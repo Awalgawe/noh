@@ -12,6 +12,8 @@
 <p align="center">
   <a href="#download-and-install">Download &amp; install</a> ·
   <a href="docs/APP.md">First video</a> ·
+  <a href="https://github.com/Awalgawe/noh/releases">Releases</a> ·
+  <a href="docs/CHANGELOG.md">Changelog</a> ·
   <a href="docs/BUILDING.md">Build from source</a>
 </p>
 
@@ -36,11 +38,16 @@ NOH is focused on repeating visual sequences, music and short extracts. It is no
 
 ## Download and install
 
-**NOH is in development. A public ready-to-use download is not available yet.**
+[GitHub Releases](https://github.com/Awalgawe/noh/releases) is the download page
+for published versions, release notes and package checksums. **No ready-to-use
+application release is available yet.** The [changelog](docs/CHANGELOG.md) tracks
+the first public version in preparation.
 
-Windows portable and macOS Apple Silicon builds have been tested locally.
-Linux and Intel Mac distributions are not yet validated. The current portable
-Mac build requires macOS 26.6.2 or newer and is not notarized.
+Windows x64 and macOS Apple Silicon portable packages are being prepared and
+validated. Linux and Intel Mac currently require a [source build](docs/BUILDING.md).
+Source builds and native CI tests pass on all four targets; installable packages
+still need their own validation. macOS signing and notarization remain incomplete.
+Use each published release's notes for its supported systems and minimum versions.
 
 Already have a complete portable build?
 
