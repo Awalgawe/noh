@@ -213,8 +213,11 @@ Original producer notices and pinned mpv/FFmpeg source notices are copied to the
 portable. Full paired source archives, recipes and patches are separate materials.
 Some packages omit standalone notices from their binary archives; their original
 terms remain in the retained sources pending attribution review. Twenty-six native
-crate archives lack original notice texts, listed exactly in the native lock and
-notice report. Native Rust 1.87/1.88/1.89 standard-library correspondence, compiler
+crate archives omit standalone notice files. Exact upstream root notices now
+supplement thirteen; fourteen explicit per-archive declarations (including the
+separate NOH dispatch dependency) are accompanied by pinned standard license
+texts and their original Cargo metadata. The notice report distinguishes these
+supplements from original texts. See [notice decisions](RUST_NOTICE_DECISIONS.md). Native Rust 1.87/1.88/1.89 standard-library correspondence, compiler
 exceptions, static/header coverage, chosen alternatives and dynamically loaded
 data/plugins remain review and native qualification requirements. Source recipe
 correspondence does not assert a bit-identical rebuild or redistribution clearance.

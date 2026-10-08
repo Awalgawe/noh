@@ -454,6 +454,43 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(report['missing_notice_texts'], ['tiny-1.0.0'])
         self.assertIn('MISSING ORIGINAL NOTICE', (missing / 'rust-notices/RUST-NOTICES.txt').read_text())
 
+    def test_explicit_license_declaration_preserves_origin_and_rejects_changes(self):
+        root = self.root / 'declared-materials'
+        folder = root / 'vendor/tiny-1.0.0'
+        folder.mkdir(parents=True)
+        manifest = b'[package]\nname="tiny"\nversion="1.0.0"\nlicense="MIT OR Apache-2.0"\nauthors=["Original author"]\n'
+        (folder / 'Cargo.toml').write_bytes(manifest)
+        delivery.write(folder / '.cargo-checksum.json', {'package': 'a' * 64,
+                       'files': {'Cargo.toml': hashlib.sha256(manifest).hexdigest()}})
+        delivery.write(root / 'RUST-INVENTORY.json', [{'name': 'tiny', 'version': '1.0.0',
+                       'license': 'MIT OR Apache-2.0', 'source': 'registry+fixture', 'license_file': None}])
+        text_path = self.root / 'assets/license-texts/Apache-2.0.txt'
+        text_path.parent.mkdir(parents=True)
+        text_path.write_bytes(b'Synthetic standard license, not an original copyright notice')
+        declaration = {'package_sha256': 'a' * 64, 'declared_license': 'MIT OR Apache-2.0',
+                       'selected_license': 'Apache-2.0', 'authors': ['Original author'],
+                       'text': {'path': 'assets/license-texts/Apache-2.0.txt', 'sha256': delivery.digest(text_path)},
+                       'basis': 'Explicit fixture declaration'}
+        spec = {'crates': {}, 'unresolved': [], 'declared_license_supplements': {'tiny-1.0.0': declaration}}
+        report = rust_notices.generate(root, self.root / 'cache', spec, lambda *args: self.fail('No download'), self.root)
+        self.assertEqual(report['missing_original_notice_texts'], ['tiny-1.0.0'])
+        self.assertEqual(report['missing_notice_texts'], [])
+        self.assertIn(manifest, (root / 'rust-notices/RUST-NOTICES.txt').read_bytes())
+        self.assertIn(b'standard-license-text', (root / 'rust-notices/RUST-NOTICES.txt').read_bytes())
+        import shutil
+        mutations = [('package_sha256', 'b' * 64), ('selected_license', 'GPL-3.0-only'),
+                     ('authors', ['Invented author']), ('declared_license', 'MIT')]
+        for key, value in mutations:
+            shutil.rmtree(root / 'rust-notices')
+            changed = copy.deepcopy(spec)
+            changed['declared_license_supplements']['tiny-1.0.0'][key] = value
+            with self.assertRaisesRegex(ValueError, 'does not match'):
+                rust_notices.generate(root, self.root / 'cache', changed, lambda *args: self.fail('No download'), self.root)
+        shutil.rmtree(root / 'rust-notices')
+        text_path.write_bytes(b'changed standard terms')
+        with self.assertRaisesRegex(ValueError, 'Standard-license text changed'):
+            rust_notices.generate(root, self.root / 'cache', spec, lambda *args: self.fail('No download'), self.root)
+
     def test_rust_notices_reject_modified_vendor_license(self):
         root = self.root / 'rust-materials'
         folder = root / 'vendor/tiny-1.0.0'
