@@ -114,12 +114,18 @@ def pe_imports(data):
 
 
 def audit_pe_images(images):
-    """Check co-located dependencies; never consult the developer's PATH/System32."""
+    """Check bundled imports and explicit prerequisites without consulting the host."""
+    speech = read(ROOT / "assets/speech-bundle.json")
+    prerequisite = speech.get("windows_prerequisite", {})
+    external_crt = set(prerequisite.get("files", []))
+    permitted_crt = {"msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll", "vcomp140.dll"}
+    if external_crt and (external_crt != permitted_crt or prerequisite.get("architecture") != "x64"):
+        raise ValueError("Unsupported Windows speech prerequisite")
     report = {"schema_version": 1, "scope": "x64 PE normal/delay imports; co-located DLLs",
               "limitations": ["LoadLibrary/dlopen names are not inferred from code.",
                               "Windows/API-set classification does not qualify minimum OS or loader behavior.",
                               "NVIDIA GPU use requires its separately installed driver; CPU fallback needs acceptance."],
-              "images": {}, "missing": []}
+              "images": {}, "missing": [], "external_prerequisites": []}
     for name, data in images:
         relative(name)
         key = name.casefold()
@@ -140,6 +146,13 @@ def audit_pe_images(images):
                 dependencies[dependency] = {"kind": "windows"}
             elif PurePosixPath(key).name == "ggml-cuda.dll" and dependency == "nvcuda.dll":
                 dependencies[dependency] = {"kind": "external_nvidia_driver"}
+            elif (dependency in external_crt and parent == PurePosixPath("bin/speech")
+                  and speech["sha256"].get(PurePosixPath(key).name) == image["sha256"]):
+                # Only the exact locked speech images may depend on this prerequisite.
+                # It is not a Windows system component or proof of a working installation.
+                dependencies[dependency] = {"kind": "external_visual_cpp_runtime"}
+                if not report["external_prerequisites"]:
+                    report["external_prerequisites"].append(prerequisite)
             else:
                 dependencies[dependency] = {"kind": "missing"}
                 report["missing"].append({"image": image["path"], "library": dependency})
@@ -314,9 +327,8 @@ def windows_inputs(cache, destination):
     runtime, materials = destination / "speech", destination / "materials"
     runtime.mkdir()
     materials.mkdir()
-    crt = lock["visual_cpp"]
-    visual_cpp_inputs(crt, fetch(crt, cache, "vc-redist-x64.exe"),
-                      fetch(crt["license"], cache, "visual-cpp-license.docx"), runtime, materials)
+    # Microsoft supplies the runtime directly to the end user. Do not acquire or
+    # put its installer, CAB payloads or DLLs in either distributed archive.
     common_sources(cache, materials)
     for item in lock["sources"]:
         shutil.copy2(fetch(item, cache, item["name"]), materials / item["name"])
@@ -342,8 +354,6 @@ def windows_inputs(cache, destination):
             shutil.copy2(fetch(spec, cache, name), runtime / name)
         elif name == "CUDA-RUNTIME-LICENSE.txt":
             copy_member(cuda, "LICENSE", runtime / name, expected)
-        elif name in crt["files"] or name == "VISUAL-CPP-LICENSE.txt":
-            pass  # Already extracted from the pinned Microsoft installer/license above.
         elif name != "WHISPER-CPP-LICENSE.txt":
             source = cuda if name.startswith(("cublas64", "cublasLt")) else whisper
             copy_member(source, name, runtime / name, expected)
@@ -621,7 +631,7 @@ def verify_bundle(bundle, target, commit):
     build = manifest["build"]
     if (manifest["schema_version"] != 2 or build["target"] != target or build["profile"] != "release"
             or build["git_revision"] != commit or build["git_dirty"] is not False
-            or set(build["features"]) != {"gui", "mcp"}):
+            or set(build["features"]) - {"default"} != {"gui", "mcp"}):
         raise ValueError("Wrong source, profile, target or features in packaged build identity")
     files = inventory(bundle)
     expected = manifest["sha256"]
@@ -646,11 +656,23 @@ def zip_folder(folder, output):
         raise ValueError(f"Release asset is not strictly below 2 GiB: {output.name}")
 
 
+def reject_microsoft_payloads(files):
+    """The prerequisite is downloaded from Microsoft, never redistributed here."""
+    forbidden = {"msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll", "vcomp140.dll"}
+    for name in files:
+        path = PurePosixPath(name.lower())
+        if (path.name in forbidden or "visual-cpp" in path.parts
+                or (path.name.startswith(("vc_redist", "vcredist")) and path.suffix == ".exe")):
+            raise ValueError(f"Microsoft runtime payload must not be redistributed: {name}")
+
+
 def seal(bundle, materials, output, target, commit):
     policy = read(ROOT / "assets/delivery-policy.json")
     manifest = verify_bundle(bundle, policy["platforms"][target]["target"], commit)
     if target == "windows-x64":
         require_pe_closure(audit_pe_bundle(bundle))
+        reject_microsoft_payloads(inventory(bundle))
+        reject_microsoft_payloads(inventory(materials))
     version = manifest["version"]
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", version):
         raise ValueError("Unsafe package version")
@@ -707,6 +729,8 @@ def verify_envelope(folder):
         if actual[name] != spec or spec["size"] >= LIMIT:
             raise ValueError(f"Asset integrity or size failure: {name}")
         files = record["materials_files" if name.endswith("-materials.zip") else "bundle_files"]
+        if record["platform"] == "windows-x64":
+            reject_microsoft_payloads(files)
         verify_zip(folder / name, files)
         if record["platform"] == "windows-x64" and not name.endswith("-materials.zip"):
             with zipfile.ZipFile(folder / name) as archive:

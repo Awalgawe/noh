@@ -71,11 +71,18 @@ later launches. NOH's portable package has no installation wizard.
 Microsoft describes the extraction steps in its
 [ZIP guide](https://support.microsoft.com/en-us/windows/experience/storage-filemanagement/zip-and-unzip-files).
 
-Earlier development speech bundles omitted four Visual C++ runtime DLLs required
-by Whisper. The prepared Windows inputs now include those verified Microsoft
-DLLs; older bundles fail the new delivery dependency check. Redistribution rights
-and transcription on a clean Windows system still require qualification before
-a public ZIP is described as self-contained.
+For local transcription, install the **Microsoft Visual C++ v14 Redistributable
+(x64)** from [Microsoft](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+The package is tested with version **14.51.36247.0**; use this or a newer compatible
+v14 runtime. Older versions are not qualified by this package. Microsoft's
+installer may request administrator approval. If you cancel it, preview, export
+and existing SRT subtitles remain available; install the prerequisite before
+retrying generated transcription. Keep NOH closed while installing or repairing it.
+
+NOH does not redistribute the Microsoft installer or its DLLs. A fresh computer
+needs a one-time download and installation of this prerequisite. Once installed,
+local transcription uses the included models without a network connection.
+Do not download individual DLLs from third-party sites.
 
 ## Mac with Apple silicon
 

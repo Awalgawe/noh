@@ -188,22 +188,17 @@ obligations for that build; the `-L` notice alone is not a complete release proc
 
 ## Candidate delivery materials and remaining gaps
 
-The selected Windows Whisper binaries import four Visual C++ runtime
-DLLs (`msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll`, `vcomp140.dll`).
-These were absent from the old development bundle. The delivery lock now pins
-Microsoft's 14.51.36247.0 installer, its embedded x64 CAB, individual DLL hashes
-and the original runtime-use license document. Acquisition extracts those files
-without running the installer and places DLLs beside the speech executable.
-The runtime-use EULA alone does not grant redistribution: the applicable Visual
-Studio redistribution grant still needs review before any public artifact upload.
-The official [STL source](https://github.com/microsoft/STL#block-diagram) covers
-the C++ standard library; it treats VCRuntime/VCStartup as separate components.
-Whisper b5130 also has an LLVM OpenMP acquisition path requiring Clang 20.x on
-Windows. LLVM's [OpenMP source](https://github.com/llvm/llvm-project/tree/main/openmp)
-is public, but using it requires a rebuild rather than a drop-in DLL rename.
-Whisper has not been rebuilt. The new Microsoft inputs have been extracted and
-their static import closure checked locally; a final package/native transcription
-qualification remains outstanding.
+The Windows Whisper binaries import four Microsoft Visual C++ runtime DLLs:
+`msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll` and `vcomp140.dll`.
+NOH's public package and source-material archives exclude these files, their CABs
+and Microsoft's installer. Users obtain the x64 v14 runtime directly from
+[Microsoft](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+This is a separately installed speech prerequisite, not part of Windows itself.
+The tested version is 14.51.36247.0; later compatible v14 versions are supported.
+Whisper/CUDA binaries and models remain unchanged. Acquisition and PE auditing
+bind the exception to exact locked speech image hashes; unrelated missing imports
+still fail. Neither a registry entry nor an import audit proves working native
+transcription. Installed and missing-runtime behavior must be tested.
 
 `assets/delivery-windows.lock.json` binds the MSYS2 native lock and whisper.cpp
 b5130 sources. The native lock contains 112 signed binary/source package pairs,

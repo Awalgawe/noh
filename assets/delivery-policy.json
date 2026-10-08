@@ -18,7 +18,7 @@
     "windows-x64": {
       "redistribution_unresolved": [
         "MSYS2 paired native sources/recipes/notices are collected but static/header coverage, linked features, compiler/std correspondence and license alternatives require independent review.",
-        "Whisper/CUDA and Visual C++ runtime redistribution grants and Rust compiled-source/notice inventories are not reviewed."
+        "Whisper/CUDA redistribution terms and Rust compiled-source/notice inventories are not reviewed."
       ],
       "target": "x86_64-pc-windows-gnu",
       "unresolved": [
@@ -26,7 +26,7 @@
         "Review all 112 signed binary/source package pairs with matching PKGBUILD/BUILDINFO hashes, seven complete native Git repositories, exact static/header dependencies and dynamically loaded data/plugins.",
         "Review native Cargo linked features and license alternatives: four original graphs provide 653 checksum-pinned crate archives. Their 26 original notice-text gaps are named in windows-native.lock.json; some entries are unused-platform/test inputs. Establish native Rust 1.87/1.88/1.89 standard-library/compiler notice correspondence.",
         "Review exact NVIDIA redistribution terms, all Whisper/CUDA native dependencies and the matching b5130 build recipe.",
-        "Review the applicable Visual Studio redistribution grant for the four pinned Microsoft DLLs. The runtime-use EULA alone does not grant redistribution.",
+        "Qualify the external Microsoft Visual C++ v14 x64 prerequisite, installed and absent. Microsoft binaries must be absent from both package and source materials.",
         "Review the 486-crate NOH vendor notice inventory, attribution, license alternatives, Rust standard-library/toolchain/native notices, difflib 0.4.0 notice applicability and the missing dispatch 0.2.0 original text.",
         "Qualify the isolated export/preview DLL folders, dynamically loaded components and supported Windows/API-set baseline against the final native package.",
         "Qualify final ZIP on a clean Windows user profile without development runtimes, with downloaded-file protection, physical audio/GPU, preview, transcription and export."

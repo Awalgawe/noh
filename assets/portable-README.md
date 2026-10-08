@@ -4,7 +4,13 @@
 2. Open the extracted folder and double-click **noh.exe**.
 3. Add a clip or photo and a WAV soundtrack, preview, then export.
 
-The application includes its media and subtitle tools; no installation is needed.
+The application includes its media and subtitle tools. On Windows, local
+transcription also needs the **Microsoft Visual C++ v14 Redistributable (x64)**.
+Install it once from [Microsoft](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
+if it is missing. NOH does not include Microsoft's installer or runtime DLLs.
+The tested runtime is 14.51.36247.0; use that version or a newer compatible v14
+runtime. Playback, export and existing SRT subtitles do not need this speech
+prerequisite. Once the runtime is installed, transcription works offline.
 See the [installation guide](docs/INSTALLING.md) for moving, updating and removing NOH.
 
 - **bin/** — media engine, local speech runtime and models, command-line tools.

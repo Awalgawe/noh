@@ -718,6 +718,43 @@ class DeliveryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Missing bundled"):
                 delivery.require_pe_closure(delivery.audit_pe_images([("noh.exe", pe_fixture(name))]))
 
+    def test_external_crt_is_limited_to_exact_speech_images(self):
+        locked = delivery.read(delivery.ROOT / "assets/speech-bundle.json")
+        for dependency in locked["windows_prerequisite"]["files"]:
+            for delay in (False, True):
+                data = pe_fixture(dependency.encode(), delay)
+                spec = copy.deepcopy(locked)
+                spec["sha256"]["whisper-cli.exe"] = hashlib.sha256(data).hexdigest()
+                with patch.object(delivery, "read", return_value=spec):
+                    report = delivery.audit_pe_images([("bin/speech/whisper-cli.exe", data)])
+                    delivery.require_pe_closure(report)
+                    self.assertEqual(report["images"]["bin/speech/whisper-cli.exe"]["dependencies"][dependency]["kind"],
+                                     "external_visual_cpp_runtime")
+                    self.assertEqual(report["external_prerequisites"], [spec["windows_prerequisite"]])
+                    for name in ("noh.exe", "bin/whisper-cli.exe", "bin/speech/unrecognised.exe"):
+                        with self.assertRaisesRegex(ValueError, "Missing bundled"):
+                            delivery.require_pe_closure(delivery.audit_pe_images([(name, data)]))
+                spec["sha256"]["whisper-cli.exe"] = "0" * 64
+                with patch.object(delivery, "read", return_value=spec):
+                    with self.assertRaisesRegex(ValueError, "Missing bundled"):
+                        delivery.require_pe_closure(delivery.audit_pe_images([("bin/speech/whisper-cli.exe", data)]))
+
+    def test_windows_materials_cannot_reintroduce_microsoft_payloads(self):
+        for name in ("native/visual-cpp/payload.cab", "native/VC_redist.x64.exe", "speech/VCOMP140.DLL"):
+            with self.subTest(name=name):
+                bad = self.materials / name
+                bad.parent.mkdir(parents=True, exist_ok=True)
+                bad.write_bytes(b"not redistributable by this package")
+                with self.assertRaisesRegex(ValueError, "Microsoft runtime payload"):
+                    self.seal()
+                bad.unlink()
+        self.assertFalse((self.root / "assets").exists())
+
+    def test_empty_default_feature_matches_cargo_build_identity(self):
+        self.manifest["build"]["features"].append("default")
+        delivery.write(self.bundle / "manifest.json", self.manifest)
+        self.seal()
+
     def test_pe_malformed_images_fail_without_execution(self):
         for data in (b"not PE", pe_fixture()[:80], pe_fixture()[:350], pe_fixture(b"../runtime.dll")):
             with self.assertRaises(ValueError):

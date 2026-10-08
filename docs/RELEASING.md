@@ -61,12 +61,13 @@ against the packaged release workers. Python and Rust are build tools only.
 Windows portable builds check normal/delay PE imports before media tests,
 sealing and final-envelope acceptance. `PE-IMPORTS.json` records image hashes,
 co-located DLL providers, Windows/API-set classifications and the external
-NVIDIA driver dependency. Four Visual C++ DLLs imported by Whisper now have
-pinned Microsoft installer/CAB/file acquisition and runtime-use license inputs.
-Development bundles made before these inputs were added lack them and fail this check. Review the applicable
-Visual Studio redistribution grant before clearing redistribution authority;
-the runtime-use EULA alone does not grant distribution. Static imports do not replace native loader,
-minimum-OS or clean-profile acceptance.
+NVIDIA driver dependency. Whisper's four Microsoft Visual C++ DLL imports are an explicit external x64 v14
+prerequisite. Users obtain that runtime directly from Microsoft. The application
+and materials archives exclude the DLLs, installer and CAB payloads. The PE audit
+allows this exception only for the exact locked images under `bin/speech`; it
+never uses the maintainer's PATH or System32 to satisfy an undeclared dependency.
+Installed and missing-prerequisite behavior remains part of native acceptance.
+
 
 Candidate assets are named `NOH-<version>-windows-x64.zip` or
 `NOH-<version>-macos-arm64.zip`, with a separate `-materials.zip`, `DELIVERY.json`
@@ -100,7 +101,7 @@ Local preparation evidence and remaining activation work:
 | --- | --- | --- |
 | Windows x64 / Apple Silicon build chain | Candidate driver, compile-only default, exact Rust/runtime locks; delivery workflows are covered by actionlint. | Actual clean hosted execution, runner capacity and native Mac dependency/minimum-OS checks. |
 | Dependency traceability | Fixed MSYS2 URLs and hashes; 112 signed binary/source pairs with matching recipes; seven complete native Git repositories and 653 native Rust crate archives; export/preview closures kept separate. Historical acquisitions retained. | Review static/header coverage, native toolchain correspondence and dynamically loaded components; qualify actual final runtime behavior. |
-| Sources and notices | Complete 486-crate NOH vendor inventory, original notices and content-match proof; generated standard-library HTML; original native package/source notices; all locked Mac sources/resources/patches collected. | Missing dispatch text and 26 native crate texts; native/toolchain correspondence and independent review of attribution, license alternatives, CUDA and Microsoft redistribution grants. |
+| Sources and notices | Complete 486-crate NOH vendor inventory, original notices and content-match proof; generated standard-library HTML; original native package/source notices; all locked Mac sources/resources/patches collected. | Missing dispatch text and 26 native crate texts; native/toolchain correspondence and independent review of attribution, license alternatives, CUDA redistribution terms and the external Microsoft runtime prerequisite. |
 | Package and qualification controls | Synthetic rejection controls, focused shared-packager checks, exact-file ZIP/envelope checks, separate closed redistribution/qualification registries. | Qualification records for exact final hosted package bytes; dynamically loaded dependencies and clean downloaded-file installation behavior. |
 | Mac signing | Explicit protected signing choice, separate credential steps, inside-out signing, notarization/stapling and final-ZIP controls reviewed with simulated commands. | Owner Apple inputs/environment, native commands and clean Mac Gatekeeper/audio/GPU/media acceptance. |
 | Installation and missing resources | Public installation/troubleshooting guides; local Windows resource behavior validated with synthetic fixtures and captured GUI. | Rehearse the actual final download/install/remove path on clean Windows/Mac profiles. |
@@ -142,7 +143,7 @@ avoid expensive known-blocked uploads. It does not block `compile-only` or
   attribution/license alternatives. The native notice report identifies 26
   missing original crate texts, including unused-platform/test dependencies;
   NOH's separate graph still lacks dispatch's original text. Review Whisper/CUDA
-  and Microsoft redistribution grants. These inventories do not clear public
+  redistribution terms and the external Microsoft runtime prerequisite. These inventories do not clear public
   upload. Exact binary reproduction is not itself a prerequisite for source
   correspondence.
 - **Mac inputs:** the frozen Homebrew inventory covers 114 formula recipes and
