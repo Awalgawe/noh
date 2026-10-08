@@ -1,0 +1,121 @@
+name: Native Linux and macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Native platform to diagnose (PR validation always checks all)
+        type: choice
+        default: all
+        options: [all, linux, mac-arm, mac-intel, linux-mac-arm]
+  workflow_call:
+    inputs:
+      skip_audit:
+        description: Reuse the calling workflow's successful RustSec audit
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-audit:
+    if: ${{ !inputs.skip_audit }}
+    uses: ./.github/workflows/rust-audit.yml
+
+  verify:
+    needs: rust-audit
+    if: ${{ !cancelled() && (needs.rust-audit.result == 'success' || (inputs.skip_audit && needs.rust-audit.result == 'skipped')) }}
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.platform == 'linux-mac-arm' && '["ubuntu-24.04","macos-15"]' || github.event_name == 'workflow_dispatch' && inputs.platform == 'linux' && '["ubuntu-24.04"]' || github.event_name == 'workflow_dispatch' && inputs.platform == 'mac-arm' && '["macos-15"]' || github.event_name == 'workflow_dispatch' && inputs.platform == 'mac-intel' && '["macos-15-intel"]' || '["ubuntu-24.04","macos-15","macos-15-intel"]') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libasound2-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libegl1-mesa-dev libgl1-mesa-dev \
+            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            ffmpeg libmpv2 xvfb xauth
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg@7 mpv
+      - name: Provide enough desktop space for ARM GUI captures
+        if: matrix.os == 'macos-15'
+        shell: bash
+        run: |
+          brew install displayplacer
+          task_displays="$(displayplacer list)"
+          printf '%s\n' "$task_displays"
+          task_display="$(awk '/^Persistent screen id: / && !id { id=$4 } END { print id }' <<< "$task_displays")"
+          test -n "$task_display"
+          displayplacer "id:$task_display res:1920x1080 scaling:off"
+          task_after="$(displayplacer list)"
+          printf '%s\n' "$task_after"
+          awk -v expected_id="$task_display" '
+            /^Persistent screen id: / { selected = ($4 == expected_id) }
+            selected && /^Resolution: / { resolution = $2 }
+            selected && /^Scaling:/ { scaling = $0; gsub(/[[:space:]]/, "", scaling) }
+            END { exit !(resolution == "1920x1080" && scaling == "Scaling:off") }
+          ' <<< "$task_after" || {
+            echo 'ARM capture display must be 1920x1080 and unscaled before compilation.' >&2
+            exit 1
+          }
+      - name: Prepare Rust
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt
+          rustup override set stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: ${{ matrix.os }}
+      - name: Native build, media and MCP tests, GUI captures
+        shell: bash
+        run: bash tools/verify-unix.sh
+      - name: Show bounded capture errors without artifact storage
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          remaining = 12000
+          for report in sorted(Path('logs/platform').glob('*/captures/report.json'))[:4]:
+              if report.stat().st_size > 2 * 1024 * 1024:
+                  print('Capture report exceeds the diagnostic size limit')
+                  continue
+              data = json.loads(report.read_text(encoding='utf-8'))
+              for case in data.get('cases', []):
+                  if case.get('errors') and remaining > 0:
+                      message = json.dumps({key: case.get(key) for key in (
+                          'state', 'language', 'requested_width', 'requested_height', 'errors'
+                      )}, ensure_ascii=True)
+                      print(message[:remaining])
+                      remaining -= len(message[:remaining])
+          PY
+      - name: Keep evidence, including failures
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-${{ matrix.os }}
+          path: |
+            logs/platform/**/run.log
+            logs/platform/**/build-info.json
+            logs/platform/**/captures/**
+          if-no-files-found: warn
+          retention-days: 7

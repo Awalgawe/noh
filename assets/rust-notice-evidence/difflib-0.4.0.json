@@ -1,0 +1,108 @@
+{
+  "sha": "f035fb8e656f27119e23eca9d5b996df14f3885e",
+  "url": "https://api.github.com/repos/DimaKudosh/difflib/git/trees/f035fb8e656f27119e23eca9d5b996df14f3885e",
+  "tree": [
+    {
+      "path": ".travis.yml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "c9080ad3d149f32c44f670e6556af190cd44ec9c",
+      "size": 689,
+      "url": "https://api.github.com/repos/DimaKudosh/difflib/git/blobs/c9080ad3d149f32c44f670e6556af190cd44ec9c"
+    },
+    {
+      "path": "Cargo.toml",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "2edf6df6a6fc159647a10691c025786ca594cdf8",
+      "size": 446,
+      "url": "https://api.github.com/repos/DimaKudosh/difflib/git/blobs/2edf6df6a6fc159647a10691c025786ca594cdf8"
+    },
+    {
+      "path": "LICENSE",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5acedf0412212a99997b78bd36da90c8a91111a7",
+      "size": 1086,
+      "url": "https://api.github.com/repos/DimaKudosh/difflib/git/blobs/5acedf0412212a99997b78bd36da90c8a91111a7"
+    },
+    {
+      "path": "README.md",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b881fd2c72457ece16edcbf80dcb071b5db86495",
+      "size": 2257,
+      "url": "https://api.github.com/repos/DimaKudosh/difflib/git/blobs/b881fd2c72457ece16edcbf80dcb071b5db86495"
+    },
+    {
+      "path": "examples",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "db430e8bdda3c6df0245001d0c49517612407ce3",
+      "url": "https://api.github.com/repos/DimaKudosh/difflib/git/trees/db430e8bdda3c6df0245001d0c49517612407ce3"
+    },
+    {
+      "path": "examples/example.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "3f06d0adb76887e74329c8ab48e7e568c5ea417a",
+      "size": 1783,
+      "url": "https://api.github.com/repos/DimaKudosh/difflib/git/blobs/3f06d0adb76887e74329c8ab48e7e568c5ea417a"
+    },
+    {
+      "path": "src",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "75bb3a6479bfd2c61d9b7f42a99b3fd736a26e13",
+      "url": "https://api.github.com/repos/DimaKudosh/difflib/git/trees/75bb3a6479bfd2c61d9b7f42a99b3fd736a26e13"
+    },
+    {
+      "path": "src/differ.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "5caef9a7a8d34c7a2c2f8cdb737ded2ed7a9f1d6",
+      "size": 11122,
+      "url": "https://api.github.com/repos/DimaKudosh/difflib/git/blobs/5caef9a7a8d34c7a2c2f8cdb737ded2ed7a9f1d6"
+    },
+    {
+      "path": "src/lib.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "ca6b1cc38b974d95769240c63f47a043083c9d02",
+      "size": 5806,
+      "url": "https://api.github.com/repos/DimaKudosh/difflib/git/blobs/ca6b1cc38b974d95769240c63f47a043083c9d02"
+    },
+    {
+      "path": "src/sequencematcher.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "4157808631acc62605fd6b446d17523ae8a86152",
+      "size": 11913,
+      "url": "https://api.github.com/repos/DimaKudosh/difflib/git/blobs/4157808631acc62605fd6b446d17523ae8a86152"
+    },
+    {
+      "path": "src/utils.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "b711bf82ba0e14439d80806afb70722e60195e03",
+      "size": 1129,
+      "url": "https://api.github.com/repos/DimaKudosh/difflib/git/blobs/b711bf82ba0e14439d80806afb70722e60195e03"
+    },
+    {
+      "path": "tests",
+      "mode": "040000",
+      "type": "tree",
+      "sha": "0d87c32d460687cc4961f76b35acdcb4b1138090",
+      "url": "https://api.github.com/repos/DimaKudosh/difflib/git/trees/0d87c32d460687cc4961f76b35acdcb4b1138090"
+    },
+    {
+      "path": "tests/tests.rs",
+      "mode": "100644",
+      "type": "blob",
+      "sha": "8f49de9eba313a09863de5110eca83e022a2156d",
+      "size": 5262,
+      "url": "https://api.github.com/repos/DimaKudosh/difflib/git/blobs/8f49de9eba313a09863de5110eca83e022a2156d"
+    }
+  ],
+  "truncated": false
+}

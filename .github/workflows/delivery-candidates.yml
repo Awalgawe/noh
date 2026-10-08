@@ -1,0 +1,215 @@
+name: Build unqualified delivery candidates
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_kind:
+        description: Compile executables with Windows tests, or prepare complete portable candidates
+        type: choice
+        options: [compile-only, portable]
+        default: compile-only
+      upload_candidate:
+        description: Upload portable binaries/materials after independent redistribution review
+        type: boolean
+        default: false
+      target:
+        description: Windows first; macOS is an additional unqualified candidate
+        type: choice
+        options: [windows-x64, macos-arm64, all]
+        default: windows-x64
+      sign_macos:
+        description: Sign and privately submit a macOS portable candidate to Apple (requires reviewed environment)
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      build_kind:
+        type: string
+        default: compile-only
+      upload_candidate:
+        type: boolean
+        default: false
+      target:
+        type: string
+        default: windows-x64
+      sign_macos:
+        type: boolean
+        default: false
+    secrets:
+      NOH_MACOS_CERTIFICATE_BASE64:
+        required: false
+      NOH_MACOS_CERTIFICATE_PASSWORD:
+        required: false
+      NOH_APPLE_ID:
+        required: false
+      NOH_APPLE_APP_PASSWORD:
+        required: false
+  pull_request:
+    paths:
+      - '.github/workflows/delivery-*.yml'
+      - '.github/workflows/rust-audit.yml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'tools/delivery*'
+      - 'tools/test-delivery.py'
+      - 'tools/rust_notices.py'
+      - 'tools/macos_signing.py'
+      - 'tools/windows_runtime.py'
+      - 'tools/windows_test_runtime.py'
+      - 'assets/delivery-*.json'
+      - 'assets/rust-notices.lock.json'
+      - 'assets/rust-notice-evidence/**'
+      - 'assets/windows-native.lock.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: delivery-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  rust-audit:
+    # PR validation performs the shared audit once for every selected platform.
+    if: github.event_name == 'workflow_dispatch' && (github.event.repository.private || (github.workflow == 'Release' && github.ref == 'refs/heads/main'))
+    uses: ./.github/workflows/rust-audit.yml
+
+  controls:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check delivery controls using synthetic files
+        run: python tools/test-delivery.py
+      - name: Validate explicit signing request
+        if: github.event_name == 'workflow_dispatch' && inputs.sign_macos
+        env:
+          NOH_BUILD_KIND: ${{ inputs.build_kind }}
+          NOH_TARGET: ${{ inputs.target }}
+        run: |
+          if ($env:GITHUB_REF -ne 'refs/heads/main' -or $env:NOH_BUILD_KIND -ne 'portable' -or $env:NOH_TARGET -eq 'windows-x64') {
+            throw 'Mac signing requires main, portable mode and macos-arm64 or all'
+          }
+
+  candidate:
+    name: Candidate ${{ matrix.platform }}
+    needs: [controls, rust-audit]
+    if: github.event_name == 'workflow_dispatch' && (github.event.repository.private || (github.workflow == 'Release' && github.ref == 'refs/heads/main'))
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(inputs.target == 'all' && '["windows-x64","macos-arm64"]' || inputs.target == 'macos-arm64' && '["macos-arm64"]' || '["windows-x64"]') }}
+    runs-on: ${{ matrix.platform == 'windows-x64' && 'windows-2025' || 'macos-26' }}
+    timeout-minutes: 180
+    environment:
+      name: ${{ inputs.sign_macos && matrix.platform == 'macos-arm64' && 'noh-macos-signing' || 'noh-candidate-build' }}
+    env:
+      CARGO_TERM_COLOR: never
+      CARGO_NET_OFFLINE: 'false'
+      NOH_DELIVERY_PLATFORM: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require independently reviewed redistribution before any binary artifact upload
+        if: inputs.build_kind == 'portable' && inputs.upload_candidate
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force logs/delivery | Out-Null
+          $python = if ($IsWindows) { 'python' } else { 'python3' }
+          & $python tools/delivery.py redistribution --platform $env:NOH_DELIVERY_PLATFORM *> logs/delivery/redistribution.log
+          $result=$LASTEXITCODE
+          Get-Content logs/delivery/redistribution.log
+          exit $result
+      - name: Check signing configuration before expensive acquisition/build
+        if: inputs.sign_macos && matrix.platform == 'macos-arm64'
+        env:
+          NOH_MACOS_IDENTITY: ${{ vars.NOH_MACOS_IDENTITY }}
+          NOH_MACOS_TEAM_ID: ${{ vars.NOH_MACOS_TEAM_ID }}
+          NOH_MACOS_CERTIFICATE_BASE64: ${{ secrets.NOH_MACOS_CERTIFICATE_BASE64 }}
+          NOH_MACOS_CERTIFICATE_PASSWORD: ${{ secrets.NOH_MACOS_CERTIFICATE_PASSWORD }}
+          NOH_APPLE_ID: ${{ secrets.NOH_APPLE_ID }}
+          NOH_APPLE_APP_PASSWORD: ${{ secrets.NOH_APPLE_APP_PASSWORD }}
+        run: python3 tools/macos_signing.py --preflight --identity "$NOH_MACOS_IDENTITY" --team-id "$NOH_MACOS_TEAM_ID"
+      - name: Set up the Windows native package reader
+        if: matrix.platform == 'windows-x64'
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+      - name: Compile executables or build portable from explicit locked inputs
+        shell: pwsh
+        env:
+          NOH_BUILD_KIND: ${{ inputs.build_kind }}
+          NOH_SIGN_MACOS: ${{ inputs.sign_macos && matrix.platform == 'macos-arm64' && 'true' || 'false' }}
+        run: ./tools/delivery-build.ps1 -Platform $env:NOH_DELIVERY_PLATFORM -BuildKind $env:NOH_BUILD_KIND
+      - name: Prepare the locked FFmpeg backend for Windows tests
+        if: matrix.platform == 'windows-x64' && inputs.build_kind == 'compile-only'
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $backend = Join-Path $env:RUNNER_TEMP 'noh-test-ffmpeg'
+          python tools/windows_test_runtime.py --cache (Join-Path $env:RUNNER_TEMP 'noh-downloads') --output $backend
+          "NOH_FFMPEG=$(Join-Path $backend 'ffmpeg.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Run Windows unit, GUI, CLI, media and MCP integration tests
+        if: matrix.platform == 'windows-x64' && inputs.build_kind == 'compile-only'
+        shell: pwsh
+        env:
+          NOH_MEDIA_TESTS: '1'
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $env:NOH_EXE = Join-Path $PWD 'target/release/noh.exe'
+          $env:NOH_APP_EXE = Join-Path $PWD 'target/release/noh-app.exe'
+          $env:NOH_MCP_EXE = Join-Path $PWD 'target/release/noh-mcp.exe'
+          cargo fmt --all --check
+          cargo fetch --locked
+          $PSNativeCommandUseErrorActionPreference = $false
+          cargo test --release --locked --offline --features gui,mcp --lib --bins --tests --example dev --no-fail-fast -- --test-threads=1 *> logs/delivery/tests.log
+          $result = $LASTEXITCODE
+          $PSNativeCommandUseErrorActionPreference = $true
+          Get-Content logs/delivery/tests.log
+          exit $result
+      - name: Sign and privately notarize the prepared Mac application
+        if: inputs.sign_macos && matrix.platform == 'macos-arm64'
+        env:
+          NOH_MACOS_IDENTITY: ${{ vars.NOH_MACOS_IDENTITY }}
+          NOH_MACOS_TEAM_ID: ${{ vars.NOH_MACOS_TEAM_ID }}
+          NOH_MACOS_CERTIFICATE_BASE64: ${{ secrets.NOH_MACOS_CERTIFICATE_BASE64 }}
+          NOH_MACOS_CERTIFICATE_PASSWORD: ${{ secrets.NOH_MACOS_CERTIFICATE_PASSWORD }}
+          NOH_APPLE_ID: ${{ secrets.NOH_APPLE_ID }}
+          NOH_APPLE_APP_PASSWORD: ${{ secrets.NOH_APPLE_APP_PASSWORD }}
+        run: python3 tools/macos_signing.py --bundle dist/NOH-macos-arm64 --commit "$GITHUB_SHA" --execute --identity "$NOH_MACOS_IDENTITY" --team-id "$NOH_MACOS_TEAM_ID"
+      - name: Test signed Mac workers and seal the exact final ZIP
+        if: inputs.sign_macos && matrix.platform == 'macos-arm64'
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $env:NOH_FFMPEG = Join-Path $PWD 'dist/NOH-macos-arm64/NOH.app/Contents/MacOS/bin/ffmpeg'
+          $env:NOH_EXE = Join-Path $PWD 'dist/NOH-macos-arm64/NOH.app/Contents/MacOS/bin/noh-cli'
+          $env:NOH_APP_EXE = Join-Path $PWD 'dist/NOH-macos-arm64/NOH.app/Contents/MacOS/noh-app'
+          $env:NOH_MCP_EXE = Join-Path $PWD 'dist/NOH-macos-arm64/NOH.app/Contents/MacOS/bin/noh-mcp'
+          cargo dev verify --media --mcp --offline
+          python3 tools/delivery.py seal --platform macos-arm64 --bundle dist/NOH-macos-arm64 --materials logs/delivery/materials --output logs/delivery/assets --commit $env:GITHUB_SHA
+      - name: Retain unqualified candidate and corresponding materials
+        if: inputs.build_kind == 'portable' && inputs.upload_candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: delivery-${{ matrix.platform }}
+          path: logs/delivery/assets/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+      - name: Keep bounded diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: delivery-failure-${{ matrix.platform }}
+          path: |
+            logs/delivery/build.log
+            logs/delivery/tests.log
+            logs/delivery/BUILD-ENVIRONMENT.json
+            logs/delivery/redistribution.log
+            logs/delivery/PE-IMPORTS.json
+          if-no-files-found: warn
+          retention-days: 7

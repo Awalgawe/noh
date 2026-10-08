@@ -1,0 +1,28 @@
+name: Bug report
+description: Report a reproducible problem with NOH.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For vulnerabilities, follow SECURITY.md instead of posting details here.
+        Use synthetic media and remove secrets and personal paths from logs.
+  - type: input
+    id: version
+    attributes:
+      label: NOH version or commit
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and architecture
+      placeholder: Windows 11 x64, macOS ARM, or Linux distribution/version
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction, expected behavior and actual result
+      description: Include the smallest reproducible steps and relevant redacted diagnostics.
+    validations:
+      required: true

@@ -1,0 +1,7 @@
+{
+  "repository": "Awalgawe/noh",
+  "package_id": "NohGuiUpdateQualification",
+  "channel": "stable",
+  "controlled_windows_trial": true,
+  "targets": [{ "os": "windows", "arch": "x86_64" }]
+}

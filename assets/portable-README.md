@@ -1,0 +1,21 @@
+# NOH
+
+1. If this folder is still inside a ZIP, right-click the ZIP and choose **Extract All**.
+2. Open the extracted folder and double-click **noh.exe**.
+3. Add a clip or photo and a WAV soundtrack, preview, then export.
+
+The application includes its media and subtitle tools; no installation is needed.
+See the [installation guide](docs/INSTALLING.md) for moving, updating and removing NOH.
+
+- **bin/** — media engine, local speech runtime and models, command-line tools.
+- **docs/** — [user guide](docs/APP.md), [CLI guide](docs/CLI.md) and technical documentation.
+- **licenses/** — bundled components' licenses and font notices.
+- **manifest.json** — build identity and checksums for the complete portable folder.
+
+Keep these folders together when moving or copying NOH.
+
+NOH's code is licensed under GNU GPLv3 (`GPL-3.0-only`); the full text is in
+`licenses/NOH-LICENSE.txt`. Third-party components retain their own licenses.
+
+For command-line use, open a terminal and run `bin/noh-cli.exe --help`.
+The optional MCP server is `bin/noh-mcp.exe`; see [MCP setup](docs/MCP.md).

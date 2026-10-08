@@ -1,0 +1,44 @@
+{
+  "platforms": {
+    "macos-arm64": {
+      "redistribution_unresolved": [
+        "Exact Homebrew bottle sources/resources/patches/build materials and native notices are not reviewed.",
+        "Rust compiled-source/notice inventory is not reviewed."
+      ],
+      "target": "aarch64-apple-darwin",
+      "unresolved": [
+        "Execute the locked Homebrew acquisition and portable packaging on the macos-26 arm64 runner; verify its actual native dependency closure and minimum OS.",
+        "All 114 locked Homebrew main sources, 46 stable resources and 22 patches have been collected locally; review exact bottle/build correspondence and all native notices against the relocated Mach-O closure.",
+        "Review the complete 486-crate vendor notice inventory, applicable license alternatives, Rust standard-library/toolchain/native runtime notices, difflib 0.4.0 upstream notice applicability/attribution and the missing dispatch 0.2.0 original text.",
+        "Qualify offline transcription and media behavior of FFmpeg 7.1.5 and the locked libmpv closure on Apple Silicon.",
+        "Developer ID identity, Apple team and notarization credentials are not configured. The prepared protected-environment helper has only simulated Windows controls; validate real identity import/cleanup, signing, notarization/stapling and final-ZIP ticket transport on the native runner.",
+        "Qualify the final downloaded ZIP on a clean Mac profile, Gatekeeper, physical audio/GPU, preview, transcription and export."
+      ]
+    },
+    "windows-x64": {
+      "redistribution_unresolved": [
+        "MSYS2 paired native sources/recipes/notices are collected but static/header coverage, linked features, compiler/std correspondence and license alternatives require independent review.",
+        "Whisper/CUDA and Visual C++ runtime redistribution grants and Rust compiled-source/notice inventories are not reviewed."
+      ],
+      "target": "x86_64-pc-windows-gnu",
+      "unresolved": [
+        "Execute the fixed MSYS2 Windows portable acquisition/build on a clean hosted runner; local acquisition and synthetic native probes do not qualify the final downloaded package.",
+        "Review all 112 signed binary/source package pairs with matching PKGBUILD/BUILDINFO hashes, seven complete native Git repositories, exact static/header dependencies and dynamically loaded data/plugins.",
+        "Review native Cargo linked features and license alternatives: four original graphs provide 653 checksum-pinned crate archives. Their 26 original notice-text gaps are named in windows-native.lock.json; some entries are unused-platform/test inputs. Establish native Rust 1.87/1.88/1.89 standard-library/compiler notice correspondence.",
+        "Review exact NVIDIA redistribution terms, all Whisper/CUDA native dependencies and the matching b5130 build recipe.",
+        "Review the applicable Visual Studio redistribution grant for the four pinned Microsoft DLLs. The runtime-use EULA alone does not grant redistribution.",
+        "Review the 486-crate NOH vendor notice inventory, attribution, license alternatives, Rust standard-library/toolchain/native notices, difflib 0.4.0 notice applicability and the missing dispatch 0.2.0 original text.",
+        "Qualify the isolated export/preview DLL folders, dynamically loaded components and supported Windows/API-set baseline against the final native package.",
+        "Qualify final ZIP on a clean Windows user profile without development runtimes, with downloaded-file protection, physical audio/GPU, preview, transcription and export."
+      ]
+    }
+  },
+  "qualification_records": [],
+  "redistribution_records": [],
+  "rust_source": {
+    "sha256": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
+    "url": "https://static.rust-lang.org/dist/rustc-1.98.1-src.tar.xz"
+  },
+  "rust_version": "1.98.1",
+  "schema_version": 1
+}

@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "compiler": {
+    "name": "llvm-mingw-20260922-ucrt-x86_64.zip",
+    "url": "https://github.com/mstorsjo/llvm-mingw/releases/download/20260922/llvm-mingw-20260922-ucrt-x86_64.zip",
+    "algorithm": "SHA256",
+    "hash": "e3ad77d117a4bea19a7a3b333341824d79a5a371004a10e25b8504e7b3047666"
+  },
+  "packager": {
+    "name": "vpk.1.2.161.zip",
+    "url": "https://github.com/velopack/velopack/releases/download/1.2.161/vpk.1.2.161.nupkg",
+    "algorithm": "SHA256",
+    "hash": "2b56ce117f803fc70c103cb423bd040e395e40370f6ff6e10818e9ff9c26a323"
+  },
+  "dotnet": {
+    "name": "dotnet-runtime-8.0.31-win-x64.zip",
+    "url": "https://builds.dotnet.microsoft.com/dotnet/Runtime/8.0.31/dotnet-runtime-8.0.31-win-x64.zip",
+    "algorithm": "SHA512",
+    "hash": "9c55c58694676ee64b0eed2cd6d8cbf58b9aa8288420acc66841e15ca0099c75d4af0182d23a641c2342e5a151a325df4a12fa0bde2e47c0fb7e9a33e7b09896"
+  }
+}

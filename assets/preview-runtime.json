@@ -1,0 +1,45 @@
+{
+  "archive": "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-mpv-0.40.0-4-any.pkg.tar.zst",
+  "archive_sha256": "7ad35e9a1fbb30bc7064b0bdd20600935a1f6c5ac58210627caff99e6d80d8e6",
+  "build_recipe_sha256": "a9e91d5e62d7273ecba685a2d4ef7d6e487d70d53e472caae4bce3e75b1731b4",
+  "component": "libmpv",
+  "filename": "libmpv-2.dll",
+  "historical_acquisition": {
+    "archive": "https://github.com/mpv-player/mpv/releases/download/git-release/libmpv-v0.41.0-dev-ga1f50f2c3-36640285359-x86_64-w64-mingw32-lgpl.zip",
+    "archive_sha256": "7e349cc9589b7ced492ed0207c24808f7c328a0ffa96cdae6a069861a1a856a4",
+    "build_script": "https://github.com/mpv-player/mpv/blob/a1f50f2c3/ci/build-mingw64-full.sh",
+    "commit": "a1f50f2c38206dc943f331cf5a5b02f97a0ce219",
+    "component": "libmpv",
+    "filename": "libmpv-2.dll",
+    "license": "LGPL-3.0-or-later (upstream CI LGPL variant)",
+    "schema_version": 1,
+    "sha256": "1e23e98611c99137565b684d7d59b5bf30dc3b81f3c8e606df6d503f0bd6b8a3",
+    "source": "https://github.com/mpv-player/mpv/tree/a1f50f2c3",
+    "upstream": "https://github.com/mpv-player/mpv",
+    "upstream_build": {
+      "asset_created_at": "2026-09-29T23:14:39Z",
+      "asset_id": 599460663,
+      "download_verified_at": "2026-09-30T11:51:11Z",
+      "job_id": 109650691353,
+      "job_name": "mingw64-full (win64, lgpl)",
+      "run_attempt": 1,
+      "run_id": 36640285359
+    },
+    "version": "v0.41.0-dev-ga1f50f2c3"
+  },
+  "layout": "bin/preview/libmpv-2.dll",
+  "license": "GPL-2.0-or-later (producer declaration; linked FFmpeg declares GPL-3.0-or-later)",
+  "native_runtime_lock": "assets/windows-native.lock.json",
+  "schema_version": 1,
+  "sha256": "992e4ee71a566c3e9fb4d02c9f5f627f41f35b1f5246c1275054d33ac3f5905f",
+  "source": "https://github.com/mpv-player/mpv/tree/v0.40.0",
+  "source_package": {
+    "sha256": "02c8124cd89d3f845ddcc18275e3ac665a356457412873fe96a2014f81320354",
+    "signature_sha256": "7cef2d7f5b4df422e3ace47799964091e3e8ca116e8f6476fb195518f265c4c0",
+    "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+    "url": "https://repo.msys2.org/mingw/sources/mingw-w64-mpv-0.40.0-4.src.tar.zst"
+  },
+  "status": "unqualified-candidate; independent redistribution review required",
+  "upstream": "https://github.com/mpv-player/mpv",
+  "version": "0.40.0 (MSYS2 package 0.40.0-4)"
+}

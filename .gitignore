@@ -1,0 +1,21 @@
+/target/
+/.mcp-dev/
+/dist/
+/logs/
+/.verification-*/
+/.app-test-*/
+/*.exe
+/*.lnk
+__pycache__/
+*.py[cod]
+
+# Local assistant state, evidence and credentials never belong in source exports.
+/.codex/
+/.agents/
+/docs/STATUS.md
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx

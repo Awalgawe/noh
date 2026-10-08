@@ -1,0 +1,108 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Verify packages without upload, build reviewed artifacts, or prepare a qualified draft
+        type: choice
+        options: [verify, build, draft]
+        default: verify
+      target:
+        description: Windows x64 and/or macOS ARM64 (Linux has no packager yet)
+        type: choice
+        options: [windows-x64, macos-arm64, all]
+        default: windows-x64
+      sign_macos:
+        description: Use the protected Apple signing/notarization configuration
+        type: boolean
+        default: false
+      source_run_id:
+        description: Draft stage only - successful Release build run ID
+        type: string
+        default: ''
+      source_attempt:
+        description: Draft stage only - exact build attempt
+        type: string
+        default: '1'
+      source_commit:
+        description: Draft stage only - exact 40-character build commit
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check release inputs and redistribution before expensive work
+        env:
+          PYTHONPATH: tools
+          RELEASE_STAGE: ${{ inputs.stage }}
+          RELEASE_TARGET: ${{ inputs.target }}
+          SOURCE_RUN: ${{ inputs.source_run_id }}
+          SOURCE_ATTEMPT: ${{ inputs.source_attempt }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import delivery
+          if os.environ['GITHUB_REF'] != 'refs/heads/main':
+              raise SystemExit('Release must run from main')
+          stage = os.environ['RELEASE_STAGE']
+          target = os.environ['RELEASE_TARGET']
+          if stage not in ('verify', 'build', 'draft') or target not in ('windows-x64', 'macos-arm64', 'all'):
+              raise SystemExit('Unsupported release stage or packaged platform')
+          if stage == 'draft' and not (
+              re.fullmatch(r'[1-9][0-9]*', os.environ['SOURCE_RUN'])
+              and re.fullmatch(r'[1-9][0-9]*', os.environ['SOURCE_ATTEMPT'])
+              and re.fullmatch(r'[0-9a-f]{40}', os.environ['SOURCE_COMMIT'])
+          ):
+              raise SystemExit('Draft requires exact successful run, attempt and source commit')
+          platforms = ['windows-x64', 'macos-arm64'] if target == 'all' else [target]
+          if stage != 'verify':
+              for platform in platforms:
+                  delivery.authorize_redistribution(platform)
+          print('Release preflight passed; verify mode retains no application artifacts')
+          PY
+
+  build:
+    needs: preflight
+    if: inputs.stage != 'draft'
+    uses: ./.github/workflows/delivery-candidates.yml
+    with:
+      build_kind: portable
+      upload_candidate: ${{ inputs.stage == 'build' }}
+      target: ${{ inputs.target }}
+      sign_macos: ${{ inputs.sign_macos }}
+    secrets:
+      NOH_MACOS_CERTIFICATE_BASE64: ${{ secrets.NOH_MACOS_CERTIFICATE_BASE64 }}
+      NOH_MACOS_CERTIFICATE_PASSWORD: ${{ secrets.NOH_MACOS_CERTIFICATE_PASSWORD }}
+      NOH_APPLE_ID: ${{ secrets.NOH_APPLE_ID }}
+      NOH_APPLE_APP_PASSWORD: ${{ secrets.NOH_APPLE_APP_PASSWORD }}
+
+  draft:
+    needs: preflight
+    if: inputs.stage == 'draft'
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/delivery-draft.yml
+    with:
+      source_run_id: ${{ inputs.source_run_id }}
+      source_attempt: ${{ inputs.source_attempt }}
+      source_commit: ${{ inputs.source_commit }}
+      target: ${{ inputs.target }}
+      create_draft: true

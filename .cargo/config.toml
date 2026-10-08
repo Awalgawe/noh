@@ -1,0 +1,8 @@
+# This toolchain's GNU linker produces a GUI executable that crashes before
+# main. LLD correctly links the Windows imports used by eframe.
+[target.x86_64-pc-windows-gnu]
+linker = "rust-lld"
+rustflags = ["-C", "linker-flavor=ld.lld"]
+
+[alias]
+dev = "run --profile qa --locked --example dev --"

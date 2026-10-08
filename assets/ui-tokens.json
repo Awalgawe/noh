@@ -1,0 +1,105 @@
+{
+  "name": "NOH",
+  "version": 2,
+  "meta": { "source": "NOH interface tokens; synchronized with src/app_style.rs by the token consistency test." },
+  "color": {
+    "themes": [{ "id": "dark", "name": "Dark" }, { "id": "light", "name": "Light" }],
+    "tokens": [
+      { "name": "bg", "value": { "dark": "#17181A", "light": "#F4F4F1" }, "usage": "Window ground: header, media strip, stage and timeline sit directly on it." },
+      { "name": "surface", "value": { "dark": "#1F2023", "light": "#FFFFFF" }, "usage": "The one raised zone per area: export bar, song and lyrics chips, timeline lanes, menus and the export sheet." },
+      { "name": "surface-2", "value": { "dark": "#292A2E", "light": "#EBEBE7" }, "usage": "Secondary buttons, segmented-control track, empty thumbnails, the Details box in the export sheet." },
+      { "name": "surface-3", "value": { "dark": "#33353A", "light": "#E1E1DC" }, "usage": "Progress track, switch track (off), spinner track." },
+      { "name": "seg-on", "value": { "dark": "#3A3C41", "light": "#FFFFFF" }, "usage": "Selected segment inside a segmented control on surface-2." },
+      { "name": "input", "value": { "dark": "#121315", "light": "#FFFFFF" }, "usage": "Text-field fill (file name, start/end fields)." },
+      { "name": "border", "value": { "dark": "#34363A", "light": "#D9D8D2" }, "usage": "Hairline only: top edge of the export bar, menu/popover outline, separators inside menus, ruler ticks." },
+      { "name": "border-strong", "value": { "dark": "#6A6C72", "light": "#878680" }, "usage": "Input borders, dashed add/missing/drop outlines, unchecked checkbox. At least 3:1 on bg and input in both themes." },
+      { "name": "text", "value": { "dark": "#EDEEEA", "light": "#1B1C1E" }, "usage": "Primary text on bg and surface (≥ 13:1) and on surface-2 (≥ 12:1, 12.3:1 in dark; AAA). Also the playhead." },
+      { "name": "text-2", "value": { "dark": "#B1B3AE", "light": "#53565A" }, "usage": "Secondary text: durations, meta, bar line 2, labels. ≥ 6:1 on bg, surface and surface-2." },
+      { "name": "text-3", "value": { "dark": "#989A94", "light": "#63666B" }, "usage": "Tertiary text: ruler labels, visible-range label, footnotes. ≥ 4.5:1 on bg and surface-2." },
+      { "name": "wave", "value": { "dark": "#6F726D", "light": "#8A8C87" }, "usage": "Waveform bars outside the short range, on surface (≥ 3:1 as a graphic)." },
+      { "name": "cue", "value": { "dark": "#8D8F8A", "light": "#7C7F83" }, "usage": "Lyrics-lane cue bars outside the short range." },
+      { "name": "monitor", "value": "#000000", "usage": "Preview letterbox: video bands are black in both themes." },
+      { "name": "focus", "value": { "dark": "#8AB8FF", "light": "#1F6FEB" }, "usage": "2 px focus ring, offset 2, around every focused control; also the open state of a chip whose menu is showing." },
+      { "name": "info", "value": { "dark": "#8AB8FF", "light": "#1F5FBF" }, "usage": "Info icon in the bar (partial project, settings changed). Always with its icon and text." },
+      { "name": "warn", "value": { "dark": "#E9C46A", "light": "#8A5A00" }, "usage": "Warning icon and tag text (for example the 'to qualify' tag). Always with icon or tag shape." },
+      { "name": "error", "value": { "dark": "#F4948A", "light": "#B3261E" }, "usage": "Error icon, message text, 2 px error outline on a tile or field. Always with icon and text." },
+      { "name": "ok", "value": { "dark": "#8FD18C", "light": "#2E7D32" }, "usage": "Ready / done check icon in the bar. Never alone: the status text says the same thing." },
+      { "name": "warn-soft", "value": { "dark": "rgba(233, 196, 106, 0.14)", "light": "#F6EEDC" }, "usage": "Tag background behind warn text." },
+      { "name": "error-soft", "value": { "dark": "rgba(244, 148, 138, 0.12)", "light": "#FBEAE8" }, "usage": "Fill of an unreadable media tile." },
+      { "name": "scrim", "value": { "dark": "rgba(0, 0, 0, 0.55)", "light": "rgba(24, 24, 26, 0.32)" }, "usage": "Backdrop behind the export sheet and Settings (egui Modal backdrop)." },
+      { "name": "seq-1", "value": { "dark": "#4E6A8A", "light": "#C9D7E8" }, "usage": "Sequence colour of the first picture (letter badge and its timeline cells). Letters in seq-ink." },
+      { "name": "seq-2", "value": { "dark": "#7E5F45", "light": "#E8D5C4" }, "usage": "Sequence colour of the second picture." },
+      { "name": "seq-3", "value": { "dark": "#53704C", "light": "#CFE0CB" }, "usage": "Sequence colour of the third picture; the palette cycles after three, the letter keeps items apart. The dark-theme colour keeps seq-ink contrast at or above 4.5:1." },
+      { "name": "seq-ink", "value": { "dark": "#EDEEEA", "light": "#1B1C1E" }, "usage": "Letters on seq-1, seq-2, seq-3 (≥ 4.5:1 on each)." },
+      { "name": "accent", "value": { "dark": "#5FCABE", "light": "#0B6C66" }, "usage": "Primary accent. Fill of the primary button, the short range (border, handles, flag), checked checkbox, progress, switch on. Nothing else." },
+      { "name": "on-accent", "value": { "dark": "#06241F", "light": "#FFFFFF" }, "usage": "Text and glyphs on accent (≥ 6:1)." },
+      { "name": "accent-text", "value": { "dark": "#7AD6CB", "light": "#0A635D" }, "usage": "Accent used as text or icon on bg/surface: logo loop, lyrics cues inside the range, link in Details." },
+      { "name": "accent-soft", "value": { "dark": "rgba(95, 202, 190, 0.16)", "light": "rgba(11, 108, 102, 0.12)" }, "usage": "Fill inside the short range on the lanes." },
+      { "name": "accent-orange", "value": { "dark": "#F0AC8B", "light": "#A84E2A" }, "usage": "Orange accent variant (on-accent-orange on it)." },
+      { "name": "on-accent-orange", "value": { "dark": "#28190F", "light": "#FFFFFF" }, "usage": "Text on accent-orange." },
+      { "name": "accent-orchid", "value": { "dark": "#D9A2E6", "light": "#86398F" }, "usage": "Orchid accent variant (on-accent-orchid on it)." },
+      { "name": "on-accent-orchid", "value": { "dark": "#2A1030", "light": "#FFFFFF" }, "usage": "Text on accent-orchid." }
+    ]
+  },
+  "type": {
+    "fonts": [
+      { "family": "Noto Sans", "file": "NotoSans-SemiBold.ttf", "weight": "600", "style": "normal" }
+    ],
+    "families": {
+      "sans": "\"Noto Sans\", \"Noto Sans JP\", system-ui, sans-serif"
+    },
+    "groups": [
+      {
+        "name": "Interface",
+        "family": "sans",
+        "styles": [
+          { "name": "title", "fontSize": "22px", "lineHeight": "28px", "fontWeight": 600, "sample": "Drop your photos, clips and soundtrack", "usage": "One per screen at most: the empty-state invitation." },
+          { "name": "heading", "fontSize": "17px", "lineHeight": "24px", "fontWeight": 600, "sample": "Export the video", "usage": "App name in the header, sheet and Settings titles." },
+          { "name": "body", "fontSize": "14px", "lineHeight": "20px", "fontWeight": 400, "sample": "Restart the sequence", "usage": "Controls, secondary buttons, menu items, messages." },
+          { "name": "body-strong", "fontSize": "14px", "lineHeight": "20px", "fontWeight": 600, "sample": "Ready to export", "usage": "Primary button, bar status line 1, chip names, selected segment." },
+          { "name": "small", "fontSize": "12px", "lineHeight": "16px", "fontWeight": 400, "sample": "Duration: 3:02", "usage": "Durations, ruler, bar line 2, menu sub-lines, tags." },
+          { "name": "small-strong", "fontSize": "12px", "lineHeight": "16px", "fontWeight": 600, "sample": "Short 5.0 s", "usage": "Sequence letters and the range flag." }
+        ]
+      }
+    ]
+  },
+  "spacing": {
+    "tokens": [
+      { "name": "space-1", "value": "4px", "usage": "Label to help text, lane gap, text lines in a stack." },
+      { "name": "space-2", "value": "8px", "usage": "Inside a group: adjacent buttons, chips, icon to label." },
+      { "name": "space-3", "value": "12px", "usage": "Between picture tiles; compact gaps." },
+      { "name": "space-4", "value": "16px", "usage": "Compact outer margin; between inline groups in the range row; sheet rhythm." },
+      { "name": "space-5", "value": "20px", "usage": "Between zones on the 980 layout (strip, stage, timeline)." },
+      { "name": "space-6", "value": "24px", "usage": "Outer margin on the 980 layout; between the tiles and the song/lyrics column." }
+    ]
+  },
+  "radius": {
+    "tokens": [
+      { "name": "radius-s", "value": "4px", "usage": "Lanes, letter badges, tags, range flag." },
+      { "name": "radius-m", "value": "6px", "usage": "Buttons, inputs, segments, the short range." },
+      { "name": "radius-l", "value": "8px", "usage": "Thumbnails, chips, monitor, segmented track." },
+      { "name": "radius-xl", "value": "12px", "usage": "Menus, popover, export sheet, empty drop area." }
+    ]
+  },
+  "shadow": {
+    "tokens": [
+      { "name": "shadow-overlay", "value": { "dark": "0 12px 32px rgba(0, 0, 0, 0.45)", "light": "0 12px 32px rgba(24, 24, 26, 0.18)" }, "usage": "Only floating layers: lyrics menu, range popover, export sheet (egui Frame::shadow)." }
+    ]
+  },
+  "size": {
+    "tokens": [
+      { "name": "control-h", "value": "32px", "usage": "Buttons, inputs, icon buttons, segmented controls (28 inside the track)." },
+      { "name": "control-h-lg", "value": "36px", "usage": "Export bar buttons and sheet confirmation." },
+      { "name": "header-h", "value": "48px", "usage": "Header with the logo and Settings." },
+      { "name": "bar-min-h", "value": "72px", "usage": "Export bar on 980; compact bar grows with its stacked rows." },
+      { "name": "tile-w", "value": "112px", "usage": "Picture thumbnail width on 980 (16:9, 63 high); 96 × 54 compact." },
+      { "name": "chip-h", "value": "40px", "usage": "Song and lyrics chips." },
+      { "name": "lane-pictures-h", "value": "28px", "usage": "Pictures lane." },
+      { "name": "lane-wave-h", "value": "64px", "usage": "Waveform lane on 980; 48 compact." },
+      { "name": "lane-lyrics-h", "value": "20px", "usage": "Lyrics lane, only when a lyrics track exists." },
+      { "name": "monitor-h", "value": "320px", "usage": "Preview height on 980 (569 × 320 in 16:9, 180 × 320 in 9:16); 200 compact." },
+      { "name": "handle", "value": "10px", "usage": "Range handle width (32 high, 28 compact); hit area 24 wide." },
+      { "name": "compact-below", "value": "560px", "usage": "Content width under which the compact layout applies (window − 2 × 16)." }
+    ]
+  }
+}

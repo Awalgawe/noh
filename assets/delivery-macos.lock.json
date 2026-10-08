@@ -1,0 +1,3637 @@
+{
+  "schema_version": 1,
+  "status": "unqualified-candidate-inputs",
+  "bottle_tag": "arm64_tahoe",
+  "core_commit": "3bd46f766c8c1c84020cf517befb013103362bbd",
+  "core": {
+    "url": "https://github.com/Homebrew/homebrew-core/archive/3bd46f766c8c1c84020cf517befb013103362bbd.tar.gz",
+    "sha256": "1667b7dd9d5e88c6b1402fdfe42b382399ff2430d6c6522974114fac1b6f714e"
+  },
+  "formulae": {
+    "aom": {
+      "version": "3.15.1",
+      "revision": 0,
+      "license": "BSD-2-Clause",
+      "recipe": "Formula/a/aom.rb",
+      "recipe_sha256": "7d315c303e7e42571200c5b948c5872c9668a835b337df38ec8582b373ea34c7",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/aom/blobs/sha256:f78fc63421cf6d79eae934ffb0c0b8e671285cee6e4213c4fd08e5ff84b3d393",
+        "sha256": "f78fc63421cf6d79eae934ffb0c0b8e671285cee6e4213c4fd08e5ff84b3d393"
+      },
+      "source": {
+        "url": "https://aomedia.googlesource.com/aom.git",
+        "tag": "v3.15.1",
+        "revision": "44d0a57786f432d933ff64b653347c66f4d0fa1d",
+        "using": null,
+        "checksum": null
+      },
+      "patches": [],
+      "dependencies": [
+        "libvmaf"
+      ],
+      "build_dependencies": [
+        "cmake",
+        "pkgconf"
+      ],
+      "resources": [
+        {
+          "name": "homebrew-bus_qcif_15fps.y4m",
+          "url": "https://media.xiph.org/video/derf/y4m/bus_qcif_15fps.y4m",
+          "sha256": "868fc3446d37d0c6959a48b68906486bd64788b2e795f0e29613cbb1fa73480e"
+        }
+      ]
+    },
+    "aribb24": {
+      "version": "1.0.4",
+      "revision": 0,
+      "license": "LGPL-3.0-only",
+      "recipe": "Formula/a/aribb24.rb",
+      "recipe_sha256": "d9d0becea50d7bc9eea5edad44f7e09be8c2a43452387b4fe973ebbffda4cc01",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/aribb24/blobs/sha256:68aed54c8d78b72dcc8306e91e004c2afcf193563be22adca2774fa094121ee5",
+        "sha256": "68aed54c8d78b72dcc8306e91e004c2afcf193563be22adca2774fa094121ee5"
+      },
+      "source": {
+        "url": "https://code.videolan.org/jeeb/aribb24/-/archive/v1.0.4/aribb24-v1.0.4.tar.bz2",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "88b58dd760609372701087e25557ada9f7c6d973306c017067c5dcaf9e2c9710"
+      },
+      "patches": [],
+      "dependencies": [
+        "libpng"
+      ],
+      "build_dependencies": [
+        "autoconf",
+        "automake",
+        "libtool",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "brotli": {
+      "version": "1.2.0",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/b/brotli.rb",
+      "recipe_sha256": "b8df7117622413020974e47392069789b3115dae0ab85705424c71a78bf6d62f",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/brotli/blobs/sha256:71ffd30ccd74a9f28cfb210c21fcdc1aa5fec79e23ad2264b6dbceb73437601f",
+        "sha256": "71ffd30ccd74a9f28cfb210c21fcdc1aa5fec79e23ad2264b6dbceb73437601f"
+      },
+      "source": {
+        "url": "https://github.com/google/brotli/archive/refs/tags/v1.2.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "816c96e8e8f193b40151dad7e8ff37b1221d019dbcb9c35cd3fadbfe6477dfec"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "ca-certificates": {
+      "version": "2026-09-25",
+      "revision": 0,
+      "license": "MPL-2.0",
+      "recipe": "Formula/c/ca-certificates.rb",
+      "recipe_sha256": "e7807634f02d41cfad036cdebb546daacd45e118fcb463acc6c6e4f6e07dcf3f",
+      "bottle": {
+        "cellar": ":any_skip_relocation",
+        "url": "https://ghcr.io/v2/homebrew/core/ca-certificates/blobs/sha256:81804ad8a70a7a8d2a0a964d106765ff88716b310decaeffb4b4895a3252186a",
+        "sha256": "81804ad8a70a7a8d2a0a964d106765ff88716b310decaeffb4b4895a3252186a"
+      },
+      "source": {
+        "url": "https://curl.se/ca/cacert-2026-09-25.pem",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "cairo": {
+      "version": "1.18.6",
+      "revision": 0,
+      "license": "LGPL-2.1-only OR MPL-1.1",
+      "recipe": "Formula/c/cairo.rb",
+      "recipe_sha256": "a2cb21214a44f8c1d90f6fddea2d60af9233916946a2596314a2f9d1895b6f2c",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/cairo/blobs/sha256:e067e63e664c7d95bdff0a08a293b4a0182a26f38b750f5f7958012e00823416",
+        "sha256": "e067e63e664c7d95bdff0a08a293b4a0182a26f38b750f5f7958012e00823416"
+      },
+      "source": {
+        "url": "https://cairographics.org/releases/cairo-1.18.6.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "1c767308174337a74694da0f3ec069c271452163a1ef4540964c50c301f157d4"
+      },
+      "patches": [],
+      "dependencies": [
+        "fontconfig",
+        "freetype",
+        "glib",
+        "libpng",
+        "libx11",
+        "libxcb",
+        "libxext",
+        "libxrender",
+        "lzo",
+        "pixman",
+        "gettext"
+      ],
+      "build_dependencies": [
+        "meson",
+        "ninja",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "certifi": {
+      "version": "2026.7.22",
+      "revision": 0,
+      "license": "MPL-2.0",
+      "recipe": "Formula/c/certifi.rb",
+      "recipe_sha256": "3c6a78933d08b52034b8b226e3d1755cb9598205c8355582d3a598afa320fa21",
+      "bottle": {
+        "cellar": ":any_skip_relocation",
+        "url": "https://ghcr.io/v2/homebrew/core/certifi/blobs/sha256:80180b52ce893311447332b65baaa60e7a264fee17a66cb62802fa0a7d483161",
+        "sha256": "80180b52ce893311447332b65baaa60e7a264fee17a66cb62802fa0a7d483161"
+      },
+      "source": {
+        "url": "https://files.pythonhosted.org/packages/a3/c2/24167ea9858356b47a87a50d39908bfdb72ceeefe0041586e704e5376b3a/certifi-2026.7.22.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55"
+      },
+      "patches": [],
+      "dependencies": [
+        "ca-certificates"
+      ],
+      "build_dependencies": [
+        "python-setuptools",
+        "python@3.14"
+      ],
+      "resources": []
+    },
+    "cffi": {
+      "version": "2.1.1",
+      "revision": 0,
+      "license": "MIT-0",
+      "recipe": "Formula/c/cffi.rb",
+      "recipe_sha256": "5fe26cd8c39842f2648b95c4138472e6c904350e5e146b46e60058065d089607",
+      "bottle": {
+        "cellar": ":any_skip_relocation",
+        "url": "https://ghcr.io/v2/homebrew/core/cffi/blobs/sha256:a9f59871dac0d694d909c4d953173dff0c3058d99c5d192368a40f07d0e6deb9",
+        "sha256": "a9f59871dac0d694d909c4d953173dff0c3058d99c5d192368a40f07d0e6deb9"
+      },
+      "source": {
+        "url": "https://files.pythonhosted.org/packages/9e/ef/008a1939e372c06329a3fce4279c02f328488f3526744906eeec3da7ad5f/cffi-2.1.1.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be"
+      },
+      "patches": [],
+      "dependencies": [
+        "pycparser"
+      ],
+      "build_dependencies": [
+        "python@3.13",
+        "python@3.14"
+      ],
+      "resources": []
+    },
+    "cjson": {
+      "version": "1.7.19",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/c/cjson.rb",
+      "recipe_sha256": "c967da19e4b775de3e8bda6b83616835e6155f6872867cef433331cb339b0d5a",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/cjson/blobs/sha256:3949c4efc1e2bb3de33dff83f7bb3322465f4e459b05b9c8ecafb50f9589453a",
+        "sha256": "3949c4efc1e2bb3de33dff83f7bb3322465f4e459b05b9c8ecafb50f9589453a"
+      },
+      "source": {
+        "url": "https://github.com/DaveGamble/cJSON/archive/refs/tags/v1.7.19.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "7fa616e3046edfa7a28a32d5f9eacfd23f92900fe1f8ccd988c1662f30454562"
+      },
+      "patches": [
+        {
+          "strip": "p1",
+          "url": "https://github.com/DaveGamble/cJSON/commit/a29814f285cc531c00223743ad3c55cd38c0dc56.patch?full_index=1",
+          "sha256": "98485b6f2635d2d6f69c7d1ebb3f316661023f7570b12b89e0e535ddba88981e",
+          "type": "backport",
+          "resolves": [
+            {
+              "type": "defect",
+              "id": "https://github.com/DaveGamble/cJSON/pull/986"
+            }
+          ]
+        }
+      ],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "dav1d": {
+      "version": "1.5.4",
+      "revision": 0,
+      "license": "BSD-2-Clause",
+      "recipe": "Formula/d/dav1d.rb",
+      "recipe_sha256": "6c96636f03986330f28ae4760357515cf27503b310e57d387d24c96ed2eee3c0",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/dav1d/blobs/sha256:d30ff747564febd643ec4b279c5adc74f708b8d6eb8e172f914b9fcdec26c464",
+        "sha256": "d30ff747564febd643ec4b279c5adc74f708b8d6eb8e172f914b9fcdec26c464"
+      },
+      "source": {
+        "url": "https://code.videolan.org/videolan/dav1d/-/archive/1.5.4/dav1d-1.5.4.tar.bz2",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "2abfb0c89212e6e4733a54e0ae509ec00a5b845a6360946f918806e14aedb011"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "meson",
+        "ninja"
+      ],
+      "resources": [
+        {
+          "name": "homebrew-00000000.ivf",
+          "url": "https://code.videolan.org/videolan/dav1d-test-data/raw/1.1.0/8-bit/data/00000000.ivf",
+          "sha256": "52b4351f9bc8a876c8f3c9afc403d9e90f319c1882bfe44667d41c8c6f5486f3"
+        }
+      ]
+    },
+    "deno": {
+      "version": "2.9.7",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/d/deno.rb",
+      "recipe_sha256": "5a154a1bcb4b2d16fac4d15bb31f4bc31d056461698bfc06a3a1244a8face9b1",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/deno/blobs/sha256:98359a62d2ae77d6878240826153e426929d995f9774514fe91c946be9ad51cd",
+        "sha256": "98359a62d2ae77d6878240826153e426929d995f9774514fe91c946be9ad51cd"
+      },
+      "source": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.9.7/deno_src.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "21069d2f4dd65b6832e3f5c373c24a43a8d35cb3d68d3841e15d0582bed39ea8"
+      },
+      "patches": [],
+      "dependencies": [
+        "little-cms2",
+        "sqlite"
+      ],
+      "build_dependencies": [
+        "cmake",
+        "lld",
+        "llvm",
+        "ninja",
+        "pkgconf",
+        "rust"
+      ],
+      "resources": []
+    },
+    "ffmpeg": {
+      "version": "9.0.2",
+      "revision": 0,
+      "license": "GPL-3.0-or-later",
+      "recipe": "Formula/f/ffmpeg.rb",
+      "recipe_sha256": "d276ecab3d5e109fadcb93a671a7175569ca7ac942be46008a41f4fa678509f0",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/ffmpeg/blobs/sha256:1c3f1b92bece4e10027a022be15a87e8544a54ab0df16b05f098e9abef8abdd6",
+        "sha256": "1c3f1b92bece4e10027a022be15a87e8544a54ab0df16b05f098e9abef8abdd6"
+      },
+      "source": {
+        "url": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
+      },
+      "patches": [],
+      "dependencies": [
+        "dav1d",
+        "lame",
+        "libvmaf",
+        "libvpx",
+        "openssl@3",
+        "opus",
+        "sdl2-compat",
+        "svt-av1",
+        "x264",
+        "x265",
+        "xz"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "ffmpeg@7": {
+      "version": "7.1.5",
+      "revision": 3,
+      "license": "GPL-3.0-or-later",
+      "recipe": "Formula/f/ffmpeg@7.rb",
+      "recipe_sha256": "79acec3ead3737b748597c407ce8d46771f7040a9153a2c7e5ed5340da2f86e5",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/ffmpeg/7/blobs/sha256:d749053ce58efb23f6aecf53cc923523561c3a32a1fb2e5ccd690b4b7fb8f240",
+        "sha256": "d749053ce58efb23f6aecf53cc923523561c3a32a1fb2e5ccd690b4b7fb8f240"
+      },
+      "source": {
+        "url": "https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f"
+      },
+      "patches": [],
+      "dependencies": [
+        "aom",
+        "aribb24",
+        "dav1d",
+        "fontconfig",
+        "freetype",
+        "frei0r",
+        "gnutls",
+        "harfbuzz",
+        "jpeg-xl",
+        "lame",
+        "libass",
+        "libbluray",
+        "librist",
+        "libsoxr",
+        "libssh",
+        "libvidstab",
+        "libvmaf",
+        "libvorbis",
+        "libvpx",
+        "libx11",
+        "libxcb",
+        "opencore-amr",
+        "openjpeg",
+        "opus",
+        "rav1e",
+        "rubberband",
+        "sdl2-compat",
+        "snappy",
+        "speex",
+        "srt",
+        "svt-av1",
+        "tesseract",
+        "theora",
+        "webp",
+        "x264",
+        "x265",
+        "xvid",
+        "xz",
+        "zeromq",
+        "zimg",
+        "libarchive",
+        "libogg",
+        "libsamplerate"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "flac": {
+      "version": "1.5.0",
+      "revision": 0,
+      "license": "BSD-3-Clause AND GPL-2.0-or-later AND ISC AND LGPL-2.0-or-later AND LGPL-2.1-or-later AND LicenseRef-Homebrew-public-domain AND (GPL-2.0-or-later OR LGPL-2.1-or-later)",
+      "recipe": "Formula/f/flac.rb",
+      "recipe_sha256": "672673af158e6b17e6fd0aa69c66b36074501ab904df99d6eed23086445ab0ab",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/flac/blobs/sha256:82b19ded7c732c245a9e325c191de60f7d17bb3370afdc98d159852cf3f9dbd5",
+        "sha256": "82b19ded7c732c245a9e325c191de60f7d17bb3370afdc98d159852cf3f9dbd5"
+      },
+      "source": {
+        "url": "https://ftp.osuosl.org/pub/xiph/releases/flac/flac-1.5.0.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "f2c1c76592a82ffff8413ba3c4a1299b6c7ab06c734dee03fd88630485c2b920"
+      },
+      "patches": [],
+      "dependencies": [
+        "libogg"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "fontconfig": {
+      "version": "2.18.3",
+      "revision": 0,
+      "license": "HPND-sell-variant AND Unicode-3.0 AND MIT-Modern-Variant AND MIT AND LicenseRef-Homebrew-public-domain",
+      "recipe": "Formula/f/fontconfig.rb",
+      "recipe_sha256": "377fd40fc05503009a2ecc23e447b7413e6aca2e99eabe277a18689c0340bcc9",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/fontconfig/blobs/sha256:ad1c5a3054313853e9eefa9a07c32a3ff7b11c4fbcff9e73affc2a50233dbafe",
+        "sha256": "ad1c5a3054313853e9eefa9a07c32a3ff7b11c4fbcff9e73affc2a50233dbafe"
+      },
+      "source": {
+        "url": "https://gitlab.freedesktop.org/fontconfig/fontconfig/-/archive/2.18.3/fontconfig-2.18.3.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "9ae01e1d53acdef56010c5451cd34aa41d325b2faccd8606448d8fa01b2496b3"
+      },
+      "patches": [],
+      "dependencies": [
+        "freetype",
+        "gettext"
+      ],
+      "build_dependencies": [
+        "gettext",
+        "meson",
+        "ninja",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "freetype": {
+      "version": "2.14.3",
+      "revision": 0,
+      "license": "FTL",
+      "recipe": "Formula/f/freetype.rb",
+      "recipe_sha256": "8d37fea6100c7db4fba0d943353948b98042cf26c07cbebf2d88cd2cc8c78c11",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/freetype/blobs/sha256:449e22351da81ba5c8c398f87c295decac6b396bd6fab54becbb3d18800b62d1",
+        "sha256": "449e22351da81ba5c8c398f87c295decac6b396bd6fab54becbb3d18800b62d1"
+      },
+      "source": {
+        "url": "https://downloads.sourceforge.net/project/freetype/freetype2/2.14.3/freetype-2.14.3.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f"
+      },
+      "patches": [],
+      "dependencies": [
+        "libpng"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "frei0r": {
+      "version": "3.6.0",
+      "revision": 0,
+      "license": "GPL-2.0-or-later",
+      "recipe": "Formula/f/frei0r.rb",
+      "recipe_sha256": "96ac613632610c0824056584ce2801d57aa79a3c56572b83488a7a699108dbad",
+      "bottle": {
+        "cellar": ":any_skip_relocation",
+        "url": "https://ghcr.io/v2/homebrew/core/frei0r/blobs/sha256:482020519fe945975c7cac2f2eb88fd7f5c11b4a74e64078c6c1efa74fe8b532",
+        "sha256": "482020519fe945975c7cac2f2eb88fd7f5c11b4a74e64078c6c1efa74fe8b532"
+      },
+      "source": {
+        "url": "https://github.com/dyne/frei0r/archive/refs/tags/v3.6.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "425ddc9358151c52775a00b14e9dbd4044fc1f3aa931beef2aa3633707ba1eb8"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "fribidi": {
+      "version": "1.0.17",
+      "revision": 0,
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later",
+      "recipe": "Formula/f/fribidi.rb",
+      "recipe_sha256": "a7a0f98a348293651e9dcd90b7a8ab80ef2ae93aae6fa8853b07d5e5002a8350",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/fribidi/blobs/sha256:1933df503db74d65aa5c47dc71f7eedf88692b1e1866a2d98b8422c085f8ef15",
+        "sha256": "1933df503db74d65aa5c47dc71f7eedf88692b1e1866a2d98b8422c085f8ef15"
+      },
+      "source": {
+        "url": "https://github.com/fribidi/fribidi/releases/download/v1.0.17/fribidi-1.0.17.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "6949dcde27d41cebad1fd741fcafc36d55a1020d2d872d4a6eb3914caabbada2"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "help2man",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "gettext": {
+      "version": "1.0",
+      "revision": 0,
+      "license": "GPL-3.0-or-later AND LGPL-2.1-or-later",
+      "recipe": "Formula/g/gettext.rb",
+      "recipe_sha256": "9c90f7cf5a45c828e2a66d9339b25b781302cf49316e939d029e6079e1b9d916",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/gettext/blobs/sha256:3af5392939e50a6ef73e42799fc3ead6ef72fe0040c0a45183d04a4008306d6a",
+        "sha256": "3af5392939e50a6ef73e42799fc3ead6ef72fe0040c0a45183d04a4008306d6a"
+      },
+      "source": {
+        "url": "https://ftpmirror.gnu.org/gettext/gettext-1.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "85d99b79c981a404874c02e0342176cf75c7698e2b51fe41031cf6526d974f1a",
+        "download_url": "https://ftp.gnu.org/gnu/gettext/gettext-1.0.tar.gz"
+      },
+      "patches": [],
+      "dependencies": [
+        "json-c",
+        "libunistring"
+      ],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "giflib": {
+      "version": "6.1.3",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/g/giflib.rb",
+      "recipe_sha256": "d07af08a16f8bcbe3405e94af9c60ba48f0d4e2540008174a86068e728c9b584",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/giflib/blobs/sha256:5bf0850f756c9fe9469d628d1833b0d44db914e44b6b67037e91312c0d0f560d",
+        "sha256": "5bf0850f756c9fe9469d628d1833b0d44db914e44b6b67037e91312c0d0f560d"
+      },
+      "source": {
+        "url": "https://downloads.sourceforge.net/project/giflib/giflib-6.x/giflib-6.1.3.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "b65b66b99f0424b93525f987386f22fc5efb9da2bfc92ad4a532249aaffbab0e"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "glib": {
+      "version": "2.90.0",
+      "revision": 0,
+      "license": "LGPL-2.1-or-later",
+      "recipe": "Formula/g/glib.rb",
+      "recipe_sha256": "7e41107faf209528d2e993afec53ad1006bbe8945772bde43c2295e8a2ef7659",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/glib/blobs/sha256:e2d2d3cff3bb121e8f6c98f9a831e03f78b66e88063fc5d432a68bf0b4951092",
+        "sha256": "e2d2d3cff3bb121e8f6c98f9a831e03f78b66e88063fc5d432a68bf0b4951092"
+      },
+      "source": {
+        "url": "https://download.gnome.org/sources/glib/2.90/glib-2.90.0.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "17d15cac2af80a33271127408e0abc2748eb297c595c2a26409e81e14e7d1b8f"
+      },
+      "patches": [
+        {
+          "strip": "p1",
+          "file": "Patches/glib/hardcoded-paths.diff",
+          "sha256": "d846efd0bf62918350da94f850db33b0f8727fece9bfaf8164566e3094e80c97"
+        }
+      ],
+      "dependencies": [
+        "pcre2",
+        "gettext"
+      ],
+      "build_dependencies": [
+        "bison",
+        "gettext",
+        "meson",
+        "ninja",
+        "pkgconf",
+        "python-setuptools",
+        "python@3.14"
+      ],
+      "resources": [
+        {
+          "name": "gobject-introspection",
+          "url": "https://download.gnome.org/sources/gobject-introspection/1.86/gobject-introspection-1.86.0.tar.xz",
+          "sha256": "920d1a3fcedeadc32acff95c2e203b319039dd4b4a08dd1a2dfd283d19c0b9ae"
+        }
+      ]
+    },
+    "gmp": {
+      "version": "6.3.0",
+      "revision": 0,
+      "license": "LGPL-3.0-or-later OR GPL-2.0-or-later",
+      "recipe": "Formula/g/gmp.rb",
+      "recipe_sha256": "a7a712aab26d2b88865ebd9c06f4eeb131c53815f3b6e467578b32ab66ac3b18",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/gmp/blobs/sha256:fa46330de5d003bd9294ae042c8f4ae0a51bcb8c57de2c94c073ff4a7ffa10c3",
+        "sha256": "fa46330de5d003bd9294ae042c8f4ae0a51bcb8c57de2c94c073ff4a7ffa10c3"
+      },
+      "source": {
+        "url": "https://ftpmirror.gnu.org/gmp/gmp-6.3.0.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898",
+        "download_url": "https://ftp.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "autoconf",
+        "automake",
+        "libtool"
+      ],
+      "resources": []
+    },
+    "gnutls": {
+      "version": "3.8.13",
+      "revision": 2,
+      "license": "LGPL-2.1-or-later AND GPL-3.0-only",
+      "recipe": "Formula/g/gnutls.rb",
+      "recipe_sha256": "720a0b82acbc9f97fe2950c6b919ea5e9383b491c8ef7b7f06a7f3e16c9b8c07",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/gnutls/blobs/sha256:a2334eb50a165945aad7df804a3e846053de62973f6aee8060fec8c16c59446b",
+        "sha256": "a2334eb50a165945aad7df804a3e846053de62973f6aee8060fec8c16c59446b"
+      },
+      "source": {
+        "url": "https://www.gnupg.org/ftp/gcrypt/gnutls/v3.8/gnutls-3.8.13.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "ffed8ec1bf09c2426d4f14aae377de4753b53e537d685e604e99a8b16ca9c97e"
+      },
+      "patches": [
+        {
+          "strip": "p1",
+          "url": "https://gitlab.com/gnutls/gnutls/-/commit/29c2027c963cf559817d0da37c1fc2efd0c1bd6a.diff",
+          "sha256": "c0bfc0164ff131c9d2e1c4d0367430f8b767b64c9c21e0f408bd634d21fb0302",
+          "type": "backport",
+          "resolves": [
+            {
+              "type": "defect",
+              "id": "https://gitlab.com/gnutls/gnutls/-/merge_requests/2106"
+            }
+          ]
+        }
+      ],
+      "dependencies": [
+        "ca-certificates",
+        "gmp",
+        "libidn2",
+        "libtasn1",
+        "libunistring",
+        "nettle",
+        "p11-kit",
+        "gettext"
+      ],
+      "build_dependencies": [
+        "pkgconf",
+        "texinfo"
+      ],
+      "resources": []
+    },
+    "graphite2": {
+      "version": "1.3.15",
+      "revision": 0,
+      "license": "MIT OR MPL-2.0 OR LGPL-2.1-or-later OR GPL-2.0-or-later",
+      "recipe": "Formula/g/graphite2.rb",
+      "recipe_sha256": "27b88654eaa68701681d02c19abcb800b54b9cfd14fa4d084df113c133b552d4",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/graphite2/blobs/sha256:c05e664c8872f3a9e08ada587a33d71b841673126840fe0cd301300c1f59acea",
+        "sha256": "c05e664c8872f3a9e08ada587a33d71b841673126840fe0cd301300c1f59acea"
+      },
+      "source": {
+        "url": "https://github.com/silnrsi/graphite/releases/download/1.3.15/graphite2-1.3.15.tgz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "c6bc8b4252724665297f7cad0c55897285c673f9b8e6db3522ace833593fe0b1"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": [
+        {
+          "name": "testfont",
+          "url": "https://scripts.sil.org/pub/woff/fonts/Simple-Graphite-Font.ttf",
+          "sha256": "7e573896bbb40088b3a8490f83d6828fb0fd0920ac4ccdfdd7edb804e852186a"
+        }
+      ]
+    },
+    "harfbuzz": {
+      "version": "14.5.1",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/h/harfbuzz.rb",
+      "recipe_sha256": "9c67597f69970bdc1ca5e4f6d9d23c207dae365ac7ee40f62183372c28c32128",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/harfbuzz/blobs/sha256:1acf1656c7db85043eaf262a2d53eff2b395b5890b508e01fef31c344423b899",
+        "sha256": "1acf1656c7db85043eaf262a2d53eff2b395b5890b508e01fef31c344423b899"
+      },
+      "source": {
+        "url": "https://github.com/harfbuzz/harfbuzz/releases/download/14.5.1/harfbuzz-14.5.1.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "7e2fa4e8c7c98e8d8140671f5772542afaaa6acccfbd746506886b6d85f7f8d6"
+      },
+      "patches": [],
+      "dependencies": [
+        "cairo",
+        "freetype",
+        "glib",
+        "graphite2",
+        "icu4c@78",
+        "libpng"
+      ],
+      "build_dependencies": [
+        "gobject-introspection",
+        "meson",
+        "ninja",
+        "pkgconf",
+        "python@3.14"
+      ],
+      "resources": [
+        {
+          "name": "homebrew-test-ttf",
+          "url": "https://github.com/harfbuzz/harfbuzz/raw/fc0daafab0336b847ac14682e581a8838f36a0bf/test/shaping/fonts/sha1sum/270b89df543a7e48e206a2d830c0e10e5265c630.ttf",
+          "sha256": "9535d35dab9e002963eef56757c46881f6b3d3b27db24eefcc80929781856c77"
+        }
+      ]
+    },
+    "highway": {
+      "version": "1.4.0",
+      "revision": 0,
+      "license": "Apache-2.0 OR BSD-3-Clause",
+      "recipe": "Formula/h/highway.rb",
+      "recipe_sha256": "4cd06ebd5130b5983d8106f0d51ce97316d8e19dd20cdfd9cf7910932e8ed8d9",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/highway/blobs/sha256:4a17f51ff9c2f22f412db35dacc63860a7e1c722f08fbf308f05f9f4db21db0d",
+        "sha256": "4a17f51ff9c2f22f412db35dacc63860a7e1c722f08fbf308f05f9f4db21db0d"
+      },
+      "source": {
+        "url": "https://github.com/google/highway/archive/refs/tags/1.4.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "e72241ac9524bb653ae52ced768b508045d4438726a303f10181a38f764a453c"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "icu4c@78": {
+      "version": "78.3",
+      "revision": 0,
+      "license": "Unicode-3.0",
+      "recipe": "Formula/i/icu4c@78.rb",
+      "recipe_sha256": "56435e8587d8b8252e3e6b5930c43d47346a6423c15583fde4056b651ac42a0f",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/icu4c/78/blobs/sha256:0476be299494b97e50a48b0ba08811255300228aef664058e555480d6aee4fb5",
+        "sha256": "0476be299494b97e50a48b0ba08811255300228aef664058e555480d6aee4fb5"
+      },
+      "source": {
+        "url": "https://github.com/unicode-org/icu/releases/download/release-78.3/icu4c-78.3-sources.tgz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "3a2e7a47604ba702f345878308e6fefeca612ee895cf4a5f222e7955fabfe0c0"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "imath": {
+      "version": "3.2.3",
+      "revision": 0,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/i/imath.rb",
+      "recipe_sha256": "d1e776ad26a15b3531eb632f2828a0633ed26acc28cf658132907d86d691e8d2",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/imath/blobs/sha256:cd0092341705d6b55ef5e9cf76ef8d5b079af1e4bb3a0d403ae0f308e9775e19",
+        "sha256": "cd0092341705d6b55ef5e9cf76ef8d5b079af1e4bb3a0d403ae0f308e9775e19"
+      },
+      "source": {
+        "url": "https://github.com/AcademySoftwareFoundation/Imath/archive/refs/tags/v3.2.3.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "e10c12b3f21f45bf08e09d4215d9c7691368d747beebd840de0b6fefed2df9f8"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "jpeg-turbo": {
+      "version": "3.2.0",
+      "revision": 0,
+      "license": "IJG AND Zlib AND BSD-3-Clause",
+      "recipe": "Formula/j/jpeg-turbo.rb",
+      "recipe_sha256": "7e2e90fde4b71193c517e87763b199f3ebf185afcce4b99d82eee7467e761b8d",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/jpeg-turbo/blobs/sha256:02539b0736cfacdc6c4bb6a7d274d0c5c8b6e1faf9b5bab1e155168961d288aa",
+        "sha256": "02539b0736cfacdc6c4bb6a7d274d0c5c8b6e1faf9b5bab1e155168961d288aa"
+      },
+      "source": {
+        "url": "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.2.0/libjpeg-turbo-3.2.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "6f30092cef9fb839779646608f4ee14ae3cbac989c47fa05e841b0841f09878e"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "jpeg-xl": {
+      "version": "0.12.0",
+      "revision": 1,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/j/jpeg-xl.rb",
+      "recipe_sha256": "1e76478e13ef6cd18c73676e029f043cc0511386deeb07db11ddee7aa70217fd",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/jpeg-xl/blobs/sha256:1da12f614c4db97c3afa09d7dec5b9e719dca06bb1a3f545358ff38ce6dbb33b",
+        "sha256": "1da12f614c4db97c3afa09d7dec5b9e719dca06bb1a3f545358ff38ce6dbb33b"
+      },
+      "source": {
+        "url": "https://github.com/libjxl/libjxl/archive/refs/tags/v0.12.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "03e9be69a30be4011f559da75328b6d7cea8ad921fabfbd551ce10bf45cdc992"
+      },
+      "patches": [],
+      "dependencies": [
+        "brotli",
+        "giflib",
+        "highway",
+        "imath",
+        "jpeg-turbo",
+        "libpng",
+        "little-cms2",
+        "openexr"
+      ],
+      "build_dependencies": [
+        "asciidoc",
+        "cmake",
+        "docbook-xsl",
+        "pkgconf",
+        "sphinx-doc",
+        "webp"
+      ],
+      "resources": [
+        {
+          "name": "sjpeg",
+          "url": "https://github.com/webmproject/sjpeg/archive/94e0df6d0f8b44228de5be0ff35efb9f946a13c9.tar.gz",
+          "sha256": "ac94917fe745a674eabf1e044f23ec55cd5a548c9869c06ec4b19da14ee0227d"
+        }
+      ]
+    },
+    "json-c": {
+      "version": "0.19",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/j/json-c.rb",
+      "recipe_sha256": "7b6c55b79158a98a41e376a39e05bbee827f425b67654af75db461f79402af37",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/json-c/blobs/sha256:f2da9c816501d9c3c0e5f883b60b3d2758b35a3995e20d541d4b029d8b35ef13",
+        "sha256": "f2da9c816501d9c3c0e5f883b60b3d2758b35a3995e20d541d4b029d8b35ef13"
+      },
+      "source": {
+        "url": "https://s3.amazonaws.com/json-c_releases/releases/json-c-0.19.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "37ad0249902e301bd9052bf712e511fcc6acff4ecaad4b5900aad9ce564e26de"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "lame": {
+      "version": "4.0",
+      "revision": 0,
+      "license": "LGPL-2.0-or-later",
+      "recipe": "Formula/l/lame.rb",
+      "recipe_sha256": "9a5607136c9583e61d0be24428901baecce5d38f204df9428bbfde6ed3d1360e",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/lame/blobs/sha256:b0fe0cfb39c74a53b7635833fe3293a62c886b084bc5ccc8ed7cd177803182e4",
+        "sha256": "b0fe0cfb39c74a53b7635833fe3293a62c886b084bc5ccc8ed7cd177803182e4"
+      },
+      "source": {
+        "url": "https://downloads.sourceforge.net/project/lame/lame/4.0/lame-4.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "3df5124d5ad3a98312ffd7ba6a9b36230e4f8a3e66d3ce0f425e336c32d216eb"
+      },
+      "patches": [],
+      "dependencies": [
+        "mpg123"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "leptonica": {
+      "version": "1.87.0",
+      "revision": 0,
+      "license": "BSD-2-Clause",
+      "recipe": "Formula/l/leptonica.rb",
+      "recipe_sha256": "0785c1d81e62af0ffc1edae8b8d5808dc6049a8439398cd498919b9d6d8124df",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/leptonica/blobs/sha256:6932bf1645434e6c93d7bd4ca86623c55bdbd6d386833ebbdae969c581d4d303",
+        "sha256": "6932bf1645434e6c93d7bd4ca86623c55bdbd6d386833ebbdae969c581d4d303"
+      },
+      "source": {
+        "url": "https://github.com/DanBloomberg/leptonica/releases/download/1.87.0/leptonica-1.87.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "c73363397f96eb1295602bf44d708a994ad42046c791bf03ea0505d829bdb6a7"
+      },
+      "patches": [],
+      "dependencies": [
+        "giflib",
+        "jpeg-turbo",
+        "libpng",
+        "libtiff",
+        "openjpeg",
+        "webp"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "libarchive": {
+      "version": "3.8.9",
+      "revision": 0,
+      "license": "BSD-2-Clause",
+      "recipe": "Formula/lib/libarchive.rb",
+      "recipe_sha256": "f70c717f702afc86174a032f225770d1f9726ed2ab0b1520722cbea02561cbfb",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libarchive/blobs/sha256:0d24892c4031758a148bece7e41b82cc8be8c8af020eb379d43a98cf984ba26d",
+        "sha256": "0d24892c4031758a148bece7e41b82cc8be8c8af020eb379d43a98cf984ba26d"
+      },
+      "source": {
+        "url": "https://www.libarchive.org/downloads/libarchive-3.8.9.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "888c934f9d95648ecb9163dc8e23ab80a476ecb81a8f1154704a227b5b676dde"
+      },
+      "patches": [],
+      "dependencies": [
+        "libb2",
+        "lz4",
+        "xz",
+        "zstd"
+      ],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "libass": {
+      "version": "0.17.5",
+      "revision": 1,
+      "license": "ISC",
+      "recipe": "Formula/lib/libass.rb",
+      "recipe_sha256": "176f69e91d8b0a139c75fd3bd6b4af022eb295624b0364bdaea653f4a5b9fd86",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libass/blobs/sha256:29ac9a179908bc0c3d918b0f41fc40f7fbdfbc8819fa774ac85f0620b9281dc3",
+        "sha256": "29ac9a179908bc0c3d918b0f41fc40f7fbdfbc8819fa774ac85f0620b9281dc3"
+      },
+      "source": {
+        "url": "https://github.com/libass/libass/releases/download/0.17.5/libass-0.17.5.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "2dca25c0e0c837ddf00b52011b3f82cac1e4ddd3ad018227806b0c2288864acc"
+      },
+      "patches": [],
+      "dependencies": [
+        "freetype",
+        "fribidi",
+        "harfbuzz",
+        "libunibreak"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "libb2": {
+      "version": "0.98.1",
+      "revision": 0,
+      "license": "CC0-1.0",
+      "recipe": "Formula/lib/libb2.rb",
+      "recipe_sha256": "18439fcdeadceaadb9fd8fed4e8a4f4df2e9a5b750bdeae8338fe430b5bd3533",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libb2/blobs/sha256:4c161a089a39249a589b88d39f57998c6a2183426647ce886708861774b001eb",
+        "sha256": "4c161a089a39249a589b88d39f57998c6a2183426647ce886708861774b001eb"
+      },
+      "source": {
+        "url": "https://github.com/BLAKE2/libb2/releases/download/v0.98.1/libb2-0.98.1.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "53626fddce753c454a3fea581cbbc7fe9bbcf0bc70416d48fdbbf5d87ef6c72e"
+      },
+      "patches": [
+        {
+          "strip": "p1",
+          "file": "Patches/libtool/configure-big_sur.diff",
+          "sha256": "35acd6aebc19843f1a2b3a63e880baceb0f5278ab1ace661e57a502d9d78c93c"
+        }
+      ],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "libbluray": {
+      "version": "1.5.0",
+      "revision": 0,
+      "license": "LGPL-2.1-or-later",
+      "recipe": "Formula/lib/libbluray.rb",
+      "recipe_sha256": "047d95a8260b3b0c6c1dc13d9dd29dec25b9f4ebb33671f292e08b535395ead7",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libbluray/blobs/sha256:6f27f52be0330c4e36c59a6beb6a12255e8e6d51448d35d889246419d20ac042",
+        "sha256": "6f27f52be0330c4e36c59a6beb6a12255e8e6d51448d35d889246419d20ac042"
+      },
+      "source": {
+        "url": "https://download.videolan.org/videolan/libbluray/1.5.0/libbluray-1.5.0.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "f676408e91a5d321abf8b8d4dfdae36205c297dab5c54c3ec519639025f474a2"
+      },
+      "patches": [],
+      "dependencies": [
+        "fontconfig",
+        "freetype",
+        "libudfread"
+      ],
+      "build_dependencies": [
+        "meson",
+        "ninja",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "libdatrie": {
+      "version": "0.2.14",
+      "revision": 0,
+      "license": "LGPL-2.1-or-later",
+      "recipe": "Formula/lib/libdatrie.rb",
+      "recipe_sha256": "b20b65d517aa418d34b4f8d873e0fe8ff0862cf131a075c2f36dc77007c459cf",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libdatrie/blobs/sha256:77f8ac3d31bc58f8e000a6b065fa1eeff3c0f832e1d4e3c5fa67b464307c4e87",
+        "sha256": "77f8ac3d31bc58f8e000a6b065fa1eeff3c0f832e1d4e3c5fa67b464307c4e87"
+      },
+      "source": {
+        "url": "https://github.com/tlwg/libdatrie/releases/download/v0.2.14/libdatrie-0.2.14.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "f04095010518635b51c2313efa4f290b7db828d6273e39b2b8858f859dfe81d5"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "libdeflate": {
+      "version": "1.26",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/lib/libdeflate.rb",
+      "recipe_sha256": "2725c16233640dc83385432ea530e88b90885ab9b489645178721466619e0616",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libdeflate/blobs/sha256:9a46f024adee90da4cd40a8d0e3386551044c3d815406e50bc7c6ec276cdb52d",
+        "sha256": "9a46f024adee90da4cd40a8d0e3386551044c3d815406e50bc7c6ec276cdb52d"
+      },
+      "source": {
+        "url": "https://github.com/ebiggers/libdeflate/archive/refs/tags/v1.26.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "bba03fffc5538576213675ce6968fcff6ce2e67d82e4d5febea2d05f9f13cf85"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "libidn2": {
+      "version": "2.3.8",
+      "revision": 0,
+      "license": "(GPL-2.0-or-later OR LGPL-3.0-or-later) AND (Unicode-TOU AND Unicode-DFS-2016) AND GPL-3.0-or-later AND LGPL-2.1-or-later AND FSFAP-no-warranty-disclaimer",
+      "recipe": "Formula/lib/libidn2.rb",
+      "recipe_sha256": "032d48cd71a4c81e9c6a7847b1dc2d3b0a1d1f21a8fa6fead4a7ff1b60df2160",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/libidn2/blobs/sha256:f8f1b459f15a4ac11d2dce786a9140509782227b7d499cbdf3a1279dd325d90b",
+        "sha256": "f8f1b459f15a4ac11d2dce786a9140509782227b7d499cbdf3a1279dd325d90b"
+      },
+      "source": {
+        "url": "https://ftpmirror.gnu.org/libidn/libidn2-2.3.8.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "f557911bf6171621e1f72ff35f5b1825bb35b52ed45325dcdee931e5d3c0787a",
+        "download_url": "https://ftp.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz"
+      },
+      "patches": [],
+      "dependencies": [
+        "libunistring",
+        "gettext"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "libmicrohttpd": {
+      "version": "1.0.10",
+      "revision": 0,
+      "license": "LGPL-2.1-or-later",
+      "recipe": "Formula/lib/libmicrohttpd.rb",
+      "recipe_sha256": "e7ed9f1948e8df3e1a679c2cc885bcddc18a646a97760b8c54c810c88ca83c15",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libmicrohttpd/blobs/sha256:4092f5f284ac8a4dfa7c39997599a51b69a195ad54f778dad979f21cd3ac8564",
+        "sha256": "4092f5f284ac8a4dfa7c39997599a51b69a195ad54f778dad979f21cd3ac8564"
+      },
+      "source": {
+        "url": "https://ftpmirror.gnu.org/libmicrohttpd/libmicrohttpd-1.0.10.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "04bfe8ef75db7d629a33de767599765cecadc56274a39822d5d081030d577685",
+        "download_url": "https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-1.0.10.tar.gz"
+      },
+      "patches": [],
+      "dependencies": [
+        "gnutls"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "libogg": {
+      "version": "1.3.6",
+      "revision": 0,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/lib/libogg.rb",
+      "recipe_sha256": "d8afcb1046e6ec9fa3bd6c3f067c0f1f14ebd61c2e6e4030efd25535baf075e2",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libogg/blobs/sha256:4d9d14f8e36ed913c02201bfc01682ba3f550de412e9a24e3ef9aed4f1b8a23d",
+        "sha256": "4d9d14f8e36ed913c02201bfc01682ba3f550de412e9a24e3ef9aed4f1b8a23d"
+      },
+      "source": {
+        "url": "https://ftp.osuosl.org/pub/xiph/releases/ogg/libogg-1.3.6.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "83e6704730683d004d20e21b8f7f55dcb3383cdf84c0daedf30bde175f774638"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": [
+        {
+          "name": "oggfile",
+          "url": "https://upload.wikimedia.org/wikipedia/commons/c/c8/Example.ogg",
+          "sha256": "f57b56d8aae4c847cf01224fb45293610d801cfdac43d932b5eeab1cd318182a"
+        }
+      ]
+    },
+    "libplacebo": {
+      "version": "7.360.1",
+      "revision": 0,
+      "license": "LGPL-2.1-or-later",
+      "recipe": "Formula/lib/libplacebo.rb",
+      "recipe_sha256": "a1a481cc9a1a3f2a98bd0116b7978acc12ef349e2b3ea14c6b27d1f88e602480",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libplacebo/blobs/sha256:6575f7e22f75c946f5c831d2ff130b89aa275a2cdd4dbe7a0204590513b87b25",
+        "sha256": "6575f7e22f75c946f5c831d2ff130b89aa275a2cdd4dbe7a0204590513b87b25"
+      },
+      "source": {
+        "url": "https://code.videolan.org/videolan/libplacebo/-/archive/v7.360.1/libplacebo-v7.360.1.tar.bz2",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "937aa5eeea596798b3274d362de2e3bd32bc537a66d149dd85043349c74dffb6"
+      },
+      "patches": [],
+      "dependencies": [
+        "little-cms2",
+        "shaderc",
+        "vulkan-loader"
+      ],
+      "build_dependencies": [
+        "fast_float",
+        "meson",
+        "ninja",
+        "pkgconf",
+        "python@3.14",
+        "vulkan-headers"
+      ],
+      "resources": [
+        {
+          "name": "glad2",
+          "url": "https://files.pythonhosted.org/packages/6e/5a/d62b24fe1c7c2f34e15c2aa4418a5327a8550fdc272999a59e0dddebc3ee/glad2-2.0.8.tar.gz",
+          "sha256": "b84079b9fa404f37171b961bdd1d8da21370e6c818defb8481c5b3fe3d6436da"
+        },
+        {
+          "name": "jinja2",
+          "url": "https://files.pythonhosted.org/packages/df/bf/f7da0350254c0ed7c72f3e33cef02e048281fec7ecec5f032d4aac52226b/jinja2-3.1.6.tar.gz",
+          "sha256": "0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d"
+        },
+        {
+          "name": "markupsafe",
+          "url": "https://files.pythonhosted.org/packages/7e/99/7690b6d4034fffd95959cbe0c02de8deb3098cc577c67bb6a24fe5d7caa7/markupsafe-3.0.3.tar.gz",
+          "sha256": "722695808f4b6457b320fdc131280796bdceb04ab50fe1795cd540799ebe1698"
+        }
+      ]
+    },
+    "libpng": {
+      "version": "1.6.59",
+      "revision": 0,
+      "license": "libpng-2.0",
+      "recipe": "Formula/lib/libpng.rb",
+      "recipe_sha256": "b4c719b087e0ba9c8f724846b984b51e9edb2d71926bf65a654a0c54d339eac1",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libpng/blobs/sha256:de1c24778cb63a442682c1e6a391560662046a68c2f0c207ecb4abbc81e98cff",
+        "sha256": "de1c24778cb63a442682c1e6a391560662046a68c2f0c207ecb4abbc81e98cff"
+      },
+      "source": {
+        "url": "https://downloads.sourceforge.net/project/libpng/libpng16/1.6.59/libpng-1.6.59.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "d80dd2a38a37f803cb9b6ac7b14bd6e74ddc3b654780a8380bdf93523fdb4389"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": [
+        {
+          "name": "pngtest.png",
+          "url": "https://src.fedoraproject.org/rpms/libpng/raw/49e9a06ca115aaa911dd3419ee79c1870d1428fb/f/pngtest.png",
+          "sha256": "f925a657a5343cfb724414c01e87afd4d60b1f82a46edc0e11f016a126f84064"
+        }
+      ]
+    },
+    "librist": {
+      "version": "0.2.20",
+      "revision": 0,
+      "license": "BSD-2-Clause",
+      "recipe": "Formula/lib/librist.rb",
+      "recipe_sha256": "67836789080e9cc0594d20053bbbff7625c7e08bf781da27e004d8ad9fde5237",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/librist/blobs/sha256:d53fe875d0331485ee81cf492045ba8cf5551e596299104fc428666bdd328a8d",
+        "sha256": "d53fe875d0331485ee81cf492045ba8cf5551e596299104fc428666bdd328a8d"
+      },
+      "source": {
+        "url": "https://code.videolan.org/rist/librist/-/archive/v0.2.20/librist-v0.2.20.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "9e40eeb87f014790531ad41326cc271b930a65962e4b15231b301fc59b29fe31"
+      },
+      "patches": [],
+      "dependencies": [
+        "cjson",
+        "gmp",
+        "gnutls",
+        "libmicrohttpd",
+        "lz4",
+        "nettle"
+      ],
+      "build_dependencies": [
+        "meson",
+        "ninja",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "libsamplerate": {
+      "version": "0.2.2",
+      "revision": 0,
+      "license": "BSD-2-Clause",
+      "recipe": "Formula/lib/libsamplerate.rb",
+      "recipe_sha256": "17f538f90f34412ebbb77427a901e143892aecee4a7ca8ba928da3c8dc88dc3c",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libsamplerate/blobs/sha256:a5245adca05c76e8f9593494b5909903ffe44c5173b7b713b6c5dec75005953b",
+        "sha256": "a5245adca05c76e8f9593494b5909903ffe44c5173b7b713b6c5dec75005953b"
+      },
+      "source": {
+        "url": "https://github.com/libsndfile/libsamplerate/releases/download/0.2.2/libsamplerate-0.2.2.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "3258da280511d24b49d6b08615bbe824d0cacc9842b0e4caf11c52cf2b043893"
+      },
+      "patches": [
+        {
+          "strip": "p1",
+          "url": "https://github.com/libsndfile/libsamplerate/commit/e4a0ab46887029e0f65f145ba3987cc592f18200.patch?full_index=1",
+          "sha256": "0826fb59d733188645f3dc207c938580970700381b9bc87058b137723cb30bba",
+          "type": "backport",
+          "resolves": [
+            {
+              "type": "defect",
+              "id": "https://github.com/libsndfile/libsamplerate/pull/180"
+            }
+          ]
+        },
+        {
+          "strip": "p1",
+          "url": "https://github.com/libsndfile/libsamplerate/commit/1abc639420b2df8b9ff2e0bdcc28cf6613c7c0d0.patch?full_index=1",
+          "sha256": "b6fb61c763a0f072ef2ebb3a311037d2429a5e294141f6d5e552ccd25efabdc0",
+          "type": "backport",
+          "resolves": [
+            {
+              "type": "defect",
+              "id": "https://github.com/libsndfile/libsamplerate/pull/225"
+            }
+          ]
+        }
+      ],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "libsndfile": {
+      "version": "1.2.2",
+      "revision": 1,
+      "license": "LGPL-2.1-or-later",
+      "recipe": "Formula/lib/libsndfile.rb",
+      "recipe_sha256": "eade91fe64bbfd958d691a37345f2b6d8769fc0de1598dee6f5c9b30517066a1",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libsndfile/blobs/sha256:7788d515f9bc665779112b28a86810a2ac4bc5fb94a763df5d1188e461efce98",
+        "sha256": "7788d515f9bc665779112b28a86810a2ac4bc5fb94a763df5d1188e461efce98"
+      },
+      "source": {
+        "url": "https://github.com/libsndfile/libsndfile/releases/download/1.2.2/libsndfile-1.2.2.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "3799ca9924d3125038880367bf1468e53a1b7e3686a934f098b7e1d286cdb80e"
+      },
+      "patches": [],
+      "dependencies": [
+        "flac",
+        "lame",
+        "libogg",
+        "libvorbis",
+        "mpg123",
+        "opus"
+      ],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "libsodium": {
+      "version": "1.0.22",
+      "revision": 0,
+      "license": "ISC",
+      "recipe": "Formula/lib/libsodium.rb",
+      "recipe_sha256": "97116400ef5a3ef2647f58b650fe55bbf59b6b50ad3aa49f9c3be7163168f2b2",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libsodium/blobs/sha256:665929906297818edf15955cf4e4faefca7d717271c9fa448291989d2511d266",
+        "sha256": "665929906297818edf15955cf4e4faefca7d717271c9fa448291989d2511d266"
+      },
+      "source": {
+        "url": "https://download.libsodium.org/libsodium/releases/libsodium-1.0.22.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "adbdd8f16149e81ac6078a03aca6fc03b592b89ef7b5ed83841c086191be3349"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "libsoxr": {
+      "version": "0.1.3",
+      "revision": 0,
+      "license": "LGPL-2.1-or-later",
+      "recipe": "Formula/lib/libsoxr.rb",
+      "recipe_sha256": "5a36ee48934489231c35753a6b1e898e4eb80734ced4cb22906b12c56ebc35e2",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libsoxr/blobs/sha256:6fd815529e1078139d7965e7bb7e92b4fa5680e74ca671357aaf4c0e1ea1dc95",
+        "sha256": "6fd815529e1078139d7965e7bb7e92b4fa5680e74ca671357aaf4c0e1ea1dc95"
+      },
+      "source": {
+        "url": "https://downloads.sourceforge.net/project/soxr/soxr-0.1.3-Source.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "b111c15fdc8c029989330ff559184198c161100a59312f5dc19ddeb9b5a15889"
+      },
+      "patches": [
+        {
+          "strip": "p1",
+          "file": "Patches/libsoxr/arm64_defines.patch",
+          "sha256": "9df5737a21b9ce70cc136c302e195fad9f9f6c14418566ad021f14bb34bb022c"
+        }
+      ],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "libssh": {
+      "version": "0.12.2",
+      "revision": 0,
+      "license": "LGPL-2.1-or-later",
+      "recipe": "Formula/lib/libssh.rb",
+      "recipe_sha256": "35acc436de5d09ce9ead74ce6d3bd0e5df2abeb818015082588567a2637cc863",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libssh/blobs/sha256:0d7992b5269b93e53695ab3e52037eb454e846e46627a32d60df416a71fb71ea",
+        "sha256": "0d7992b5269b93e53695ab3e52037eb454e846e46627a32d60df416a71fb71ea"
+      },
+      "source": {
+        "url": "https://www.libssh.org/files/0.12/libssh-0.12.2.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "49560f677d96e3706a904ac2de1116e25f3680937d51e5c92198fcba4a1c1e9f"
+      },
+      "patches": [],
+      "dependencies": [
+        "openssl@3"
+      ],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "libtasn1": {
+      "version": "4.21.0",
+      "revision": 0,
+      "license": "LGPL-2.1-or-later",
+      "recipe": "Formula/lib/libtasn1.rb",
+      "recipe_sha256": "8c0814380e9449c0b9b5cfcbf12e7e44e25e581c8f3909f2467c63bb482bcd2d",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libtasn1/blobs/sha256:ae01713eec0bd922b903ed2bf514dc085ec3108636c4ead84614b23a2c33f267",
+        "sha256": "ae01713eec0bd922b903ed2bf514dc085ec3108636c4ead84614b23a2c33f267"
+      },
+      "source": {
+        "url": "https://ftpmirror.gnu.org/libtasn1/libtasn1-4.21.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "1d8a444a223cc5464240777346e125de51d8e6abf0b8bac742ac84609167dc87",
+        "download_url": "https://ftp.gnu.org/gnu/libtasn1/libtasn1-4.21.0.tar.gz"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "libthai": {
+      "version": "0.1.30",
+      "revision": 0,
+      "license": "LGPL-2.1-or-later",
+      "recipe": "Formula/lib/libthai.rb",
+      "recipe_sha256": "4052bd1b5090015a244b5ceedf915ecd324fb6271624c426ea1502b2078e0958",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/libthai/blobs/sha256:683257ceaae0ebf522c07e2fd39b82863ff54d35ac8a985d9d62597bda8a05b3",
+        "sha256": "683257ceaae0ebf522c07e2fd39b82863ff54d35ac8a985d9d62597bda8a05b3"
+      },
+      "source": {
+        "url": "https://linux.thai.net/pub/thailinux/software/libthai/libthai-0.1.30.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "ddba8b53dfe584c3253766030218a88825488a51a7deef041d096e715af64bdd"
+      },
+      "patches": [],
+      "dependencies": [
+        "libdatrie"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "libtiff": {
+      "version": "4.7.2",
+      "revision": 0,
+      "license": "libtiff",
+      "recipe": "Formula/lib/libtiff.rb",
+      "recipe_sha256": "8acf5e0f22700b2c18fb5419721ccc0bf7a202dfc27d5b36543166222589ec3d",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libtiff/blobs/sha256:9a0ff1ac153879e9fb324951f33fc52c797149a6de44176e4fb80f0c8adad9a8",
+        "sha256": "9a0ff1ac153879e9fb324951f33fc52c797149a6de44176e4fb80f0c8adad9a8"
+      },
+      "source": {
+        "url": "https://download.osgeo.org/libtiff/tiff-4.7.2.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "672bd7d10aee4606171afb864f3570b83340f6a33e2c186dc0512f7145ffdf6a"
+      },
+      "patches": [],
+      "dependencies": [
+        "jpeg-turbo",
+        "webp",
+        "xz",
+        "zstd"
+      ],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "libudfread": {
+      "version": "1.2.0",
+      "revision": 0,
+      "license": "LGPL-2.1-or-later",
+      "recipe": "Formula/lib/libudfread.rb",
+      "recipe_sha256": "4e42b9502defd34e5f15b122be342e5e8beb4772bfa09e65a9a0c4c846026d2f",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libudfread/blobs/sha256:c30a3d1c34e209bd79301f3626e0e617ed841979ae1e33b0acc066c9643f9dea",
+        "sha256": "c30a3d1c34e209bd79301f3626e0e617ed841979ae1e33b0acc066c9643f9dea"
+      },
+      "source": {
+        "url": "https://download.videolan.org/videolan/libudfread/libudfread-1.2.0.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "bb477cbd4cfbfc7787d9d05b71ee5e70430f5cfebf1297497f7e83547958050f"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "meson",
+        "ninja"
+      ],
+      "resources": []
+    },
+    "libunibreak": {
+      "version": "8.0",
+      "revision": 0,
+      "license": "Zlib",
+      "recipe": "Formula/lib/libunibreak.rb",
+      "recipe_sha256": "c965132af50d3ce674d8c6b4be9331c974c677fe0d775fa671894a57680096e0",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libunibreak/blobs/sha256:b5ea43d5ae7e12db466b52c75ae517be48aa31c270e9dbb2cb8a9412d94f1aff",
+        "sha256": "b5ea43d5ae7e12db466b52c75ae517be48aa31c270e9dbb2cb8a9412d94f1aff"
+      },
+      "source": {
+        "url": "https://github.com/adah1972/libunibreak/releases/download/libunibreak_8_0/libunibreak-8.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "9c4fad6e517338a098373acc9f35579ae2c325e6446666fb9ac2666ba15ceba4"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "libunistring": {
+      "version": "1.4.2",
+      "revision": 0,
+      "license": "GPL-2.0-or-later OR LGPL-3.0-or-later",
+      "recipe": "Formula/lib/libunistring.rb",
+      "recipe_sha256": "8acac13619748b5c040c866f78955ea15fe51f555d60d494f52beae6ee24ce34",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libunistring/blobs/sha256:14a72bd0aa3f1b2b3a7360be24380171d140b2fc5abbde0144807d3847b6728c",
+        "sha256": "14a72bd0aa3f1b2b3a7360be24380171d140b2fc5abbde0144807d3847b6728c"
+      },
+      "source": {
+        "url": "https://ftpmirror.gnu.org/libunistring/libunistring-1.4.2.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "e82664b170064e62331962126b259d452d53b227bb4a93ab20040d846fec01d8",
+        "download_url": "https://ftp.gnu.org/gnu/libunistring/libunistring-1.4.2.tar.gz"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "libvidstab": {
+      "version": "1.1.2",
+      "revision": 0,
+      "license": "GPL-2.0-or-later",
+      "recipe": "Formula/lib/libvidstab.rb",
+      "recipe_sha256": "5901f31983eab18dcfbe4a24c049dc8191500008f83f14a6854c4ede8909308a",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libvidstab/blobs/sha256:e6808d2f543809c806b81c690719b23c14c177cbb0cb1f42c27d559b4cb1b172",
+        "sha256": "e6808d2f543809c806b81c690719b23c14c177cbb0cb1f42c27d559b4cb1b172"
+      },
+      "source": {
+        "url": "https://github.com/georgmartius/vid.stab/archive/refs/tags/v1.1.2.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "96db34d48a9e3aa13736a48744b56dfb76731ac9bb5193c716de8534c9fd709d"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "libvmaf": {
+      "version": "3.2.1",
+      "revision": 0,
+      "license": "BSD-2-Clause-Patent",
+      "recipe": "Formula/lib/libvmaf.rb",
+      "recipe_sha256": "e26bc5341ea496e86d7f2be1f48a711235139d5ccd10556188d3c52b24a30f76",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libvmaf/blobs/sha256:703f56cd94ba6bb86ee1463bec792d8ad6f9841f67152fa6e93040b966bbf82f",
+        "sha256": "703f56cd94ba6bb86ee1463bec792d8ad6f9841f67152fa6e93040b966bbf82f"
+      },
+      "source": {
+        "url": "https://github.com/Netflix/vmaf/archive/refs/tags/v3.2.1.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "5df7386911bc15fd1ca783132528748d219768ae4fc5f8e0b61184f041648092"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "meson",
+        "ninja"
+      ],
+      "resources": []
+    },
+    "libvorbis": {
+      "version": "1.3.7",
+      "revision": 0,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/lib/libvorbis.rb",
+      "recipe_sha256": "52c0ff9baa24e2e66ce76ed96ae18e9e971bf6c5bb7b31b03af8d4c2822ce054",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libvorbis/blobs/sha256:99c0de7ff87f4648bb17acd0324a15563e975b7492dbd4f11fd656a8eb6b5622",
+        "sha256": "99c0de7ff87f4648bb17acd0324a15563e975b7492dbd4f11fd656a8eb6b5622"
+      },
+      "source": {
+        "url": "https://ftp.osuosl.org/pub/xiph/releases/vorbis/libvorbis-1.3.7.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "b33cc4934322bcbf6efcbacf49e3ca01aadbea4114ec9589d1b1e9d20f72954b"
+      },
+      "patches": [],
+      "dependencies": [
+        "libogg"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "libvpx": {
+      "version": "1.17.0",
+      "revision": 0,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/lib/libvpx.rb",
+      "recipe_sha256": "da99e55001e2a5494e8c27f80dc5ce54469b07af5a2dcbc428bc8dcb4a225833",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libvpx/blobs/sha256:f98fa074f8eef7b2de3346fb83d4da15e7e6284fd13bf65210d855043f78f8c1",
+        "sha256": "f98fa074f8eef7b2de3346fb83d4da15e7e6284fd13bf65210d855043f78f8c1"
+      },
+      "source": {
+        "url": "https://github.com/webmproject/libvpx/archive/refs/tags/v1.17.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "1020f184046187baa2985dbde38e0691f49c44088bca7a1842b0236c6081dc0a"
+      },
+      "patches": [
+        {
+          "strip": "p1",
+          "data": true,
+          "sha256": "8821af8076eeacbe8d9055ef3b6c95c7eeef7e7ff8b5e13c04520c75642b1dce"
+        }
+      ],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "libx11": {
+      "version": "1.8.13",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/lib/libx11.rb",
+      "recipe_sha256": "bab15130a1818393b207a07924762a05e40be0cd01d50fa1712dcaf9b5213e25",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/libx11/blobs/sha256:eea875959b2cd7b129fe9459e1771141b9215f3452e671996434f664fe96e193",
+        "sha256": "eea875959b2cd7b129fe9459e1771141b9215f3452e671996434f664fe96e193"
+      },
+      "source": {
+        "url": "https://xorg.freedesktop.org/archive/individual/lib/libX11-1.8.13.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "acf0e7cd7541110e6330ecb539441a2d53061f386ec7be6906dfde0de2598470"
+      },
+      "patches": [],
+      "dependencies": [
+        "libxcb",
+        "xorgproto"
+      ],
+      "build_dependencies": [
+        "pkgconf",
+        "util-macros",
+        "xtrans"
+      ],
+      "resources": []
+    },
+    "libxau": {
+      "version": "1.0.12",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/lib/libxau.rb",
+      "recipe_sha256": "2cdf3d1c459a7e58615dd07cb087aa511ad415619ced460636d2401ee652fa7f",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libxau/blobs/sha256:503040606c5d29dd415f2c8dcba7e181d259e4cdff02d1d8bde4e9ea5244765a",
+        "sha256": "503040606c5d29dd415f2c8dcba7e181d259e4cdff02d1d8bde4e9ea5244765a"
+      },
+      "source": {
+        "url": "https://xorg.freedesktop.org/archive/individual/lib/libXau-1.0.12.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "74d0e4dfa3d39ad8939e99bda37f5967aba528211076828464d2777d477fc0fb"
+      },
+      "patches": [],
+      "dependencies": [
+        "xorgproto"
+      ],
+      "build_dependencies": [
+        "pkgconf",
+        "util-macros"
+      ],
+      "resources": []
+    },
+    "libxcb": {
+      "version": "1.17.0",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/lib/libxcb.rb",
+      "recipe_sha256": "52e8716fe215c71e08b0c8be7ef5f91b04c043543ef4b4f996c87bffe15e24b3",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libxcb/blobs/sha256:059edd054b17234abb0ce8a34dcbbd927e104445d09a3f5904ea82f7c5aa7ded",
+        "sha256": "059edd054b17234abb0ce8a34dcbbd927e104445d09a3f5904ea82f7c5aa7ded"
+      },
+      "source": {
+        "url": "https://xorg.freedesktop.org/archive/individual/lib/libxcb-1.17.0.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "599ebf9996710fea71622e6e184f3a8ad5b43d0e5fa8c4e407123c88a59a6d55"
+      },
+      "patches": [],
+      "dependencies": [
+        "libxau",
+        "libxdmcp"
+      ],
+      "build_dependencies": [
+        "pkgconf",
+        "python@3.14",
+        "xcb-proto"
+      ],
+      "resources": []
+    },
+    "libxdmcp": {
+      "version": "1.1.5",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/lib/libxdmcp.rb",
+      "recipe_sha256": "6ecf6850f41a7a182ffcc47db4c7025001669c74208fbb37f5fc227119a37a29",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libxdmcp/blobs/sha256:34ca0da1c319eeea93ce31badfb5c29c8876cea644754279e93f6cf032ab5cb1",
+        "sha256": "34ca0da1c319eeea93ce31badfb5c29c8876cea644754279e93f6cf032ab5cb1"
+      },
+      "source": {
+        "url": "https://xorg.freedesktop.org/archive/individual/lib/libXdmcp-1.1.5.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "d8a5222828c3adab70adf69a5583f1d32eb5ece04304f7f8392b6a353aa2228c"
+      },
+      "patches": [],
+      "dependencies": [
+        "xorgproto"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "libxext": {
+      "version": "1.3.7",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/lib/libxext.rb",
+      "recipe_sha256": "a56be613f2f488afe0858c286a1443f8e9ba9a7ee4b0d1c0538d40bb3740fb7f",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libxext/blobs/sha256:7cf2c8903d82f28e0e854c8d6d3dff46ea98c5512724e5349af40f1edca88e9c",
+        "sha256": "7cf2c8903d82f28e0e854c8d6d3dff46ea98c5512724e5349af40f1edca88e9c"
+      },
+      "source": {
+        "url": "https://xorg.freedesktop.org/archive/individual/lib/libXext-1.3.7.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "6564608dc3b816b0cfddf0c7ddc62bc579055dd70b2f28113a618df2acb64189"
+      },
+      "patches": [],
+      "dependencies": [
+        "libx11",
+        "xorgproto"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "libxrender": {
+      "version": "0.9.12",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/lib/libxrender.rb",
+      "recipe_sha256": "96228e7db71fb1bfa9baaca00848653f4d807bfd98003f2a58094e981f3055c1",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/libxrender/blobs/sha256:6405639931b8924b009e16163b7d99f50a10274189cb7f7eba12a4585d1ef255",
+        "sha256": "6405639931b8924b009e16163b7d99f50a10274189cb7f7eba12a4585d1ef255"
+      },
+      "source": {
+        "url": "https://xorg.freedesktop.org/archive/individual/lib/libXrender-0.9.12.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "0fff64125819c02d1102b6236f3d7d861a07b5216d8eea336c3811d31494ecf7"
+      },
+      "patches": [],
+      "dependencies": [
+        "libx11",
+        "xorgproto"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "little-cms2": {
+      "version": "2.19.1",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/l/little-cms2.rb",
+      "recipe_sha256": "3fb1fecbc829bddbbadb586f38596b5cd0d6b953469fe56139faabd6fecc35fe",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/little-cms2/blobs/sha256:11f9fcdcbbe77b186777196971d8ba2c41526d2d96fbd02d411461df73313dce",
+        "sha256": "11f9fcdcbbe77b186777196971d8ba2c41526d2d96fbd02d411461df73313dce"
+      },
+      "source": {
+        "url": "https://downloads.sourceforge.net/project/lcms/lcms/2.19.1/lcms2-2.19.1.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "bfc54f7bab59fbc921012014a8032e4cba4abd46db47d46b76416a8c0b2815c8"
+      },
+      "patches": [],
+      "dependencies": [
+        "jpeg-turbo",
+        "libtiff"
+      ],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "luajit": {
+      "version": "2.1.1788856981",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/l/luajit.rb",
+      "recipe_sha256": "981b996822b12cfad7ff9fc7b62c0450fff29090446af6ef94ff6b6de7ebc9a7",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/luajit/blobs/sha256:f784345a4fa60b214f2bcf2cd4d2072adfb9c454f9734c4eb365d84293bd91ec",
+        "sha256": "f784345a4fa60b214f2bcf2cd4d2072adfb9c454f9734c4eb365d84293bd91ec"
+      },
+      "source": {
+        "url": "https://github.com/LuaJIT/LuaJIT/archive/c6ffc141a8762b41703f9287d63d93622a13dd8f.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "6e5fec07750add912e7c3eae0c194d24cd6d023714e1f04a0298a5b4819e4457"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "lz4": {
+      "version": "1.10.0",
+      "revision": 0,
+      "license": "BSD-2-Clause",
+      "recipe": "Formula/l/lz4.rb",
+      "recipe_sha256": "b45023020f34ac622d84d10e44f1d972f742d5c741098f6ee828b6ab79bd19e4",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/lz4/blobs/sha256:2be9df952396d89008e56232b065354b3bd51dde5f8a30c1fe18d765ff26e017",
+        "sha256": "2be9df952396d89008e56232b065354b3bd51dde5f8a30c1fe18d765ff26e017"
+      },
+      "source": {
+        "url": "https://github.com/lz4/lz4/archive/refs/tags/v1.10.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "537512904744b35e232912055ccf8ec66d768639ff3abe5788d90d792ec5f48b"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "lzo": {
+      "version": "2.10",
+      "revision": 0,
+      "license": "GPL-2.0-or-later",
+      "recipe": "Formula/l/lzo.rb",
+      "recipe_sha256": "8acc83503bd65a1e198d16638fe911201c7922cf70b24b5db3015fcd948c54cd",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/lzo/blobs/sha256:9863be33af38858d028657bdfbceaff00465b23a9857ce6ed93e2ad24f6adbd8",
+        "sha256": "9863be33af38858d028657bdfbceaff00465b23a9857ce6ed93e2ad24f6adbd8"
+      },
+      "source": {
+        "url": "https://www.oberhumer.com/opensource/lzo/download/lzo-2.10.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "c0f892943208266f9b6543b3ae308fab6284c5c90e627931446fb49b4221a072"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "molten-vk": {
+      "version": "1.4.2",
+      "revision": 0,
+      "license": "Apache-2.0",
+      "recipe": "Formula/m/molten-vk.rb",
+      "recipe_sha256": "81994f09def6947f5ef3e5d7278e3b224fca56d125784bcad4b5ed952b9a6264",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/molten-vk/blobs/sha256:5a83a9421fb588695613464a75ea469443f9aef72db475c3b2ae64dccc97c98a",
+        "sha256": "5a83a9421fb588695613464a75ea469443f9aef72db475c3b2ae64dccc97c98a"
+      },
+      "source": {
+        "url": "https://github.com/KhronosGroup/MoltenVK/archive/refs/tags/v1.4.2.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "6864db532f1dbbdb621a8d0ec13f24edae318fd9269dd3dd0cdff791334bb1cb"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": [
+        {
+          "name": "SPIRV-Cross",
+          "url": "https://github.com/KhronosGroup/SPIRV-Cross.git",
+          "revision": "6c09849fe88c48eaed08413aa022aaa136a3a057"
+        },
+        {
+          "name": "SPIRV-Headers",
+          "url": "https://github.com/KhronosGroup/SPIRV-Headers.git",
+          "revision": "29981f65241605e08b0ede4cfeb999fe3b723c6a"
+        },
+        {
+          "name": "SPIRV-Tools",
+          "url": "https://github.com/KhronosGroup/SPIRV-Tools.git",
+          "revision": "0d6fd73ca73830ccab5fa1f00ed5ed40124e2c55"
+        },
+        {
+          "name": "Vulkan-Headers",
+          "url": "https://github.com/KhronosGroup/Vulkan-Headers.git",
+          "revision": "e3b1eec08173d6b825cd3ac88c885a63b621504a"
+        },
+        {
+          "name": "Vulkan-Tools",
+          "url": "https://github.com/KhronosGroup/Vulkan-Tools.git",
+          "revision": "8c66b352925cb771f793a4d3220b1321ae0febf1"
+        },
+        {
+          "name": "cereal",
+          "url": "https://github.com/USCiLab/cereal.git",
+          "revision": "a56bad8bbb770ee266e930c95d37fff2a5be7fea"
+        }
+      ]
+    },
+    "mpdecimal": {
+      "version": "4.0.1",
+      "revision": 0,
+      "license": "BSD-2-Clause",
+      "recipe": "Formula/m/mpdecimal.rb",
+      "recipe_sha256": "b7e3a231899466088e6dfc6ad4c82bffe8dc38c623b2a4a0ef4de388bd68c1fb",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/mpdecimal/blobs/sha256:9fa6ced040c13747f9b010f406453c14041659dfb496a791b949c163b8a413f5",
+        "sha256": "9fa6ced040c13747f9b010f406453c14041659dfb496a791b949c163b8a413f5"
+      },
+      "source": {
+        "url": "https://www.bytereef.org/software/mpdecimal/releases/mpdecimal-4.0.1.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "96d33abb4bb0070c7be0fed4246cd38416188325f820468214471938545b1ac8"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "mpg123": {
+      "version": "1.33.7",
+      "revision": 0,
+      "license": "LGPL-2.1-only",
+      "recipe": "Formula/m/mpg123.rb",
+      "recipe_sha256": "3698eb1f9ba852c034a659b627386f0113671b77ea828535343b9c058fe0f9fb",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/mpg123/blobs/sha256:5fcd87caeb9b6e6730d7de5c7738e785c84814c641d1ba9ac578a142d2b033f5",
+        "sha256": "5fcd87caeb9b6e6730d7de5c7738e785c84814c641d1ba9ac578a142d2b033f5"
+      },
+      "source": {
+        "url": "https://www.mpg123.de/download/mpg123-1.33.7.tar.bz2",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "31d0e35a4ca567ec9b5ebda6c3062bb4435d6d3eacd6ef0d95cadd7854dc03ee"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "mpv": {
+      "version": "0.41.0",
+      "revision": 10,
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later",
+      "recipe": "Formula/m/mpv.rb",
+      "recipe_sha256": "bcf37e4202e262c0e907ed643dc7cbff6cb60a9249178fd538c02f63b58b10aa",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/mpv/blobs/sha256:7d498f6e80a4f6b4071c5f2862e1a228edac45961d52c713831e0cef8e1cf6ba",
+        "sha256": "7d498f6e80a4f6b4071c5f2862e1a228edac45961d52c713831e0cef8e1cf6ba"
+      },
+      "source": {
+        "url": "https://github.com/mpv-player/mpv/archive/refs/tags/v0.41.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "ee21092a5ee427353392360929dc64645c54479aefdb5babc5cfbb5fad626209"
+      },
+      "patches": [
+        {
+          "strip": "p1",
+          "url": "https://github.com/mpv-player/mpv/commit/75b2ccfeb1ce4ed5a40ac9860fa74f3d1265e13f.patch?full_index=1",
+          "sha256": "3906b98b02071a0d5747a400406494ca69cef7afd8d3eee4a99fdbe40dc90c1f",
+          "type": "backport",
+          "resolves": [
+            {
+              "type": "defect",
+              "id": "https://github.com/mpv-player/mpv/pull/17731"
+            }
+          ]
+        },
+        {
+          "strip": "p1",
+          "url": "https://github.com/mpv-player/mpv/commit/c5d391adba7bd024954d0df1e0405f5749f4d4ca.patch?full_index=1",
+          "sha256": "769b218df220738cc1cf9f81cf696c16518c5dfe56a5ef028e33b22536e0e924",
+          "type": "backport",
+          "resolves": [
+            {
+              "type": "defect",
+              "id": "https://github.com/mpv-player/mpv/issues/18274"
+            }
+          ]
+        }
+      ],
+      "dependencies": [
+        "ffmpeg",
+        "jpeg-turbo",
+        "libarchive",
+        "libass",
+        "libbluray",
+        "libplacebo",
+        "little-cms2",
+        "luajit",
+        "mujs",
+        "rubberband",
+        "uchardet",
+        "vapoursynth",
+        "vulkan-loader",
+        "yt-dlp",
+        "zimg",
+        "molten-vk"
+      ],
+      "build_dependencies": [
+        "docutils",
+        "meson",
+        "ninja",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "mujs": {
+      "version": "1.3.10",
+      "revision": 0,
+      "license": "ISC",
+      "recipe": "Formula/m/mujs.rb",
+      "recipe_sha256": "2b726d85caecd95d2265b1474330805b7a98b060565873e2b471ec6b82afb667",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/mujs/blobs/sha256:a74e150e1d09521e6105a443d5587ac33bf2ca3cac25390125ce6484bd4869b9",
+        "sha256": "a74e150e1d09521e6105a443d5587ac33bf2ca3cac25390125ce6484bd4869b9"
+      },
+      "source": {
+        "url": "https://mujs.com/downloads/mujs-1.3.10.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "6e36c15dbb84ff859320297c900852f241b131a7b6ddaea669ac9a65bd75571c"
+      },
+      "patches": [
+        {
+          "strip": "p1",
+          "url": "https://github.com/ccxvii/mujs/commit/e21c6bfdce374e19800f2455f45828a90fce39da.patch?full_index=1",
+          "sha256": "e10de8b9c3a62ffe121b61fe60b67ba8faa68eaace9a3b17a13f46a2cc795a11",
+          "type": "unofficial",
+          "resolves": [
+            {
+              "type": "defect",
+              "id": "https://github.com/ccxvii/mujs/pull/203"
+            }
+          ]
+        }
+      ],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "nettle": {
+      "version": "4.0",
+      "revision": 0,
+      "license": "GPL-2.0-or-later OR LGPL-3.0-or-later",
+      "recipe": "Formula/n/nettle.rb",
+      "recipe_sha256": "8135edd1ccf828e5a9550a965bd5f11a862ad028335f451838998f3e5215e4f2",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/nettle/blobs/sha256:ba11eb261bc502c28c9cd695f8354306d0a31cb1e55c3d3f1568e051293a0f10",
+        "sha256": "ba11eb261bc502c28c9cd695f8354306d0a31cb1e55c3d3f1568e051293a0f10"
+      },
+      "source": {
+        "url": "https://ftpmirror.gnu.org/nettle/nettle-4.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "3addbc00da01846b232fb3bc453538ea5468da43033f21bb345cb1e9073f5094",
+        "download_url": "https://ftp.gnu.org/gnu/nettle/nettle-4.0.tar.gz"
+      },
+      "patches": [],
+      "dependencies": [
+        "gmp"
+      ],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "opencore-amr": {
+      "version": "0.1.6",
+      "revision": 0,
+      "license": "Apache-2.0",
+      "recipe": "Formula/o/opencore-amr.rb",
+      "recipe_sha256": "8e662c3c97c499d2d6942edb4c1d313c6e518511ed972d2f3ddb7cca38dfbc9c",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/opencore-amr/blobs/sha256:38dea780c6b453fcae6c1addb3054b0d14a4c216183a319e26575f61fda8050b",
+        "sha256": "38dea780c6b453fcae6c1addb3054b0d14a4c216183a319e26575f61fda8050b"
+      },
+      "source": {
+        "url": "https://downloads.sourceforge.net/project/opencore-amr/opencore-amr/opencore-amr-0.1.6.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "483eb4061088e2b34b358e47540b5d495a96cd468e361050fae615b1809dc4a1"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "openexr": {
+      "version": "3.5.2",
+      "revision": 0,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/o/openexr.rb",
+      "recipe_sha256": "abb57aab8cb9a43c9483e552088185d1ec574071a950092182e3d861bb56dfa9",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/openexr/blobs/sha256:5b6d293d0f7d3b4b8b8aba409f86ff3824b62ac5e4f0b57951158ab0ae98a937",
+        "sha256": "5b6d293d0f7d3b4b8b8aba409f86ff3824b62ac5e4f0b57951158ab0ae98a937"
+      },
+      "source": {
+        "url": "https://github.com/AcademySoftwareFoundation/openexr/archive/refs/tags/v3.5.2.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "85a291b9b8563fabef1aa3f6e912d744ce1d4b9fd5a8f978eda194cd51b15ae9"
+      },
+      "patches": [],
+      "dependencies": [
+        "imath",
+        "libdeflate",
+        "openjph",
+        "zstd"
+      ],
+      "build_dependencies": [
+        "cmake",
+        "pkgconf"
+      ],
+      "resources": [
+        {
+          "name": "homebrew-exr",
+          "url": "https://github.com/AcademySoftwareFoundation/openexr-images/raw/f17e353fbfcde3406fe02675f4d92aeae422a560/TestImages/AllHalfValues.exr",
+          "sha256": "eede573a0b59b79f21de15ee9d3b7649d58d8f2a8e7787ea34f192db3b3c84a4"
+        }
+      ]
+    },
+    "openjpeg": {
+      "version": "2.5.4",
+      "revision": 1,
+      "license": "BSD-2-Clause",
+      "recipe": "Formula/o/openjpeg.rb",
+      "recipe_sha256": "4b595e734d2c800750ba2abc90e5a532235fbe82c38b7a7ec09fd11b21d42ce9",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/openjpeg/blobs/sha256:175f4e65750a8bc968e01b36259e7adb979dc32dbc22c0f4c980bb56e7b494b8",
+        "sha256": "175f4e65750a8bc968e01b36259e7adb979dc32dbc22c0f4c980bb56e7b494b8"
+      },
+      "source": {
+        "url": "https://github.com/uclouvain/openjpeg/archive/refs/tags/v2.5.4.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "a695fbe19c0165f295a8531b1e4e855cd94d0875d2f88ec4b61080677e27188a"
+      },
+      "patches": [
+        {
+          "strip": "p1",
+          "url": "https://github.com/uclouvain/openjpeg/commit/91d08b11a72764f6d199f32fa0c1b1abd4edc2ad.patch?full_index=1",
+          "sha256": "40648d63bfbb0f6c3a41cb9425ac48c396772c3527fff4b2979b07f42aaea6b8",
+          "type": "backport",
+          "resolves": [
+            {
+              "type": "security",
+              "id": "OSV-2025-219"
+            }
+          ]
+        },
+        {
+          "strip": "p1",
+          "url": "https://github.com/uclouvain/openjpeg/commit/839936aa33eb8899bbbd80fda02796bb65068951.patch?full_index=1",
+          "sha256": "d06af7a5e1681bb602e71bc1724718ff07f49aace9d841164658d72b1cfe7d5d",
+          "type": "backport",
+          "resolves": [
+            {
+              "type": "security",
+              "id": "CVE-2026-6192"
+            }
+          ]
+        }
+      ],
+      "dependencies": [
+        "libpng",
+        "libtiff",
+        "little-cms2"
+      ],
+      "build_dependencies": [
+        "cmake",
+        "doxygen"
+      ],
+      "resources": []
+    },
+    "openjph": {
+      "version": "0.32.0",
+      "revision": 0,
+      "license": "BSD-2-Clause",
+      "recipe": "Formula/o/openjph.rb",
+      "recipe_sha256": "88a46493db4f820fb8415ec10ef5731795415a4ab806273e5e11a8611e01b8a6",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/openjph/blobs/sha256:5d007e77d74a266d101de537c05d3c4f03a6936550938e86c03bf7d6e6ca2072",
+        "sha256": "5d007e77d74a266d101de537c05d3c4f03a6936550938e86c03bf7d6e6ca2072"
+      },
+      "source": {
+        "url": "https://github.com/aous72/OpenJPH/archive/refs/tags/0.32.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "5cb1ebe18e5ee1322d23ff2130b37562d447d1ad5586c3d16cf84be3ae30f719"
+      },
+      "patches": [],
+      "dependencies": [
+        "libtiff"
+      ],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": [
+        {
+          "name": "homebrew-test.ppm",
+          "url": "https://raw.githubusercontent.com/aous72/jp2k_test_codestreams/ca2d370/openjph/references/Malamute.ppm",
+          "sha256": "e4e36966d68a473a7f5f5719d9e41c8061f2d817f70a7de1c78d7e510a6391ff"
+        }
+      ]
+    },
+    "openssl@3": {
+      "version": "3.6.5",
+      "revision": 0,
+      "license": "Apache-2.0",
+      "recipe": "Formula/o/openssl@3.rb",
+      "recipe_sha256": "53136fa50edf4783384360626c1f30404879cd989e0dc4ae4d7713228b68dda7",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/openssl/3/blobs/sha256:a1ef3283ad41feaedac5d41dafc4c2a71db6492c3a45a4d1755cfb19d02afc7b",
+        "sha256": "a1ef3283ad41feaedac5d41dafc4c2a71db6492c3a45a4d1755cfb19d02afc7b"
+      },
+      "source": {
+        "url": "https://github.com/openssl/openssl/releases/download/openssl-3.6.5/openssl-3.6.5.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "a2157c2830efdec3788939b00c9b0638306d3f0bbb76dc4832ee503bb397df98"
+      },
+      "patches": [],
+      "dependencies": [
+        "ca-certificates"
+      ],
+      "build_dependencies": [],
+      "resources": [
+        {
+          "name": "Test::Harness",
+          "url": "https://cpan.metacpan.org/authors/id/L/LE/LEONT/Test-Harness-3.52.tar.gz",
+          "sha256": "8fe65cfc0261ed3c8a4395f0524286f5719669fe305f9b03b16cf3684d62cd70"
+        },
+        {
+          "name": "Test::More",
+          "url": "https://cpan.metacpan.org/authors/id/E/EX/EXODIST/Test-Simple-1.302224.tar.gz",
+          "sha256": "6c366b8ab03553976dd1813940770b60bdb4396e7bbae8c263baa6e96ec52fd7"
+        },
+        {
+          "name": "ExtUtils::MakeMaker",
+          "url": "https://cpan.metacpan.org/authors/id/B/BI/BINGOS/ExtUtils-MakeMaker-7.78.tar.gz",
+          "sha256": "43b33c20f8d82dba7cc48f8cd702f8fc9811e9d07880886dfd31b7077bd4a3a6"
+        }
+      ]
+    },
+    "opus": {
+      "version": "1.6.1",
+      "revision": 0,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/o/opus.rb",
+      "recipe_sha256": "39611712ad2de37708493f43569e9266c4be9dcc5e88e7276ee78a562bf03a33",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/opus/blobs/sha256:5e8146a64fab2683ea447aaa7d0de0b1d717539b4cdabd1fedd4a510e4be0d1e",
+        "sha256": "5e8146a64fab2683ea447aaa7d0de0b1d717539b4cdabd1fedd4a510e4be0d1e"
+      },
+      "source": {
+        "url": "https://ftp.osuosl.org/pub/xiph/releases/opus/opus-1.6.1.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "p11-kit": {
+      "version": "0.26.5",
+      "revision": 0,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/p/p11-kit.rb",
+      "recipe_sha256": "f417ea91e494ec02cc2c79284c80dd4f1b214ba6678a0669af531243aacdaded",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/p11-kit/blobs/sha256:fd108a936783ac40b4c3ea4dda639e7d22faa063e9f40f92b0ed2b2a7e99efa6",
+        "sha256": "fd108a936783ac40b4c3ea4dda639e7d22faa063e9f40f92b0ed2b2a7e99efa6"
+      },
+      "source": {
+        "url": "https://github.com/p11-glue/p11-kit/releases/download/0.26.5/p11-kit-0.26.5.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "f2cc09111e44bf3fea58f023180b33acea90aa82d042d6fbb623fbc5ba033bb7"
+      },
+      "patches": [],
+      "dependencies": [
+        "ca-certificates",
+        "libtasn1"
+      ],
+      "build_dependencies": [
+        "meson",
+        "ninja",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "pango": {
+      "version": "1.58.2",
+      "revision": 0,
+      "license": "LGPL-2.0-or-later",
+      "recipe": "Formula/p/pango.rb",
+      "recipe_sha256": "d3bbc69122793bfff00b8a73eb67b601ca5aa6eb73af7827a76ee9a897bc6f76",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/pango/blobs/sha256:9e58508e6ae06c08ab7cfe5fac5cb8b0899cfb7c1f24fbc6363d030319ff1780",
+        "sha256": "9e58508e6ae06c08ab7cfe5fac5cb8b0899cfb7c1f24fbc6363d030319ff1780"
+      },
+      "source": {
+        "url": "https://download.gnome.org/sources/pango/1.58/pango-1.58.2.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "342385b6ca3b7c73455d7c80a13b7dbe4489e00bc3bd4c5bd6ed4dce421e374a"
+      },
+      "patches": [],
+      "dependencies": [
+        "cairo",
+        "fontconfig",
+        "freetype",
+        "fribidi",
+        "glib",
+        "harfbuzz",
+        "libthai"
+      ],
+      "build_dependencies": [
+        "gobject-introspection",
+        "meson",
+        "ninja",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "pcre2": {
+      "version": "10.49",
+      "revision": 0,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/p/pcre2.rb",
+      "recipe_sha256": "2dcb74b4bc19dc81ace51feac7bb626b679c7b730eca1d3492d73fe822134fb8",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/pcre2/blobs/sha256:475d36ffae1f472554eac1fd96ca3ead3840c3d8fd2d34b257d2d7c4c1e5a17f",
+        "sha256": "475d36ffae1f472554eac1fd96ca3ead3840c3d8fd2d34b257d2d7c4c1e5a17f"
+      },
+      "source": {
+        "url": "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.49/pcre2-10.49.tar.bz2",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "53c156e1ba416a20da8e65395daa132da0d80e76910424caca3fcdae7831d384"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "pixman": {
+      "version": "0.46.4",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/p/pixman.rb",
+      "recipe_sha256": "a9957ff4b6518062d2e2697b5ff8b470b06e5a73f8f9076c9d3e7d1c8dbc1d85",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/pixman/blobs/sha256:2b011051909d7f9ad432a76d32c0490f796ad545f7acbd6445356024f0c712e5",
+        "sha256": "2b011051909d7f9ad432a76d32c0490f796ad545f7acbd6445356024f0c712e5"
+      },
+      "source": {
+        "url": "https://cairographics.org/releases/pixman-0.46.4.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "d09c44ebc3bd5bee7021c79f922fe8fb2fb57f7320f55e97ff9914d2346a591c"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "meson",
+        "ninja"
+      ],
+      "resources": []
+    },
+    "pycparser": {
+      "version": "3.0",
+      "revision": 0,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/p/pycparser.rb",
+      "recipe_sha256": "75ed36fe143658d6df206ce89736375eca0d0e3e1d643372118e021982a5e40e",
+      "bottle": {
+        "cellar": ":any_skip_relocation",
+        "url": "https://ghcr.io/v2/homebrew/core/pycparser/blobs/sha256:2c10120dc7d0f6e19f7ceaa82bf41195df1541f3971a69367611f04121babec8",
+        "sha256": "2c10120dc7d0f6e19f7ceaa82bf41195df1541f3971a69367611f04121babec8"
+      },
+      "source": {
+        "url": "https://files.pythonhosted.org/packages/1b/7d/92392ff7815c21062bea51aa7b87d45576f649f16458d78b7cf94b9ab2e6/pycparser-3.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "python@3.13",
+        "python@3.14"
+      ],
+      "resources": []
+    },
+    "python@3.14": {
+      "version": "3.14.8",
+      "revision": 0,
+      "license": "Python-2.0",
+      "recipe": "Formula/p/python@3.14.rb",
+      "recipe_sha256": "919dba9b0eaaed94bea1ac727f7d571ed10f4e796213be5795fb8c23783a67ab",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/python/3.14/blobs/sha256:14a1da5f9ee3d2e344ac8be1686d5cab15a4f0148754eab3b6b31549bb7787c8",
+        "sha256": "14a1da5f9ee3d2e344ac8be1686d5cab15a4f0148754eab3b6b31549bb7787c8"
+      },
+      "source": {
+        "url": "https://www.python.org/ftp/python/3.14.8/Python-3.14.8.tgz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "a65b20a728f169f4e66ae143f40b1bd3d33c38d770251663f627c9767b79b210"
+      },
+      "patches": [
+        {
+          "strip": "p1",
+          "file": "Patches/python/3.13-sysconfig.diff",
+          "type": "unofficial",
+          "resolves": [
+            {
+              "type": "defect",
+              "id": "https://bugs.python.org/issue43976"
+            }
+          ],
+          "sha256": "9f2eae1d08720b06ac3d9ef1999c09388b9db39dfb52687fc261ff820bff20c3"
+        }
+      ],
+      "dependencies": [
+        "ca-certificates",
+        "mpdecimal",
+        "openssl@3",
+        "sqlite",
+        "xz",
+        "zstd"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": [
+        {
+          "name": "flit-core",
+          "url": "https://files.pythonhosted.org/packages/e7/91/add211b38c357bf1b94900b4f79c34661a92be65c0243d2b0a3393c5092d/flit_core-4.1.0.tar.gz",
+          "sha256": "62e12b63ead8335b37f59fabb977c7167fe476dafb5e41785dfa8c9aff843bc6"
+        },
+        {
+          "name": "packaging",
+          "url": "https://files.pythonhosted.org/packages/7d/fa/3944b40b07da9ce895c0e6303a5ab7d53da063554f534556b134a54d6093/packaging-26.3.tar.gz",
+          "sha256": "94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79"
+        },
+        {
+          "name": "pip",
+          "url": "https://files.pythonhosted.org/packages/ae/15/4500e320e6b101ec3b719ae85b697d9940b6cda672bc555bd6016fc60c6f/pip-26.2.1.tar.gz",
+          "sha256": "f6ad667e89a1fe78046c8f13232b247200f5258d7828f3f7883d660878e0813f"
+        },
+        {
+          "name": "wheel",
+          "url": "https://files.pythonhosted.org/packages/d0/20/50ed6bdf27dec98b568a8ae25dc599f35baa3d9709f9e83fd1edb56b9a90/wheel-0.48.0.tar.gz",
+          "sha256": "94800765601e9171bf5d58d066e640662842bcedcbab982b2c90787a2c987322"
+        }
+      ]
+    },
+    "rav1e": {
+      "version": "0.8.1",
+      "revision": 0,
+      "license": "BSD-2-Clause",
+      "recipe": "Formula/r/rav1e.rb",
+      "recipe_sha256": "af7a29eb09ffc3a2dccc4ca79f30174a25a5624b4bdb8ff7543fcd6980dca167",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/rav1e/blobs/sha256:66ef57034787b9e1328abec79bb85ca9fd65c5f4a2bb800be9b5a58ecab849a5",
+        "sha256": "66ef57034787b9e1328abec79bb85ca9fd65c5f4a2bb800be9b5a58ecab849a5"
+      },
+      "source": {
+        "url": "https://github.com/xiph/rav1e/archive/refs/tags/v0.8.1.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "06d1523955fb6ed9cf9992eace772121067cca7e8926988a1ee16492febbe01e"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cargo-c",
+        "rust"
+      ],
+      "resources": [
+        {
+          "name": "homebrew-bus_qcif_7.5fps.y4m",
+          "url": "https://media.xiph.org/video/derf/y4m/bus_qcif_7.5fps.y4m",
+          "sha256": "1f5bfcce0c881567ea31c1eb9ecb1da9f9583fdb7d6bb1c80a8c9acfc6b66f6b"
+        }
+      ]
+    },
+    "readline": {
+      "version": "8.3.6",
+      "revision": 0,
+      "license": "GPL-3.0-or-later",
+      "recipe": "Formula/r/readline.rb",
+      "recipe_sha256": "ead60941ba0f81334499b208e26382eefda15eb1b9614c417d70f1d827dc2e64",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/readline/blobs/sha256:15cdd69af824537192843db389cbfd2459b3797cf4f36c906f8f8ab617d7d59f",
+        "sha256": "15cdd69af824537192843db389cbfd2459b3797cf4f36c906f8f8ab617d7d59f"
+      },
+      "source": {
+        "url": "https://ftpmirror.gnu.org/readline/readline-8.3.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "fe5383204467828cd495ee8d1d3c037a7eba1389c22bc6a041f627976f9061cc",
+        "download_url": "https://ftp.gnu.org/gnu/readline/readline-8.3.tar.gz"
+      },
+      "patches": [
+        {
+          "strip": "p0",
+          "url": "https://ftpmirror.gnu.org/readline/readline-8.3-patches/readline83-001",
+          "sha256": "21f0a03106dbe697337cd25c70eb0edbaa2bdb6d595b45f83285cdd35bac84de",
+          "type": "cherry-pick",
+          "download_url": "https://ftp.gnu.org/gnu/readline/readline-8.3-patches/readline83-001"
+        },
+        {
+          "strip": "p0",
+          "url": "https://ftpmirror.gnu.org/readline/readline-8.3-patches/readline83-002",
+          "sha256": "e27364396ba9f6debf7cbaaf1a669e2b2854241ae07f7eca74ca8a8ba0c97472",
+          "type": "cherry-pick",
+          "download_url": "https://ftp.gnu.org/gnu/readline/readline-8.3-patches/readline83-002"
+        },
+        {
+          "strip": "p0",
+          "url": "https://ftpmirror.gnu.org/readline/readline-8.3-patches/readline83-003",
+          "sha256": "72dee13601ce38f6746eb15239999a7c56f8e1ff5eb1ec8153a1f213e4acdb29",
+          "type": "cherry-pick",
+          "download_url": "https://ftp.gnu.org/gnu/readline/readline-8.3-patches/readline83-003"
+        },
+        {
+          "strip": "p0",
+          "url": "https://ftpmirror.gnu.org/readline/readline-8.3-patches/readline83-004",
+          "sha256": "1f189c4566aa35950964647b9ec3be1a821e42b86048129c63eb7f9d4d2f5a74",
+          "type": "cherry-pick",
+          "download_url": "https://ftp.gnu.org/gnu/readline/readline-8.3-patches/readline83-004"
+        },
+        {
+          "strip": "p0",
+          "url": "https://ftpmirror.gnu.org/readline/readline-8.3-patches/readline83-005",
+          "sha256": "5481adbe161c9f6ba972c74db9e18c7aa351d3df3035cc4a673a1aa06247d1c6",
+          "type": "cherry-pick",
+          "download_url": "https://ftp.gnu.org/gnu/readline/readline-8.3-patches/readline83-005"
+        },
+        {
+          "strip": "p0",
+          "url": "https://ftpmirror.gnu.org/readline/readline-8.3-patches/readline83-006",
+          "sha256": "4ebd261a608287796e171af0ea9af5a1e3122e46672accda2484b6698c47c1a4",
+          "type": "cherry-pick",
+          "download_url": "https://ftp.gnu.org/gnu/readline/readline-8.3-patches/readline83-006"
+        }
+      ],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "rubberband": {
+      "version": "4.0.0",
+      "revision": 0,
+      "license": "GPL-2.0-or-later",
+      "recipe": "Formula/r/rubberband.rb",
+      "recipe_sha256": "c60bb7a8e3c71bf318b2fd645efa5c1b762d75a85a2cc7cc36e483282852108e",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/rubberband/blobs/sha256:65ba1e050a7368f043369932bfc493de4f33f9dda9f6863250960559b5bdf1d8",
+        "sha256": "65ba1e050a7368f043369932bfc493de4f33f9dda9f6863250960559b5bdf1d8"
+      },
+      "source": {
+        "url": "https://breakfastquay.com/files/releases/rubberband-4.0.0.tar.bz2",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "af050313ee63bc18b35b2e064e5dce05b276aaf6d1aa2b8a82ced1fe2f8028e9"
+      },
+      "patches": [],
+      "dependencies": [
+        "libsamplerate",
+        "libsndfile"
+      ],
+      "build_dependencies": [
+        "meson",
+        "ninja",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "sdl2-compat": {
+      "version": "2.32.74",
+      "revision": 0,
+      "license": "Zlib",
+      "recipe": "Formula/s/sdl2-compat.rb",
+      "recipe_sha256": "58bc961ca5448e6b9d942916972dc05aadd2372de4f1231da5045743c2a5437b",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/sdl2-compat/blobs/sha256:32ef73fe92e17d21856399165bc902f74f3c0e87d03021e3e945dfc4dd2d771c",
+        "sha256": "32ef73fe92e17d21856399165bc902f74f3c0e87d03021e3e945dfc4dd2d771c"
+      },
+      "source": {
+        "url": "https://github.com/libsdl-org/sdl2-compat/releases/download/release-2.32.74/sdl2-compat-2.32.74.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "ec68abde77e2e459c8abc4f9587b8976b5d2a657b2bfda2fb3a079b0f8924588"
+      },
+      "patches": [],
+      "dependencies": [
+        "sdl3"
+      ],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "sdl3": {
+      "version": "3.4.18",
+      "revision": 0,
+      "license": "Zlib",
+      "recipe": "Formula/s/sdl3.rb",
+      "recipe_sha256": "c3d6ea1becc0bb53773e82d3a7f885bf4cfeaec10b367d82530928859d41dc75",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/sdl3/blobs/sha256:0040e2deb33adb677f9ab1a0309e4a645a4bfdfb37e59bd6c3d4ed3ab4d0c814",
+        "sha256": "0040e2deb33adb677f9ab1a0309e4a645a4bfdfb37e59bd6c3d4ed3ab4d0c814"
+      },
+      "source": {
+        "url": "https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "shaderc": {
+      "version": "2026.4",
+      "revision": 0,
+      "license": "Apache-2.0",
+      "recipe": "Formula/s/shaderc.rb",
+      "recipe_sha256": "af90df2b5f2a328d31ffdcb8ae5d53a9276151f79b54c011c74ebd1d3d51c8ce",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/shaderc/blobs/sha256:12ba0c59a98fb8f671f9473573002b2a812f26d2e60ea4f577f0c8c750c9838a",
+        "sha256": "12ba0c59a98fb8f671f9473573002b2a812f26d2e60ea4f577f0c8c750c9838a"
+      },
+      "source": {
+        "url": "https://github.com/google/shaderc/archive/refs/tags/v2026.4.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "f06ce5bcca94e5df7f34e115743597d0ad2e13c5fe9213c67dc8c76031241947"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": [
+        {
+          "name": "glslang",
+          "url": "https://github.com/KhronosGroup/glslang.git",
+          "revision": "e1b562a8bed273a02f30b59b66a5d499793cede5"
+        },
+        {
+          "name": "spirv-headers",
+          "url": "https://github.com/KhronosGroup/SPIRV-Headers.git",
+          "revision": "04fd3caa1e8267e4d95c806cad901181728e1006"
+        },
+        {
+          "name": "spirv-tools",
+          "url": "https://github.com/KhronosGroup/SPIRV-Tools.git",
+          "revision": "ef96ed763b43b59b33b31b362f09a02b729fa1c9"
+        }
+      ]
+    },
+    "snappy": {
+      "version": "1.3.1",
+      "revision": 0,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/s/snappy.rb",
+      "recipe_sha256": "65ad62d494f32ebad469606114480e5aeb6e88cac51d6bd5067e7cfed4c86959",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/snappy/blobs/sha256:11f6a15644bc2dece119e6d0cf912e702ed5355ec706409a57bb8d482ff022b0",
+        "sha256": "11f6a15644bc2dece119e6d0cf912e702ed5355ec706409a57bb8d482ff022b0"
+      },
+      "source": {
+        "url": "https://github.com/google/snappy/archive/refs/tags/1.3.1.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "893f708a0bf4b5529d555ffcee390e940e932fcf90261f682604475a76cd0247"
+      },
+      "patches": [
+        {
+          "strip": "p1",
+          "data": true,
+          "sha256": "ad43745089793f521a1bf12929f4276df758517cf3dc71d261d408d83fa70c9f"
+        }
+      ],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "speex": {
+      "version": "1.2.1",
+      "revision": 0,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/s/speex.rb",
+      "recipe_sha256": "dc3fd719b71176f98cd74b7acc7e7742ce4bdbdbef01d1e624fc09c517344d61",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/speex/blobs/sha256:a7608ef62c92fd11d5eed0e3643e769087e4f0eb6de3a321fa602d6dd041387d",
+        "sha256": "a7608ef62c92fd11d5eed0e3643e769087e4f0eb6de3a321fa602d6dd041387d"
+      },
+      "source": {
+        "url": "https://ftp.osuosl.org/pub/xiph/releases/speex/speex-1.2.1.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "4b44d4f2b38a370a2d98a78329fefc56a0cf93d1c1be70029217baae6628feea"
+      },
+      "patches": [],
+      "dependencies": [
+        "libogg"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "sqlite": {
+      "version": "3.53.4",
+      "revision": 0,
+      "license": "blessing",
+      "recipe": "Formula/s/sqlite.rb",
+      "recipe_sha256": "72beb735cdbdbe21ff6134ac65df742c4b4c31a3511a88d979917ce37579c67a",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/sqlite/blobs/sha256:d09c4852f75e19c18c3e347ce73c81b0b864792046f079d074205522c735d3fc",
+        "sha256": "d09c4852f75e19c18c3e347ce73c81b0b864792046f079d074205522c735d3fc"
+      },
+      "source": {
+        "url": "https://www.sqlite.org/2026/sqlite-autoconf-3530400.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "0e9483900e92cd5de8fd48d16bf9200145a61f7fd5be542a5ac81d8a9516eb9c"
+      },
+      "patches": [],
+      "dependencies": [
+        "readline"
+      ],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "srt": {
+      "version": "1.5.7",
+      "revision": 0,
+      "license": "MPL-2.0",
+      "recipe": "Formula/s/srt.rb",
+      "recipe_sha256": "c8a7caa63d26ee9b42199b0a0ae1e8f925a18ebc23c400fe03b94b3937137ef8",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/srt/blobs/sha256:a09e2746cd2fe48a6674da75c163705b91cb695ce2a585f5e62129dbe4f562d8",
+        "sha256": "a09e2746cd2fe48a6674da75c163705b91cb695ce2a585f5e62129dbe4f562d8"
+      },
+      "source": {
+        "url": "https://github.com/Haivision/srt/archive/refs/tags/v1.5.7.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "017cd1e437ef2073a4dd10ddf7b55e86bc3d6ebac0393d13bd22f6a57055d32b"
+      },
+      "patches": [],
+      "dependencies": [
+        "openssl@3"
+      ],
+      "build_dependencies": [
+        "cmake",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "svt-av1": {
+      "version": "4.2.0",
+      "revision": 0,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/s/svt-av1.rb",
+      "recipe_sha256": "57bc694f1e94dae6894eeb022d4de8adbb8eb7ad7776c074f624c0d5803cea59",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/svt-av1/blobs/sha256:bd6186cc963d1980f0d81d59ecef58c8fa6263eb1124211dd3537b224e04c9e0",
+        "sha256": "bd6186cc963d1980f0d81d59ecef58c8fa6263eb1124211dd3537b224e04c9e0"
+      },
+      "source": {
+        "url": "https://gitlab.com/AOMediaCodec/SVT-AV1/-/archive/v4.2.0/SVT-AV1-v4.2.0.tar.bz2",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "512f2ea5649e3e76c2dddcc25c2556fb67a9582baaab207c9c96161c94659dad"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": [
+        {
+          "name": "homebrew-testvideo",
+          "url": "https://github.com/grusell/svt-av1-homebrew-testdata/raw/main/video_64x64_yuv420p_25frames.yuv",
+          "sha256": "0c5cc90b079d0d9c1ded1376357d23a9782a704a83e01731f50ccd162e246492"
+        }
+      ]
+    },
+    "tesseract": {
+      "version": "5.5.3",
+      "revision": 0,
+      "license": "Apache-2.0",
+      "recipe": "Formula/t/tesseract.rb",
+      "recipe_sha256": "612e427e233a1625cd73d9eae0be6cc323b9c61df8366466109813effdbef770",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/tesseract/blobs/sha256:5dc22e82f5c9fe0c466830671388866626a076032e7569bbe6ff6d27f1271599",
+        "sha256": "5dc22e82f5c9fe0c466830671388866626a076032e7569bbe6ff6d27f1271599"
+      },
+      "source": {
+        "url": "https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.5.3.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "9218e62793116d42a9f6d14cd9348518b27f382096eea3d0f2d1a24616bb5884"
+      },
+      "patches": [],
+      "dependencies": [
+        "cairo",
+        "fontconfig",
+        "glib",
+        "harfbuzz",
+        "icu4c@78",
+        "leptonica",
+        "libarchive",
+        "pango",
+        "freetype",
+        "gettext"
+      ],
+      "build_dependencies": [
+        "autoconf",
+        "automake",
+        "libtool",
+        "pkgconf"
+      ],
+      "resources": [
+        {
+          "name": "eng",
+          "url": "https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata",
+          "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+        },
+        {
+          "name": "osd",
+          "url": "https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/osd.traineddata",
+          "sha256": "9cf5d576fcc47564f11265841e5ca839001e7e6f38ff7f7aacf46d15a96b00ff"
+        },
+        {
+          "name": "homebrew-test_resource",
+          "url": "https://raw.githubusercontent.com/tesseract-ocr/test/6dd816cdaf3e76153271daf773e562e24c928bf5/testing/eurotext.tif",
+          "sha256": "7b9bd14aba7d5e30df686fbb6f71782a97f48f81b32dc201a1b75afe6de747d6"
+        }
+      ]
+    },
+    "theora": {
+      "version": "1.2.0",
+      "revision": 0,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/t/theora.rb",
+      "recipe_sha256": "7ed232cd0a6d9a67e8e53d45ef8e54c9faf662e869afa56e63b545fb43835271",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/theora/blobs/sha256:b611f6607b0d916bd49ec4b88113cd230d7c0199865b287e75b1ae769bae64b0",
+        "sha256": "b611f6607b0d916bd49ec4b88113cd230d7c0199865b287e75b1ae769bae64b0"
+      },
+      "source": {
+        "url": "https://ftp.osuosl.org/pub/xiph/releases/theora/libtheora-1.2.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "279327339903b544c28a92aeada7d0dcfd0397b59c2f368cc698ac56f515906e"
+      },
+      "patches": [],
+      "dependencies": [
+        "libogg",
+        "libvorbis"
+      ],
+      "build_dependencies": [
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "uchardet": {
+      "version": "0.0.8",
+      "revision": 0,
+      "license": "MPL-1.1 OR GPL-2.0-or-later OR LGPL-2.1-or-later",
+      "recipe": "Formula/u/uchardet.rb",
+      "recipe_sha256": "1ed983f02aacdb5e8fe7693a0cb5f467d124ee8922e2a2ffb7d26dd1cf94a2a4",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/uchardet/blobs/sha256:9c7726503e9063cc35716cd81cd22ebb8dbe34aec0922bd02d90b5a435940476",
+        "sha256": "9c7726503e9063cc35716cd81cd22ebb8dbe34aec0922bd02d90b5a435940476"
+      },
+      "source": {
+        "url": "https://www.freedesktop.org/software/uchardet/releases/uchardet-0.0.8.tar.xz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "e97a60cfc00a1c147a674b097bb1422abd9fa78a2d9ce3f3fdcc2e78a34ac5f0"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "vapoursynth": {
+      "version": "80",
+      "revision": 0,
+      "license": "LGPL-2.1-or-later",
+      "recipe": "Formula/v/vapoursynth.rb",
+      "recipe_sha256": "7801877bbae378b89c2551418958dfb7371b0b2d6145d04aa9d2a6d4b2e8801e",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/vapoursynth/blobs/sha256:7c1ebe0fdcd313876c49a4228f8b8dd201915debdffe928030587c9a245891ce",
+        "sha256": "7c1ebe0fdcd313876c49a4228f8b8dd201915debdffe928030587c9a245891ce"
+      },
+      "source": {
+        "url": "https://files.pythonhosted.org/packages/66/22/4e7bb7682495b03470b2f594cbe30b13fb81d7b3378edf359042c9f1f6bf/vapoursynth-80.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "4d03e3ef64df65a855490e6fd77ccc74d5debf89799aea93a6bd08f6a90afeb0"
+      },
+      "patches": [],
+      "dependencies": [
+        "python@3.14",
+        "zimg"
+      ],
+      "build_dependencies": [
+        "ninja",
+        "pkgconf",
+        "vulkan-headers"
+      ],
+      "resources": [
+        {
+          "name": "glslang",
+          "url": "https://github.com/KhronosGroup/glslang/archive/refs/tags/vulkan-sdk-1.4.357.0.tar.gz",
+          "sha256": "81038794e20494556edbcc0fc70fa984d71d1b440f9c49adf2cbaaa60a519757"
+        }
+      ]
+    },
+    "vulkan-headers": {
+      "version": "1.4.363.0",
+      "revision": 0,
+      "license": "Apache-2.0",
+      "recipe": "Formula/v/vulkan-headers.rb",
+      "recipe_sha256": "2021cfd8658a3cc6b74547fd72a3d27a33114d85c940023da5b366a7d4c1c36c",
+      "bottle": {
+        "cellar": ":any_skip_relocation",
+        "url": "https://ghcr.io/v2/homebrew/core/vulkan-headers/blobs/sha256:e29460a3bc874e18e407211f3e550cf60177c6f7614c04d3081beb94d8ad4ab2",
+        "sha256": "e29460a3bc874e18e407211f3e550cf60177c6f7614c04d3081beb94d8ad4ab2"
+      },
+      "source": {
+        "url": "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/vulkan-sdk-1.4.363.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "4a078be12bef21cfebc09d878b77a63cff9d68f899254a0b00d0e37ef73e7f7e"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "vulkan-loader": {
+      "version": "1.4.363.0",
+      "revision": 0,
+      "license": "Apache-2.0",
+      "recipe": "Formula/v/vulkan-loader.rb",
+      "recipe_sha256": "e17b99bb7e073a873e6c6548f524da74d419b737d0f4c944690da4b35088fad9",
+      "bottle": {
+        "cellar": "/opt/homebrew/Cellar",
+        "url": "https://ghcr.io/v2/homebrew/core/vulkan-loader/blobs/sha256:6d5ee00d4104774f3ae56e5e9441a59a6a6f5d800f937f4e926a8f9e01ed046f",
+        "sha256": "6d5ee00d4104774f3ae56e5e9441a59a6a6f5d800f937f4e926a8f9e01ed046f"
+      },
+      "source": {
+        "url": "https://github.com/KhronosGroup/Vulkan-Loader/archive/refs/tags/vulkan-sdk-1.4.363.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "941eff558fc74f248745fb7df367640cf89a8457f216dae498a74ae14b6ba6f7"
+      },
+      "patches": [],
+      "dependencies": [
+        "vulkan-headers"
+      ],
+      "build_dependencies": [
+        "cmake",
+        "pkgconf"
+      ],
+      "resources": []
+    },
+    "webp": {
+      "version": "1.6.0",
+      "revision": 0,
+      "license": "BSD-3-Clause",
+      "recipe": "Formula/w/webp.rb",
+      "recipe_sha256": "41b28d58db0c173be8b8cf18e2de50057c92eaff9c0a1ad6a28d3d998a2ec8fd",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/webp/blobs/sha256:89d7380c156284433cf5a130b82423b1a3d83b4aac88fe88ba35d174bcc9d3b6",
+        "sha256": "89d7380c156284433cf5a130b82423b1a3d83b4aac88fe88ba35d174bcc9d3b6"
+      },
+      "source": {
+        "url": "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564"
+      },
+      "patches": [],
+      "dependencies": [
+        "giflib",
+        "jpeg-turbo",
+        "libpng"
+      ],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    },
+    "x264": {
+      "version": "r3222",
+      "revision": 0,
+      "license": "GPL-2.0-or-later",
+      "recipe": "Formula/x/x264.rb",
+      "recipe_sha256": "d404046a3ad9833f9878ab074a743060f3a83cc6ecb08a2a15fda5b960e693e4",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/x264/blobs/sha256:b631667b5ad55c6c3ae383484f658c5b4ba14da8a2fbb1d537975695852529ca",
+        "sha256": "b631667b5ad55c6c3ae383484f658c5b4ba14da8a2fbb1d537975695852529ca"
+      },
+      "source": {
+        "url": "https://code.videolan.org/videolan/x264.git",
+        "tag": null,
+        "revision": "b35605ace3ddf7c1a5d67a2eb553f034aef41d55",
+        "using": null,
+        "checksum": null
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "x265": {
+      "version": "4.3",
+      "revision": 0,
+      "license": "GPL-2.0-or-later",
+      "recipe": "Formula/x/x265.rb",
+      "recipe_sha256": "9df26445b47e71e2a69ea15dedf1f06bff396e9a57f75560b8d7c32df74cedc8",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/x265/blobs/sha256:46dd2b3656ec8e99438a789b627e41a25e3a24407dc76a3a6b88cf159b447858",
+        "sha256": "46dd2b3656ec8e99438a789b627e41a25e3a24407dc76a3a6b88cf159b447858"
+      },
+      "source": {
+        "url": "https://github.com/Multicorewareinc/x265/releases/download/4.3/x265_4.3.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "83c53e4c8bbb8f1e33ed59e10a7d621d1d7801ca853910c3eb41f038b8ffb121"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": [
+        {
+          "name": "homebrew-test_video",
+          "url": "https://raw.githubusercontent.com/fraunhoferhhi/vvenc/master/test/data/RTn23_80x44p15_f15.yuv",
+          "sha256": "ecd2ef466dd2975f4facc889e0ca128a6bea6645df61493a96d8e7763b6f3ae9"
+        }
+      ]
+    },
+    "xorgproto": {
+      "version": "2026.1",
+      "revision": 0,
+      "license": "MIT",
+      "recipe": "Formula/x/xorgproto.rb",
+      "recipe_sha256": "b69294d3d2e166830fedaf30b978ecc89d8dea1d05ba07354846784225675140",
+      "bottle": {
+        "cellar": ":any_skip_relocation",
+        "url": "https://ghcr.io/v2/homebrew/core/xorgproto/blobs/sha256:8327b24ee8a0d4b3cd9dfb6d49eb20a80484c0f25535be6e726d1b908f444514",
+        "sha256": "8327b24ee8a0d4b3cd9dfb6d49eb20a80484c0f25535be6e726d1b908f444514"
+      },
+      "source": {
+        "url": "https://xorg.freedesktop.org/archive/individual/proto/xorgproto-2026.1.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "7fa90e48cbaca6bc4c99d176e88c5c147ab0ed42358e14a0869ee9c8a610ae7e"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "pkgconf",
+        "util-macros"
+      ],
+      "resources": []
+    },
+    "xvid": {
+      "version": "1.3.7",
+      "revision": 0,
+      "license": "GPL-2.0-or-later",
+      "recipe": "Formula/x/xvid.rb",
+      "recipe_sha256": "4b1ec5fb7d85ad6ebfc852a17135be7688104b8b2b9a4690d9235a2c60dade59",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/xvid/blobs/sha256:3a95088d2a638b37179758a0abdc7324ab03097b02f2216b67989ae87d3b3892",
+        "sha256": "3a95088d2a638b37179758a0abdc7324ab03097b02f2216b67989ae87d3b3892"
+      },
+      "source": {
+        "url": "https://downloads.xvid.com/downloads/xvidcore-1.3.7.tar.bz2",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "aeeaae952d4db395249839a3bd03841d6844843f5a4f84c271ff88f7aa1acff7"
+      },
+      "patches": [
+        {
+          "strip": "p1",
+          "data": true,
+          "sha256": "75d09515bf91ce7d85d52f8367806b39a672da714a0fe982ee74202474f722a6"
+        }
+      ],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "xz": {
+      "version": "5.8.4",
+      "revision": 0,
+      "license": "0BSD AND GPL-2.0-or-later",
+      "recipe": "Formula/x/xz.rb",
+      "recipe_sha256": "e5b8bbf09dccb4a1f2ee333ed65b13ee773350a26735ef594ca859d2cf85248e",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/xz/blobs/sha256:d291ad2277682238329b0e4d249e5e2c948c4b10cd64dba1963d897330ad88dd",
+        "sha256": "d291ad2277682238329b0e4d249e5e2c948c4b10cd64dba1963d897330ad88dd"
+      },
+      "source": {
+        "url": "https://github.com/tukaani-project/xz/releases/download/v5.8.4/xz-5.8.4.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "0014c7886930454fe8bd4228665b51af55eeae560ea135c9c4cd33f55b2591d9"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [],
+      "resources": []
+    },
+    "yt-dlp": {
+      "version": "2026.8.19",
+      "revision": 2,
+      "license": "Unlicense",
+      "recipe": "Formula/y/yt-dlp.rb",
+      "recipe_sha256": "46062fa56e8edb816fc4009509fb842e385a509fd2ded8c8e5d1be16e52f4fd3",
+      "bottle": {
+        "cellar": ":any_skip_relocation",
+        "url": "https://ghcr.io/v2/homebrew/core/yt-dlp/blobs/sha256:e6884fb0dc8b3b6fce3a6384a05803ec8197b6764813f5846d0de3dc35001ad6",
+        "sha256": "e6884fb0dc8b3b6fce3a6384a05803ec8197b6764813f5846d0de3dc35001ad6"
+      },
+      "source": {
+        "url": "https://files.pythonhosted.org/packages/1e/e0/832fa4ca334b766a06933a196066edc3dba37cdb6f14cd98d59bcc69a4b4/yt_dlp-2026.8.19.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "9e213e48cea35c66b378e4447903f118f6392a5fa380a2b6d7070ec86f4e0af1"
+      },
+      "patches": [],
+      "dependencies": [
+        "certifi",
+        "cffi",
+        "deno",
+        "pycparser",
+        "python@3.14"
+      ],
+      "build_dependencies": [],
+      "resources": [
+        {
+          "name": "brotli",
+          "url": "https://files.pythonhosted.org/packages/f7/16/c92ca344d646e71a43b8bb353f0a6490d7f6e06210f8554c8f874e454285/brotli-1.2.0.tar.gz",
+          "sha256": "e310f77e41941c13340a95976fe66a8a95b01e783d430eeaf7a2f87e0a57dd0a"
+        },
+        {
+          "name": "charset-normalizer",
+          "url": "https://files.pythonhosted.org/packages/33/1c/f41d4e74c28ab327ff3acd36053f7ea506c55872d7a90b0fa71aa3ab0c89/charset_normalizer-3.5.2.tar.gz",
+          "sha256": "39de2a259fc954455c57274dc94c79d5842774e1247a016aff30bc0efed0f4ef"
+        },
+        {
+          "name": "curl-cffi",
+          "url": "https://files.pythonhosted.org/packages/82/e1/730125c43e3e331d98e17af3cb310ba526b3f1101b7635ca23d976ebfcf5/curl_cffi-0.16.3.tar.gz",
+          "sha256": "d15d0c2a35f2d75bec430c28946c2a833f421c85773bdb0795182cc5c515665b"
+        },
+        {
+          "name": "idna",
+          "url": "https://files.pythonhosted.org/packages/f5/08/8eea9d4b8302028f3abb2c0813953f7aec26d33b7a8960ed760e65ff29fa/idna-3.20.tar.gz",
+          "sha256": "a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44"
+        },
+        {
+          "name": "mutagen",
+          "url": "https://files.pythonhosted.org/packages/df/70/1675da133ea92227da41bf5b24e1c66be597ff736a1533ade41da986852f/mutagen-1.48.1.tar.gz",
+          "sha256": "8f95637ab9f6f305cec6bd1294e197debe207998e3e068596563c74f86b0a173"
+        },
+        {
+          "name": "pycryptodomex",
+          "url": "https://files.pythonhosted.org/packages/c9/85/e24bf90972a30b0fcd16c73009add1d7d7cd9140c2498a68252028899e41/pycryptodomex-3.23.0.tar.gz",
+          "sha256": "71909758f010c82bc99b0abf4ea12012c98962fbf0583c2164f8b84533c2e4da"
+        },
+        {
+          "name": "requests",
+          "url": "https://files.pythonhosted.org/packages/ac/c3/e2a2b89f2d3e2179abd6d00ebd70bff6273f37fb3e0cc209f48b39d00cbf/requests-2.34.2.tar.gz",
+          "sha256": "f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed"
+        },
+        {
+          "name": "urllib3",
+          "url": "https://files.pythonhosted.org/packages/e3/05/b17359e1cefb4f909b5e40b1b90a496d987258916dbbf88e842c729f510e/urllib3-2.8.0.tar.gz",
+          "sha256": "63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63"
+        },
+        {
+          "name": "websockets",
+          "url": "https://files.pythonhosted.org/packages/18/72/fba934cb3dff7a85d811820efffcd141ddd52b5a2a01637f64551373ff4d/websockets-17.1.tar.gz",
+          "sha256": "acfea4c20bf54384883ea33b1240fc1db4f52e190823a4e2b334bc3e8bfca96a"
+        },
+        {
+          "name": "yt-dlp-ejs",
+          "url": "https://files.pythonhosted.org/packages/d3/e6/cceb9530e8f4e5940f6f7822d90e9d94f1b85343329a16baaf47bbbb3de1/yt_dlp_ejs-0.8.0.tar.gz",
+          "sha256": "d5fa1639f63b5c4af8d932495f60689d5370f1a095782c944f7f62a303eb104e"
+        }
+      ]
+    },
+    "zeromq": {
+      "version": "4.3.5",
+      "revision": 2,
+      "license": "MPL-2.0",
+      "recipe": "Formula/z/zeromq.rb",
+      "recipe_sha256": "cb968e07489911d569bacacf88e749cdb207afbebf30fe93d0ac7fc9cb88684e",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/zeromq/blobs/sha256:76e3d40941eb6d5d2ea5f94c017fd3503b68aee2aefc017291ab38b729fbcf08",
+        "sha256": "76e3d40941eb6d5d2ea5f94c017fd3503b68aee2aefc017291ab38b729fbcf08"
+      },
+      "source": {
+        "url": "https://github.com/zeromq/libzmq/releases/download/v4.3.5/zeromq-4.3.5.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "6653ef5910f17954861fe72332e68b03ca6e4d9c7160eb3a8de5a5a913bfab43"
+      },
+      "patches": [],
+      "dependencies": [
+        "libsodium"
+      ],
+      "build_dependencies": [
+        "asciidoc",
+        "pkgconf",
+        "xmlto"
+      ],
+      "resources": []
+    },
+    "zimg": {
+      "version": "3.0.6",
+      "revision": 0,
+      "license": "WTFPL",
+      "recipe": "Formula/z/zimg.rb",
+      "recipe_sha256": "12ab0f855e60cd5616e1b7d52167336261b91eaf00446456a3fa35ac8d6a7134",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/zimg/blobs/sha256:2beb74e61904dd631d9dfc8e43ae710572041e93058d759b77c37b20c6a9a431",
+        "sha256": "2beb74e61904dd631d9dfc8e43ae710572041e93058d759b77c37b20c6a9a431"
+      },
+      "source": {
+        "url": "https://github.com/sekrit-twc/zimg/archive/refs/tags/release-3.0.6.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "be89390f13a5c9b2388ce0f44a5e89364a20c1c57ce46d382b1fcc3967057577"
+      },
+      "patches": [],
+      "dependencies": [],
+      "build_dependencies": [
+        "autoconf",
+        "automake",
+        "libtool"
+      ],
+      "resources": []
+    },
+    "zstd": {
+      "version": "1.5.7",
+      "revision": 1,
+      "license": "(BSD-3-Clause OR GPL-2.0-only) AND BSD-2-Clause AND MIT",
+      "recipe": "Formula/z/zstd.rb",
+      "recipe_sha256": "e40f1de5b4e53faf64cad3d24dd74e28948d674caf96b3229310ce78e66b030e",
+      "bottle": {
+        "cellar": ":any",
+        "url": "https://ghcr.io/v2/homebrew/core/zstd/blobs/sha256:628a4ef53428d0078e3d76d297171ce8d0294f5ec1de3f20305e08c4dd333565",
+        "sha256": "628a4ef53428d0078e3d76d297171ce8d0294f5ec1de3f20305e08c4dd333565"
+      },
+      "source": {
+        "url": "https://github.com/facebook/zstd/archive/refs/tags/v1.5.7.tar.gz",
+        "tag": null,
+        "revision": null,
+        "using": null,
+        "checksum": "37d7284556b20954e56e1ca85b80226768902e2edabd3b649e9e72c0c9012ee3"
+      },
+      "patches": [],
+      "dependencies": [
+        "lz4",
+        "xz"
+      ],
+      "build_dependencies": [
+        "cmake"
+      ],
+      "resources": []
+    }
+  }
+}

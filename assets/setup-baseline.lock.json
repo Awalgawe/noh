@@ -1,0 +1,107 @@
+{
+  "schema": 1,
+  "repository": "Awalgawe/noh",
+  "repository_id": 1406079938,
+  "package_id": "NOH",
+  "release_id": 404558295,
+  "source_commit": "d9f5aeae674e7a069dd3e74f352218e1d4050818",
+  "version": "0.1.1",
+  "candidate_sha256": "bba60302cfeea837bd06ab4f15cc01afe5a46fe10cd3b3745b73d90de1532767",
+  "qualification_sha256": "815e7285031a3acacb4b7235b1e66cd0b086f0457daff5b6e31a3ce1ea664c9e",
+  "assets": [
+    {
+      "path": "packages-B-minimal/NOH-0.1.1-win-x64-minimal-Setup.exe",
+      "name": "NOH-0.1.1-win-x64-minimal-Setup.exe",
+      "sha256": "8109d362487ef71c5af9641e1f66577cc1fcf19b275ef3fad991273897be055f",
+      "size": 48884432,
+      "profile": "minimal",
+      "payload": true,
+      "id": 615133821
+    },
+    {
+      "path": "envelope-B-minimal.json",
+      "name": "envelope-minimal.json",
+      "sha256": "7f05035819f31e30e948856e6fd2b4df87c5f61b83b6b02778229472bdefeceb",
+      "size": 50692,
+      "profile": "minimal",
+      "payload": false,
+      "id": 615133987
+    },
+    {
+      "path": "packages-B-standard/NOH-0.1.1-win-x64-standard-Setup.exe",
+      "name": "NOH-0.1.1-win-x64-standard-Setup.exe",
+      "sha256": "8cb6cab944cedc6578770401531ae8257fd390cba5aea752c263489735eda0b6",
+      "size": 177222934,
+      "profile": "standard",
+      "payload": true,
+      "id": 615133424
+    },
+    {
+      "path": "envelope-B-standard.json",
+      "name": "envelope-standard.json",
+      "sha256": "351e76d694abc352cfceb0007f68f6225db9d28d771b889a4ea391569b501040",
+      "size": 112332,
+      "profile": "standard",
+      "payload": false,
+      "id": 615133793
+    },
+    {
+      "path": "packages-B/NOH-0.1.1-win-x64-Setup.exe",
+      "name": "NOH-0.1.1-win-x64-Setup.exe",
+      "sha256": "71b557ff5b45d6e98d744ffd6fb173e74aa038e6985c2026842325c971f7c3e4",
+      "size": 1320488708,
+      "profile": "complete",
+      "payload": true,
+      "id": 615131034
+    },
+    {
+      "path": "envelope-B.json",
+      "name": "envelope.json",
+      "sha256": "a252b07ae7fb596223d13b76d09910a29f6d5f123c7cfb06c9cde9d4ca03a115",
+      "size": 119024,
+      "profile": "complete",
+      "payload": false,
+      "id": 615133395
+    }
+  ],
+  "support": {
+    "name": "NOH-0.1.1-baseline-support.zip",
+    "sha256": "5cab811d036129a459c9338b9267c0461e43c758f3caf8c723f09ec343bec97f",
+    "size": 26662660,
+    "members": [
+      {
+        "path": "candidate.json",
+        "sha256": "bba60302cfeea837bd06ab4f15cc01afe5a46fe10cd3b3745b73d90de1532767"
+      },
+      {
+        "path": "keys.json",
+        "sha256": "72112d887a637fd2e1d24760504df3a12de3d2163519a1c22727c4e38fb90863"
+      },
+      {
+        "path": "source-inventory.json",
+        "sha256": "e1e8f11f3bf8d2f5abf4f2505bbb54f0918d7d1de67017a605bde2a096d20a31"
+      },
+      {
+        "path": "tools/bootstrap-B.exe",
+        "sha256": "d838947c91e8d49ab2b9a0c8930ccd08e8dfb98c185384834269e40f46571646"
+      },
+      {
+        "path": "tools/update-release.exe",
+        "sha256": "0023cce9fdf983d0fc29d2c61a4971c5f7af7ca0998e5b3905a5575a9c504409"
+      },
+      {
+        "path": "release-B-minimal.json",
+        "sha256": "2f9d6c9b9915bff6938464fb3a8dd4e4476a432ddc0b057884d7866fa6b54650"
+      },
+      {
+        "path": "release-B-standard.json",
+        "sha256": "758ec9a54f3186c725812e40eb7321a4f4948e4c5b90525b6da7bf65006125fd"
+      },
+      {
+        "path": "release-B.json",
+        "sha256": "92cde8c1603640fde44cda2715b6084655507a5dffddf958bc926d47b796baf3"
+      }
+    ],
+    "id": 615470714
+  }
+}

@@ -1,0 +1,62 @@
+name: Rust dependency audit
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/rust-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Audit Cargo.lock against RustSec
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Restore the pinned auditor
+        id: auditor-cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/rust-audit-tool
+          key: rust-audit-v1-${{ runner.os }}-0.22.2-rust-1.98.1-no-default-features
+      - name: Install cargo-audit from locked sources
+        if: steps.auditor-cache.outputs.cache-hit != 'true'
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal
+          cargo +1.98.1 install cargo-audit --version 0.22.2 --locked --no-default-features --root "$RUNNER_TEMP/rust-audit-tool"
+      - name: Audit all locked Rust dependencies
+        shell: bash
+        run: |
+          mkdir -p logs/security
+          auditor="$RUNNER_TEMP/rust-audit-tool/bin/cargo-audit"
+          "$auditor" --version | tee logs/security/auditor-version.txt
+          test "$("$auditor" --version)" = 'cargo-audit 0.22.2'
+          sha256sum Cargo.lock > logs/security/Cargo.lock.sha256
+          "$auditor" audit --file Cargo.lock --db "$RUNNER_TEMP/rustsec-advisory-db" --deny unsound 2>&1 | tee logs/security/rust-audit.log
+      - name: Record the advisory database revision
+        if: always()
+        shell: bash
+        run: |
+          if [ -d "$RUNNER_TEMP/rustsec-advisory-db/.git" ]; then
+            git -C "$RUNNER_TEMP/rustsec-advisory-db" rev-parse HEAD > logs/security/RUSTSEC-COMMIT.txt
+          fi
+      - name: Retain audit evidence, including failures
+        if: always()
+        # Public validation and PR results must not depend on artifact storage capacity.
+        continue-on-error: ${{ !github.event.repository.private || github.event_name == 'pull_request' || github.workflow == 'Native Linux and macOS' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rust-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: logs/security/*
+          if-no-files-found: warn
+          retention-days: 7

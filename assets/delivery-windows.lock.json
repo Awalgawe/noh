@@ -1,0 +1,250 @@
+{
+  "historical_ffmpeg": {
+    "archive_name": "ffmpeg-7.1-essentials_build.zip",
+    "asset_id": 195884618,
+    "declared_external_libraries": [
+      {
+        "name": "AMF",
+        "version": "v1.4.34-6-g3db6164"
+      },
+      {
+        "name": "aom",
+        "version": "v3.10.0-110-g3817481261"
+      },
+      {
+        "name": "AviSynthPlus",
+        "version": "v3.7.3-75-gc6649361"
+      },
+      {
+        "name": "ffnvcodec",
+        "version": "n12.2.72.0-1-g9934f17"
+      },
+      {
+        "name": "freetype",
+        "version": "VER-2-13-3"
+      },
+      {
+        "name": "fribidi",
+        "version": "v1.0.16"
+      },
+      {
+        "name": "gsm",
+        "version": "1.0.22"
+      },
+      {
+        "name": "harfbuzz",
+        "version": "10.0.1-1-gc7ef6a2e"
+      },
+      {
+        "name": "lame",
+        "version": "3.100"
+      },
+      {
+        "name": "libass",
+        "version": "0.17.3-32-g5298859"
+      },
+      {
+        "name": "libgme",
+        "version": "0.6.3"
+      },
+      {
+        "name": "libopencore-amrnb",
+        "version": "0.1.6"
+      },
+      {
+        "name": "libopencore-amrwb",
+        "version": "0.1.6"
+      },
+      {
+        "name": "libssh",
+        "version": "0.11.1"
+      },
+      {
+        "name": "libtheora",
+        "version": "1.1.1"
+      },
+      {
+        "name": "libwebp",
+        "version": "v1.4.0-97-g220ee529"
+      },
+      {
+        "name": "oneVPL",
+        "version": "2.13"
+      },
+      {
+        "name": "openmpt",
+        "version": "libopenmpt-0.6.19-9-g1a29ac622"
+      },
+      {
+        "name": "opus",
+        "version": "v1.5.2-21-gff6dea5e"
+      },
+      {
+        "name": "rubberband",
+        "version": "v1.8.1"
+      },
+      {
+        "name": "SDL",
+        "version": "prerelease-2.29.2-377-g1edaad172"
+      },
+      {
+        "name": "speex",
+        "version": "Speex-1.2.1-28-g1de1260"
+      },
+      {
+        "name": "srt",
+        "version": "v1.5.4-rc.0-11-ga7b3711"
+      },
+      {
+        "name": "VAAPI",
+        "version": "2.23.0."
+      },
+      {
+        "name": "vidstab",
+        "version": "v1.1.1-13-g8dff7ad"
+      },
+      {
+        "name": "vmaf",
+        "version": "v3.0.0-95-gd95b69e0"
+      },
+      {
+        "name": "vo-amrwbenc",
+        "version": "0.1.3"
+      },
+      {
+        "name": "vorbis",
+        "version": "v1.3.7-10-g84c02369"
+      },
+      {
+        "name": "vpx",
+        "version": "v1.14.1-371-g32de9c2be"
+      },
+      {
+        "name": "x264",
+        "version": "v0.164.3192"
+      },
+      {
+        "name": "x265",
+        "version": "4.0-6-ga009ec077"
+      },
+      {
+        "name": "xvid",
+        "version": "v1.3.7"
+      },
+      {
+        "name": "zeromq",
+        "version": "4.3.5"
+      },
+      {
+        "name": "zimg",
+        "version": "release-3.0.5-150-g7143181"
+      }
+    ],
+    "executable_sha256": "2ce797a0f88d7f067180338fb227f7b1928ea727bd9a4d7a1d022f7c52af71a3",
+    "member": "ffmpeg-7.1-essentials_build/bin/ffmpeg.exe",
+    "original_acquisition": {
+      "executable_sha256": "2ce797a0f88d7f067180338fb227f7b1928ea727bd9a4d7a1d022f7c52af71a3",
+      "member": "imageio_ffmpeg/binaries/ffmpeg-win-x86_64-v7.1.exe",
+      "sha256": "02fa47c83703c37df6bfe4896aab339013f62bf02c5ebf2dce6da56af04ffc0a",
+      "url": "https://files.pythonhosted.org/packages/2c/c6/fa760e12a2483469e2bf5058c5faff664acf66cadb4df2ad6205b016a73d/imageio_ffmpeg-0.6.0-py3-none-win_amd64.whl",
+      "version": "7.1 (Gyan, imageio-ffmpeg 0.6.0)"
+    },
+    "producer_materials": [
+      {
+        "member": "LICENSE",
+        "name": "LICENSE",
+        "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+      },
+      {
+        "member": "README.txt",
+        "name": "README.txt",
+        "sha256": "cf9643d68f4149f534cf5e010760cb5125b109c1ec04cfdab4fd38e968212e69"
+      }
+    ],
+    "sha256": "fa7d4d7e795db0e2503f49f105f46ed5852386f0cfdd819899be3b65ebde24fc",
+    "source_coverage": "README declarations preserve known versions; missing declarations, patches and corresponding-source collection remain unreviewed",
+    "url": "https://github.com/GyanD/codexffmpeg/releases/download/7.1/ffmpeg-7.1-essentials_build.zip",
+    "version": "7.1 (Gyan essentials)"
+  },
+  "historical_project_sources": [
+    {
+      "coverage": "FFmpeg upstream only; not the complete Gyan corresponding source closure",
+      "name": "ffmpeg-7.1.tar.xz",
+      "sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+      "url": "https://ffmpeg.org/releases/ffmpeg-7.1.tar.xz"
+    },
+    {
+      "coverage": "mpv upstream/build script only; not its complete corresponding source closure",
+      "name": "mpv-a1f50f2c3.tar.gz",
+      "sha256": "94a6ef40fa3ee5551791b88dbe2a1a92ac79a610a7ae3f8ab36a5a0acfe6daac",
+      "url": "https://github.com/mpv-player/mpv/archive/a1f50f2c3.tar.gz"
+    },
+    {
+      "coverage": "whisper.cpp upstream; external CUDA sources and redistribution review remain separate",
+      "name": "whisper-b5130.tar.gz",
+      "sha256": "a9ad0f82f30cb6ac5b627874895f89571dd64f7c49d0df3a38550fdb9325fe9b",
+      "url": "https://github.com/ggml-org/whisper.cpp/archive/refs/tags/b5130.tar.gz"
+    }
+  ],
+  "licenses": [
+    {
+      "name": "WHISPER-MODEL-LICENSE.txt",
+      "sha256": "b5d65a59060e68c4ff940e1eddfa6f94b2d68fdf58ed7f4dd57721c997e35e9d",
+      "url": "https://raw.githubusercontent.com/openai/whisper/86098128c0b4f24f0e2aa2994de830614b474227/LICENSE"
+    },
+    {
+      "name": "SILERO-LICENSE.txt",
+      "sha256": "2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b",
+      "url": "https://raw.githubusercontent.com/snakers4/silero-vad/1e261b036686cd0017d500ee96acd1c4ba572a9d/LICENSE"
+    }
+  ],
+  "native_runtime": {
+    "lock": "assets/windows-native.lock.json",
+    "sha256": "956985a0f7e3b30355fc675ec0676c7e66b4d4dd8ec4b31cf7f52a20ab197a19"
+  },
+  "schema_version": 1,
+  "sources": [
+    {
+      "coverage": "whisper.cpp upstream; external CUDA sources and redistribution review remain separate",
+      "name": "whisper-b5130.tar.gz",
+      "sha256": "a9ad0f82f30cb6ac5b627874895f89571dd64f7c49d0df3a38550fdb9325fe9b",
+      "url": "https://github.com/ggml-org/whisper.cpp/archive/refs/tags/b5130.tar.gz"
+    }
+  ],
+  "status": "unqualified-candidate-inputs",
+  "visual_cpp": {
+    "cabinet": {
+      "member": "a4",
+      "member_sha256": "6e8ee73933678c55973e83366e48e948b394c7a36743a36b7224c95de979b13f",
+      "offset": 630000,
+      "sha256": "8b1595b5d0001e0747371ecfc2dccb604dc836fba0a778566e97a6bdb0816bb8",
+      "size": 18091661
+    },
+    "files": {
+      "msvcp140.dll": {
+        "member": "msvcp140.dll_amd64",
+        "sha256": "7c26614e1d733892c2deac7e245ce115504b1d80592dd0a01b08e3e5a55f89ca"
+      },
+      "vcomp140.dll": {
+        "member": "vcomp140.dll_amd64",
+        "sha256": "95d4ce4a6802d1e18b5e0e1722cc30ea72ca7e033f83828f05c0b7b993fe7cbf"
+      },
+      "vcruntime140.dll": {
+        "member": "vcruntime140.dll_amd64",
+        "sha256": "d1f4225df2cd877dbf130d5668a021dce3f94118455ff5ec952061c30afc9ce7"
+      },
+      "vcruntime140_1.dll": {
+        "member": "vcruntime140_1.dll_amd64",
+        "sha256": "a7146c08f89fe5b04541ab507cdb59ff7b44534d4ba3c668a426c6450a03434e"
+      }
+    },
+    "license": {
+      "sha256": "08651651a7602fc7c0e2763de0fde1ff9f868df2780597cd1775ee9d6441c783",
+      "url": "https://visualstudio.microsoft.com/wp-content/uploads/2025/10/Visual-C-V14-License-Redistributable_and_Runtime_ENU.docx"
+    },
+    "redistribution_status": "Review the applicable Visual Studio redistribution grant; the runtime-use EULA alone does not grant redistribution.",
+    "sha256": "843068991daaa1f73ad9f6239bce4d0f6a07a51f18c37ea2a867e9beca71295c",
+    "url": "https://download.visualstudio.microsoft.com/download/pr/ebdab8e5-1d7b-4d9f-a11b-cbb1720c3b12/843068991DAAA1F73AD9F6239BCE4D0F6A07A51F18C37EA2A867E9BECA71295C/VC_redist.x64.exe",
+    "version": "14.51.36247.0"
+  }
+}

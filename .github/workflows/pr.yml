@@ -1,0 +1,169 @@
+name: PR validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main, codex/setup-release]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scope:
+    name: Select platforms and run fast controls
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      windows: ${{ steps.scope.outputs.windows }}
+      unix: ${{ steps.scope.outputs.unix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify routing and merge-gate controls
+        run: python3 -m unittest discover -s tools -p test_ci_scope.py
+      - name: Select native platforms from the complete Git diff
+        id: scope
+        run: python3 tools/ci_scope.py
+      - name: Check build and delivery scripts with synthetic fixtures
+        if: steps.scope.outputs.windows == 'true' || steps.scope.outputs.unix == 'true'
+        run: |
+          python3 tools/test-delivery.py
+          python3 tools/test-runtime-cache.py
+          python3 -m unittest discover -s tools -p test_setup_delivery.py
+
+  audit:
+    needs: scope
+    if: needs.scope.outputs.windows == 'true' || needs.scope.outputs.unix == 'true'
+    uses: ./.github/workflows/rust-audit.yml
+
+  windows:
+    name: Windows QA
+    needs: [scope, audit]
+    if: needs.scope.outputs.windows == 'true'
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CARGO_TERM_COLOR: never
+      RUSTFLAGS: -C linker-flavor=ld.lld
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+      - name: Resolve pinned compiler inputs
+        id: inputs
+        run: |
+          $policy = Get-Content assets/delivery-policy.json -Raw | ConvertFrom-Json
+          $compiler = (Get-Content assets/setup-tools.lock.json -Raw | ConvertFrom-Json).compiler
+          "toolchain=$($policy.rust_version)-x86_64-pc-windows-gnu" >> $env:GITHUB_OUTPUT
+          "compiler_hash=$($compiler.hash)" >> $env:GITHUB_OUTPUT
+      - name: Restore compiler archive
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/noh-pr-compiler/*.zip
+          key: noh-pr-compiler-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.inputs.outputs.compiler_hash }}
+      - name: Prepare Rust and the compiler only
+        env:
+          PR_TOOLCHAIN: ${{ steps.inputs.outputs.toolchain }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($env:CARGO_ENCODED_RUSTFLAGS) { throw 'Unexpected encoded Rust flags' }
+          rustup toolchain install $env:PR_TOOLCHAIN --profile minimal --component rustfmt
+          rustup default $env:PR_TOOLCHAIN
+          "RUSTUP_TOOLCHAIN=$env:PR_TOOLCHAIN" >> $env:GITHUB_ENV
+          $spec = (Get-Content assets/setup-tools.lock.json -Raw | ConvertFrom-Json).compiler
+          $directory = Join-Path $env:RUNNER_TEMP 'noh-pr-compiler'
+          [void][IO.Directory]::CreateDirectory($directory)
+          $archive = Join-Path $directory $spec.name
+          if (-not (Test-Path -LiteralPath $archive)) { Invoke-WebRequest -Uri $spec.url -OutFile $archive }
+          if ((Get-FileHash -LiteralPath $archive -Algorithm $spec.algorithm).Hash.ToLowerInvariant() -ne $spec.hash) { throw 'Compiler archive hash mismatch' }
+          Expand-Archive -LiteralPath $archive -DestinationPath $directory
+          $compiler = Join-Path $directory ([IO.Path]::GetFileNameWithoutExtension($spec.name) + '/bin')
+          foreach ($file in @('clang.exe', 'llvm-ar.exe')) {
+            if (-not (Test-Path -LiteralPath "$compiler/$file" -PathType Leaf)) { throw "Missing compiler tool: $file" }
+          }
+          "CC=$compiler/clang.exe" >> $env:GITHUB_ENV
+          "AR=$compiler/llvm-ar.exe" >> $env:GITHUB_ENV
+      - name: Check formatting before compilation
+        run: cargo fmt --all --check
+      - name: Restore compatible Cargo dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: noh-pr-windows-qa-v1-${{ steps.inputs.outputs.compiler_hash }}
+          workspaces: . -> target
+          cache-bin: 'false'
+          cache-workspace-crates: 'false'
+          cache-on-failure: 'false'
+      - name: Restore only test-runtime downloads
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/noh-pr-downloads
+          key: noh-pr-ffmpeg-v1-${{ hashFiles('assets/delivery-windows.lock.json', 'assets/windows-native.lock.json') }}
+      - name: Fetch locked dependencies
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          cargo fetch --locked
+      - name: Compile QA workers and run GUI, CLI, media, MCP and update tests
+        run: ./tools/windows-qa.ps1 -Cache "$env:RUNNER_TEMP/noh-pr-downloads" -Runtime "$env:RUNNER_TEMP/noh-pr-ffmpeg"
+      - name: Show timings and test results without artifact storage
+        if: always()
+        run: |
+          foreach ($file in Get-ChildItem logs/setup/*.process.json -ErrorAction SilentlyContinue) {
+            $record = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
+            "$($file.Name): exit=$($record.exit), seconds=$($record.seconds), timed_out=$($record.timed_out)"
+            if ($record.exit -ne 0 -or $record.error) {
+              $prefix = $file.FullName -replace '\.process\.json$', ''
+              foreach ($stream in @('stdout', 'stderr')) {
+                Get-Content -LiteralPath "$prefix.$stream.log" -Tail 80 -ErrorAction SilentlyContinue
+              }
+            }
+          }
+          if (Test-Path logs/setup/verification.stdout.log) {
+            Select-String -Path logs/setup/verification.stdout.log -Pattern '^test result:' | ForEach-Object Line
+          }
+      - name: Retain QA diagnostics
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-pr-diagnostics
+          path: |
+            logs/setup/*.json
+            logs/setup/*.log
+          if-no-files-found: warn
+          retention-days: 7
+
+  unix:
+    needs: [scope, audit]
+    if: needs.scope.outputs.unix == 'true'
+    uses: ./.github/workflows/native.yml
+    with:
+      skip_audit: true
+
+  required:
+    name: PR checks
+    if: always()
+    needs: [scope, audit, windows, unix]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require every selected check to succeed
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: python3 tools/ci_scope.py --gate
