@@ -62,6 +62,47 @@
       "review_round": "windows-release-v17",
       "scope": "Ordinary portable and corresponding materials only; installer excluded",
       "source_commit": "df41ed864aef4aef4bf8df0da2460cd7173e2cf1"
+    },
+    {
+      "delivery_sha256": "9f6b97caf15502c46336f71cc7af5b68f9aacefc313f395cdf366de9758c162a",
+      "evidence": {
+        "audio_gpu": {
+          "path": "docs/release-evidence/windows-0.1.1.json",
+          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+        },
+        "clean_install": {
+          "path": "docs/release-evidence/windows-0.1.1.json",
+          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+        },
+        "corresponding_sources": {
+          "path": "docs/release-evidence/windows-0.1.1.json",
+          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+        },
+        "download_protection": {
+          "path": "docs/release-evidence/windows-0.1.1.json",
+          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+        },
+        "media_export": {
+          "path": "docs/release-evidence/windows-0.1.1.json",
+          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+        },
+        "native_import_closure": {
+          "path": "docs/release-evidence/windows-0.1.1.json",
+          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+        },
+        "offline_transcription": {
+          "path": "docs/release-evidence/windows-0.1.1.json",
+          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+        },
+        "rust_notices": {
+          "path": "docs/release-evidence/windows-0.1.1.json",
+          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+        }
+      },
+      "platform": "windows-x64",
+      "review_round": "windows-0.1.1-portable-v1",
+      "scope": "Ordinary portable and corresponding materials only; installer wrappers and publication excluded",
+      "source_commit": "9a8ee751d95c5950c3dffab0eb34ca8493d8e8f0"
     }
   ],
   "redistribution_records": [

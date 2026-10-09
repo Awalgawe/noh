@@ -1,0 +1,204 @@
+{
+  "assets": {
+    "NOH-0.1.1-windows-x64-materials.zip": {
+      "sha256": "a53179947452befbacfdddf484de9dedbd324cce25391f023c79ba25a5902094",
+      "size": 1277111082
+    },
+    "NOH-0.1.1-windows-x64.zip": {
+      "sha256": "3c722a53cdd47e1fa37548726682a06c80df5e531d064ce9c102ecdbb46d4d96",
+      "size": 1312782292
+    }
+  },
+  "build": {
+    "build_fingerprint": "ee69a7e676ea64218d3b2e4b386000139b18bf35903d3f2144f351495ee83966",
+    "cargo_version": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+    "features": [
+      "default",
+      "gui",
+      "mcp"
+    ],
+    "git_dirty": false,
+    "git_revision": "9a8ee751d95c5950c3dffab0eb34ca8493d8e8f0",
+    "options_sha256": "1ce6dbc5a54de1b0150f5325181b44153788a587c82a2d1467dd89d9b611a4e8",
+    "package_version": "0.1.1",
+    "profile": "release",
+    "rustc_version": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "schema_version": 1,
+    "source_sha256": "03394032b46c98e235c8d69953fa33cd503e55c26ee402286922e63c7a965075",
+    "target": "x86_64-pc-windows-gnu"
+  },
+  "bundled_notices_comparison": {
+    "added": [],
+    "changed": [
+      "licenses/FONT-NOTICE.md"
+    ],
+    "only_difference": "FONT-NOTICE.md line endings; normalized text identical. All original licence files unchanged.",
+    "removed": []
+  },
+  "delivery_sha256": "9f6b97caf15502c46336f71cc7af5b68f9aacefc313f395cdf366de9758c162a",
+  "download_protection": {
+    "archive_sha256_after": "3c722a53cdd47e1fa37548726682a06c80df5e531d064ce9c102ecdbb46d4d96",
+    "attachment_services": {
+      "EXE": {
+        "policy_after": 1,
+        "policy_before": 1,
+        "save_hresult": 0,
+        "zone_identifier": "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=https://api.github.com/repos/Awalgawe/noh/actions/artifacts/11612501385/zip\r\n"
+      },
+      "PORTABLE": {
+        "policy_after": 1,
+        "policy_before": 1,
+        "save_hresult": 0,
+        "zone_identifier": "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=https://api.github.com/repos/Awalgawe/noh/actions/artifacts/11612501385/zip\r\n"
+      }
+    },
+    "defender_exit": 0,
+    "defender_seconds": 62.6142073,
+    "executable_sha256_after": "32bdfcf756ff148b673ae04ddf76aa84b9c1f54407b1b5f753a5ed74ae601051",
+    "limits": "Downloaded GitHub Actions envelope, with the nested portable and executable marked using their actual HTTPS origin. No browser, interactive SmartScreen reputation approval or security-setting change.",
+    "origin": "GitHub Actions artifact 11612501385, nested portable ZIP and executable",
+    "protection": {
+      "AntivirusEnabled": true,
+      "AntivirusSignatureLastUpdated": "2026-10-09T03:03:43+02:00",
+      "AntivirusSignatureVersion": "1.459.634.0",
+      "RealTimeProtectionEnabled": true
+    },
+    "signature_status": "NotSigned",
+    "threats_reported": 0
+  },
+  "integration": {
+    "failed": 0,
+    "ignored": 12,
+    "passed": 477,
+    "suites": 22
+  },
+  "limitations": [
+    "No Authenticode signing or SmartScreen reputation is claimed.",
+    "Fresh application configuration on the recorded existing Windows host, not a fresh OS or universal hardware compatibility.",
+    "Microsoft runtime was already installed; no fresh-system prerequisite installation is claimed.",
+    "Native audio-device playback was observed; no human listening test is claimed.",
+    "Installer, on-demand download and public-URL qualification are separate from this portable record."
+  ],
+  "materials_comparison": {
+    "added": [],
+    "changed": [
+      "BUILD-ENVIRONMENT.json",
+      "NOH-source.zip",
+      "PE-IMPORTS.json",
+      "README.txt"
+    ],
+    "identical_files": 25489,
+    "new_source": "9a8ee751d95c5950c3dffab0eb34ca8493d8e8f0",
+    "old_source": "df41ed864aef4aef4bf8df0da2460cd7173e2cf1",
+    "removed": []
+  },
+  "native_acceptance": {
+    "bundled_preview_libraries_observed": 130,
+    "failed_capture_cases": 0,
+    "fresh_application_profile": true,
+    "fresh_os_installation": false,
+    "gpu": "NVIDIA GeForce RTX 4060",
+    "gui_capture_cases": 84,
+    "gui_states": [
+      "ready",
+      "resources-options"
+    ],
+    "host": "Windows 10 Pro 22H2 x64, build 19045",
+    "languages": [
+      "en",
+      "fr",
+      "de",
+      "es",
+      "ja",
+      "ko",
+      "zh"
+    ],
+    "path": "Windows system directories only",
+    "play_pause_seek_handoffs": 6,
+    "playing_audio_device_observations": 2,
+    "preview_frames": 294,
+    "scales": [
+      1,
+      1.5,
+      2
+    ],
+    "sizes": [
+      "420x760",
+      "980x850"
+    ],
+    "speech": [
+      {
+        "cuda0_observed": false,
+        "exit": 0,
+        "expected_words": true,
+        "mode": "cpu",
+        "seconds": 10.718
+      },
+      {
+        "cuda0_observed": true,
+        "exit": 0,
+        "expected_words": true,
+        "mode": "cuda",
+        "seconds": 2.016
+      }
+    ],
+    "speech_fixture": "Previously generated synthetic French speech; no user media",
+    "theme": "dark",
+    "visually_inspected": [
+      "resources-options-fr-dark-1-420x760",
+      "resources-options-ja-dark-2-420x760",
+      "resources-options-de-dark-1-980x850",
+      "ready-fr-dark-1-980x850"
+    ]
+  },
+  "native_reuse": {
+    "basis": "Exact SHA-256 equality with the qualified 0.1.0 runtime/model payload",
+    "unchanged_files": 266
+  },
+  "platform": "windows-x64",
+  "provenance": {
+    "artifact_digest": "sha256:2d05d9d5846698d1e2728ca31cb0602eda1939be25522f931d6a2519638472fa",
+    "artifact_id": 11612501385,
+    "attempt": 1,
+    "conclusion": "success",
+    "repository": "Awalgawe/noh",
+    "repository_id": 1411000018,
+    "run_id": 37917999373,
+    "url": "https://github.com/Awalgawe/noh/actions/runs/37917999373",
+    "workflow": ".github/workflows/release.yml",
+    "workflow_id": 379053207
+  },
+  "schema_version": 1,
+  "scope": "Exact Windows x64 portable application and corresponding materials. Installer wrappers, real component downloads and publication are separate acceptance gates.",
+  "source_commit": "9a8ee751d95c5950c3dffab0eb34ca8493d8e8f0",
+  "source_correspondence": {
+    "archive_metadata_difference_count": 354,
+    "archive_metadata_differences": [
+      {
+        "different_fields": [
+          "date_time"
+        ],
+        "name": ".cargo/"
+      },
+      {
+        "different_fields": [
+          "date_time"
+        ],
+        "name": ".cargo/config.toml"
+      },
+      {
+        "different_fields": [
+          "date_time"
+        ],
+        "name": ".gitattributes"
+      }
+    ],
+    "exact_git_tree_match": true,
+    "git_archive_sha256": "4305f99c719d74e6107716034663eb93e02cd75c591a202c9db8d262105d5010",
+    "missing_imports": [],
+    "pe_images": 265,
+    "source_commit": "9a8ee751d95c5950c3dffab0eb34ca8493d8e8f0",
+    "source_files": 321
+  },
+  "version": "0.1.1"
+}
