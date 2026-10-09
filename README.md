@@ -38,28 +38,25 @@ NOH is focused on repeating visual sequences, music and short extracts. It is no
 
 ## Download and install
 
-[GitHub Releases](https://github.com/Awalgawe/noh/releases) is the download page
-for published versions, release notes and package checksums. **No ready-to-use
-application release is available yet.** The [changelog](docs/CHANGELOG.md) tracks
-the first public version in preparation.
+**[Download NOH for Windows](https://github.com/Awalgawe/noh/releases/latest)**
 
-Windows x64 and macOS Apple Silicon portable packages are being prepared and
-validated. Linux and Intel Mac currently require a [source build](docs/BUILDING.md).
-Source builds and native CI tests pass on all four targets; installable packages
-still need their own validation. macOS signing and notarization remain incomplete.
-Use each published release's notes for its supported systems and minimum versions.
+Choose the application ZIP (`NOH-<version>-windows-x64.zip`) in the release assets. Extract the complete
+ZIP, then open `noh.exe`. Keep the `bin`, `docs` and `licenses` folders together.
+The separate `-materials.zip` contains source code and build materials.
 
-Already have a complete portable build?
+The portable package includes the media tools and local speech models. If the
+Microsoft component needed for automatic subtitles is missing, NOH provides a
+**Download the Microsoft component** action. Install it, then choose **Check
+again**. Preview, export and existing subtitles also work without that component.
 
-- **Windows:** right-click the ZIP, choose **Extract All**, then open `noh.exe`
-  inside the extracted folder. Keep its `bin`, `docs` and `licenses` folders together.
-- **Mac:** extract the portable ZIP, move `NOH.app` to **Applications**, then open it.
-  The current development build is not yet approved for ordinary macOS distribution.
+This release was validated on Windows 10 x64 22H2 (build 19045). Read its notes
+for checksums and validation limits. macOS and Linux currently require a
+[source build](docs/BUILDING.md); macOS distribution signing and notarization
+remain incomplete.
 
-Complete portable builds include the media tools and speech models. Windows local
-transcription requires the Microsoft Visual C++ v14 x64 runtime supplied by Microsoft. Follow the [installation guide](docs/INSTALLING.md)
-for setup, updates and removal, then [make your first video](docs/APP.md#make-your-first-video).
-Developers can [build from source](docs/BUILDING.md).
+Follow the [installation guide](docs/INSTALLING.md) for setup, updates and removal,
+then [make your first video](docs/APP.md#make-your-first-video).
+See the [changelog](docs/CHANGELOG.md) for the initial release's features and limits.
 
 ## Learn more
 

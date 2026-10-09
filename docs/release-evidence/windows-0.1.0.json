@@ -1,0 +1,256 @@
+{
+  "schema_version": 1,
+  "source_commit": "df41ed864aef4aef4bf8df0da2460cd7173e2cf1",
+  "delivery_sha256": "83b85e6b4641a37e81b1a3f0e7633065f9509ebb8e979333954513aa7b379646",
+  "assets": {
+    "NOH-0.1.0-windows-x64-materials.zip": {
+      "sha256": "cd2e0dd70793d159e748e8579c85a18ec4d1addf7fd4ffb522c71761025248df",
+      "size": 1277300534
+    },
+    "NOH-0.1.0-windows-x64.zip": {
+      "sha256": "79eae3216d45a290ce5e47ae530e28530b66c0eb1ac6d1f58fee193c7cfd3765",
+      "size": 1302253805
+    }
+  },
+  "build": {
+    "kind": "local Windows GNU/LLD",
+    "rust": "1.98.1",
+    "profile": "release",
+    "features": [
+      "gui",
+      "mcp"
+    ],
+    "clean_source": true,
+    "hosted_build": false
+  },
+  "ci": {
+    "run_id": 37884373742,
+    "url": "https://github.com/Awalgawe/noh/actions/runs/37884373742",
+    "head": "7174a0d9b145da3e3eec75c5f1d611389d08566d",
+    "all_four_platforms_passed": true,
+    "merge_tree_matches_tested_head": true
+  },
+  "host": {
+    "windows": "Windows 10 Pro 22H2 x64, build19045",
+    "gpu": "NVIDIA GeForce RTX4060",
+    "driver": "32.0.16.1088",
+    "external_microsoft_runtime": "14.51.36247.0"
+  },
+  "native": {
+    "steps": [
+      {
+        "exit": 0,
+        "log": "installer-wrapper.log",
+        "name": "installer-wrapper",
+        "seconds": 139.859
+      },
+      {
+        "exit": 0,
+        "log": "format.log",
+        "name": "format",
+        "seconds": 1.984
+      },
+      {
+        "exit": 0,
+        "log": "integration.log",
+        "name": "integration",
+        "seconds": 371.813
+      },
+      {
+        "exit": 0,
+        "log": "real-transcription.log",
+        "name": "real-transcription",
+        "seconds": 35.234
+      },
+      {
+        "exit": 0,
+        "log": "speech-cpu.log",
+        "name": "speech-cpu",
+        "seconds": 8.078
+      },
+      {
+        "exit": 0,
+        "log": "speech-cuda.log",
+        "name": "speech-cuda",
+        "seconds": 1.563
+      },
+      {
+        "exit": 0,
+        "log": "native-gui.log",
+        "name": "native-gui",
+        "seconds": 26.5
+      },
+      {
+        "exit": 0,
+        "log": "language-size-scale-captures.log",
+        "name": "language-size-scale-captures",
+        "seconds": 109.969
+      }
+    ],
+    "integration_passed": 476,
+    "integration_failed": 0,
+    "integration_ignored": 14,
+    "opt_in_real_transcription_passed": 3,
+    "cpu_mode": "-ng",
+    "cuda_mode": "CUDA0 backend recorded",
+    "synthetic_french_expected_words": [
+      "jardin",
+      "français"
+    ],
+    "gui_frames": 693,
+    "play_pause_seek_observations": 6,
+    "audio_device_playing_observations": 2,
+    "graphics_modules": [
+      "OPENGL32.dll",
+      "d3d11.dll",
+      "nvoglv64.dll",
+      "vulkan-1.dll"
+    ],
+    "fresh_application_profile": true,
+    "fresh_os": false,
+    "path_isolation": "Native GUI and direct speech probes use Windows system directories only",
+    "captures": {
+      "count": 42,
+      "languages": [
+        "en",
+        "fr",
+        "de",
+        "es",
+        "ja",
+        "ko",
+        "zh"
+      ],
+      "scales": [
+        1,
+        1.5,
+        2
+      ],
+      "logical_sizes": [
+        [
+          420,
+          540
+        ],
+        [
+          980,
+          850
+        ]
+      ],
+      "theme": "dark",
+      "state": "ready",
+      "actor_visual_review": "42-image contact sheet plus native playback and French/Japanese narrow2x images reviewed"
+    }
+  },
+  "original_local_receipt_sha256": {
+    "FINAL-BUILD.json": "9763dd103cd505f89a1edf97d5a250d49f03adb9096c1dd11c99d7bf431e3bd7",
+    "FINAL-PE-IMPORTS.json": "5bac4c024ac958f40897c570b2079f984695116474194bef0dd9efa0e5678740",
+    "final-qualification/RESULTS.json": "e94548e876a884b120a002a893224c6e5ad71314983f50ab99c55afb775030d2",
+    "final-qualification/native-gui/NATIVE-GUI.json": "fb7e08693926a279915b84469989b61b0cd991e223f5be4e2ede85a0877224ea",
+    "download-protection/ZIP-ATTACHMENT.json": "4e8335a14993b1f6696702b0ad354283309fa86c373b5b5bf9afb2874497a4ba",
+    "download-protection/EXE-ATTACHMENT.json": "e080bab0ccc7ca76f7da8758b426172e57169b1b0afcaa017d8eb3f81ee9f355",
+    "download-protection/DEFENDER.json": "3ecae720e7787f376de4a71694c9660205ae13ac0ee658fc87ac00410573e0e4",
+    "download-protection/THREATS.json": "ceaab0a06a4e78125fc3ee2bb0a1ed1b553b6601542cb05f25192e532f17e217",
+    "download-protection/AUTHENTICODE.json": "ee0bbef4a475375f1c93ce55e1c0a967bbf25de420dc0dd90739196baf480bf2",
+    "download-protection/defender.log": "a57031e5b7e4f7784be9f41f513a5a11d3d4005a690f9838ba95ba2fb62c57f5"
+  },
+  "download_protection": {
+    "method": "Exact GitHub draft asset downloaded through its authenticated API, followed by native Windows Attachment Services and Defender checks",
+    "zip": {
+      "source": "https://api.github.com/repos/Awalgawe/noh/releases/assets/623992013",
+      "protection": {
+        "AntivirusEnabled": true,
+        "AMServiceEnabled": true,
+        "RealTimeProtectionEnabled": true,
+        "AntivirusSignatureVersion": "1.459.601.0",
+        "AntivirusSignatureLastUpdated": "2026-10-07T10:47:31+02:00"
+      },
+      "file": "NOH-0.1.0-windows-x64.zip",
+      "policy_after": 1,
+      "save_hresult": 0,
+      "policy_before": 1,
+      "sha256_after": "79eae3216d45a290ce5e47ae530e28530b66c0eb1ac6d1f58fee193c7cfd3765",
+      "sha256_before": "79eae3216d45a290ce5e47ae530e28530b66c0eb1ac6d1f58fee193c7cfd3765",
+      "zone_identifier": "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=https://api.github.com/repos/Awalgawe/noh/releases/assets/623992013\r\n",
+      "limits": "Windows Attachment Services policy and save result. S_FALSE=1 means a prompt would be needed; no prompt accepted and no file executed. This is not a browser SmartScreen reputation or interactive installer test."
+    },
+    "extracted_executable": {
+      "sha256_after": "7cbac688f26e3235c3d0d2bf8fd855321237143bd3e124fc752d354884fcc973",
+      "source": "https://api.github.com/repos/Awalgawe/noh/releases/assets/623992013",
+      "policy_after": 1,
+      "zone_identifier": "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=https://api.github.com/repos/Awalgawe/noh/releases/assets/623992013\r\n",
+      "limits": "Windows Attachment Services policy and save result. S_FALSE=1 means a prompt would be needed; no prompt accepted and no file executed. This is not a browser SmartScreen reputation or interactive installer test.",
+      "protection": {
+        "AntivirusEnabled": true,
+        "AMServiceEnabled": true,
+        "RealTimeProtectionEnabled": true,
+        "AntivirusSignatureVersion": "1.459.601.0",
+        "AntivirusSignatureLastUpdated": "2026-10-07T10:47:31+02:00"
+      },
+      "file": "noh.exe",
+      "policy_before": 1,
+      "sha256_before": "7cbac688f26e3235c3d0d2bf8fd855321237143bd3e124fc752d354884fcc973",
+      "save_hresult": 0
+    },
+    "authenticode_status": "NotSigned",
+    "defender": {
+      "exit": 0,
+      "seconds": 55.188,
+      "scope": "Only exact downloaded portable ZIP and its extracted executable; default remediation/protection retained",
+      "scanner_version": "4.18.26080.4-0",
+      "zip_sha256_after": "79eae3216d45a290ce5e47ae530e28530b66c0eb1ac6d1f58fee193c7cfd3765",
+      "exe_sha256_after": "7cbac688f26e3235c3d0d2bf8fd855321237143bd3e124fc752d354884fcc973"
+    },
+    "relevant_threat_detections": 0,
+    "defender_output": "Scanning the downloaded package and extracted executable found no threats.",
+    "security_settings_changed": false,
+    "executable_launched": false,
+    "interpretation": "CheckPolicy S_FALSE=1 requests a user prompt; Save S_OK=0 succeeded. No prompt was accepted and no interactive SmartScreen reputation test is claimed."
+  },
+  "publication_scope": "Portable and corresponding source/materials ZIPs; installer excluded pending interactive acceptance",
+  "limits": [
+    "Fresh application extraction/configuration is not a fresh OS installation.",
+    "Actual audio-device operation is not human listening.",
+    "NOH is unsigned; no Authenticode identity or SmartScreen reputation is claimed.",
+    "Native installer interaction was not approved by the UI tool and is not qualified.",
+    "Packaged guides reflect the build-source snapshot; current release notes and online installation guide identify the portable-only offering."
+  ],
+  "native_import_closure": {
+    "images": 265,
+    "missing": [],
+    "external_prerequisites": [
+      {
+        "architecture": "x64",
+        "distribution": "External prerequisite supplied directly by Microsoft; not included in NOH archives.",
+        "download_url": "https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist",
+        "files": [
+          "msvcp140.dll",
+          "vcruntime140.dll",
+          "vcruntime140_1.dll",
+          "vcomp140.dll"
+        ],
+        "name": "Microsoft Visual C++ v14 Redistributable",
+        "tested_version": "14.51.36247.0",
+        "version_policy": "Use the tested version or a newer compatible v14 runtime. Older versions are not qualified by this package."
+      }
+    ],
+    "scope": "x64 PE normal/delay imports; co-located DLLs",
+    "limitations": [
+      "LoadLibrary/dlopen names are not inferred from code.",
+      "Windows/API-set classification does not qualify minimum OS or loader behavior.",
+      "NVIDIA GPU use requires its separately installed driver; CPU fallback needs acceptance."
+    ]
+  },
+  "materials_review": {
+    "native_binary_source_pairs": 112,
+    "original_native_notice_pins": 99,
+    "noh_vendor_crates": 486,
+    "native_rust_crates": 653,
+    "standard_library_dependency_graphs": 5,
+    "additional_unique_standard_library_crate_archives": 92,
+    "guides": [
+      "docs/WINDOWS_REDISTRIBUTION.md",
+      "docs/RUST_NOTICE_DECISIONS.md"
+    ],
+    "original_source_recipe_and_notice_materials": "Included in the hash-bound materials ZIP",
+    "microsoft_runtime_files": "Excluded from both portable and material inventories"
+  }
+}

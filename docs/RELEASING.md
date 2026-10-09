@@ -105,12 +105,14 @@ notice supplements, standard-library correspondence, license alternatives and
 Whisper/CUDA conditions are documented in [WINDOWS_REDISTRIBUTION.md](WINDOWS_REDISTRIBUTION.md)
 and [RUST_NOTICE_DECISIONS.md](RUST_NOTICE_DECISIONS.md).
 
-Final Windows package qualification is still separate: build identity, complete
+Windows 0.1.0 portable qualification is recorded against the exact compiled
+commit and DELIVERY digest in `assets/delivery-policy.json`. Its
+[qualification report](WINDOWS_0_1_0_QUALIFICATION.md) covers build/source identity,
 PE imports, fresh extraction/configuration, the external Microsoft prerequisite,
-preview/GPU/audio-device operation, transcription, captions/export and downloaded
-archive checks. No final qualification record is present yet. Mac material review,
-native packaging and signing/notarization remain unresolved; Windows acceptance
-does not clear Mac gates.
+actual preview/GPU/audio-device operation, transcription, captions/export and
+exact downloaded-byte attachment/Defender checks. The installer is excluded
+pending interactive qualification. Mac material review, native packaging and
+signing/notarization remain unresolved; Windows acceptance does not clear Mac gates.
 
 Public Actions binary artifacts are distributions. Before uploading them, the
 redistribution record must match the exact hashes of Cargo.lock, NOH's license,

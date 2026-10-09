@@ -18,15 +18,52 @@
     "windows-x64": {
       "redistribution_unresolved": [],
       "target": "x86_64-pc-windows-gnu",
-      "unresolved": [
-        "Build the final Windows portable once from a clean public source commit, preserve its exact source/build identity and supply complete reviewed materials.",
-        "Qualify final normal/delay PE closure, fresh extraction and isolated application configuration without developer PATH; record the actual supported Windows baseline and external Microsoft prerequisite version.",
-        "Qualify actual GUI preview/GPU/audio-device operation, CPU/CUDA offline transcription, caption rendering and media export; distinguish technical device checks from human listening and from a clean OS installation.",
-        "Check the final downloaded archive and hashes under normal Windows download protection, documenting unsigned publisher/reputation behavior without disabling security."
-      ]
+      "unresolved": []
     }
   },
-  "qualification_records": [],
+  "qualification_records": [
+    {
+      "delivery_sha256": "83b85e6b4641a37e81b1a3f0e7633065f9509ebb8e979333954513aa7b379646",
+      "evidence": {
+        "audio_gpu": {
+          "path": "docs/release-evidence/windows-0.1.0.json",
+          "sha256": "2986ba7369998648e66eb46b044d7a4aa6aafd43339f7238643e2eb70bb66cfe"
+        },
+        "clean_install": {
+          "path": "docs/release-evidence/windows-0.1.0.json",
+          "sha256": "2986ba7369998648e66eb46b044d7a4aa6aafd43339f7238643e2eb70bb66cfe"
+        },
+        "corresponding_sources": {
+          "path": "docs/release-evidence/windows-0.1.0.json",
+          "sha256": "2986ba7369998648e66eb46b044d7a4aa6aafd43339f7238643e2eb70bb66cfe"
+        },
+        "download_protection": {
+          "path": "docs/release-evidence/windows-0.1.0.json",
+          "sha256": "2986ba7369998648e66eb46b044d7a4aa6aafd43339f7238643e2eb70bb66cfe"
+        },
+        "media_export": {
+          "path": "docs/release-evidence/windows-0.1.0.json",
+          "sha256": "2986ba7369998648e66eb46b044d7a4aa6aafd43339f7238643e2eb70bb66cfe"
+        },
+        "native_import_closure": {
+          "path": "docs/release-evidence/windows-0.1.0.json",
+          "sha256": "2986ba7369998648e66eb46b044d7a4aa6aafd43339f7238643e2eb70bb66cfe"
+        },
+        "offline_transcription": {
+          "path": "docs/release-evidence/windows-0.1.0.json",
+          "sha256": "2986ba7369998648e66eb46b044d7a4aa6aafd43339f7238643e2eb70bb66cfe"
+        },
+        "rust_notices": {
+          "path": "docs/release-evidence/windows-0.1.0.json",
+          "sha256": "2986ba7369998648e66eb46b044d7a4aa6aafd43339f7238643e2eb70bb66cfe"
+        }
+      },
+      "platform": "windows-x64",
+      "review_round": "windows-release-v17",
+      "scope": "Ordinary portable and corresponding materials only; installer excluded",
+      "source_commit": "df41ed864aef4aef4bf8df0da2460cd7173e2cf1"
+    }
+  ],
   "redistribution_records": [
     {
       "evidence": {
