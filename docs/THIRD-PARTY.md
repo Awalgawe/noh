@@ -39,7 +39,7 @@ are in `bin/speech/` and the `*-LICENSE.txt` notices are in `licenses/`.
 Executables, libraries and model weights remain outside Git. No media upload,
 startup model download or additional Python runtime is needed. The Windows
 speech tool requires the external Microsoft Visual C++ v14 x64 runtime. The
-ordinary installer offers its direct Microsoft download when missing; Microsoft's
+portable app provides a direct Microsoft download action when it is missing; Microsoft's
 installer and DLLs are not redistributed in NOH packages.
 
 The delivery acquisition script extracts NVIDIA's full 61,498-byte license from
@@ -57,13 +57,14 @@ notices; see [RUST_NOTICE_DECISIONS.md](RUST_NOTICE_DECISIONS.md).
 
 ## Windows installer
 
-The optional ordinary Windows installer uses **Inno Setup 7.1.0**, copyright
+The guided Windows installer is implemented but excluded from the 0.1.0 public
+release pending interactive qualification. Its wrapper uses **Inno Setup 7.1.0**, copyright
 1997-2026 Jordan Russell and portions copyright 2000-2026 Martijn Laan.
 Its [original licence](https://jrsoftware.org/files/is/license.txt) permits use
 and redistribution with its notices retained.
 The installer keeps the producer's notices and installs the original licence
-as `licenses/INNO-SETUP-LICENSE.txt`. Wrapper sources and the same licence are
-provided alongside the release. See [Inno Setup](https://jrsoftware.org/isinfo.php)
+as `licenses/INNO-SETUP-LICENSE.txt`. The wrapper builder preserves sources and the same licence for any future
+qualified installer distribution. See [Inno Setup](https://jrsoftware.org/isinfo.php)
 and its [source code](https://github.com/jrsoftware/issrc/tree/is-7_1_0).
 
 Candidate source materials include `cargo vendor --locked --offline` output for

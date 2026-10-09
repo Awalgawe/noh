@@ -1,14 +1,14 @@
 # Changelog
 
 User-visible changes are recorded here. Published versions and their downloads
-will appear on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
+are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
-## Unreleased
+## 0.1.0 — 2026-10-09
 
-The first public application release is in preparation. There is no downloadable
-application package for this version yet.
+The first public Windows x64 portable release is available from
+[GitHub Releases](https://github.com/Awalgawe/noh/releases/tag/v0.1.0).
 
 ### Added
 
@@ -23,16 +23,19 @@ application package for this version yet.
 - A command-line interface and local MCP server sharing the desktop's media core.
 - Public GPL-3.0-only sources, contribution guidance and private security reporting.
 
-### Release preparation
+### Distribution
 
 - Native CI validation on Windows x64, Linux, macOS Apple Silicon and Intel Mac.
 - PR checks that select affected platforms and avoid native builds for documentation.
 - A separate manual pipeline for package verification, candidate builds and release drafts.
-- Windows x64 and macOS Apple Silicon portable packaging under qualification.
+- A Windows x64 portable package with bundled media tools and local speech models.
+- A direct Microsoft download action when the optional transcription prerequisite is missing.
+- Corresponding native/Rust source archives, build recipes and original licence notices.
 
 ### Known limitations
 
-- Linux and Intel Mac packages are not available; these targets require source builds.
+- macOS and Linux packages are not available; these targets require source builds.
+- The guided Windows installer is implemented but awaits interactive qualification; this release provides the portable ZIP.
 - macOS distribution signing and notarization are not complete.
 - Automatic update installation is disabled in ordinary builds.
 - The desktop does not restore the editing session after closing.
