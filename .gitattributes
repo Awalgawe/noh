@@ -1,3 +1,11 @@
 *.sh text eol=lf
 *.yml text eol=lf
+*.json text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+Cargo.lock text eol=lf
+LICENSE text eol=lf
 assets/rust-notice-evidence/difflib-0.4.0.json -text
+assets/license-texts/*.txt -text
+assets/license-texts/native/** -text
+assets/native-toolchains/** -text

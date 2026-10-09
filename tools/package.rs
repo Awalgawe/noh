@@ -238,6 +238,8 @@ fn copy_docs(root: &Path, ready: &Path, _mcp: bool) -> Result<()> {
         "SHORT_PRESETS.md",
         "PROJECT_EXPORT.md",
         "THIRD-PARTY.md",
+        "RUST_NOTICE_DECISIONS.md",
+        "WINDOWS_REDISTRIBUTION.md",
         "UPDATES.md",
         "UPDATE_RECOVERY.md",
         "UPDATE_RELEASE.md",

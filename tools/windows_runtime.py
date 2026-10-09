@@ -12,7 +12,7 @@ import delivery
 import rust_notices
 
 
-def native_rust_notices(crates, notices, cache):
+def native_rust_notices(crates, notices, cache, output_name="rust-native"):
     supplements = delivery.read(delivery.ROOT / "assets/rust-notices.lock.json")
     supplements.pop("standard_library", None)
     with tempfile.TemporaryDirectory(prefix="noh-native-notices-") as temporary:
@@ -74,7 +74,7 @@ def native_rust_notices(crates, notices, cache):
                             "source": "registry+https://github.com/rust-lang/crates.io-index"})
         delivery.write(work / "RUST-INVENTORY.json", records)
         report = rust_notices.generate(work, cache, supplements, delivery.fetch, delivery.ROOT)
-        shutil.copytree(work / "rust-notices", notices / "rust-native")
+        shutil.copytree(work / "rust-notices", notices / output_name)
         return report["missing_notice_texts"]
 
 
@@ -103,6 +103,20 @@ def source_notices(source, identity, specs, notices):
     selected = [item for item in specs if item["component"] == identity]
     if not selected:
         return
+    for item in selected:
+        if "repository_file" not in item:
+            continue
+        if delivery.digest(source) != item["source_archive_sha256"]:
+            raise ValueError("Git notice source archive checksum mismatch")
+        data = (delivery.ROOT / str(delivery.relative(item["repository_file"]))).read_bytes()
+        if hashlib.sha256(data).hexdigest() != item["sha256"]:
+            raise ValueError("Original Git source notice checksum mismatch")
+        target = notices / identity / "upstream" / str(delivery.relative(item["source_member"]))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    selected = [item for item in selected if "repository_file" not in item]
+    if not selected:
+        return
     with archive(source) as outer:
         for outer_name in sorted({item["source_archive_member"] for item in selected}):
             outer_member = outer.getmember(outer_name)
@@ -121,6 +135,89 @@ def source_notices(source, identity, specs, notices):
                     target = notices / identity / "upstream" / str(delivery.relative(member.name))
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(data)
+
+
+def native_toolchain_materials(specs, cache, sources, notices):
+    """Keep exact producer std sources/notices, without redistributing compilers."""
+    for spec in specs:
+        version = str(delivery.relative(spec["version"]))
+        for kind in ("binary", "standard_library_source"):
+            package = spec[kind]
+            path = delivery.fetch(package, cache, PurePosixPath(package["url"]).name)
+            with archive(path) as tar:
+                buildinfo = tar.extractfile(".BUILDINFO").read()
+                if hashlib.sha256(buildinfo).hexdigest() != package["buildinfo_sha256"]:
+                    raise ValueError("Native Rust BUILDINFO checksum mismatch")
+                recipe = "pkgbuild_sha256sum = " + spec["recipe_sha256"]
+                if recipe not in buildinfo.decode("utf-8").splitlines():
+                    raise ValueError("Native Rust binary/source recipe mismatch")
+                for item in package["notices"]:
+                    member = tar.getmember(item["member"])
+                    if not member.isfile():
+                        raise ValueError("Native Rust notice is not a regular file")
+                    data = tar.extractfile(member).read()
+                    if hashlib.sha256(data).hexdigest() != item["sha256"]:
+                        raise ValueError("Native Rust notice checksum mismatch")
+                    target = notices / "rust-toolchains" / version / str(delivery.relative(member.name))
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(data)
+            if kind == "standard_library_source":
+                target = sources / "rust-toolchains" / path.name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, target)
+        for item in spec["recipe_files"]:
+            path = delivery.ROOT / str(delivery.relative(item["path"]))
+            if delivery.digest(path) != item["sha256"]:
+                raise ValueError("Native Rust recipe material checksum mismatch")
+            target = sources / "rust-toolchains" / version / path.name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
+    delivery.write(sources / "rust-toolchains/PROVENANCE.json", specs)
+
+
+def standard_library_dependency_materials(lock, cache, sources, notices):
+    """Cover all locked std dependencies, including unused targets and tests."""
+    expected = {}
+    for graph in lock["standard_library_dependency_locks"]:
+        original = delivery.fetch(graph["source"], cache, PurePosixPath(graph["source"]["url"]).name)
+        opener = archive(original) if original.name.endswith(".zst") else tarfile.open(original, "r|*")
+        with opener as tar:
+            data = None
+            for member in tar:
+                if member.name == graph["member"]:
+                    if not member.isfile():
+                        raise ValueError("Rust std Cargo.lock is not a regular member")
+                    data = tar.extractfile(member).read()
+                    break
+        if data is None or hashlib.sha256(data).hexdigest() != graph["sha256"]:
+            raise ValueError("Rust std dependency lock differs from producer source")
+        saved = delivery.ROOT / str(delivery.relative(graph["path"]))
+        if saved.read_bytes() != data:
+            raise ValueError("Retained Rust std dependency lock changed")
+        packages = {}
+        for item in tomllib.loads(data.decode("utf-8"))["package"]:
+            if not item.get("source"):
+                continue
+            if item["source"] != "registry+https://github.com/rust-lang/crates.io-index":
+                raise ValueError("Unreviewed Rust std dependency source")
+            identity = item["name"] + "-" + item["version"]
+            packages[identity] = item["checksum"]
+            if identity in expected and expected[identity] != item["checksum"]:
+                raise ValueError("Conflicting Rust std dependency checksums")
+            expected[identity] = item["checksum"]
+        if packages != graph["packages"]:
+            raise ValueError("Incomplete Rust std dependency graph")
+    if expected != {name: spec["sha256"] for name, spec in lock["standard_library_crates"].items()}:
+        raise ValueError("Rust std crate inventory does not cover its exact dependency graphs")
+    crates = sources / "rust-toolchains/crates"
+    crates.mkdir(parents=True)
+    for identity, spec in lock["standard_library_crates"].items():
+        path = delivery.fetch(spec, cache, str(delivery.relative(identity)) + ".crate")
+        shutil.copy2(path, crates / path.name)
+    gaps = native_rust_notices(crates, notices, cache, output_name="rust-standard-libraries")
+    if gaps:
+        raise ValueError("Missing Rust std dependency notices: " + ", ".join(gaps))
+    delivery.write(sources / "rust-toolchains/DEPENDENCIES.json", lock["standard_library_dependency_locks"])
 
 
 def acquire(lock, cache, destination, materials, crate_cache=None):
@@ -177,6 +274,8 @@ def acquire(lock, cache, destination, materials, crate_cache=None):
         path = delivery.fetch(spec, crate_cache or cache, identity + ".crate")
         shutil.copy2(path, crates / path.name)
     gaps = native_rust_notices(crates, notices, cache)
+    native_toolchain_materials(lock["native_rust_toolchains"], cache, sources, notices)
+    standard_library_dependency_materials(lock, cache, sources, notices)
     delivery.write(sources / "INPUTS.json", lock)
     delivery.write(notices / "PROVENANCE.json", {
         "status": "unreviewed-original-package-notices", "provider": "MSYS2",

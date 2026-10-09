@@ -238,6 +238,86 @@ class DeliveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'checksum'):
             windows_runtime.source_notices(source, 'component', [spec], notices)
 
+    def test_retained_git_notice_binds_source_and_text_without_checkout(self):
+        source = self.root / 'source.tar'
+        source.write_bytes(b'Locked original source archive')
+        original = self.root / 'COPYING'
+        original.write_bytes(b'Original terms\r\n')
+        spec = {'component': 'component', 'repository_file': 'COPYING',
+                'source_archive_sha256': delivery.digest(source),
+                'source_member': 'librtmp/COPYING', 'sha256': delivery.digest(original)}
+        notices = self.root / 'notices'
+        with patch.object(delivery, 'ROOT', self.root):
+            windows_runtime.source_notices(source, 'component', [spec], notices)
+            self.assertEqual((notices / 'component/upstream/librtmp/COPYING').read_bytes(), original.read_bytes())
+            original.write_bytes(b'Changed terms')
+            with self.assertRaisesRegex(ValueError, 'checksum'):
+                windows_runtime.source_notices(source, 'component', [spec], notices)
+            spec['source_archive_sha256'] = '0' * 64
+            with self.assertRaisesRegex(ValueError, 'archive checksum'):
+                windows_runtime.source_notices(source, 'component', [spec], notices)
+
+    def test_native_toolchain_notices_reject_recipe_and_notice_mismatch(self):
+        recipe = self.root / 'PKGBUILD'
+        recipe.write_bytes(b'Original producer recipe')
+        buildinfo = ('pkgbuild_sha256sum = ' + delivery.digest(recipe) + '\n').encode()
+        content = b'Original generated standard-library notices'
+        package = self.root / 'rust.tar'
+        with tarfile.open(package, 'w') as tar:
+            for name, data in [('.BUILDINFO', buildinfo), ('doc/COPYRIGHT-library.html', content)]:
+                member = tarfile.TarInfo(name)
+                member.size = len(data)
+                tar.addfile(member, io.BytesIO(data))
+        pinned = {'url': 'https://example.invalid/rust.tar', 'sha256': delivery.digest(package),
+                  'buildinfo_sha256': hashlib.sha256(buildinfo).hexdigest(),
+                  'notices': [{'member': 'doc/COPYRIGHT-library.html', 'sha256': hashlib.sha256(content).hexdigest()}]}
+        spec = {'version': '1.87.0-2', 'binary': pinned, 'standard_library_source': pinned,
+                'recipe_sha256': delivery.digest(recipe),
+                'recipe_files': [{'path': 'PKGBUILD', 'sha256': delivery.digest(recipe)}]}
+        sources, notices = self.root / 'sources', self.root / 'notices'
+        with patch.object(delivery, 'ROOT', self.root), patch.object(delivery, 'fetch', return_value=package):
+            windows_runtime.native_toolchain_materials([spec], self.root, sources, notices)
+            self.assertEqual((notices / 'rust-toolchains/1.87.0-2/doc/COPYRIGHT-library.html').read_bytes(), content)
+            self.assertEqual((sources / 'rust-toolchains/rust.tar').read_bytes(), package.read_bytes())
+            spec['recipe_sha256'] = '0' * 64
+            with self.assertRaisesRegex(ValueError, 'recipe mismatch'):
+                windows_runtime.native_toolchain_materials([spec], self.root, sources, notices)
+            spec['recipe_sha256'] = delivery.digest(recipe)
+            pinned['notices'][0]['sha256'] = '0' * 64
+            with self.assertRaisesRegex(ValueError, 'notice checksum'):
+                windows_runtime.native_toolchain_materials([spec], self.root, sources, notices)
+
+    def test_std_dependency_graph_cannot_omit_registry_crates(self):
+        content = ('[[package]]\nname = "dep"\nversion = "1.0.0"\n'
+                   'source = "registry+https://github.com/rust-lang/crates.io-index"\n'
+                   'checksum = "' + 'a' * 64 + '"\n').encode()
+        retained = self.root / 'library-Cargo.lock'
+        retained.write_bytes(content)
+        source = self.root / 'rust.tar'
+        with tarfile.open(source, 'w') as tar:
+            member = tarfile.TarInfo('rust/library/Cargo.lock')
+            member.size = len(content)
+            tar.addfile(member, io.BytesIO(content))
+        crate = self.root / 'dep-1.0.0.crate'
+        crate.write_bytes(b'Fixture crate handled by the separately tested notice collector')
+        graph = {'source': {'url': 'https://example.invalid/rust.tar'},
+                 'member': member.name, 'path': retained.name,
+                 'sha256': hashlib.sha256(content).hexdigest(), 'packages': {'dep-1.0.0': 'a' * 64}}
+        lock = {'standard_library_dependency_locks': [graph],
+                'standard_library_crates': {'dep-1.0.0': {'sha256': 'a' * 64}}}
+        fetch = lambda spec, cache, name: source if name == source.name else crate
+        with patch.object(delivery, 'ROOT', self.root), patch.object(delivery, 'fetch', side_effect=fetch), \
+                patch.object(windows_runtime, 'native_rust_notices', return_value=[]) as notices:
+            windows_runtime.standard_library_dependency_materials(lock, self.root, self.root / 'sources', self.root / 'notices')
+            self.assertEqual(notices.call_args.kwargs['output_name'], 'rust-standard-libraries')
+            graph['packages'] = {}
+            with self.assertRaisesRegex(ValueError, 'Incomplete Rust std dependency graph'):
+                windows_runtime.standard_library_dependency_materials(lock, self.root, self.root / 'sources2', self.root / 'notices2')
+            graph['packages'] = {'dep-1.0.0': 'a' * 64}
+            lock['standard_library_crates'] = {}
+            with self.assertRaisesRegex(ValueError, 'exact dependency graphs'):
+                windows_runtime.standard_library_dependency_materials(lock, self.root, self.root / 'sources3', self.root / 'notices3')
+
     def mac_bundle(self):
         bundle = self.root / 'mac-bundle'
         app = bundle / 'NOH.app'
@@ -896,12 +976,14 @@ class DeliveryTests(unittest.TestCase):
 
     def test_existing_gaps_and_no_authority_cannot_be_self_qualified(self):
         output = self.seal()
-        with self.assertRaisesRegex(ValueError, "Public artifact upload blocked"):
-            delivery.qualify(output)
         policy = copy.deepcopy(delivery.read(delivery.ROOT / "assets/delivery-policy.json"))
-        policy["platforms"]["windows-x64"]["unresolved"] = []
         original = delivery.read
         with patch.object(delivery, "authorize_redistribution"), patch.object(delivery, "read", side_effect=lambda p: policy if Path(p).name == "delivery-policy.json" else original(p)):
+            policy["platforms"]["windows-x64"]["unresolved"] = ["Unverified native fixture"]
+            with self.assertRaisesRegex(ValueError, "Public draft blocked"):
+                delivery.qualify(output)
+            policy["platforms"]["windows-x64"]["unresolved"] = []
+            policy["qualification_records"] = []
             with self.assertRaisesRegex(ValueError, "independently reviewed"):
                 delivery.qualify(output)
 
@@ -929,12 +1011,20 @@ class DeliveryTests(unittest.TestCase):
     def test_public_artifacts_require_independent_redistribution_authority(self):
         original = delivery.read
         policy = copy.deepcopy(original(delivery.ROOT / "assets/delivery-policy.json"))
-        with self.assertRaisesRegex(ValueError, "Public artifact upload blocked"):
-            delivery.authorize_redistribution("windows-x64")
-        policy["platforms"]["windows-x64"]["redistribution_unresolved"] = []
         with patch.object(delivery, "read", side_effect=lambda p: policy if Path(p).name == "delivery-policy.json" else original(p)):
+            policy["platforms"]["windows-x64"]["redistribution_unresolved"] = ["Unreviewed fixture"]
+            with self.assertRaisesRegex(ValueError, "Public artifact upload blocked"):
+                delivery.authorize_redistribution("windows-x64")
+            policy["platforms"]["windows-x64"]["redistribution_unresolved"] = []
+            policy["redistribution_records"] = []
             with self.assertRaisesRegex(ValueError, "reviewed redistribution"):
                 delivery.authorize_redistribution("windows-x64")
+
+    def test_json_metadata_hashes_survive_git_lf_checkout(self):
+        output = self.root / 'locked.json'
+        delivery.write(output, {'fixture': ['first', 'second']})
+        self.assertNotIn(b'\r\n', output.read_bytes())
+        self.assertEqual(delivery.digest(output), hashlib.sha256(output.read_bytes().replace(b'\r\n', b'\n')).hexdigest())
 
     def test_provenance_run_boundaries(self):
         run = {"repository": {"full_name": "owner/noh"}, "head_repository": {"full_name": "owner/noh"},

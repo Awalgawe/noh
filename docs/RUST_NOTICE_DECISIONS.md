@@ -58,6 +58,18 @@ Standard-library/compiler notices and non-Rust native components are separate.
 The generated status remains unreviewed until the corresponding evidence is
 independently accepted. These notice decisions alone do not authorize publication.
 
+The standard-library dependency supplement separately covers 92 distinct crate
+versions from the five exact library Cargo.lock files (Rust 1.87, 1.88 twice,
+1.89 and 1.98.1). It is a complete graph superset, including unused targets/tests.
+Five archives need original upstream notices: compiler_builtins 0.1.152,
+fortanix-sgx-abi 0.5.0/0.6.1, vex-sdk 0.27.1 and wasip1 1.0.0. These are pinned
+to their recorded VCS base revision and original notice bytes. vex-sdk's published
+VCS metadata says the tree was dirty: the retained upstream MIT notice agrees
+with its published MIT declaration, but is not evidence of an identical source
+tree. That limitation is carried in the inventory. compiler_builtins' combined
+MIT/Apache/LLVM-exception requirements are retained together, not reduced to one
+permissive alternative.
+
 References:
 - https://doc.rust-lang.org/cargo/reference/manifest.html#the-license-and-license-file-fields
 - https://spdx.org/licenses/

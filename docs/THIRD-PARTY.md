@@ -209,17 +209,23 @@ revisions. Four original native Cargo graphs contribute 653 checksum-pinned crat
 archives and original available notices. These graphs include unused platforms
 and tests; they do not establish which features were actually linked.
 
-Original producer notices and pinned mpv/FFmpeg source notices are copied to the
+Original producer notices and 99 pinned source notices are copied to the
 portable. Full paired source archives, recipes and patches are separate materials.
-Some packages omit standalone notices from their binary archives; their original
-terms remain in the retained sources pending attribution review. Twenty-six native
+All 112 native package identities now have materialized notices, including the
+26 packages whose binary archives omitted standalone terms. Twenty-six native
 crate archives omit standalone notice files. Exact upstream root notices now
 supplement thirteen; fourteen explicit per-archive declarations (including the
 separate NOH dispatch dependency) are accompanied by pinned standard license
 texts and their original Cargo metadata. The notice report distinguishes these
-supplements from original texts. See [notice decisions](RUST_NOTICE_DECISIONS.md). Native Rust 1.87/1.88/1.89 standard-library correspondence, compiler
-exceptions, static/header coverage, chosen alternatives and dynamically loaded
-data/plugins remain review and native qualification requirements. Source recipe
+supplements from original texts. See [notice decisions](RUST_NOTICE_DECISIONS.md).
+The exact four native Rust toolchain packages now supply their original generated
+standard-library notices, matching rust-src archives and producer recipes.
+The five standard-library Cargo.lock graphs also supply 92 distinct dependency
+archives and their original notices, including the dependencies missing from the
+producer notice output.
+[Windows distribution review](WINDOWS_REDISTRIBUTION.md) records source coverage,
+license alternatives, compiler exceptions and CUDA distribution conditions.
+Final package behavior remains a separate qualification requirement. Source recipe
 correspondence does not assert a bit-identical rebuild or redistribution clearance.
 The native lock's `coverage_audit` names the remaining recipe-only build tools,
 native Rust toolchain versions and optional data omitted by the runtime collector:
@@ -253,7 +259,8 @@ remain unreviewed; exact bottle build materials and license coverage remain
 explicit unresolved gates. Homebrew receipts and SBOMs retained
 by the portable packager are supplementary evidence, not a compliance attestation.
 
-`assets/delivery-policy.json` records these gaps and has no qualification records.
+`assets/delivery-policy.json` records the reviewed Windows distribution materials
+and the remaining native qualification gates. macOS materials remain unreviewed.
 The draft verifier refuses unresolved platforms and requires independently
 reviewed evidence bound to the exact candidate manifest hash. None of the new
 inventories establishes that a public binary release is ready.

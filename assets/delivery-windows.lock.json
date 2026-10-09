@@ -200,7 +200,7 @@
   ],
   "native_runtime": {
     "lock": "assets/windows-native.lock.json",
-    "sha256": "956985a0f7e3b30355fc675ec0676c7e66b4d4dd8ec4b31cf7f52a20ab197a19"
+    "sha256": "de8481277cc2e37a70773f69dcc304eb13be44f2db65c84d6f3324d1e26331ed"
   },
   "schema_version": 1,
   "sources": [
@@ -213,10 +213,8 @@
   ],
   "status": "unqualified-candidate-inputs",
   "visual_cpp_prerequisite": {
-    "name": "Microsoft Visual C++ v14 Redistributable",
     "architecture": "x64",
-    "tested_version": "14.51.36247.0",
-    "version_policy": "Use the tested version or a newer compatible v14 runtime. Older versions are not qualified by this package.",
+    "distribution": "External prerequisite supplied directly by Microsoft; not included in NOH archives.",
     "download_url": "https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist",
     "files": [
       "msvcp140.dll",
@@ -224,6 +222,8 @@
       "vcruntime140_1.dll",
       "vcomp140.dll"
     ],
-    "distribution": "External prerequisite supplied directly by Microsoft; not included in NOH archives."
+    "name": "Microsoft Visual C++ v14 Redistributable",
+    "tested_version": "14.51.36247.0",
+    "version_policy": "Use the tested version or a newer compatible v14 runtime. Older versions are not qualified by this package."
   }
 }

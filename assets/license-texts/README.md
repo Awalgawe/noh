@@ -8,3 +8,10 @@ are retained alongside them; placeholders in a standard text are not assertions
 about a package's copyright ownership or dates.
 
 Source: https://github.com/spdx/license-list-data/tree/8a04f0303d95c4f932210b118588c662665bd383
+
+The `native/` subdirectory instead contains original, unmodified x264 and
+librtmp project notices. They were read with `git show` from the exact commits
+in the signed MSYS2 source archives. `windows-native.lock.json` pins each source
+archive, revision, original path and notice checksum. The complete bare source
+repositories accompany the release materials. No license template is used for
+these files. Git attributes preserve the exact bytes on every checkout.

@@ -1,0 +1,87 @@
+From fa924641d67a510a1101b79bbc2cea4f5360135e Mon Sep 17 00:00:00 2001
+From: Maksim Bondarenkov <maksapple2306@gmail.com>
+Date: Mon, 21 Jul 2025 15:58:38 +0300
+Subject: [PATCH] opt-dist: add an option for setting path to stage0 root
+
+in MSYS2 we have problems with stage0 for *-gnullvm hosts because prebuilt dist tarballs will be
+available starting from 1.90.0-beta. also this change helps to match bootstrap.toml config
+---
+ src/tools/opt-dist/src/environment.rs | 16 ++++++++--------
+ src/tools/opt-dist/src/main.rs        |  6 ++++++
+ 2 files changed, 14 insertions(+), 8 deletions(-)
+
+diff --git a/src/tools/opt-dist/src/environment.rs b/src/tools/opt-dist/src/environment.rs
+index e6e4c711c0cb3..2cae0785f33bf 100644
+--- a/src/tools/opt-dist/src/environment.rs
++++ b/src/tools/opt-dist/src/environment.rs
+@@ -28,6 +28,8 @@ pub struct Environment {
+     run_tests: bool,
+     fast_try_build: bool,
+     build_llvm: bool,
++    #[builder(default)]
++    stage0_root: Option<Utf8PathBuf>,
+ }
+ 
+ impl Environment {
+@@ -56,17 +58,11 @@ impl Environment {
+     }
+ 
+     pub fn cargo_stage_0(&self) -> Utf8PathBuf {
+-        self.build_artifacts()
+-            .join("stage0")
+-            .join("bin")
+-            .join(format!("cargo{}", executable_extension()))
++        self.stage0().join("bin").join(format!("cargo{}", executable_extension()))
+     }
+ 
+     pub fn rustc_stage_0(&self) -> Utf8PathBuf {
+-        self.build_artifacts()
+-            .join("stage0")
+-            .join("bin")
+-            .join(format!("rustc{}", executable_extension()))
++        self.stage0().join("bin").join(format!("rustc{}", executable_extension()))
+     }
+ 
+     pub fn rustc_stage_2(&self) -> Utf8PathBuf {
+@@ -116,6 +112,10 @@ impl Environment {
+     pub fn build_llvm(&self) -> bool {
+         self.build_llvm
+     }
++
++    pub fn stage0(&self) -> Utf8PathBuf {
++        self.stage0_root.clone().unwrap_or_else(|| self.build_artifacts().join("stage0"))
++    }
+ }
+ 
+ /// What is the extension of binary executables on this platform?
+diff --git a/src/tools/opt-dist/src/main.rs b/src/tools/opt-dist/src/main.rs
+index d0e6badede6e7..f46a86f507cc7 100644
+--- a/src/tools/opt-dist/src/main.rs
++++ b/src/tools/opt-dist/src/main.rs
+@@ -107,6 +107,10 @@ enum EnvironmentCmd {
+         /// in bootstrap.toml via `build.build-dir` option
+         #[arg(long, default_value = "build")]
+         build_dir: Utf8PathBuf,
++
++        /// Path to custom stage0 root
++        #[arg(long)]
++        stage0_root: Option<Utf8PathBuf>,
+     },
+     /// Perform an optimized build on Linux CI, from inside Docker.
+     LinuxCi {
+@@ -144,6 +148,7 @@ fn create_environment(args: Args) -> anyhow::Result<(Environment, Vec<String>)>
+             run_tests,
+             build_llvm,
+             build_dir,
++            stage0_root,
+         } => {
+             let env = EnvironmentBuilder::default()
+                 .host_tuple(target_triple)
+@@ -160,6 +165,7 @@ fn create_environment(args: Args) -> anyhow::Result<(Environment, Vec<String>)>
+                 .run_tests(run_tests)
+                 .fast_try_build(is_fast_try_build)
+                 .build_llvm(build_llvm)
++                .stage0_root(stage0_root)
+                 .build()?;
+ 
+             (env, shared.build_args)

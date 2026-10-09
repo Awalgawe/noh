@@ -1,62 +1,20 @@
 # Download and install NOH
 
-**Public downloads are not available yet.** The instructions below apply if you
-have received a complete portable build. A supported download will need a
-published application package and release notes identifying compatible systems.
+Download the Windows x64 portable ZIP from the
+[latest GitHub release](https://github.com/Awalgawe/noh/releases/latest).
+Choose the application ZIP from **Assets**. The separate `-materials.zip` and
+GitHub's **Source code** downloads contain sources and build materials.
 
-## Get the application
+Read the release notes for tested Windows versions and package checksums.
+The public Windows download is a complete portable application, with media
+libraries and local speech models. It does not require Rust, Python or a
+separate FFmpeg installation. There is no public installer or automatic updater.
+Allow space for both the ZIP and its extracted folder, plus your media/exports.
 
-When downloads are available, choose the application ZIP for your operating
-system from the release's **Assets** list. GitHub's **Source code** archives and
-**Code → Download ZIP** contain source files; they do not contain a ready-to-run app.
-There is no public `.msi`, setup wizard or `.dmg` download. The Windows setup
-wizard described below is a private candidate.
-
-| Computer | Current package status |
-| --- | --- |
-| Windows with an Intel or AMD 64-bit processor | A complete portable build has been tested locally; no public release yet. |
-| Mac with Apple silicon | A portable development build has been tested locally. The current bundle requires macOS 26.6.2 or newer and is not notarized. |
-| Intel Mac, Windows on Arm, Linux | No qualified ready-to-use download. |
-
-Complete portable builds contain their media tools and local speech models.
-They do not require Rust, Python or a separate FFmpeg installation. Allow space
-for both the ZIP and its extracted contents, plus your source media and exports.
-Exact download and installed sizes belong in each release's notes.
+macOS and Linux currently require a [source build](BUILDING.md). The experimental
+Mac portable is not signed or notarized and is not offered as a supported download.
 
 ## Windows
-
-### Installer profiles (private candidate)
-
-The private Windows installer offers three content profiles from the
-same application build. Public downloads are still unavailable.
-
-| Profile | Included content |
-| --- | --- |
-| Minimal | NOH, CLI and MCP. Configure external media tools in Options; preview/export/transcription require their respective resources. |
-| Standard (recommended) | NOH, FFmpeg and the complete preview runtime. Attach existing subtitles; generated transcription is unavailable without separately configured speech resources. |
-| Complete | Standard plus the qualified speech runtime and models for offline transcription. |
-
-The web installer downloads one complete signed profile package. An offline
-installer embeds the same package and needs no network for first installation.
-The private web trial requires runtime GitHub access; no access token is embedded
-in the installer. The private trial does not establish public download support.
-
-Installation is per user in `%LOCALAPPDATA%\NOH`, without elevation. Updates and
-repairs preserve the chosen profile. An existing installation cannot be silently
-switched to another profile. Reopening the installer repairs that profile, including
-when the application folder is missing; an older installer refuses a downgrade.
-Downloading can be cancelled. Once application installation begins, wait for it to
-finish. Failure shows an error and keeps a log under `NOH\installer-logs`.
-The application owns the uninstall entry; the outer wizard adds no second uninstaller.
-
-Uninstalling removes the application, its registration and its Start menu shortcut.
-It retains `%LOCALAPPDATA%\NOH\.noh-update` and `installer-logs`. Recovery state
-includes the installation identity, executable recovery tools and downloaded
-packages; its size depends on the profile and update history and can be substantial.
-While that identity remains, reinstalling preserves the profile and version rules.
-There is currently no automatic purge of this recovery history.
-
-The portable ZIP instructions below describe the existing portable delivery.
 
 1. Save the complete portable ZIP to your computer.
 2. Right-click it and choose **Extract All**. Choose a folder you can write to,
@@ -84,21 +42,10 @@ needs a one-time download and installation of this prerequisite. Once installed,
 local transcription uses the included models without a network connection.
 Do not download individual DLLs from third-party sites.
 
-## Mac with Apple silicon
-
-These steps describe the **self-contained portable** ZIP. A developer's local
-Homebrew-dependent build is a different package; see the [build guide](BUILDING.md).
-
-1. Double-click the ZIP in Finder to extract it.
-2. Move **NOH.app** to **Applications**, or another folder where you keep apps.
-3. Open **NOH.app** in Finder. Its required tools and models are inside the app.
-
-The current development bundle is not Developer ID-signed or notarized. A
-downloaded copy may be blocked by macOS; the ordinary download-and-open path
-has not been qualified. A public Mac release must resolve this before being
-presented as ready to install. These instructions do not require disabling macOS
-security settings. Apple's [installation guide](https://support.apple.com/guide/mac-help/install-and-uninstall-other-apps-mh35835/mac)
-explains how apps from outside the App Store are handled.
+The Windows binary is not Authenticode-signed. Windows may show an unknown-publisher
+or SmartScreen warning. Check that the download came from the official release
+and verify its SHA-256 against `SHA256SUMS`; keep system security protections
+enabled. Signing and download reputation are separate from the package checksums.
 
 ## First launch
 
@@ -120,8 +67,7 @@ portable copy, close NOH and extract the complete new package into a new folder.
 Check that it opens before removing the previous copy. Keep any media or exports
 you saved inside the old folder before deleting it.
 
-To remove NOH, close it and delete its portable folder on Windows, or move
-`NOH.app` to the Bin on Mac. Media and exports saved elsewhere remain in place.
+To remove NOH, close it and delete its portable folder on Windows. Media and exports saved elsewhere remain in place.
 The small language-preference file is stored separately and is not removed with
 the application.
 
@@ -130,8 +76,8 @@ the application.
 - **A DLL or media tool is missing:** extract the entire ZIP again and keep all
   bundled files together. Do not download individual replacement DLLs from an
   unrelated website.
-- **Only source files are present:** you downloaded a source archive. An
-  application package contains `noh.exe` or `NOH.app`.
+- **Only source files are present:** you downloaded a source archive. The Windows
+  application package contains `noh.exe`.
 - **The system blocks the app:** check the package's release notes and reported
   platform support. The current Mac development bundle is not a supported public
   download.

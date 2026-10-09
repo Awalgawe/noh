@@ -225,6 +225,8 @@ def generate(materials, cache, supplements, fetcher, evidence_root=None):
             record["declared_license_supplement"] = declaration
         if correspondence:
             record["source_correspondence"] = correspondence
+        if supplement and supplement.get("source_revision_limit"):
+            record["source_revision_limit"] = supplement["source_revision_limit"]
         records.append(record)
     notice = output / "RUST-NOTICES.txt"
     notice.write_text("".join(text), encoding="utf-8", newline="\n")

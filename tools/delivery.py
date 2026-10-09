@@ -177,7 +177,7 @@ def read(path):
 
 
 def write(path, value):
-    Path(path).write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    Path(path).write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
 
 
 def digest(path):

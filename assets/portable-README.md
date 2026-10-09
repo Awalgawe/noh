@@ -22,6 +22,11 @@ Keep these folders together when moving or copying NOH.
 
 NOH's code is licensed under GNU GPLv3 (`GPL-3.0-only`); the full text is in
 `licenses/NOH-LICENSE.txt`. Third-party components retain their own licenses.
+The separate Whisper speech tool's NVIDIA CUDA files remain under the original
+CUDA terms in `licenses/`; NOH's GPL license does not relicense them. Preserve
+those terms when redistributing the complete package. Corresponding sources
+and build materials are provided beside the binaries on
+[GitHub Releases](https://github.com/Awalgawe/noh/releases).
 
 For command-line use, open a terminal and run `bin/noh-cli.exe --help`.
 The optional MCP server is `bin/noh-mcp.exe`; see [MCP setup](docs/MCP.md).

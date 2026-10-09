@@ -1,0 +1,278 @@
+From 8e840f726d013f824cc2e98aa54307f27295b34b Mon Sep 17 00:00:00 2001
+From: Maksim Bondarenkov <maksapple2306@gmail.com>
+Date: Fri, 18 Jul 2025 11:20:03 +0300
+Subject: [PATCH] opt-dist: make llvm builds optional
+
+adds command line option for disabling llvm builds. it's useful in case of user having their own
+optimized LLVM, so they won't waste time for (at least) 3 LLVM builds. in this case PGO optimized
+will be already built in Stage 1, so my previous PR should be addressed for this change
+---
+ src/tools/opt-dist/src/environment.rs |   5 ++
+ src/tools/opt-dist/src/exec.rs        |  12 ++-
+ src/tools/opt-dist/src/main.rs        | 122 +++++++++++++++-----------
+ src/tools/opt-dist/src/training.rs    |   4 +-
+ 4 files changed, 87 insertions(+), 56 deletions(-)
+
+diff --git a/src/tools/opt-dist/src/environment.rs b/src/tools/opt-dist/src/environment.rs
+index 946e926a3c010..d41dc80e6b2af 100644
+--- a/src/tools/opt-dist/src/environment.rs
++++ b/src/tools/opt-dist/src/environment.rs
+@@ -27,6 +27,7 @@ pub struct Environment {
+     shared_llvm: bool,
+     run_tests: bool,
+     fast_try_build: bool,
++    build_llvm: bool,
+ }
+ 
+ impl Environment {
+@@ -111,6 +112,10 @@ impl Environment {
+     pub fn is_fast_try_build(&self) -> bool {
+         self.fast_try_build
+     }
++
++    pub fn build_llvm(&self) -> bool {
++        self.build_llvm
++    }
+ }
+ 
+ /// What is the extension of binary executables on this platform?
+diff --git a/src/tools/opt-dist/src/exec.rs b/src/tools/opt-dist/src/exec.rs
+index 0dc6e56b9d5f4..56eff2ca2a7df 100644
+--- a/src/tools/opt-dist/src/exec.rs
++++ b/src/tools/opt-dist/src/exec.rs
+@@ -139,8 +139,10 @@ impl Bootstrap {
+         self
+     }
+ 
+-    pub fn llvm_pgo_optimize(mut self, profile: &LlvmPGOProfile) -> Self {
+-        self.cmd = self.cmd.arg("--llvm-profile-use").arg(profile.0.as_str());
++    pub fn llvm_pgo_optimize(mut self, profile: Option<&LlvmPGOProfile>) -> Self {
++        if let Some(prof) = profile {
++            self.cmd = self.cmd.arg("--llvm-profile-use").arg(prof.0.as_str());
++        }
+         self
+     }
+ 
+@@ -174,8 +176,10 @@ impl Bootstrap {
+         self
+     }
+ 
+-    pub fn with_bolt_profile(mut self, profile: BoltProfile) -> Self {
+-        self.cmd = self.cmd.arg("--reproducible-artifact").arg(profile.0.as_str());
++    pub fn with_bolt_profile(mut self, profile: Option<BoltProfile>) -> Self {
++        if let Some(prof) = profile {
++            self.cmd = self.cmd.arg("--reproducible-artifact").arg(prof.0.as_str());
++        }
+         self
+     }
+ 
+diff --git a/src/tools/opt-dist/src/main.rs b/src/tools/opt-dist/src/main.rs
+index 9c8a6637a3b10..7857f196626bc 100644
+--- a/src/tools/opt-dist/src/main.rs
++++ b/src/tools/opt-dist/src/main.rs
+@@ -98,6 +98,10 @@ enum EnvironmentCmd {
+         /// Perform tests after final build if it's not a fast try build
+         #[arg(long)]
+         run_tests: bool,
++
++        /// Will be LLVM built during the run?
++        #[arg(long, default_value_t = true, action(clap::ArgAction::Set))]
++        build_llvm: bool,
+     },
+     /// Perform an optimized build on Linux CI, from inside Docker.
+     LinuxCi {
+@@ -133,6 +137,7 @@ fn create_environment(args: Args) -> anyhow::Result<(Environment, Vec<String>)>
+             benchmark_cargo_config,
+             shared,
+             run_tests,
++            build_llvm,
+         } => {
+             let env = EnvironmentBuilder::default()
+                 .host_tuple(target_triple)
+@@ -148,6 +153,7 @@ fn create_environment(args: Args) -> anyhow::Result<(Environment, Vec<String>)>
+                 .benchmark_cargo_config(benchmark_cargo_config)
+                 .run_tests(run_tests)
+                 .fast_try_build(is_fast_try_build)
++                .build_llvm(build_llvm)
+                 .build()?;
+ 
+             (env, shared.build_args)
+@@ -172,6 +178,7 @@ fn create_environment(args: Args) -> anyhow::Result<(Environment, Vec<String>)>
+                 .skipped_tests(vec![])
+                 .run_tests(true)
+                 .fast_try_build(is_fast_try_build)
++                .build_llvm(true)
+                 .build()?;
+ 
+             (env, shared.build_args)
+@@ -193,6 +200,7 @@ fn create_environment(args: Args) -> anyhow::Result<(Environment, Vec<String>)>
+                 .skipped_tests(vec![])
+                 .run_tests(true)
+                 .fast_try_build(is_fast_try_build)
++                .build_llvm(true)
+                 .build()?;
+ 
+             (env, shared.build_args)
+@@ -255,30 +263,35 @@ fn execute_pipeline(
+     // Stage 2: Gather LLVM PGO profiles
+     // Here we build a PGO instrumented LLVM, reusing the previously PGO optimized rustc.
+     // Then we use the instrumented LLVM to gather LLVM PGO profiles.
+-    let llvm_pgo_profile = timer.section("Stage 2 (LLVM PGO)", |stage| {
+-        // Remove the previous, uninstrumented build of LLVM.
+-        clear_llvm_files(env)?;
++    let llvm_pgo_profile = if env.build_llvm() {
++        timer.section("Stage 2 (LLVM PGO)", |stage| {
++            // Remove the previous, uninstrumented build of LLVM.
++            clear_llvm_files(env)?;
+ 
+-        let llvm_profile_dir_root = env.artifact_dir().join("llvm-pgo");
++            let llvm_profile_dir_root = env.artifact_dir().join("llvm-pgo");
+ 
+-        stage.section("Build PGO instrumented LLVM", |section| {
+-            Bootstrap::build(env)
+-                .llvm_pgo_instrument(&llvm_profile_dir_root)
+-                .avoid_rustc_rebuild()
+-                .run(section)
+-        })?;
++            stage.section("Build PGO instrumented LLVM", |section| {
++                Bootstrap::build(env)
++                    .llvm_pgo_instrument(&llvm_profile_dir_root)
++                    .avoid_rustc_rebuild()
++                    .run(section)
++            })?;
+ 
+-        let profile = stage
+-            .section("Gather profiles", |_| gather_llvm_profiles(env, &llvm_profile_dir_root))?;
++            let profile = stage.section("Gather profiles", |_| {
++                gather_llvm_profiles(env, &llvm_profile_dir_root)
++            })?;
+ 
+-        print_free_disk_space()?;
++            print_free_disk_space()?;
+ 
+-        // Proactively delete the instrumented artifacts, to avoid using them by accident in
+-        // follow-up stages.
+-        clear_llvm_files(env)?;
++            // Proactively delete the instrumented artifacts, to avoid using them by accident in
++            // follow-up stages.
++            clear_llvm_files(env)?;
+ 
+-        Ok(profile)
+-    })?;
++            Ok(Some(profile))
++        })?
++    } else {
++        None
++    };
+ 
+     let bolt_profiles = if env.use_bolt() {
+         // Stage 3: Build BOLT instrumented LLVM
+@@ -286,37 +299,43 @@ fn execute_pipeline(
+         // Note that we don't remove LLVM artifacts after this step, so that they are reused in the final dist build.
+         // BOLT instrumentation is performed "on-the-fly" when the LLVM library is copied to the sysroot of rustc,
+         // therefore the LLVM artifacts on disk are not "tainted" with BOLT instrumentation and they can be reused.
++        let libdir = env.build_artifacts().join("stage2").join("lib");
+         timer.section("Stage 3 (BOLT)", |stage| {
+-            stage.section("Build PGO optimized LLVM", |stage| {
+-                Bootstrap::build(env)
+-                    .with_llvm_bolt_ldflags()
+-                    .llvm_pgo_optimize(&llvm_pgo_profile)
+-                    .avoid_rustc_rebuild()
+-                    .run(stage)
+-            })?;
+-
+-            let libdir = env.build_artifacts().join("stage2").join("lib");
+-            // The actual name will be something like libLLVM.so.18.1-rust-dev.
+-            let llvm_lib = io::find_file_in_dir(&libdir, "libLLVM.so", "")?;
+-
+-            log::info!("Optimizing {llvm_lib} with BOLT");
+-
+-            // FIXME(kobzol): try gather profiles together, at once for LLVM and rustc
+-            // Instrument the libraries and gather profiles
+-            let llvm_profile = with_bolt_instrumented(&llvm_lib, |llvm_profile_dir| {
+-                stage.section("Gather profiles", |_| {
+-                    gather_bolt_profiles(env, "LLVM", llvm_benchmarks(env), llvm_profile_dir)
+-                })
+-            })?;
+-            print_free_disk_space()?;
+-
+-            // Now optimize the library with BOLT. The `libLLVM-XXX.so` library is actually hard-linked
+-            // from several places, and this specific path (`llvm_lib`) will *not* be packaged into
+-            // the final dist build. However, when BOLT optimizes an artifact, it does so *in-place*,
+-            // therefore it will actually optimize all the hard links, which means that the final
+-            // packaged `libLLVM.so` file *will* be BOLT optimized.
+-            bolt_optimize(&llvm_lib, &llvm_profile, env)
+-                .context("Could not optimize LLVM with BOLT")?;
++            let llvm_profile = if env.build_llvm() {
++                stage.section("Build PGO optimized LLVM", |stage| {
++                    Bootstrap::build(env)
++                        .with_llvm_bolt_ldflags()
++                        .llvm_pgo_optimize(llvm_pgo_profile.as_ref())
++                        .avoid_rustc_rebuild()
++                        .run(stage)
++                })?;
++
++                // The actual name will be something like libLLVM.so.18.1-rust-dev.
++                let llvm_lib = io::find_file_in_dir(&libdir, "libLLVM.so", "")?;
++
++                log::info!("Optimizing {llvm_lib} with BOLT");
++
++                // FIXME(kobzol): try gather profiles together, at once for LLVM and rustc
++                // Instrument the libraries and gather profiles
++                let llvm_profile = with_bolt_instrumented(&llvm_lib, |llvm_profile_dir| {
++                    stage.section("Gather profiles", |_| {
++                        gather_bolt_profiles(env, "LLVM", llvm_benchmarks(env), llvm_profile_dir)
++                    })
++                })?;
++                print_free_disk_space()?;
++
++                // Now optimize the library with BOLT. The `libLLVM-XXX.so` library is actually hard-linked
++                // from several places, and this specific path (`llvm_lib`) will *not* be packaged into
++                // the final dist build. However, when BOLT optimizes an artifact, it does so *in-place*,
++                // therefore it will actually optimize all the hard links, which means that the final
++                // packaged `libLLVM.so` file *will* be BOLT optimized.
++                bolt_optimize(&llvm_lib, &llvm_profile, env)
++                    .context("Could not optimize LLVM with BOLT")?;
++
++                Some(llvm_profile)
++            } else {
++                None
++            };
+ 
+             let rustc_lib = io::find_file_in_dir(&libdir, "librustc_driver", ".so")?;
+ 
+@@ -334,15 +353,16 @@ fn execute_pipeline(
+             bolt_optimize(&rustc_lib, &rustc_profile, env)
+                 .context("Could not optimize rustc with BOLT")?;
+ 
+-            // LLVM is not being cleared here, we want to use the BOLT-optimized LLVM
+-            Ok(vec![llvm_profile, rustc_profile])
++            // LLVM is not being cleared here. Either we built it and we want to use the BOLT-optimized LLVM, or we
++            // didn't build it, so we don't want to remove it.
++            Ok(vec![llvm_profile, Some(rustc_profile)])
+         })?
+     } else {
+         vec![]
+     };
+ 
+     let mut dist = Bootstrap::dist(env, &dist_args)
+-        .llvm_pgo_optimize(&llvm_pgo_profile)
++        .llvm_pgo_optimize(llvm_pgo_profile.as_ref())
+         .rustc_pgo_optimize(&rustc_pgo_profile)
+         .avoid_rustc_rebuild();
+ 
+diff --git a/src/tools/opt-dist/src/training.rs b/src/tools/opt-dist/src/training.rs
+index 36a7d6a7cba4f..ae062d5c60c66 100644
+--- a/src/tools/opt-dist/src/training.rs
++++ b/src/tools/opt-dist/src/training.rs
+@@ -163,7 +163,9 @@ pub fn gather_rustc_profiles(
+     let merged_profile = env.artifact_dir().join("rustc-pgo.profdata");
+     log::info!("Merging Rustc PGO profiles to {merged_profile}");
+ 
+-    merge_llvm_profiles(env, &merged_profile, profile_root, LlvmProfdata::Target)?;
++    let llvm_profdata = if env.build_llvm() { LlvmProfdata::Target } else { LlvmProfdata::Host };
++
++    merge_llvm_profiles(env, &merged_profile, profile_root, llvm_profdata)?;
+     log_profile_stats("Rustc", &merged_profile, profile_root)?;
+ 
+     // We don't need the individual .profraw files now that they have been merged
