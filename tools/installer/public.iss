@@ -13,6 +13,7 @@ AppUpdatesURL=https://github.com/Awalgawe/noh/releases/latest
 DefaultDirName={localappdata}\Programs\NOH
 DefaultGroupName=NOH
 PrivilegesRequired=lowest
+SetupArchitecture=x64
 ArchitecturesAllowed=x64os
 ArchitecturesInstallIn64BitMode=x64os
 MinVersion=10.0.19045

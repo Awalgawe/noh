@@ -1,19 +1,19 @@
-name: Windows installers and private draft
+name: Windows installers
 
 on:
   workflow_dispatch:
     inputs:
       source_run_id:
         description: Successful Windows Setup producer run ID (reuse without compiling)
-        required: true
+        required: false
         type: string
       source_attempt:
         description: Exact producer run attempt
-        required: true
+        required: false
         type: string
       source_commit:
         description: Exact 40-character application source commit
-        required: true
+        required: false
         type: string
   workflow_call:
     inputs:
@@ -36,6 +36,51 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  public-installer:
+    if: github.repository_id == '1411000018' && github.ref == 'refs/heads/main'
+    runs-on: windows-2025
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Record the disposable runner boundary
+        env:
+          HOSTED_KIND: ${{ runner.environment }}
+        run: '"NOH_RUNNER_ENVIRONMENT=$env:HOSTED_KIND" >> $env:GITHUB_ENV'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+      - name: Check installer validation guards
+        run: python -m unittest discover -s tools/installer -p test_public_ci.py
+      - name: Verify the already qualified release and exact source identity
+        run: python tools/installer/public-ci.py prepare
+      - name: Install the pinned Inno Setup compiler on this disposable runner
+        run: |
+          $compiler = ./tools/installer-tools.ps1 -Directory "$env:RUNNER_TEMP/noh-inno"
+          "NOH_ISCC_DIRECTORY=$compiler" >> $env:GITHUB_ENV
+      - name: Compile only the installer around unchanged release application bytes
+        run: python tools/installer/public-ci.py build
+      - name: Test install, installed payload, application launch, reinstall and uninstall
+        run: python tools/installer/public-ci.py test
+      - name: Retain exact tested bytes and evidence in an unpublished draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/installer/public-ci.py stage
+      - name: Show bounded diagnostics
+        if: always()
+        run: |
+          Get-ChildItem "$env:RUNNER_TEMP/noh-public-installer" -Filter '*.log' -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Output $_.Name
+            Get-Content -LiteralPath $_.FullName -Tail 20
+          }
+
   installers:
     if: github.event.repository.private && github.ref == 'refs/heads/codex/setup-release'
     runs-on: windows-2025

@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       stage:
-        description: Verify packages without upload, build reviewed artifacts, or prepare a qualified draft
+        description: Verify packages, build artifacts, prepare a draft, or build/test the Windows installer
         type: choice
-        options: [verify, build, draft]
+        options: [verify, build, draft, installer]
         default: verify
       target:
         description: Windows x64 and/or macOS ARM64 (Linux has no packager yet)
@@ -63,8 +63,10 @@ jobs:
               raise SystemExit('Release must run from main')
           stage = os.environ['RELEASE_STAGE']
           target = os.environ['RELEASE_TARGET']
-          if stage not in ('verify', 'build', 'draft') or target not in ('windows-x64', 'macos-arm64', 'all'):
+          if stage not in ('verify', 'build', 'draft', 'installer') or target not in ('windows-x64', 'macos-arm64', 'all'):
               raise SystemExit('Unsupported release stage or packaged platform')
+          if stage == 'installer' and target != 'windows-x64':
+              raise SystemExit('The installer stage requires Windows x64')
           if stage == 'draft' and not (
               re.fullmatch(r'[1-9][0-9]*', os.environ['SOURCE_RUN'])
               and re.fullmatch(r'[1-9][0-9]*', os.environ['SOURCE_ATTEMPT'])
@@ -80,7 +82,7 @@ jobs:
 
   build:
     needs: preflight
-    if: inputs.stage != 'draft'
+    if: inputs.stage == 'verify' || inputs.stage == 'build'
     uses: ./.github/workflows/delivery-candidates.yml
     with:
       build_kind: portable
@@ -106,3 +108,15 @@ jobs:
       source_commit: ${{ inputs.source_commit }}
       target: ${{ inputs.target }}
       create_draft: true
+
+  installer:
+    needs: preflight
+    if: inputs.stage == 'installer'
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/windows-installers.yml
+    with:
+      source_run_id: ''
+      source_attempt: ''
+      source_commit: ''
