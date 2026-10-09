@@ -54,6 +54,41 @@ def pe_fixture(name=None, delay=False):
 
 
 class DeliveryTests(unittest.TestCase):
+    def test_public_profile_content_boundaries(self):
+        files = ['noh.exe', 'bin/noh-cli.exe', 'bin/noh-mcp.exe', 'README.md',
+                 'licenses/WHISPER.txt', 'bin/ffmpeg.exe', 'bin/libmpv-2.dll',
+                 'bin/libavcodec.dll', 'bin/speech/whisper.exe', 'bin/speech/model.bin']
+        selected = lambda profile: [n for n in files if public_installer.includes(profile, n)]
+        self.assertEqual(selected('minimal'), files[:5])
+        self.assertEqual(selected('standard'), files[:8])
+        self.assertEqual(selected('complete'), files)
+        with self.assertRaisesRegex(ValueError, 'Unknown'):
+            public_installer.includes('unexpected', 'noh.exe')
+
+    def test_public_profile_manifest_matches_selected_files_and_preserves_build(self):
+        for name in ('bin/noh-cli.exe', 'bin/noh-mcp.exe', 'bin/ffmpeg.exe',
+                     'bin/preview/libmpv-2.dll', 'bin/speech/model.bin'):
+            path = self.bundle / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'synthetic profile content')
+        self.manifest['tools'] = {'ffmpeg': {'path': 'bin/ffmpeg.exe'}}
+        self.manifest['sha256'] = {n: v['sha256'] for n, v in delivery.inventory(self.bundle).items() if n != 'manifest.json'}
+        original = copy.deepcopy(self.manifest)
+        for profile in public_installer.PROFILES:
+            source = self.root / profile
+            source.mkdir()
+            paths, expected = public_installer.profile_payload(self.bundle, self.manifest, profile, source)
+            manifest = delivery.read(source / 'manifest.json')
+            self.assertEqual(manifest['build'], self.manifest['build'])
+            self.assertEqual(manifest['distribution_profile'], profile)
+            self.assertEqual(manifest['sha256'], {n: v['sha256'] for n, v in expected.items() if n != 'manifest.json'})
+            self.assertEqual(expected['noh.exe']['sha256'], delivery.digest(self.bundle / 'noh.exe'))
+            self.assertEqual('bin/ffmpeg.exe' in paths, profile != 'minimal')
+            self.assertEqual('bin/speech/model.bin' in paths, profile == 'complete')
+            if profile == 'minimal':
+                self.assertEqual(manifest['tools'], {})
+        self.assertEqual(self.manifest, original)
+
     def test_public_installer_rejects_changed_portable_before_compiler(self):
         (self.bundle / 'noh.exe').write_bytes(b'changed after qualification')
         with patch.object(public_installer.subprocess, 'run') as compile_process:

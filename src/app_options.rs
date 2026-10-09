@@ -28,6 +28,7 @@ impl NohApp {
             || self.subtitles.running
             || self.captions.running.is_some()
             || self.shorts.running.is_some()
+            || self.resources.installing()
     }
 
     /// Seconds since Options appeared, 0 while it is closed.

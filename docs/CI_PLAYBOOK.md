@@ -8,7 +8,7 @@ before choosing infrastructure. Contributor checks are in [DEVELOPMENT.md](DEVEL
 ## Validate PRs without producing a release
 
 `PR validation` (`.github/workflows/pr.yml`) runs on PRs, on pushes to `main`
-and `codex/setup-release`, and by manual dispatch. It tests the PR merge checkout.
+and by manual dispatch. It tests the PR merge checkout.
 Its first job validates the platform selector and runs synthetic script controls
 before any application compilation. The complete local Git diff includes deleted
 files and both sides of renames; unavailable comparisons select every platform.
@@ -261,14 +261,15 @@ release operations. Reused binaries retain their original embedded source identi
 | Tests or validation scripts | Build/run changed checks against the correctly identified application; renew the affected evidence. | Existing release candidate if those edits did not change the application being qualified. |
 | Cache or workflow orchestration | Lint/review the workflow; measure the next required execution. | Existing application candidate and its evidence unless the execution semantics changed. |
 
-For NOH, `windows-setup.yml` is dispatched explicitly with the new version.
-It builds and signs only B, retains the exact candidate, then calls
-`windows-installers.yml` to build all four wrappers and prepare a private draft.
-Ordinary pushes do not start another expensive release build. Native PR checks
-remain separate. The installer workflow can also be dispatched with a successful
-producer run, attempt and commit; it does not install Rust or compile NOH.
-An installer failure can reuse a successful producer even if the overall run
-failed. Artifact creation time must fall within that exact successful job attempt.
+For NOH, use the **Release** entrypoint on `main`: `build` prepares portable
+candidates, `draft` stages independently qualified output, and `installer` wraps
+the qualified Windows portable into three offline profiles and a web selector
+without compiling NOH. Ordinary pushes run PR
+validation; they do not start a release build. The five reusable workflow files
+have no independent dispatch/push/PR triggers. The measurement workflows and
+private profile/update producers are retired; their content profiles remain
+available through Release, while their historical lessons remain
+documented here. See [RELEASING.md](RELEASING.md) for the current delivery procedure.
 
 Path filters save whole runs; Cargo's dependency graph saves compilation inside a
 required run. Keep one compatible target directory, avoid `cargo clean`, and do not
@@ -375,9 +376,9 @@ paths exclude credentials, signing keys, user data and unrelated caches. Keep
 published artifacts separate: a cache hit is a build optimization, not release
 provenance or proof that an executable passed acceptance.
 
-NOH implements these layers in
-[windows-setup.yml](../.github/workflows/windows-setup.yml). Its Rust dependency
-cache covers the common `target` directory used by both `qa` and `release` and
+The retired private producer implemented these layers in
+[the historical windows-setup.yml](https://github.com/Awalgawe/noh/blob/bb5463af39a9071aa6d9f90797960e7e684014c8/.github/workflows/windows-setup.yml). Its Rust dependency
+cache covered the common `target` directory used by both `qa` and `release` and
 by the frozen source snapshots. The cache action excludes workspace products;
 NOH is rebuilt with its current version, trust configuration and source fingerprint.
 LLVM-MinGW, .NET and Velopack cache only archives. The current extraction marker
@@ -385,8 +386,8 @@ is not an integrity attestation for a restored executable tree.
 
 Save a verified download/tool cache immediately after its successful preparation.
 Where the pipeline has a separate completed-compilation boundary, save reusable
-dependencies before packaging. NOH's current combined producer does not expose
-that boundary: its dependency cache now saves only after a successful job. This
+dependencies before packaging. That historical combined producer did not expose
+that boundary: its dependency cache saved only after a successful job. This
 deliberate compromise avoids freezing an incomplete cache after early QA failure,
 but a failure on the first fill can still discard newly compiled dependencies.
 Restrict cache writes to trusted release-development triggers. Dependency caches

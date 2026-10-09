@@ -493,3 +493,8 @@ updates.error_target=No hay ninguna actualización compatible para esta versión
 updates.error_storage=No se pudo guardar la actualización. Comprueba el espacio libre y los permisos de la carpeta.
 updates.error_other=La actualización ha fallado. Consulta las instrucciones de recuperación antes de reintentarlo.
 updates.safe_close=Guarda o exporta lo que necesites antes de continuar. Esta sesión se cerrará y no se restaurará automáticamente. Continúa solo cuando tu trabajo esté a salvo y no haya tareas multimedia en curso.
+
+resources.install=Añadir o reparar componentes
+resources.installing=El instalador de componentes está abierto.
+resources.installed=Configuración de componentes terminada. Reinicie NOH para activar la vista previa de vídeo recién añadida.
+resources.install_failed=La configuración de componentes se canceló o no pudo finalizar.

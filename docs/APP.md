@@ -8,7 +8,8 @@ export a selected moment as a vertical short.
 
 Start with the [installation guide](INSTALLING.md) to extract and place a complete
 portable build. Then open **noh.exe** on Windows or **NOH.app** on Mac.
-Public downloads are not available yet; developers can [build from source](BUILDING.md).
+Windows downloads are available from the [latest release](https://github.com/Awalgawe/noh/releases/latest).
+See the [installation guide](INSTALLING.md); other platforms require a [source build](BUILDING.md).
 
 ## Make your first video
 

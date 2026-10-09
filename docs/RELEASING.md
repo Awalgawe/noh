@@ -8,23 +8,49 @@ distinct qualification reports and share the same application bytes.
 
 PR validation, portable preparation and installer packaging use distinct stages.
 Qualification applies to the exact tested artifacts, not to every future build.
+Only **PR validation** and **Release** are manual entrypoints. The five other
+workflow files are reusable jobs called by those entrypoints; they cannot be
+dispatched independently and do not start additional push or PR runs.
 
 | Workflow | Trigger and output | Authority |
 | --- | --- | --- |
 | `pr.yml` | PRs and main pushes; select affected checks on Windows, Linux, macOS ARM64 and Intel. Shared/unknown changes select all platforms. Documentation-only changes avoid native builds. | Read-only tests and one shared RustSec audit, followed by the required `PR checks` aggregate. No distributions. |
 | `release.yml` | Manual dispatch on main: `verify` (default) tests portable packages without uploading them; `build` uploads reviewed candidates; `draft` prepares an independently qualified draft; `installer` wraps the qualified Windows portable. Portable targets: Windows x64, macOS ARM64 or both. | Preflight before expensive work. Write tokens only in staging jobs; no automatic publication. |
-| `windows-installers.yml` | Reusable Windows installer stage called by Release on main. Exact payload verification, wrapper compilation, install/reinstall/removal tests and an unpublished review draft. | Reuses the released application bytes; records the wrapper commit and run separately. Local graphics acceptance is required if hosted OpenGL is unavailable. |
-| `delivery-candidates.yml` | Reusable Release build engine; direct dispatch remains private-only. PRs run synthetic delivery controls. | Read-only token; optional Mac signing uses separate protected steps. Artifact upload requires reviewed redistribution materials. |
-| `delivery-draft.yml` | Reusable Release verifier and draft creator; direct dispatch remains private-only. | Exact run/attempt/commit and artifact verification; independently reviewed inert draft upload. |
-| `rust-audit.yml` | Reusable audit, manifest/lockfile push changes and manual dispatch. No NOH compilation. | Vulnerabilities, unsoundness advisories and acquisition errors fail the job. Public diagnostic uploads are optional. |
-| `native.yml` | Source/native verification. | Development evidence, not public packaging. |
-| `update-release.yml` | Private controlled update trial. | Separate prototype; public updates remain disabled. |
+| `windows-installers.yml` | Reusable Windows installer stage called by Release on main. Produces Minimal, Standard and Complete offline installers plus a small web selector. Tests exact profile contents, installation, repair, profile mismatch rejection and removal before creating an unpublished review draft. | Reuses the released application bytes; records the wrapper commit and run separately. Local graphics acceptance is required if hosted OpenGL is unavailable. |
+| `delivery-candidates.yml` | Reusable Release build engine. Synthetic delivery controls also run inside PR validation. | Read-only token; optional Mac signing uses separate protected steps. Artifact upload requires reviewed redistribution materials. |
+| `delivery-draft.yml` | Reusable Release verifier and draft creator. | Exact run/attempt/commit and artifact verification; independently reviewed inert draft upload. |
+| `rust-audit.yml` | Reusable audit called by PR validation and Release. No NOH compilation. | Vulnerabilities, unsoundness advisories and acquisition errors fail the job. Public diagnostic uploads are optional. |
+| `native.yml` | Reusable Linux and macOS verification called by PR validation. | Both Mac architectures remain covered; development evidence, not public packaging. |
+
+The five Windows measurement workflows and the private `windows-setup.yml` and
+`update-release.yml` prototypes have been retired. Their sources and past runs
+remain in Git/Actions history; public automatic updates remain disabled. The
+current Windows installer workflow preserves the three content profiles and web
+selection in ordinary per-user public installers. It does not enable the private
+updater/controller protocol. Minimal includes the application, CLI and MCP but
+no FFmpeg, preview runtime or speech files. Standard adds FFmpeg and preview;
+Complete adds Whisper and models. The web selector downloads only the chosen
+offline installer from the official release and checks its compiled-in SHA-256
+before starting it. Existing installations keep their profile and folder;
+the selected content can grow without uninstalling. Minimal setup and the installed
+`noh-components.exe` helper share the acquisition/extraction code. The GUI starts
+that helper from its missing-resource panel and rechecks availability afterwards.
+Profile templates and content registration preserve additions during repair.
+User-created files survive removal; downgrades and incompatible helper targets are rejected.
+
+The installer stage does not run Cargo. All profiles reuse the qualified
+portable's application executables and retain its notices and source-material
+correspondence. Each has a derived manifest recording its actual inventory;
+application source identity is distinct from the wrapper/workflow commit.
+Public download instructions are updated only after exact artifact acceptance
+and publication. The original complete installer remains the currently qualified
+public download until that acceptance finishes.
 
 Native builds and standard tests have passed for all three operating systems,
 including both Mac architectures. That evidence does not qualify an installable
 package. Linux and macOS Intel have no delivery packager and are excluded from
 Release targets. The public Windows installer stage has passed on hosted runners;
-the older private update/install prototypes are separate. See the
+the older private update/install workflows are retired. See the
 [installer report](WINDOWS_0_1_0_INSTALLER.md) for the exact run and local acceptance.
 
 The build driver is `tools/delivery-build.ps1`; the acquisition, source and ZIP
@@ -197,23 +223,33 @@ the release link and evidence without rebuilding or relabelling that binary.
 The hosted draft path keeps its separate run/protected-environment requirements.
 
 The ordinary Windows installer is a separate wrapper around those exact portable
-bytes. `tools/public-installer.py --bundle <portable-folder> --commit <source-sha>
---compiler <Inno-Setup-7.1.0-folder> --output <new-folder>` verifies the portable
-manifest, input authority and compiler pins before generating its exact file list.
+bytes. `tools/public_components.py` first derives the two runtime ZIPs and
+`COMPONENTS.json` from the verified portable. `tools/public-installer.py` builds
+the maintenance helper with `--maintenance --profile minimal`, then builds each
+offline profile with `--profile <minimal|standard|complete> --helper <helper-exe>`.
+Each invocation also requires `--bundle <portable-folder> --commit <source-sha>
+--components <component-folder> --compiler <Inno-Setup-7.1.0-folder> --output <new-folder>`.
+It verifies the portable manifest, content archives, input authority and compiler
+pins before generating its exact file list. `tools/installer/public-web.py` binds
+the small selector to the three resulting installers.
 It does not rebuild NOH. Preserve `INSTALLER.json`, the wrapper source ZIP and
 native install/uninstall evidence alongside the original delivery identity.
 Qualify this additional executable independently before advertising it.
 
 Use the existing **Release** workflow on main with `stage=installer` and
-`target=windows-x64`. This calls the public job in `windows-installers.yml` for
-the initial 0.1.0 release; there is no branch-specific build or publication path.
-It verifies the existing release tag, portable ZIP and manifest hashes,
-then compiles the checked-in wrapper with the pinned Inno compiler. The application
+`target=windows-x64`, plus the successful Release build's `source_run_id`,
+`source_attempt` and `source_commit`. This calls the public job in
+`windows-installers.yml`; there is no branch-specific build or publication path.
+It verifies the source run, mandatory jobs, immutable artifact digest, portable
+and corresponding materials before compiling the checked-in wrappers. The application
 is not rebuilt. Its receipt distinguishes the application commit from the wrapper
 workflow commit and run/attempt, and records the actual installer SHA-256.
 The hosted test installs into a disposable path containing spaces, checks every
 installed payload hash, launches the GUI and CLI, reinstalls, and uninstalls while
-checking that a user-created file survives. Silent installation does not exercise
+checking that a user-created file survives. It also adds media and speech to
+Minimal, repairs missing tools, retains additions during a Minimal reinstall,
+and rejects a corrupt component archive before changing the installation.
+Silent installation does not exercise
 the Microsoft prerequisite wizard. Existing portable media qualification remains
 valid for the unchanged installed application bytes.
 

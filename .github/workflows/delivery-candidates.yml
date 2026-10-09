@@ -1,26 +1,6 @@
 name: Build unqualified delivery candidates
 
 on:
-  workflow_dispatch:
-    inputs:
-      build_kind:
-        description: Compile executables with Windows tests, or prepare complete portable candidates
-        type: choice
-        options: [compile-only, portable]
-        default: compile-only
-      upload_candidate:
-        description: Upload portable binaries/materials after independent redistribution review
-        type: boolean
-        default: false
-      target:
-        description: Windows first; macOS is an additional unqualified candidate
-        type: choice
-        options: [windows-x64, macos-arm64, all]
-        default: windows-x64
-      sign_macos:
-        description: Sign and privately submit a macOS portable candidate to Apple (requires reviewed environment)
-        type: boolean
-        default: false
   workflow_call:
     inputs:
       build_kind:
@@ -44,22 +24,6 @@ on:
         required: false
       NOH_APPLE_APP_PASSWORD:
         required: false
-  pull_request:
-    paths:
-      - '.github/workflows/delivery-*.yml'
-      - '.github/workflows/rust-audit.yml'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'tools/delivery*'
-      - 'tools/test-delivery.py'
-      - 'tools/rust_notices.py'
-      - 'tools/macos_signing.py'
-      - 'tools/windows_runtime.py'
-      - 'tools/windows_test_runtime.py'
-      - 'assets/delivery-*.json'
-      - 'assets/rust-notices.lock.json'
-      - 'assets/rust-notice-evidence/**'
-      - 'assets/windows-native.lock.json'
 
 permissions:
   contents: read
@@ -70,8 +34,8 @@ concurrency:
 
 jobs:
   rust-audit:
-    # PR validation performs the shared audit once for every selected platform.
-    if: github.event_name == 'workflow_dispatch' && (github.event.repository.private || (github.workflow == 'Release' && github.ref == 'refs/heads/main'))
+    # Release shares this audit across its selected package builds.
+    if: github.workflow == 'Release' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/rust-audit.yml
 
   controls:
@@ -84,7 +48,7 @@ jobs:
       - name: Check delivery controls using synthetic files
         run: python tools/test-delivery.py
       - name: Validate explicit signing request
-        if: github.event_name == 'workflow_dispatch' && inputs.sign_macos
+        if: inputs.sign_macos
         env:
           NOH_BUILD_KIND: ${{ inputs.build_kind }}
           NOH_TARGET: ${{ inputs.target }}
@@ -96,7 +60,7 @@ jobs:
   candidate:
     name: Candidate ${{ matrix.platform }}
     needs: [controls, rust-audit]
-    if: github.event_name == 'workflow_dispatch' && (github.event.repository.private || (github.workflow == 'Release' && github.ref == 'refs/heads/main'))
+    if: github.workflow == 'Release' && github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
       matrix:

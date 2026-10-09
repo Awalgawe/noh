@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       stage:
-        description: Verify packages, build artifacts, prepare a draft, or build/test the Windows installer
+        description: Verify packages, build artifacts, prepare a draft, or build/test the Windows profile installers
         type: choice
         options: [verify, build, draft, installer]
         default: verify
@@ -18,15 +18,15 @@ on:
         type: boolean
         default: false
       source_run_id:
-        description: Draft stage only - successful Release build run ID
+        description: Draft/installer stages - successful Release build run ID
         type: string
         default: ''
       source_attempt:
-        description: Draft stage only - exact build attempt
+        description: Draft/installer stages - exact build attempt
         type: string
         default: '1'
       source_commit:
-        description: Draft stage only - exact 40-character build commit
+        description: Draft/installer stages - exact 40-character build commit
         type: string
         default: ''
 
@@ -67,12 +67,12 @@ jobs:
               raise SystemExit('Unsupported release stage or packaged platform')
           if stage == 'installer' and target != 'windows-x64':
               raise SystemExit('The installer stage requires Windows x64')
-          if stage == 'draft' and not (
+          if stage in ('draft', 'installer') and not (
               re.fullmatch(r'[1-9][0-9]*', os.environ['SOURCE_RUN'])
               and re.fullmatch(r'[1-9][0-9]*', os.environ['SOURCE_ATTEMPT'])
               and re.fullmatch(r'[0-9a-f]{40}', os.environ['SOURCE_COMMIT'])
           ):
-              raise SystemExit('Draft requires exact successful run, attempt and source commit')
+              raise SystemExit('Draft/installer stages require exact successful run, attempt and source commit')
           platforms = ['windows-x64', 'macos-arm64'] if target == 'all' else [target]
           if stage != 'verify':
               for platform in platforms:
@@ -117,6 +117,6 @@ jobs:
       actions: read
     uses: ./.github/workflows/windows-installers.yml
     with:
-      source_run_id: ''
-      source_attempt: ''
-      source_commit: ''
+      source_run_id: ${{ inputs.source_run_id }}
+      source_attempt: ${{ inputs.source_attempt }}
+      source_commit: ${{ inputs.source_commit }}
