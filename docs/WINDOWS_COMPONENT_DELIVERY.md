@@ -1,6 +1,6 @@
-# Restore optional Windows content delivery
+# Windows component delivery in 0.1.1
 
-## Verified recovery inventory
+## Historical recovery inventory
 
 The public root `741da7a` already contains `tools/setup_profiles.rs`,
 `tools/build-installer.ps1`, `tools/installer/noh.iss` and
@@ -24,7 +24,7 @@ previously shipped on-demand component manager.
 `src/resources.rs` and `src/app_resources.rs` already detect missing FFmpeg,
 speech/model files and preview support, show translated recovery help, and
 recheck availability off the GUI thread. The inspected history contains no
-FFmpeg/Whisper download action there. The public app currently links to the
+FFmpeg/Whisper download action there. Before 0.1.1, the public app linked only to the
 Microsoft prerequisite download. `src/app_updates.rs` provides a separate,
 feature-gated full-application update flow, not media-component acquisition.
 
@@ -38,7 +38,7 @@ cancellation, user files, exact source identity and redistribution constraints.
 Remove obsolete workflows only after their required capabilities have a route
 through the canonical Release workflow.
 
-## Integration decision for review
+## Implemented integration
 
 Reuse the existing profile boundaries: application; FFmpeg plus preview; speech
 runtime plus models. Reuse the resource diagnostics and recheck behavior in the
@@ -86,5 +86,8 @@ Recheck legal/source correspondence for the unchanged native payload and the new
 application build. Do not claim the old private qualification covers new public
 installers or the new GUI entrypoint.
 
-The current uncommitted workflow/profile implementation remains a prototype.
-No workflow removal, application release or new installer has been published.
+The implementation was merged in PR6 and built once from `9a8ee751`.
+The seven retired workflows are removed; the standard Release installer stage
+produces all four setup choices and the shared helper from an identified
+successful application build. See [0.1.1 installer qualification](WINDOWS_0_1_1_INSTALLER.md)
+for the exact artifacts, test coverage and explicit interaction limits.

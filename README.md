@@ -40,16 +40,27 @@ NOH is focused on repeating visual sequences, music and short extracts. It is no
 
 **[Download NOH for Windows](https://github.com/Awalgawe/noh/releases/latest)**
 
-Choose **`NOH-<version>-windows-x64-Setup.exe`** and follow the installation wizard.
-Then open **NOH** from the Start menu. A portable ZIP is also available: extract
-the complete `NOH-<version>-windows-x64.zip`, then open `noh.exe`.
-The separate `-materials.zip` and `-installer-sources.zip` contain sources and build materials.
+Choose **`NOH-<version>-windows-x64-Web-Setup.exe`** for guided installation.
+It downloads the profile you choose:
 
-Both packages include the media tools and local speech models. If the
-Microsoft component needed for automatic subtitles is missing, the installer
+| Profile | Included content |
+| --- | --- |
+| **Standard** | NOH, media tools and preview support for editing and exporting. |
+| **Complete** | Standard plus local automatic transcription and its models. |
+| **Minimal** | NOH only; add the media tools and transcription later. |
+
+Each profile also has an offline installer. Minimal can offer additional downloads
+during setup; an installed copy of NOH can add or repair missing components from
+its resource settings, without uninstalling. Restart NOH after adding preview support.
+
+A complete portable ZIP is also available: extract the entire
+`NOH-<version>-windows-x64.zip`, then open `noh.exe`. Archives named `-materials.zip`
+or `-installer-sources.zip` contain sources and build materials, not the app download.
+
+If the Microsoft component needed for automatic subtitles is missing, the installer
 offers to download it directly from Microsoft. In a portable copy, NOH provides a
-**Download the Microsoft component** action. Install it, then choose **Check
-again**. Preview, export and existing subtitles also work without that component.
+**Download the Microsoft component** action. Install it, then choose **Check again**.
+Preview, export and existing subtitles also work without that component.
 
 This release was validated on Windows 10 x64 22H2 (build 19045). Read its notes
 for checksums and validation limits. macOS and Linux currently require a
@@ -58,7 +69,7 @@ remain incomplete.
 
 Follow the [installation guide](docs/INSTALLING.md) for setup, updates and removal,
 then [make your first video](docs/APP.md#make-your-first-video).
-See the [changelog](docs/CHANGELOG.md) for the initial release's features and limits.
+See the [changelog](docs/CHANGELOG.md) for changes and known limits.
 
 ## Learn more
 

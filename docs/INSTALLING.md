@@ -2,15 +2,27 @@
 
 Download NOH for Windows x64 from the
 [latest GitHub release](https://github.com/Awalgawe/noh/releases/latest).
-Choose **`NOH-<version>-windows-x64-Setup.exe`** for guided installation, or
-`NOH-<version>-windows-x64.zip` for a portable copy. The separate `-materials.zip`,
-`-installer-sources.zip` and GitHub's **Source code** downloads contain sources and build materials.
+Choose **`NOH-<version>-windows-x64-Web-Setup.exe`** for guided installation.
+This small download lets you choose a profile and downloads its installer.
+
+| Profile | Content | Offline installer filename |
+| --- | --- | --- |
+| Standard | NOH, media tools and preview for editing and exporting. | `NOH-<version>-windows-x64-Standard-Setup.exe` |
+| Complete | Standard plus automatic transcription and its local models. | `NOH-<version>-windows-x64-Complete-Setup.exe` |
+| Minimal | NOH only, with optional content available during setup or later. | `NOH-<version>-windows-x64-Minimal-Setup.exe` |
+
+An offline installer includes its profile's content. Selecting more content needs
+an Internet connection. Minimal needs media tools before preview and export are
+available. Neither profile installation nor component downloads require Rust or Python.
+
+For a complete portable copy, choose `NOH-<version>-windows-x64.zip`. The separate
+`-materials.zip`, `-installer-sources.zip` and GitHub's **Source code** downloads
+contain sources and build materials. The media/speech archives are downloaded
+automatically by the installers; you do not need to extract them manually.
 
 Read the release notes for tested Windows versions and package checksums.
-Both Windows downloads include the application, media
-libraries and local speech models. It does not require Rust, Python or a
-separate FFmpeg installation. Automatic updating is not enabled.
-Allow space for the download and installed files, plus your media/exports.
+Automatic updating is not enabled. Allow space for the download, temporary
+extraction and installed files, plus your media and exports.
 
 macOS and Linux currently require a [source build](BUILDING.md). The experimental
 Mac portable is not signed or notarized and is not offered as a supported download.
@@ -19,18 +31,38 @@ Mac portable is not signed or notarized and is not offered as a supported downlo
 
 ### Guided installation
 
-1. Open **NOH-<version>-windows-x64-Setup.exe** and choose your language.
-2. Keep the proposed installation folder or choose another writable folder.
-3. If the Microsoft component for automatic subtitles is missing, the wizard
-   offers to download it. Microsoft's installer presents its own licence and may
-   request administrator approval. You can leave this optional component for later.
-4. Finish installation, then open **NOH** from the Start menu. A desktop shortcut
+1. Open the web installer or your chosen offline installer and select your language.
+2. Choose **Standard** for editing, **Complete** for automatic transcription too,
+   or **Minimal** to add these components later.
+3. Keep the proposed installation folder or choose another writable folder.
+4. For Complete, if the Microsoft prerequisite is missing, the wizard offers its
+   official download. Microsoft's installer presents its own licence and may
+   request administrator approval. You can leave this optional step for later.
+5. Finish installation, then open **NOH** from the Start menu. A desktop shortcut
    is optional.
 
 NOH installs for your Windows account without requiring administrator rights.
-It includes the same application, media tools and speech models as the portable ZIP.
-The optional Microsoft download is separate; it is skipped when a compatible
-runtime is already present. NOH itself does not need an Internet connection for editing.
+Download progress is shown and can be cancelled. NOH verifies the downloaded
+content before installing it. Once the required components are installed, editing
+and local transcription work without an Internet connection.
+
+### Add or repair components later
+
+In an installed copy of NOH, choose **Resolve missing resources**, then
+**Add or repair components**. The wizard offers the missing media tools or
+transcription content. Choose the desired profile and follow its download and
+installation progress. You can also rerun an offline or web installer for the
+same release to add content.
+
+You do not need to uninstall NOH. Already installed content and user files are
+preserved; selecting a smaller profile does not remove components. Failed downloads
+leave the existing installation unchanged, so you can retry. End-to-end cancellation
+during an active download remains unverified in 0.1.1; see the release notes.
+Avoid starting this while editing a session you need to keep: the wizard may
+need NOH closed to replace files. Restart NOH to enable newly added preview support.
+
+The in-app component installer belongs to installed copies. To repair a portable
+copy, extract its complete ZIP again, or select existing tool/model paths in Settings.
 
 ### Portable copy
 
@@ -98,9 +130,10 @@ the application.
 
 ## If it does not open
 
-- **A DLL or media tool is missing:** extract the entire ZIP again and keep all
-  bundled files together. Do not download individual replacement DLLs from an
-  unrelated website.
+- **A DLL or media tool is missing:** for an installed copy, use **Add or repair
+  components** if NOH opens, or rerun its matching installer if it does not. For
+  a portable copy, extract the complete ZIP again and keep its files together.
+  Do not download individual replacement DLLs from an unrelated website.
 - **Only source files are present:** you downloaded a source archive. The Windows
   application package contains `noh.exe`.
 - **The system blocks the app:** check the package's release notes and reported
@@ -114,8 +147,9 @@ the application.
 NOH checks media tools and speech files in the background. Missing tools,
 models or runtime libraries appear in a warning with **Resolve missing
 resources**. Open it to see the affected feature, expected file path and repair
-instructions. Restore the complete package, or select the tool/model paths in
-Options, then press **Check again**. Restart NOH after restoring the fast-preview
+instructions. In an installed copy, choose **Add or repair components**. For a portable copy,
+restore the complete package or select the tool/model paths in Options. Then
+press **Check again**. Restart NOH after restoring the fast-preview
 library. On Windows, transcription diagnostics also link to Microsoft's official
 Visual C++ runtime information.
 
