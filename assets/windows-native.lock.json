@@ -4,7 +4,7 @@
       "mingw-w64-x86_64-speexdsp-1.2.1-1"
     ],
     "build_tool_limit": "Recipe dependencies are not automatically linked code; inspect header/static dependencies and compiler runtime exceptions against original recipes/BUILDINFO before redistribution",
-    "native_rust_std_source_notice_status": "Rust 1.87.0-2, 1.88.0-2/3 and 1.89.0-3 are named build inputs; original standard-library source/notice correspondence is not yet collected or cleared",
+    "native_rust_std_source_notice_status": "Four exact signed Rust binary/rust-src pairs share the original source recipe hash; generated COPYRIGHT-library.html and full COPYRIGHT.html are retained. Compilers are build tools, not distributed application binaries.",
     "optional_data_not_bundled": [
       "VapourSynth Python standard library/scripts",
       "FFmpeg frei0r external plugins",
@@ -6553,6 +6553,428 @@
     ],
     "status": "unreviewed-original-source-materials"
   },
+  "native_rust_toolchains": [
+    {
+      "binary": {
+        "buildinfo_sha256": "87e15ea5a87c1e752965ab3af4ca18a97113e85e8fef528656ae960a510ff9f5",
+        "kind": "rust",
+        "notices": [
+          {
+            "member": "mingw64/share/doc/cargo/LICENSE-APACHE",
+            "sha256": "8ada45cd9f843acf64e4722ae262c622a2b3b3007c7310ef36ac1061a30f6adb"
+          },
+          {
+            "member": "mingw64/share/doc/cargo/LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          },
+          {
+            "member": "mingw64/share/doc/clippy/LICENSE-APACHE",
+            "sha256": "b25193a6f979baf846c049e4693c3360dd9f459107380d600f5c41325a27ba5f"
+          },
+          {
+            "member": "mingw64/share/doc/clippy/LICENSE-MIT",
+            "sha256": "26ad6b53200809395f8d1372282733a061e9c53f964287447729e72b8c725a5a"
+          },
+          {
+            "member": "mingw64/share/doc/rustc/COPYRIGHT-library.html",
+            "sha256": "592ea218c47b2b50c8d8c53bf44512856fc93942e6686cca55e64311363681c0"
+          },
+          {
+            "member": "mingw64/share/doc/rustc/COPYRIGHT.html",
+            "sha256": "81c453dfb18b05efcddedda14e624bccf8aee988604412ca5871d5459b041f90"
+          },
+          {
+            "member": "mingw64/share/doc/rustfmt/LICENSE-APACHE",
+            "sha256": "092c8e82c47fb859d7385253c1b04052dbd65a8bcf0bbd8b6f7dba58a9e8753d"
+          },
+          {
+            "member": "mingw64/share/doc/rustfmt/LICENSE-MIT",
+            "sha256": "ae0f1f791e3b4faccf981c0b530199235a8b8a021c7ef0c3c85c6c676ea4d27f"
+          }
+        ],
+        "pkgbuild_sha256": "d3c06b5a2a762993c7a7f9a6aec10473131cfee38f4b6891cb663ec64e0c8a68",
+        "sha256": "3c4ef7e2604aefaea4a9d166179c2615a0021d25bc23fec23811535eaf2faa6f",
+        "signature_sha256": "c45a866dbe9d4afa1783ac3dcd8fee7f4d5ee52e5b666c149015ec8db74377b1",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-rust-1.87.0-2-any.pkg.tar.zst",
+        "version": "1.87.0-2"
+      },
+      "recipe_files": [
+        {
+          "path": "assets/native-toolchains/1.87.0-2/.SRCINFO",
+          "sha256": "20266803a350f398feadf4a4fde4b09354af5b147e38902bb9936880fe55fd6c"
+        },
+        {
+          "path": "assets/native-toolchains/1.87.0-2/0001-rustc-llvm-fix-libs.patch",
+          "sha256": "7cb1773c288ffb1c1e751edc49b1890c84bf9c362742bc5225d19d474edb73a0"
+        },
+        {
+          "path": "assets/native-toolchains/1.87.0-2/0004-compiler-Use-wasm-ld-for-wasm-targets.patch",
+          "sha256": "56882f1a0f1404c10c7726d6cc37444f2b343e72b969badfcb43760f80db0f32"
+        },
+        {
+          "path": "assets/native-toolchains/1.87.0-2/0008-disable-self-contained-for-gnu-targets.patch",
+          "sha256": "87b68c2dfbe996d3ef439278e1ac90997fc4ea192f449e8f00262360a551386a"
+        },
+        {
+          "path": "assets/native-toolchains/1.87.0-2/bootstrap.toml",
+          "sha256": "4450ad9b3acd4cb694f1b4356545aabdbc1074fadba01c5f6f09639c2d94f786"
+        },
+        {
+          "path": "assets/native-toolchains/1.87.0-2/PKGBUILD",
+          "sha256": "d3c06b5a2a762993c7a7f9a6aec10473131cfee38f4b6891cb663ec64e0c8a68"
+        }
+      ],
+      "recipe_sha256": "d3c06b5a2a762993c7a7f9a6aec10473131cfee38f4b6891cb663ec64e0c8a68",
+      "source": {
+        "sha256": "2dfb5519fde3ad18924ec7558ca5503a703c04eda8d360ce65e99d83eb7359d7",
+        "signature_sha256": "8097c4898d99dc32ddc9ccce546db2528c9fdf00e4158e52ef7e4ca4f8b79dd2",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/sources/mingw-w64-rust-1.87.0-2.src.tar.zst"
+      },
+      "standard_library_source": {
+        "buildinfo_sha256": "3c1de4bc0557ab7d3cec9aa8f00a8dda725bc4182b99c68ff9ffe78501ff2bc6",
+        "kind": "rust-src",
+        "notices": [
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-MIT",
+            "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1"
+          }
+        ],
+        "pkgbuild_sha256": "d3c06b5a2a762993c7a7f9a6aec10473131cfee38f4b6891cb663ec64e0c8a68",
+        "sha256": "28802c18142f167254f525ea77f4c9e7be00cac8760ea6da5297625e0e9977a7",
+        "signature_sha256": "daf0d9d42309bd555b7fc4ae2117d11274ed60d30a9df0a3e3e8e507d282d306",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-rust-src-1.87.0-2-any.pkg.tar.zst",
+        "version": "1.87.0-2"
+      },
+      "version": "1.87.0-2"
+    },
+    {
+      "binary": {
+        "buildinfo_sha256": "4c358ce039a616987eeeadbfc7ca432823fc7ddaa3694da9b3fc72ebc9e1329b",
+        "kind": "rust",
+        "notices": [
+          {
+            "member": "mingw64/share/doc/cargo/LICENSE-APACHE",
+            "sha256": "8ada45cd9f843acf64e4722ae262c622a2b3b3007c7310ef36ac1061a30f6adb"
+          },
+          {
+            "member": "mingw64/share/doc/cargo/LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          },
+          {
+            "member": "mingw64/share/doc/clippy/LICENSE-APACHE",
+            "sha256": "b25193a6f979baf846c049e4693c3360dd9f459107380d600f5c41325a27ba5f"
+          },
+          {
+            "member": "mingw64/share/doc/clippy/LICENSE-MIT",
+            "sha256": "26ad6b53200809395f8d1372282733a061e9c53f964287447729e72b8c725a5a"
+          },
+          {
+            "member": "mingw64/share/doc/rustc/COPYRIGHT-library.html",
+            "sha256": "592ea218c47b2b50c8d8c53bf44512856fc93942e6686cca55e64311363681c0"
+          },
+          {
+            "member": "mingw64/share/doc/rustc/COPYRIGHT.html",
+            "sha256": "81c453dfb18b05efcddedda14e624bccf8aee988604412ca5871d5459b041f90"
+          },
+          {
+            "member": "mingw64/share/doc/rustfmt/LICENSE-APACHE",
+            "sha256": "092c8e82c47fb859d7385253c1b04052dbd65a8bcf0bbd8b6f7dba58a9e8753d"
+          },
+          {
+            "member": "mingw64/share/doc/rustfmt/LICENSE-MIT",
+            "sha256": "ae0f1f791e3b4faccf981c0b530199235a8b8a021c7ef0c3c85c6c676ea4d27f"
+          }
+        ],
+        "pkgbuild_sha256": "2d6e01d61f7f6e54dd17725761d573b44d1dc7621fe9451379bb7ee7bc461c92",
+        "sha256": "e6401624788b9181c400263ae9eb4e5c2f7a4a61265537493a2a6b3ba6c70c3c",
+        "signature_sha256": "55327b15579b44b73654a4f97a05e4de8361da8fb15ac535a21868abedaadca9",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-rust-1.88.0-2-any.pkg.tar.zst",
+        "version": "1.88.0-2"
+      },
+      "recipe_files": [
+        {
+          "path": "assets/native-toolchains/1.88.0-2/.SRCINFO",
+          "sha256": "27fae385447339f3f5817d9ac4580659003c928dc93d8622bffdfa2b18c2fe1e"
+        },
+        {
+          "path": "assets/native-toolchains/1.88.0-2/0001-rustc-llvm-fix-libs.patch",
+          "sha256": "7cb1773c288ffb1c1e751edc49b1890c84bf9c362742bc5225d19d474edb73a0"
+        },
+        {
+          "path": "assets/native-toolchains/1.88.0-2/0004-compiler-Use-wasm-ld-for-wasm-targets.patch",
+          "sha256": "56882f1a0f1404c10c7726d6cc37444f2b343e72b969badfcb43760f80db0f32"
+        },
+        {
+          "path": "assets/native-toolchains/1.88.0-2/0008-disable-self-contained-for-gnu-targets.patch",
+          "sha256": "87b68c2dfbe996d3ef439278e1ac90997fc4ea192f449e8f00262360a551386a"
+        },
+        {
+          "path": "assets/native-toolchains/1.88.0-2/bootstrap.toml",
+          "sha256": "54ffdf1f995edae7302112f4f8cb376c0193eccdc331a93383ac5c496afe59c7"
+        },
+        {
+          "path": "assets/native-toolchains/1.88.0-2/PKGBUILD",
+          "sha256": "2d6e01d61f7f6e54dd17725761d573b44d1dc7621fe9451379bb7ee7bc461c92"
+        }
+      ],
+      "recipe_sha256": "2d6e01d61f7f6e54dd17725761d573b44d1dc7621fe9451379bb7ee7bc461c92",
+      "source": {
+        "sha256": "f15793b4a5fb6cd6b661eed769057a721f7b78b7e91f71adc73861f47eed1669",
+        "signature_sha256": "494c32973fecb9bc072c4d260bd259bde48afcc80d9dc512b656b428d50c1aa8",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/sources/mingw-w64-rust-1.88.0-2.src.tar.zst"
+      },
+      "standard_library_source": {
+        "buildinfo_sha256": "2922ce1978323e5e86d030778a3d51b62c820f5739d2b39cbbcae2069a7f01e4",
+        "kind": "rust-src",
+        "notices": [
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-MIT",
+            "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1"
+          }
+        ],
+        "pkgbuild_sha256": "2d6e01d61f7f6e54dd17725761d573b44d1dc7621fe9451379bb7ee7bc461c92",
+        "sha256": "42a03247080cf18d720e2a311f5c2b718f6fcc7b70724b2ffe555772ac1a9506",
+        "signature_sha256": "00eabe9af2a6ecbf598cd6feab70fb99edca21aba365e5d29ac2482c0d708847",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-rust-src-1.88.0-2-any.pkg.tar.zst",
+        "version": "1.88.0-2"
+      },
+      "version": "1.88.0-2"
+    },
+    {
+      "binary": {
+        "buildinfo_sha256": "90841df50aeba991de6682a1c96bd28a214c96e3f3212c593bfef913b622af92",
+        "kind": "rust",
+        "notices": [
+          {
+            "member": "mingw64/share/doc/cargo/LICENSE-APACHE",
+            "sha256": "8ada45cd9f843acf64e4722ae262c622a2b3b3007c7310ef36ac1061a30f6adb"
+          },
+          {
+            "member": "mingw64/share/doc/cargo/LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          },
+          {
+            "member": "mingw64/share/doc/clippy/LICENSE-APACHE",
+            "sha256": "b25193a6f979baf846c049e4693c3360dd9f459107380d600f5c41325a27ba5f"
+          },
+          {
+            "member": "mingw64/share/doc/clippy/LICENSE-MIT",
+            "sha256": "26ad6b53200809395f8d1372282733a061e9c53f964287447729e72b8c725a5a"
+          },
+          {
+            "member": "mingw64/share/doc/rustc/COPYRIGHT-library.html",
+            "sha256": "592ea218c47b2b50c8d8c53bf44512856fc93942e6686cca55e64311363681c0"
+          },
+          {
+            "member": "mingw64/share/doc/rustc/COPYRIGHT.html",
+            "sha256": "81c453dfb18b05efcddedda14e624bccf8aee988604412ca5871d5459b041f90"
+          },
+          {
+            "member": "mingw64/share/doc/rustfmt/LICENSE-APACHE",
+            "sha256": "092c8e82c47fb859d7385253c1b04052dbd65a8bcf0bbd8b6f7dba58a9e8753d"
+          },
+          {
+            "member": "mingw64/share/doc/rustfmt/LICENSE-MIT",
+            "sha256": "ae0f1f791e3b4faccf981c0b530199235a8b8a021c7ef0c3c85c6c676ea4d27f"
+          }
+        ],
+        "pkgbuild_sha256": "f0b57bae2953151149d4e8a88d5792c657b2fcefcbd6cc12c269d813a5e5f70c",
+        "sha256": "28ca9304a11733239a18421af1620f8de38d670a785fdea5f165a24495977372",
+        "signature_sha256": "89330c029893b3bfc2a4e0c4f108bb0205b80a89992f35a0b9ac39dd0887afab",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-rust-1.88.0-3-any.pkg.tar.zst",
+        "version": "1.88.0-3"
+      },
+      "recipe_files": [
+        {
+          "path": "assets/native-toolchains/1.88.0-3/.SRCINFO",
+          "sha256": "8195c5c8057289f312b306677643e2a6ff85558b1642852436c8d27f8aacea76"
+        },
+        {
+          "path": "assets/native-toolchains/1.88.0-3/0001-rustc-llvm-fix-libs.patch",
+          "sha256": "7cb1773c288ffb1c1e751edc49b1890c84bf9c362742bc5225d19d474edb73a0"
+        },
+        {
+          "path": "assets/native-toolchains/1.88.0-3/0004-compiler-Use-wasm-ld-for-wasm-targets.patch",
+          "sha256": "56882f1a0f1404c10c7726d6cc37444f2b343e72b969badfcb43760f80db0f32"
+        },
+        {
+          "path": "assets/native-toolchains/1.88.0-3/0008-disable-self-contained-for-gnu-targets.patch",
+          "sha256": "87b68c2dfbe996d3ef439278e1ac90997fc4ea192f449e8f00262360a551386a"
+        },
+        {
+          "path": "assets/native-toolchains/1.88.0-3/bootstrap.toml",
+          "sha256": "54ffdf1f995edae7302112f4f8cb376c0193eccdc331a93383ac5c496afe59c7"
+        },
+        {
+          "path": "assets/native-toolchains/1.88.0-3/PKGBUILD",
+          "sha256": "f0b57bae2953151149d4e8a88d5792c657b2fcefcbd6cc12c269d813a5e5f70c"
+        }
+      ],
+      "recipe_sha256": "f0b57bae2953151149d4e8a88d5792c657b2fcefcbd6cc12c269d813a5e5f70c",
+      "source": {
+        "sha256": "f90d6ddc393c8e875bd7e8883b4a1b2cd216bed86a568a96a4154718a312c98a",
+        "signature_sha256": "a342879f87d7faf283947627334b316ece0594fa0fae6f6aba52d88ef3d9d780",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/sources/mingw-w64-rust-1.88.0-3.src.tar.zst"
+      },
+      "standard_library_source": {
+        "buildinfo_sha256": "de1529b6c22a7ce884a84e8d4a85378f5d599b9a03b0c000216041d130894005",
+        "kind": "rust-src",
+        "notices": [
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-MIT",
+            "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1"
+          }
+        ],
+        "pkgbuild_sha256": "f0b57bae2953151149d4e8a88d5792c657b2fcefcbd6cc12c269d813a5e5f70c",
+        "sha256": "8299503cfd22caa9f4a56950e89cffb7b0561f334d6cf510a549555b2a0ab4af",
+        "signature_sha256": "0d2c537a76700f93f06ce29dd4f9798fbe5782d1206ba8521b51416ea9c90c5d",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-rust-src-1.88.0-3-any.pkg.tar.zst",
+        "version": "1.88.0-3"
+      },
+      "version": "1.88.0-3"
+    },
+    {
+      "binary": {
+        "buildinfo_sha256": "4f66145d4ffa04e35737de45ac913b1363c99bb0112e369097dfb118ef5d4ae4",
+        "kind": "rust",
+        "notices": [
+          {
+            "member": "mingw64/share/doc/cargo/LICENSE-APACHE",
+            "sha256": "8ada45cd9f843acf64e4722ae262c622a2b3b3007c7310ef36ac1061a30f6adb"
+          },
+          {
+            "member": "mingw64/share/doc/cargo/LICENSE-MIT",
+            "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+          },
+          {
+            "member": "mingw64/share/doc/clippy/LICENSE-APACHE",
+            "sha256": "b25193a6f979baf846c049e4693c3360dd9f459107380d600f5c41325a27ba5f"
+          },
+          {
+            "member": "mingw64/share/doc/clippy/LICENSE-MIT",
+            "sha256": "26ad6b53200809395f8d1372282733a061e9c53f964287447729e72b8c725a5a"
+          },
+          {
+            "member": "mingw64/share/doc/rustc/COPYRIGHT-library.html",
+            "sha256": "592ea218c47b2b50c8d8c53bf44512856fc93942e6686cca55e64311363681c0"
+          },
+          {
+            "member": "mingw64/share/doc/rustc/COPYRIGHT.html",
+            "sha256": "81c453dfb18b05efcddedda14e624bccf8aee988604412ca5871d5459b041f90"
+          },
+          {
+            "member": "mingw64/share/doc/rustfmt/LICENSE-APACHE",
+            "sha256": "092c8e82c47fb859d7385253c1b04052dbd65a8bcf0bbd8b6f7dba58a9e8753d"
+          },
+          {
+            "member": "mingw64/share/doc/rustfmt/LICENSE-MIT",
+            "sha256": "ae0f1f791e3b4faccf981c0b530199235a8b8a021c7ef0c3c85c6c676ea4d27f"
+          }
+        ],
+        "pkgbuild_sha256": "49631e5d440f85c6ea716b095b11c9c88d65892b7306d79c1d5c9f02f4064296",
+        "sha256": "f649c67be5100495fa433cdba4511590a32297de6e314e51a955ee9f2772e5e3",
+        "signature_sha256": "86a744320e1ae74f43627da7b92f40765da9fefb50749e8d4d9e0bbd747fe2d6",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-rust-1.89.0-3-any.pkg.tar.zst",
+        "version": "1.89.0-3"
+      },
+      "recipe_files": [
+        {
+          "path": "assets/native-toolchains/1.89.0-3/.SRCINFO",
+          "sha256": "2ce3b02ad39feb105ffd94a2145c8fa864b5b05a8050e0d40f03a60538885deb"
+        },
+        {
+          "path": "assets/native-toolchains/1.89.0-3/0001-rustc-llvm-fix-libs.patch",
+          "sha256": "7cb1773c288ffb1c1e751edc49b1890c84bf9c362742bc5225d19d474edb73a0"
+        },
+        {
+          "path": "assets/native-toolchains/1.89.0-3/0004-compiler-Use-wasm-ld-for-wasm-targets.patch",
+          "sha256": "56882f1a0f1404c10c7726d6cc37444f2b343e72b969badfcb43760f80db0f32"
+        },
+        {
+          "path": "assets/native-toolchains/1.89.0-3/0008-disable-self-contained-for-gnu-targets.patch",
+          "sha256": "87b68c2dfbe996d3ef439278e1ac90997fc4ea192f449e8f00262360a551386a"
+        },
+        {
+          "path": "assets/native-toolchains/1.89.0-3/0014-rustc-perf-less-verbose.patch",
+          "sha256": "6a8d987186785901d8a6e347d6ec3bccd84c869c9fa1a57cb9a30c8f6a3ce3ac"
+        },
+        {
+          "path": "assets/native-toolchains/1.89.0-3/143928.patch",
+          "sha256": "d8dd34d2474aa550c1e2089dfb7d75b5cf63174bb673e9fb5b233598c53115a6"
+        },
+        {
+          "path": "assets/native-toolchains/1.89.0-3/144159.patch",
+          "sha256": "6ba3bf8fa7b9196dc97f5e3c00718311471e3bbac0a7641e0ef88c190b830c7f"
+        },
+        {
+          "path": "assets/native-toolchains/1.89.0-3/144164.patch",
+          "sha256": "191addeef0af122bc09ef0a6578d7eaa62afbb30080227cdd1baa75d4671686d"
+        },
+        {
+          "path": "assets/native-toolchains/1.89.0-3/144254.patch",
+          "sha256": "8b81f31a3069f63694d375f7ece7bac5a711f10a9c06b803d9bca675dde33cf7"
+        },
+        {
+          "path": "assets/native-toolchains/1.89.0-3/bootstrap.toml",
+          "sha256": "ebb90532e08fc1cb4ec8af6a3de66519fb6f168a2a4f075355082dea3be0ce60"
+        },
+        {
+          "path": "assets/native-toolchains/1.89.0-3/PKGBUILD",
+          "sha256": "49631e5d440f85c6ea716b095b11c9c88d65892b7306d79c1d5c9f02f4064296"
+        }
+      ],
+      "recipe_sha256": "49631e5d440f85c6ea716b095b11c9c88d65892b7306d79c1d5c9f02f4064296",
+      "source": {
+        "sha256": "bef9a37ee87c21883bfce5b00a6825291e11abcad81a2707a59a1262cfdc7591",
+        "signature_sha256": "676fc6d1b8a9708e3fd869f2472352b80d4800e41d5b37b3c370a99df3a14e3e",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/sources/mingw-w64-rust-1.89.0-3.src.tar.zst"
+      },
+      "standard_library_source": {
+        "buildinfo_sha256": "f7ea1dfb5043891b6e2277cf148e7bc12d441cc11d862cab821377c5d00d5621",
+        "kind": "rust-src",
+        "notices": [
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-MIT",
+            "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1"
+          }
+        ],
+        "pkgbuild_sha256": "49631e5d440f85c6ea716b095b11c9c88d65892b7306d79c1d5c9f02f4064296",
+        "sha256": "c48d7baad991dfd686a494fe0a716f05a0171d1340954b8993eee406b0af9a3a",
+        "signature_sha256": "f47aad44024a247485d8b0c4a3f23fb427ff39154317332d8d70515a6c45fae9",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-rust-src-1.89.0-3-any.pkg.tar.zst",
+        "version": "1.89.0-3"
+      },
+      "version": "1.89.0-3"
+    }
+  ],
   "packages": {
     "mingw-w64-x86_64-SDL2-2.32.8-1": {
       "binary": {
@@ -16844,7 +17266,7 @@
   "schema_version": 1,
   "source_inventory_limits": [
     "Signed source recipes match producer BUILDINFO hashes; no assertion of bit-identical rebuilds.",
-    "Native Rust toolchain versions are recorded in the preserved original lock provenance; their std notices remain unreviewed."
+    "Native Rust standard-library sources and generated notices are from the exact four signed producer toolchain packages, paired by PKGBUILD hash."
   ],
   "source_notices": [
     {
@@ -16894,13 +17316,1245 @@
       "sha256": "cb48bf09a11f5fb576cddb0431c8f5ed0a60157a9ec942adffc13907cbe083f2",
       "source_archive_member": "mingw-w64-ffmpeg/ffmpeg-7.1.1.tar.xz",
       "source_member": "ffmpeg-7.1.1/LICENSE.md"
+    },
+    {
+      "component": "mingw-w64-x86_64-fftw-3.3.10-5",
+      "sha256": "14e1b1c6a7d84613c85a4c457b4167fb4927ce239ec45123e85ba5eefca4e7bb",
+      "source_archive_member": "mingw-w64-fftw/fftw-3.3.10.tar.gz",
+      "source_member": "fftw-3.3.10/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-fftw-3.3.10-5",
+      "sha256": "231f7edcc7352d7734a96eef0b8030f77982678c516876fcb81e25b32d68564c",
+      "source_archive_member": "mingw-w64-fftw/fftw-3.3.10.tar.gz",
+      "source_member": "fftw-3.3.10/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-fftw-3.3.10-5",
+      "sha256": "8a74b35d541d93fdf58a22a3d3baa48ae3edbf6d715edfeb6457c21968ae43ac",
+      "source_archive_member": "mingw-w64-fftw/fftw-3.3.10.tar.gz",
+      "source_member": "fftw-3.3.10/COPYRIGHT"
+    },
+    {
+      "component": "mingw-w64-x86_64-fftw-3.3.10-5",
+      "sha256": "68f733830a3b4dbf66815ca54b5637015517848c5f32f38f1ea2057782161a77",
+      "source_archive_member": "mingw-w64-fftw/fftw-3.3.10.tar.gz",
+      "source_member": "fftw-3.3.10/doc/license.texi"
+    },
+    {
+      "component": "mingw-w64-x86_64-fftw-3.3.10-5",
+      "sha256": "661a682f438fffc64a6d6bdcf4dc120d5c7461c4f7c4672a59c1228593f97603",
+      "source_archive_member": "mingw-w64-fftw/fftw-3.3.10.tar.gz",
+      "source_member": "fftw-3.3.10/doc/html/License-and-Copyright.html"
+    },
+    {
+      "component": "mingw-w64-x86_64-gmp-6.3.0-2",
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "source_archive_member": "mingw-w64-gmp/gmp-6.3.0.tar.xz",
+      "source_member": "gmp-6.3.0/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-gmp-6.3.0-2",
+      "sha256": "a853c2ffec17057872340eee242ae4d96cbf2b520ae27d903e1b2fef1a5f9d1c",
+      "source_archive_member": "mingw-w64-gmp/gmp-6.3.0.tar.xz",
+      "source_member": "gmp-6.3.0/COPYING.LESSERv3"
+    },
+    {
+      "component": "mingw-w64-x86_64-gmp-6.3.0-2",
+      "sha256": "da5870e2f0482c5dc15b4cfed8bbfb51ce1279c8f8fc52bdb8c13c7cee949c32",
+      "source_archive_member": "mingw-w64-gmp/gmp-6.3.0.tar.xz",
+      "source_member": "gmp-6.3.0/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-gnutls-3.8.10-1",
+      "sha256": "f3eccccedb3cdd1ecf182ea361b2e12f4da465eb4e366198c6ecbbb8c63b4b77",
+      "source_archive_member": "mingw-w64-gnutls/gnutls-3.8.10.tar.xz",
+      "source_member": "gnutls-3.8.10/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-gnutls-3.8.10-1",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "source_archive_member": "mingw-w64-gnutls/gnutls-3.8.10.tar.xz",
+      "source_member": "gnutls-3.8.10/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-gnutls-3.8.10-1",
+      "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+      "source_archive_member": "mingw-w64-gnutls/gnutls-3.8.10.tar.xz",
+      "source_member": "gnutls-3.8.10/COPYING.LESSERv2"
+    },
+    {
+      "component": "mingw-w64-x86_64-gnutls-3.8.10-1",
+      "sha256": "9ae3b39e83e9158e44b67733baa3bb2d84e80efdcfb14a5820210a42c7abdf7f",
+      "source_archive_member": "mingw-w64-gnutls/gnutls-3.8.10.tar.xz",
+      "source_member": "gnutls-3.8.10/lib/inih/LICENSE.txt"
+    },
+    {
+      "component": "mingw-w64-x86_64-jbigkit-2.1-5",
+      "sha256": "91df39d1816bfb17a4dda2d3d2c83b1f6f2d38d53e53e41e8f97ad5ac46a0cad",
+      "source_archive_member": "mingw-w64-jbigkit/jbigkit-2.1.tar.gz",
+      "source_member": "jbigkit-2.1/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-jbigkit-2.1-5",
+      "sha256": "ae9fa2575d73a0cd50c6a32621ab2b6c4ca5f1115d27d636f461275c1d1e62f3",
+      "source_archive_member": "mingw-w64-jbigkit/jbigkit-2.1.tar.gz",
+      "source_member": "jbigkit-2.1/libjbig/jbig_ar.c"
+    },
+    {
+      "component": "mingw-w64-x86_64-lame-3.100-3",
+      "sha256": "bfe4a52dc4645385f356a8e83cc54216a293e3b6f1cb4f79f5fc0277abf937fd",
+      "source_archive_member": "mingw-w64-lame/lame-3.100.tar.gz",
+      "source_member": "lame-3.100/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-lame-3.100-3",
+      "sha256": "7a40cbd8818c57e5285e83c772a459a996d1662c824a879836b97b473c07cae4",
+      "source_archive_member": "mingw-w64-lame/lame-3.100.tar.gz",
+      "source_member": "lame-3.100/LICENSE"
+    },
+    {
+      "component": "mingw-w64-x86_64-lame-3.100-3",
+      "sha256": "d8ecf9556aafa8c653796d6be3dc43deea374257680e21c30109a5c3c4484263",
+      "source_archive_member": "mingw-w64-lame/lame-3.100.tar.gz",
+      "source_member": "lame-3.100/mpglib/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-lame-3.100-3",
+      "sha256": "1f27f9f698183275bd615c1140b7bf6e498750e9280597c6eb39790e54ae809b",
+      "source_archive_member": "mingw-w64-lame/lame-3.100.tar.gz",
+      "source_member": "lame-3.100/debian/copyright"
+    },
+    {
+      "component": "mingw-w64-x86_64-libarchive-3.8.1-2",
+      "sha256": "30e556b3959e3985d66efefec5eaac51d4995053caa1d3cffe6eb916f146f229",
+      "source_archive_member": "mingw-w64-libarchive/libarchive-3.8.1.tar.xz",
+      "source_member": "libarchive-3.8.1/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-libass-0.17.4-2",
+      "sha256": "f7e30699d02798351e7f839e3d3bfeb29ce65e44efa7735c225464c4fd7dfe9c",
+      "source_archive_member": "mingw-w64-libass/libass-0.17.4.tar.xz",
+      "source_member": "libass-0.17.4/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcaca-0.99.beta20-6",
+      "sha256": "c38aee9e3c8c4d5d594ff548a1be05453023016d6286931f6512db215ec1fd42",
+      "source_archive_member": "mingw-w64-libcaca/libcaca-0.99.beta20.tar.gz",
+      "source_member": "libcaca-0.99.beta20/COPYING.GPL"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcaca-0.99.beta20-6",
+      "sha256": "3ec83fd70806b29112d06be9e96392ddd439f85a8b9d2b37e1d924039b0e529e",
+      "source_archive_member": "mingw-w64-libcaca/libcaca-0.99.beta20.tar.gz",
+      "source_member": "libcaca-0.99.beta20/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcaca-0.99.beta20-6",
+      "sha256": "7de62d31df6e3d2dacc9e8a6fcdcfc189035493c28a99f717f73a367dc6e1934",
+      "source_archive_member": "mingw-w64-libcaca/libcaca-0.99.beta20.tar.gz",
+      "source_member": "libcaca-0.99.beta20/COPYING.ISC"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcaca-0.99.beta20-6",
+      "sha256": "d20ad7990610153b563c52681da860b8302afcf0778f75237f8815c07d05141f",
+      "source_archive_member": "mingw-w64-libcaca/libcaca-0.99.beta20.tar.gz",
+      "source_member": "libcaca-0.99.beta20/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcaca-0.99.beta20-6",
+      "sha256": "d80c9d084ebfb50ea1ed91bfbc2410d6ce542097a32c43b00781b83adcb8c77f",
+      "source_archive_member": "mingw-w64-libcaca/libcaca-0.99.beta20.tar.gz",
+      "source_member": "libcaca-0.99.beta20/COPYING.LGPL"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcdio-2.2.0-1",
+      "sha256": "5bb4ab6b1c8941d3aa2ada6cd93557facf314ffd9194b771a21655012ef95f1e",
+      "source_archive_member": "mingw-w64-libcdio/libcdio-2.2.0.tar.bz2",
+      "source_member": "libcdio-2.2.0/test/data/copying.iso"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcdio-2.2.0-1",
+      "sha256": "b877ff4f890e4dc640392e81352ca03970412096cefc07b7599635983bd60976",
+      "source_archive_member": "mingw-w64-libcdio/libcdio-2.2.0.tar.bz2",
+      "source_member": "libcdio-2.2.0/test/data/copying-rr.iso"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcdio-2.2.0-1",
+      "sha256": "2c913a89ed26072d4b2e82f38964b2984720649285eba748381f461773d92908",
+      "source_archive_member": "mingw-w64-libcdio/libcdio-2.2.0.tar.bz2",
+      "source_member": "libcdio-2.2.0/test/copying.right"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcdio-2.2.0-1",
+      "sha256": "e34a0d71e46fc162060960b9e77e13b337331853559d821ef2b34b802e21f596",
+      "source_archive_member": "mingw-w64-libcdio/libcdio-2.2.0.tar.bz2",
+      "source_member": "libcdio-2.2.0/test/copying-rr-mingw.right"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcdio-2.2.0-1",
+      "sha256": "f232610d5593875418986a80af36bcf966e0064afb340e9fcd079faf53355684",
+      "source_archive_member": "mingw-w64-libcdio/libcdio-2.2.0.tar.bz2",
+      "source_member": "libcdio-2.2.0/test/copying-rr.right"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcdio-2.2.0-1",
+      "sha256": "231f7edcc7352d7734a96eef0b8030f77982678c516876fcb81e25b32d68564c",
+      "source_archive_member": "mingw-w64-libcdio/libcdio-2.2.0.tar.bz2",
+      "source_member": "libcdio-2.2.0/test/copying.gpl"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcdio-2.2.0-1",
+      "sha256": "32b1062f7da84967e7019d01ab805935caa7ab7321a7ced0e30ebe75e5df1670",
+      "source_archive_member": "mingw-w64-libcdio/libcdio-2.2.0.tar.bz2",
+      "source_member": "libcdio-2.2.0/test/copying-rr.gpl"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcdio-2.2.0-1",
+      "sha256": "92c1ab5a3f8d10c3de8252776fbf8ea0ae7302a0dc35e384b0932158ff526a93",
+      "source_archive_member": "mingw-w64-libcdio/libcdio-2.2.0.tar.bz2",
+      "source_member": "libcdio-2.2.0/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcdio-2.2.0-1",
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "source_archive_member": "mingw-w64-libcdio/libcdio-2.2.0.tar.bz2",
+      "source_member": "libcdio-2.2.0/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcdio-paranoia-10.2+2.0.2-1",
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "source_archive_member": "mingw-w64-libcdio-paranoia/libcdio-paranoia-10.2+2.0.2.tar.bz2",
+      "source_member": "libcdio-paranoia-10.2+2.0.2/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-libcdio-paranoia-10.2+2.0.2-1",
+      "sha256": "e10969d650526b39e9eb49b5a3e76e2f0ba796a83c3106a2be78dee3d34244aa",
+      "source_archive_member": "mingw-w64-libcdio-paranoia/libcdio-paranoia-10.2+2.0.2.tar.bz2",
+      "source_member": "libcdio-paranoia-10.2+2.0.2/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-libdvdcss-1.4.3-1",
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+      "source_archive_member": "mingw-w64-libdvdcss/libdvdcss-1.4.3.tar.bz2",
+      "source_member": "libdvdcss-1.4.3/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-libdvdcss-1.4.3-1",
+      "sha256": "b2de31ac3382bbadd18eb2f9abea4e209372c62bdf722c96a62043ad074e93b1",
+      "source_archive_member": "mingw-w64-libdvdcss/libdvdcss-1.4.3.tar.bz2",
+      "source_member": "libdvdcss-1.4.3/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-libdvdnav-6.1.1-2",
+      "sha256": "32b1062f7da84967e7019d01ab805935caa7ab7321a7ced0e30ebe75e5df1670",
+      "source_archive_member": "mingw-w64-libdvdnav/libdvdnav-6.1.1.tar.bz2",
+      "source_member": "libdvdnav-6.1.1/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-libdvdnav-6.1.1-2",
+      "sha256": "120360d44a585630a4bcef395da624620690023ec177857b1cb6baa02513265b",
+      "source_archive_member": "mingw-w64-libdvdnav/libdvdnav-6.1.1.tar.bz2",
+      "source_member": "libdvdnav-6.1.1/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-libidn2-2.3.8-2",
+      "sha256": "7719304df806ca5cd68c1f1c7e0139e0c11ed14fede560ae192d3c4d1989e839",
+      "source_archive_member": "mingw-w64-libidn2/libidn2-2.3.8.tar.gz",
+      "source_member": "libidn2-2.3.8/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-libidn2-2.3.8-2",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "source_archive_member": "mingw-w64-libidn2/libidn2-2.3.8.tar.gz",
+      "source_member": "libidn2-2.3.8/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-libidn2-2.3.8-2",
+      "sha256": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118",
+      "source_archive_member": "mingw-w64-libidn2/libidn2-2.3.8.tar.gz",
+      "source_member": "libidn2-2.3.8/COPYING.LESSERv3"
+    },
+    {
+      "component": "mingw-w64-x86_64-libidn2-2.3.8-2",
+      "sha256": "01d621eef165cf4d3d3dbb737aa0699178d94c6f18cf87e9dde6db3ca7790f46",
+      "source_archive_member": "mingw-w64-libidn2/libidn2-2.3.8.tar.gz",
+      "source_member": "libidn2-2.3.8/COPYING.unicode"
+    },
+    {
+      "component": "mingw-w64-x86_64-libssh-0.11.2-1",
+      "sha256": "95b6a58ab69d7687d9486b4a859ebfc00fff25b0942cc51239ada2702ae69d1b",
+      "source_archive_member": "mingw-w64-libssh/libssh-0.11.2.tar.xz",
+      "source_member": "libssh-0.11.2/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-libssh-0.11.2-1",
+      "sha256": "1656186e951db1c010a8485481fa94587f7e53a26d24976bef97945ad0c4df5a",
+      "source_archive_member": "mingw-w64-libssh/libssh-0.11.2.tar.xz",
+      "source_member": "libssh-0.11.2/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-libssh-0.11.2-1",
+      "sha256": "46cde7dc11e64c78d650b4851b88f6704b4665ff60f22a1caf68ceb15e217e5b",
+      "source_archive_member": "mingw-w64-libssh/libssh-0.11.2.tar.xz",
+      "source_member": "libssh-0.11.2/cmake/Modules/COPYING-CMAKE-SCRIPTS"
+    },
+    {
+      "component": "mingw-w64-x86_64-libssh-0.11.2-1",
+      "sha256": "54e50cdc116a90e300006d50d02199dcec7317cc903a9d43a7dc800ce289f580",
+      "source_archive_member": "mingw-w64-libssh/libssh-0.11.2.tar.xz",
+      "source_member": "libssh-0.11.2/doc/that_style/LICENSE"
+    },
+    {
+      "component": "mingw-w64-x86_64-libtheora-1.2.0-1",
+      "sha256": "2c902950c73a63cd285dc0c36573de9c5fefe66d49312949c51d941f33e92932",
+      "source_archive_member": "mingw-w64-libtheora/libtheora-1.2.0.tar.gz",
+      "source_member": "libtheora-1.2.0/LICENSE"
+    },
+    {
+      "component": "mingw-w64-x86_64-libtheora-1.2.0-1",
+      "sha256": "8417fad7da775735564e209484a2e011e0fa201e94f01fdbee6e4977e478e6fc",
+      "source_archive_member": "mingw-w64-libtheora/libtheora-1.2.0.tar.gz",
+      "source_member": "libtheora-1.2.0/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-libtheora-1.2.0-1",
+      "sha256": "ef0ba8da05924cf4e2f9acf782076892ed477c01a6d4cc9f5d107652cf84da8c",
+      "source_archive_member": "mingw-w64-libtheora/libtheora-1.2.0.tar.gz",
+      "source_member": "libtheora-1.2.0/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-libvorbis-1.3.7-2",
+      "sha256": "ec1815db59fcd302846df949d7424876cb2e2dc5ed1606c5fb0b36787b1cf43a",
+      "source_archive_member": "mingw-w64-libvorbis/libvorbis-1.3.7.tar.gz",
+      "source_member": "libvorbis-1.3.7/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-libvorbis-1.3.7-2",
+      "sha256": "f5cab9f16035f770f50299f85cf2938c06dc3a9a30425961067788102ec896d3",
+      "source_archive_member": "mingw-w64-libvorbis/libvorbis-1.3.7.tar.gz",
+      "source_member": "libvorbis-1.3.7/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-libvpx-1.15.1-4",
+      "sha256": "4f7d19d35614f7e56c65cc4475b78fed0086d20af973c65f2ec5a201b1617225",
+      "source_archive_member": "mingw-w64-libvpx/libvpx-1.15.1.tar.gz",
+      "source_member": "libvpx-1.15.1/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-libvpx-1.15.1-4",
+      "sha256": "8267348d5af1262c11d1a08de2f5afc77457755f1ac658627dd9acf71011d615",
+      "source_archive_member": "mingw-w64-libvpx/libvpx-1.15.1.tar.gz",
+      "source_member": "libvpx-1.15.1/LICENSE"
+    },
+    {
+      "component": "mingw-w64-x86_64-libvpx-1.15.1-4",
+      "sha256": "cc3273e0694ea5896145e0677699b53471b03ea43021ddc50e7923fbb9f5023c",
+      "source_archive_member": "mingw-w64-libvpx/libvpx-1.15.1.tar.gz",
+      "source_member": "libvpx-1.15.1/PATENTS"
+    },
+    {
+      "component": "mingw-w64-x86_64-libvpx-1.15.1-4",
+      "sha256": "3edb5f5496bfff3d6d4a62fa75fe996b814920d0d6e348c2e65c589e7ac5d177",
+      "source_archive_member": "mingw-w64-libvpx/libvpx-1.15.1.tar.gz",
+      "source_member": "libvpx-1.15.1/third_party/libwebm/AUTHORS.TXT"
+    },
+    {
+      "component": "mingw-w64-x86_64-libvpx-1.15.1-4",
+      "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf",
+      "source_archive_member": "mingw-w64-libvpx/libvpx-1.15.1.tar.gz",
+      "source_member": "libvpx-1.15.1/third_party/libwebm/LICENSE.TXT"
+    },
+    {
+      "component": "mingw-w64-x86_64-libvpx-1.15.1-4",
+      "sha256": "cc3273e0694ea5896145e0677699b53471b03ea43021ddc50e7923fbb9f5023c",
+      "source_archive_member": "mingw-w64-libvpx/libvpx-1.15.1.tar.gz",
+      "source_member": "libvpx-1.15.1/third_party/libwebm/PATENTS.TXT"
+    },
+    {
+      "component": "mingw-w64-x86_64-libvpx-1.15.1-4",
+      "sha256": "2b2cc1180c7e6988328ad2033b04b80117419db9c4c584918bbb3cfec7e9364f",
+      "source_archive_member": "mingw-w64-libvpx/libvpx-1.15.1.tar.gz",
+      "source_member": "libvpx-1.15.1/third_party/libyuv/LICENSE"
+    },
+    {
+      "component": "mingw-w64-x86_64-libvpx-1.15.1-4",
+      "sha256": "719d8fa235f2068e0ae6d6a7dceb0a7720d7840f0f0ebed29957989e6ded3cd8",
+      "source_archive_member": "mingw-w64-libvpx/libvpx-1.15.1.tar.gz",
+      "source_member": "libvpx-1.15.1/third_party/x86inc/LICENSE"
+    },
+    {
+      "component": "mingw-w64-x86_64-libx264-0.164.r3161.a354f11-3",
+      "repository_file": "assets/license-texts/native/mingw-w64-x86_64-libx264-0.164.r3161.a354f11-3/AUTHORS",
+      "sha256": "783150c1bef404fc7140924f3006eff27c940ea73ef38b3bc76fcb9c173229a5",
+      "source_archive_sha256": "4ca33d9d3ec81ede1cf0cc995dcef7f31f396fea70a5cef8d71762e8ca39e87c",
+      "source_git_root": "mingw-w64-x264/x264",
+      "source_member": "AUTHORS",
+      "source_revision": "a354f11f8f019a2a34ae7ef554ff07b31f0818f3"
+    },
+    {
+      "component": "mingw-w64-x86_64-libx264-0.164.r3161.a354f11-3",
+      "repository_file": "assets/license-texts/native/mingw-w64-x86_64-libx264-0.164.r3161.a354f11-3/COPYING",
+      "sha256": "32b1062f7da84967e7019d01ab805935caa7ab7321a7ced0e30ebe75e5df1670",
+      "source_archive_sha256": "4ca33d9d3ec81ede1cf0cc995dcef7f31f396fea70a5cef8d71762e8ca39e87c",
+      "source_git_root": "mingw-w64-x264/x264",
+      "source_member": "COPYING",
+      "source_revision": "a354f11f8f019a2a34ae7ef554ff07b31f0818f3"
+    },
+    {
+      "component": "mingw-w64-x86_64-lz4-1.10.0-1",
+      "sha256": "4bc9c403f6b679cc076dee210e0e21c27b4e8f6d3fb43d85364c76657bfaaac5",
+      "source_archive_member": "mingw-w64-lz4/lz4-1.10.0.tar.gz",
+      "source_member": "lz4-1.10.0/LICENSE"
+    },
+    {
+      "component": "mingw-w64-x86_64-lz4-1.10.0-1",
+      "sha256": "4f6ef9d0e844bf432d6a0abb2623f5a61175ae40f7f0e3665490311d89e3af87",
+      "source_archive_member": "mingw-w64-lz4/lz4-1.10.0.tar.gz",
+      "source_member": "lz4-1.10.0/contrib/debian/copyright"
+    },
+    {
+      "component": "mingw-w64-x86_64-lz4-1.10.0-1",
+      "sha256": "d011d1e02cb32b71c1ce2922ab41a2e2ad30f4ecf8de22c078d53618205abc05",
+      "source_archive_member": "mingw-w64-lz4/lz4-1.10.0.tar.gz",
+      "source_member": "lz4-1.10.0/contrib/djgpp/LICENSE"
+    },
+    {
+      "component": "mingw-w64-x86_64-lz4-1.10.0-1",
+      "sha256": "609b910ef05c9c855ecc1da155a36ed0f57514eac452cf93446530b5ea4b3bc3",
+      "source_archive_member": "mingw-w64-lz4/lz4-1.10.0.tar.gz",
+      "source_member": "lz4-1.10.0/examples/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-lz4-1.10.0-1",
+      "sha256": "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c",
+      "source_archive_member": "mingw-w64-lz4/lz4-1.10.0.tar.gz",
+      "source_member": "lz4-1.10.0/lib/LICENSE"
+    },
+    {
+      "component": "mingw-w64-x86_64-lz4-1.10.0-1",
+      "sha256": "609b910ef05c9c855ecc1da155a36ed0f57514eac452cf93446530b5ea4b3bc3",
+      "source_archive_member": "mingw-w64-lz4/lz4-1.10.0.tar.gz",
+      "source_member": "lz4-1.10.0/programs/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-lz4-1.10.0-1",
+      "sha256": "609b910ef05c9c855ecc1da155a36ed0f57514eac452cf93446530b5ea4b3bc3",
+      "source_archive_member": "mingw-w64-lz4/lz4-1.10.0.tar.gz",
+      "source_member": "lz4-1.10.0/tests/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-nettle-3.10.2-1",
+      "sha256": "a853c2ffec17057872340eee242ae4d96cbf2b520ae27d903e1b2fef1a5f9d1c",
+      "source_archive_member": "mingw-w64-nettle/nettle-3.10.2.tar.gz",
+      "source_member": "nettle-3.10.2/COPYING.LESSERv3"
+    },
+    {
+      "component": "mingw-w64-x86_64-nettle-3.10.2-1",
+      "sha256": "6fd91e60caa0c33dd22888b710fcfa36532bbbef00d85c78de385dcd97f7b9ee",
+      "source_archive_member": "mingw-w64-nettle/nettle-3.10.2.tar.gz",
+      "source_member": "nettle-3.10.2/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-openal-1.24.3-2",
+      "sha256": "d808ce217e5b611854da622b57ec29fe545584c48bc5352fae72a4b6e5074a15",
+      "source_archive_member": "mingw-w64-openal/1.24.3.tar.gz",
+      "source_member": "openal-soft-1.24.3/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-openal-1.24.3-2",
+      "sha256": "64056328b3e7bc104e24ef96accc1a7abead156f0c02d1b87c97e3f3a28030de",
+      "source_archive_member": "mingw-w64-openal/1.24.3.tar.gz",
+      "source_member": "openal-soft-1.24.3/LICENSE-pffft"
+    },
+    {
+      "component": "mingw-w64-x86_64-openal-1.24.3-2",
+      "sha256": "07580f2a3b35709ce703d523f447b242f6dfec7582a8c0df102c7fa2849375f8",
+      "source_archive_member": "mingw-w64-openal/1.24.3.tar.gz",
+      "source_member": "openal-soft-1.24.3/fmt-11.1.1/LICENSE"
+    },
+    {
+      "component": "mingw-w64-x86_64-opencore-amr-0.1.6-1",
+      "sha256": "8b3f1762349248d444ab9acbafe73941254e36e1064954da56bb9ddbd5873ddb",
+      "source_archive_member": "mingw-w64-opencore-amr/opencore-amr-0.1.6.tar.gz",
+      "source_member": "opencore-amr-0.1.6/LICENSE"
+    },
+    {
+      "component": "mingw-w64-x86_64-opencore-amr-0.1.6-1",
+      "sha256": "d106802b5e406073c1d10fbe9f638234c6973ebce37df71773179642085eb489",
+      "source_archive_member": "mingw-w64-opencore-amr/opencore-amr-0.1.6.tar.gz",
+      "source_member": "opencore-amr-0.1.6/opencore/NOTICE"
+    },
+    {
+      "component": "mingw-w64-x86_64-p11-kit-0.25.5-1",
+      "sha256": "cde5ccbf5083e28d1b38333b5817be06c158fb3218f21ee5594b6125a9372591",
+      "source_archive_member": "mingw-w64-p11-kit/p11-kit-0.25.5.tar.xz",
+      "source_member": "p11-kit-0.25.5/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-p11-kit-0.25.5-1",
+      "sha256": "2e1ba993904df807a10c3eda1e5c272338edc35674b679773a8b3ad460731054",
+      "source_archive_member": "mingw-w64-p11-kit/p11-kit-0.25.5.tar.xz",
+      "source_member": "p11-kit-0.25.5/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-rtmpdump-2.4.r105.6f6bb13-2",
+      "repository_file": "assets/license-texts/native/mingw-w64-x86_64-rtmpdump-2.4.r105.6f6bb13-2/COPYING",
+      "sha256": "ab15fd526bd8dd18a9e77ebc139656bf4d33e97fc7238cd11bf60e2b9b8666c6",
+      "source_archive_sha256": "3fbc93bbb887c88a2f172c73100aa80c8a5f387d590dab996b53e44409a779c4",
+      "source_git_root": "mingw-w64-rtmpdump/rtmpdump",
+      "source_member": "COPYING",
+      "source_revision": "6f6bb1353fc84f4cc37138baa99f586750028a01"
+    },
+    {
+      "component": "mingw-w64-x86_64-rtmpdump-2.4.r105.6f6bb13-2",
+      "repository_file": "assets/license-texts/native/mingw-w64-x86_64-rtmpdump-2.4.r105.6f6bb13-2/librtmp/COPYING",
+      "sha256": "03fe7ca91cc28e99b4003d5b3bd4ce3b084d4c475fdf9975cf0e7fdf4dc739cd",
+      "source_archive_sha256": "3fbc93bbb887c88a2f172c73100aa80c8a5f387d590dab996b53e44409a779c4",
+      "source_git_root": "mingw-w64-rtmpdump/rtmpdump",
+      "source_member": "librtmp/COPYING",
+      "source_revision": "6f6bb1353fc84f4cc37138baa99f586750028a01"
+    },
+    {
+      "component": "mingw-w64-x86_64-uchardet-0.0.8-1",
+      "sha256": "36c52690fb39c9c4d2929577577050f486b5be36acb5c0038339b7b83c892536",
+      "source_archive_member": "mingw-w64-uchardet/uchardet-0.0.8.tar.xz",
+      "source_member": "uchardet-0.0.8/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-uchardet-0.0.8-1",
+      "sha256": "107a29ccdd2d778aa2df5462f85dddfa099059abd22e064e07ec2cc9bafc37cd",
+      "source_archive_member": "mingw-w64-uchardet/uchardet-0.0.8.tar.xz",
+      "source_member": "uchardet-0.0.8/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-uchardet-0.0.8-1",
+      "sha256": "5a88ff705e97892c210dcb7fca63e4fef403fe67b6b6f5c108914eb076d60a7c",
+      "source_archive_member": "mingw-w64-uchardet/uchardet-0.0.8.tar.xz",
+      "source_member": "uchardet-0.0.8/src/nsUniversalDetector.cpp"
+    },
+    {
+      "component": "mingw-w64-x86_64-x265-4.1-2",
+      "sha256": "d8afb1bcc7a2cfc603683b168d6987ef0a48e59e0da3693bf55c5d33b67e2b49",
+      "source_archive_member": "mingw-w64-x265/x265-4.1.tar.gz",
+      "source_member": "x265_4.1/COPYING"
+    },
+    {
+      "component": "mingw-w64-x86_64-x265-4.1-2",
+      "sha256": "47f15d63e82eb8a4de6e46471d5f96cf6d052fd5355944a002c3157880248b69",
+      "source_archive_member": "mingw-w64-x265/x265-4.1.tar.gz",
+      "source_member": "x265_4.1/source/dynamicHDR10/LICENSE.txt"
+    },
+    {
+      "component": "mingw-w64-x86_64-xvidcore-1.3.7-5",
+      "sha256": "c6fc2bbc06918472097224a9d7096cf47d8337643afd3b9b9b281cb17711b29e",
+      "source_archive_member": "mingw-w64-xvidcore/xvidcore-1.3.7.tar.bz2",
+      "source_member": "xvidcore/AUTHORS"
+    },
+    {
+      "component": "mingw-w64-x86_64-xvidcore-1.3.7-5",
+      "sha256": "2ab06d2335f9781f1a485c78a557e6c61b6c24e118caad4d4210c46426bbce95",
+      "source_archive_member": "mingw-w64-xvidcore/xvidcore-1.3.7.tar.bz2",
+      "source_member": "xvidcore/LICENSE"
+    },
+    {
+      "component": "mingw-w64-x86_64-xvidcore-1.3.7-5",
+      "sha256": "a9818b7ab3c79f3250da933369ab71b806410cf5c683b2ef78a6517001e8e224",
+      "source_archive_member": "mingw-w64-xvidcore/xvidcore-1.3.7.tar.bz2",
+      "source_member": "xvidcore/dshow/authors.txt"
+    },
+    {
+      "component": "mingw-w64-x86_64-xvidcore-1.3.7-5",
+      "sha256": "40a8c1ea469c6813413443df59115ecc781421cc7d184839ccc7c9f54057a283",
+      "source_archive_member": "mingw-w64-xvidcore/xvidcore-1.3.7.tar.bz2",
+      "source_member": "xvidcore/vfw/LICENSE"
+    },
+    {
+      "component": "mingw-w64-x86_64-zimg-3.0.5-2",
+      "sha256": "7637386b5f81e8a719ca336233149005e5fa28b5e6054ea7b67de49355b0ad40",
+      "source_archive_member": "mingw-w64-zimg/zimg-3.0.5.tar.gz",
+      "source_member": "zimg-release-3.0.5/COPYING"
+    }
+  ],
+  "standard_library_crates": {
+    "addr2line-0.24.2": {
+      "sha256": "dfbe277e56a376000877090da837660b4427aad530e3028d44e0bffe4f89a1c1",
+      "url": "https://static.crates.io/crates/addr2line/addr2line-0.24.2.crate"
+    },
+    "addr2line-0.25.0": {
+      "sha256": "9acbfca36652500c911ddb767ed433e3ed99b032b5d935be73c6923662db1d43",
+      "url": "https://static.crates.io/crates/addr2line/addr2line-0.25.0.crate"
+    },
+    "addr2line-0.25.1": {
+      "sha256": "1b5d307320b3181d6d7954e663bd7c774a838b8220fe0593c86d9fb09f498b4b",
+      "url": "https://static.crates.io/crates/addr2line/addr2line-0.25.1.crate"
+    },
+    "adler2-2.0.0": {
+      "sha256": "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627",
+      "url": "https://static.crates.io/crates/adler2/adler2-2.0.0.crate"
+    },
+    "adler2-2.0.1": {
+      "sha256": "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa",
+      "url": "https://static.crates.io/crates/adler2/adler2-2.0.1.crate"
+    },
+    "allocator-api2-0.2.21": {
+      "sha256": "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923",
+      "url": "https://static.crates.io/crates/allocator-api2/allocator-api2-0.2.21.crate"
+    },
+    "cc-1.2.0": {
+      "sha256": "1aeb932158bd710538c73702db6945cb68a8fb08c519e6e12706b94263b36db8",
+      "url": "https://static.crates.io/crates/cc/cc-1.2.0.crate"
+    },
+    "cfg-if-1.0.0": {
+      "sha256": "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd",
+      "url": "https://static.crates.io/crates/cfg-if/cfg-if-1.0.0.crate"
+    },
+    "cfg-if-1.0.1": {
+      "sha256": "9555578bc9e57714c812a1f84e4fc5b4d21fcb063490c624de019f7464c91268",
+      "url": "https://static.crates.io/crates/cfg-if/cfg-if-1.0.1.crate"
+    },
+    "cfg-if-1.0.4": {
+      "sha256": "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801",
+      "url": "https://static.crates.io/crates/cfg-if/cfg-if-1.0.4.crate"
+    },
+    "compiler_builtins-0.1.152": {
+      "sha256": "2153cf213eb259361567720ce55f6446f17acd0ccca87fb6dc05360578228a58",
+      "url": "https://static.crates.io/crates/compiler_builtins/compiler_builtins-0.1.152.crate"
+    },
+    "compiler_builtins-0.1.158": {
+      "sha256": "164cdc689e4c6d69417f77a5f48be240c291e84fbef0b1281755dc754b19c809",
+      "url": "https://static.crates.io/crates/compiler_builtins/compiler_builtins-0.1.158.crate"
+    },
+    "dlmalloc-0.2.13": {
+      "sha256": "9f5b01c17f85ee988d832c40e549a64bd89ab2c9f8d8a613bdf5122ae507e294",
+      "url": "https://static.crates.io/crates/dlmalloc/dlmalloc-0.2.13.crate"
+    },
+    "dlmalloc-0.2.7": {
+      "sha256": "d9b5e0d321d61de16390ed273b647ce51605b575916d3c25e6ddf27a1e140035",
+      "url": "https://static.crates.io/crates/dlmalloc/dlmalloc-0.2.7.crate"
+    },
+    "dlmalloc-0.2.8": {
+      "sha256": "8cff88b751e7a276c4ab0e222c3f355190adc6dde9ce39c851db39da34990df7",
+      "url": "https://static.crates.io/crates/dlmalloc/dlmalloc-0.2.8.crate"
+    },
+    "dlmalloc-0.2.9": {
+      "sha256": "d01597dde41c0b9da50d5f8c219023d63d8f27f39a27095070fd191fddc83891",
+      "url": "https://static.crates.io/crates/dlmalloc/dlmalloc-0.2.9.crate"
+    },
+    "foldhash-0.2.0": {
+      "sha256": "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb",
+      "url": "https://static.crates.io/crates/foldhash/foldhash-0.2.0.crate"
+    },
+    "fortanix-sgx-abi-0.5.0": {
+      "sha256": "57cafc2274c10fab234f176b25903ce17e690fca7597090d50880e047a0389c5",
+      "url": "https://static.crates.io/crates/fortanix-sgx-abi/fortanix-sgx-abi-0.5.0.crate"
+    },
+    "fortanix-sgx-abi-0.6.1": {
+      "sha256": "5efc85edd5b83e8394f4371dd0da6859dff63dd387dab8568fece6af4cde6f84",
+      "url": "https://static.crates.io/crates/fortanix-sgx-abi/fortanix-sgx-abi-0.6.1.crate"
+    },
+    "getopts-0.2.21": {
+      "sha256": "14dbbfd5c71d70241ecf9e6f13737f7b5ce823821063188d7e46c41d371eebd5",
+      "url": "https://static.crates.io/crates/getopts/getopts-0.2.21.crate"
+    },
+    "getopts-0.2.23": {
+      "sha256": "cba6ae63eb948698e300f645f87c70f76630d505f23b8907cf1e193ee85048c1",
+      "url": "https://static.crates.io/crates/getopts/getopts-0.2.23.crate"
+    },
+    "getopts-0.2.24": {
+      "sha256": "cfe4fbac503b8d1f88e6676011885f34b7174f46e59956bba534ba83abded4df",
+      "url": "https://static.crates.io/crates/getopts/getopts-0.2.24.crate"
+    },
+    "gimli-0.31.1": {
+      "sha256": "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f",
+      "url": "https://static.crates.io/crates/gimli/gimli-0.31.1.crate"
+    },
+    "gimli-0.32.0": {
+      "sha256": "93563d740bc9ef04104f9ed6f86f1e3275c2cdafb95664e26584b9ca807a8ffe",
+      "url": "https://static.crates.io/crates/gimli/gimli-0.32.0.crate"
+    },
+    "gimli-0.32.3": {
+      "sha256": "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7",
+      "url": "https://static.crates.io/crates/gimli/gimli-0.32.3.crate"
+    },
+    "hashbrown-0.15.2": {
+      "sha256": "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289",
+      "url": "https://static.crates.io/crates/hashbrown/hashbrown-0.15.2.crate"
+    },
+    "hashbrown-0.15.3": {
+      "sha256": "84b26c544d002229e640969970a2e74021aadf6e2f96372b9c58eff97de08eb3",
+      "url": "https://static.crates.io/crates/hashbrown/hashbrown-0.15.3.crate"
+    },
+    "hashbrown-0.15.4": {
+      "sha256": "5971ac85611da7067dbfcabef3c70ebb5606018acd9e2a3903a0da507521e0d5",
+      "url": "https://static.crates.io/crates/hashbrown/hashbrown-0.15.4.crate"
+    },
+    "hashbrown-0.17.1": {
+      "sha256": "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a",
+      "url": "https://static.crates.io/crates/hashbrown/hashbrown-0.17.1.crate"
+    },
+    "hermit-abi-0.5.0": {
+      "sha256": "fbd780fe5cc30f81464441920d82ac8740e2e46b29a6fad543ddd075229ce37e",
+      "url": "https://static.crates.io/crates/hermit-abi/hermit-abi-0.5.0.crate"
+    },
+    "hermit-abi-0.5.2": {
+      "sha256": "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c",
+      "url": "https://static.crates.io/crates/hermit-abi/hermit-abi-0.5.2.crate"
+    },
+    "libc-0.2.171": {
+      "sha256": "c19937216e9d3aa9956d9bb8dfc0b0c8beb6058fc4f7a4dc4d850edf86a237d6",
+      "url": "https://static.crates.io/crates/libc/libc-0.2.171.crate"
+    },
+    "libc-0.2.172": {
+      "sha256": "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa",
+      "url": "https://static.crates.io/crates/libc/libc-0.2.172.crate"
+    },
+    "libc-0.2.174": {
+      "sha256": "1171693293099992e19cddea4e8b849964e9846f4acee11b3948bcc337be8776",
+      "url": "https://static.crates.io/crates/libc/libc-0.2.174.crate"
+    },
+    "libc-0.2.185": {
+      "sha256": "52ff2c0fe9bc6cb6b14a0592c2ff4fa9ceb83eea9db979b0487cd054946a2b8f",
+      "url": "https://static.crates.io/crates/libc/libc-0.2.185.crate"
+    },
+    "memchr-2.7.4": {
+      "sha256": "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3",
+      "url": "https://static.crates.io/crates/memchr/memchr-2.7.4.crate"
+    },
+    "memchr-2.7.5": {
+      "sha256": "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0",
+      "url": "https://static.crates.io/crates/memchr/memchr-2.7.5.crate"
+    },
+    "memchr-2.7.6": {
+      "sha256": "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273",
+      "url": "https://static.crates.io/crates/memchr/memchr-2.7.6.crate"
+    },
+    "miniz_oxide-0.8.3": {
+      "sha256": "b8402cab7aefae129c6977bb0ff1b8fd9a04eb5b51efc50a70bea51cda0c7924",
+      "url": "https://static.crates.io/crates/miniz_oxide/miniz_oxide-0.8.3.crate"
+    },
+    "miniz_oxide-0.8.8": {
+      "sha256": "3be647b768db090acb35d5ec5db2b0e1f1de11133ca123b9eacf5137868f892a",
+      "url": "https://static.crates.io/crates/miniz_oxide/miniz_oxide-0.8.8.crate"
+    },
+    "miniz_oxide-0.8.9": {
+      "sha256": "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316",
+      "url": "https://static.crates.io/crates/miniz_oxide/miniz_oxide-0.8.9.crate"
+    },
+    "moto-rt-0.16.0": {
+      "sha256": "29aea9f7dfeb258e030a84e0ec38a9c2ec2063d4f45eb2db31445cfc40b3dba1",
+      "url": "https://static.crates.io/crates/moto-rt/moto-rt-0.16.0.crate"
+    },
+    "object-0.36.7": {
+      "sha256": "62948e14d923ea95ea2c7c86c71013138b66525b86bdc08d2dcc262bdb497b87",
+      "url": "https://static.crates.io/crates/object/object-0.36.7.crate"
+    },
+    "object-0.37.1": {
+      "sha256": "03fd943161069e1768b4b3d050890ba48730e590f57e56d4aa04e7e090e61b4a",
+      "url": "https://static.crates.io/crates/object/object-0.37.1.crate"
+    },
+    "object-0.37.3": {
+      "sha256": "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe",
+      "url": "https://static.crates.io/crates/object/object-0.37.3.crate"
+    },
+    "proc-macro2-1.0.93": {
+      "sha256": "60946a68e5f9d28b0dc1c21bb8a97ee7d018a8b322fa57838ba31cc878e22d99",
+      "url": "https://static.crates.io/crates/proc-macro2/proc-macro2-1.0.93.crate"
+    },
+    "quote-1.0.38": {
+      "sha256": "0e4dccaaaf89514f546c693ddc140f729f958c247918a13380cccc6078391acc",
+      "url": "https://static.crates.io/crates/quote/quote-1.0.38.crate"
+    },
+    "r-efi-4.5.0": {
+      "sha256": "e9e935efc5854715dfc0a4c9ef18dc69dee0ec3bf9cc3ab740db831c0fdd86a3",
+      "url": "https://static.crates.io/crates/r-efi/r-efi-4.5.0.crate"
+    },
+    "r-efi-5.2.0": {
+      "sha256": "74765f6d916ee2faa39bc8e68e4f3ed8949b48cccdac59983d287a7cb71ce9c5",
+      "url": "https://static.crates.io/crates/r-efi/r-efi-5.2.0.crate"
+    },
+    "r-efi-5.3.0": {
+      "sha256": "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f",
+      "url": "https://static.crates.io/crates/r-efi/r-efi-5.3.0.crate"
+    },
+    "r-efi-alloc-1.0.0": {
+      "sha256": "31d6f09fe2b6ad044bc3d2c34ce4979796581afd2f1ebc185837e02421e02fd7",
+      "url": "https://static.crates.io/crates/r-efi-alloc/r-efi-alloc-1.0.0.crate"
+    },
+    "r-efi-alloc-2.0.0": {
+      "sha256": "e43c53ff1a01d423d1cb762fd991de07d32965ff0ca2e4f80444ac7804198203",
+      "url": "https://static.crates.io/crates/r-efi-alloc/r-efi-alloc-2.0.0.crate"
+    },
+    "r-efi-alloc-2.1.0": {
+      "sha256": "dc2f58ef3ca9bb0f9c44d9aa8537601bcd3df94cc9314a40178cadf7d4466354",
+      "url": "https://static.crates.io/crates/r-efi-alloc/r-efi-alloc-2.1.0.crate"
+    },
+    "rand-0.9.0": {
+      "sha256": "3779b94aeb87e8bd4e834cee3650289ee9e0d5677f976ecdb6d219e5f4f6cd94",
+      "url": "https://static.crates.io/crates/rand/rand-0.9.0.crate"
+    },
+    "rand-0.9.1": {
+      "sha256": "9fbfd9d094a40bf3ae768db9361049ace4c0e04a4fd6b359518bd7b73a73dd97",
+      "url": "https://static.crates.io/crates/rand/rand-0.9.1.crate"
+    },
+    "rand-0.9.2": {
+      "sha256": "6db2770f06117d490610c7488547d543617b21bfa07796d7a12f6f1bd53850d1",
+      "url": "https://static.crates.io/crates/rand/rand-0.9.2.crate"
+    },
+    "rand_core-0.9.0": {
+      "sha256": "b08f3c9802962f7e1b25113931d94f43ed9725bebc59db9d0c3e9a23b67e15ff",
+      "url": "https://static.crates.io/crates/rand_core/rand_core-0.9.0.crate"
+    },
+    "rand_core-0.9.3": {
+      "sha256": "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38",
+      "url": "https://static.crates.io/crates/rand_core/rand_core-0.9.3.crate"
+    },
+    "rand_xorshift-0.4.0": {
+      "sha256": "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a",
+      "url": "https://static.crates.io/crates/rand_xorshift/rand_xorshift-0.4.0.crate"
+    },
+    "rustc-demangle-0.1.24": {
+      "sha256": "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f",
+      "url": "https://static.crates.io/crates/rustc-demangle/rustc-demangle-0.1.24.crate"
+    },
+    "rustc-demangle-0.1.25": {
+      "sha256": "989e6739f80c4ad5b13e0fd7fe89531180375b18520cc8c82080e4dc4035b84f",
+      "url": "https://static.crates.io/crates/rustc-demangle/rustc-demangle-0.1.25.crate"
+    },
+    "rustc-demangle-0.1.27": {
+      "sha256": "b50b8869d9fc858ce7266cce0194bd74df58b9d0e3f6df3a9fc8eb470d95c09d",
+      "url": "https://static.crates.io/crates/rustc-demangle/rustc-demangle-0.1.27.crate"
+    },
+    "rustc-literal-escaper-0.0.2": {
+      "sha256": "0041b6238913c41fe704213a4a9329e2f685a156d1781998128b4149c230ad04",
+      "url": "https://static.crates.io/crates/rustc-literal-escaper/rustc-literal-escaper-0.0.2.crate"
+    },
+    "rustc-literal-escaper-0.0.8": {
+      "sha256": "bfe6f213fb658c8fb95baabd5420393438cf5a98d707f5dd701d9197c705f71e",
+      "url": "https://static.crates.io/crates/rustc-literal-escaper/rustc-literal-escaper-0.0.8.crate"
+    },
+    "shlex-1.3.0": {
+      "sha256": "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64",
+      "url": "https://static.crates.io/crates/shlex/shlex-1.3.0.crate"
+    },
+    "syn-2.0.98": {
+      "sha256": "36147f1a48ae0ec2b5b3bc5b537d267457555a10dc06f3dbc8cb11ba3006d3b1",
+      "url": "https://static.crates.io/crates/syn/syn-2.0.98.crate"
+    },
+    "unicode-ident-1.0.16": {
+      "sha256": "a210d160f08b701c8721ba1c726c11662f877ea6b7094007e1ca9a1041945034",
+      "url": "https://static.crates.io/crates/unicode-ident/unicode-ident-1.0.16.crate"
+    },
+    "unicode-width-0.1.14": {
+      "sha256": "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af",
+      "url": "https://static.crates.io/crates/unicode-width/unicode-width-0.1.14.crate"
+    },
+    "unicode-width-0.2.1": {
+      "sha256": "4a1a07cc7db3810833284e8d372ccdc6da29741639ecc70c9ec107df0fa6154c",
+      "url": "https://static.crates.io/crates/unicode-width/unicode-width-0.2.1.crate"
+    },
+    "unwinding-0.2.5": {
+      "sha256": "51f06a05848f650946acef3bf525fe96612226b61f74ae23ffa4e98bfbb8ab3c",
+      "url": "https://static.crates.io/crates/unwinding/unwinding-0.2.5.crate"
+    },
+    "unwinding-0.2.6": {
+      "sha256": "8393f2782b6060a807337ff353780c1ca15206f9ba2424df18cb6e733bd7b345",
+      "url": "https://static.crates.io/crates/unwinding/unwinding-0.2.6.crate"
+    },
+    "unwinding-0.2.7": {
+      "sha256": "7d80f6c2bfede213d9a90b4a14f3eb99b84e33c52df6c1a15de0a100f5a88751",
+      "url": "https://static.crates.io/crates/unwinding/unwinding-0.2.7.crate"
+    },
+    "unwinding-0.2.8": {
+      "sha256": "60612c845ef41699f39dc8c5391f252942c0a88b7d15da672eff0d14101bbd6d",
+      "url": "https://static.crates.io/crates/unwinding/unwinding-0.2.8.crate"
+    },
+    "vex-sdk-0.27.1": {
+      "sha256": "79e5fe15afde1305478b35e2cb717fff59f485428534cf49cfdbfa4723379bf6",
+      "url": "https://static.crates.io/crates/vex-sdk/vex-sdk-0.27.1.crate"
+    },
+    "wasi-0.11.0+wasi-snapshot-preview1": {
+      "sha256": "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423",
+      "url": "https://static.crates.io/crates/wasi/wasi-0.11.0+wasi-snapshot-preview1.crate"
+    },
+    "wasi-0.11.1+wasi-snapshot-preview1": {
+      "sha256": "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b",
+      "url": "https://static.crates.io/crates/wasi/wasi-0.11.1+wasi-snapshot-preview1.crate"
+    },
+    "wasip1-1.0.0": {
+      "sha256": "b5e26842486624357dbeb8f0381cf1fb42f022291fd787d4a816768fec8cc760",
+      "url": "https://static.crates.io/crates/wasip1/wasip1-1.0.0.crate"
+    },
+    "wasip2-1.0.3+wasi-0.2.9": {
+      "sha256": "20064672db26d7cdc89c7798c48a0fdfac8213434a1186e5ef29fd560ae223d6",
+      "url": "https://static.crates.io/crates/wasip2/wasip2-1.0.3+wasi-0.2.9.crate"
+    },
+    "wasip3-0.6.0+wasi-0.3.0-rc-2026-03-15": {
+      "sha256": "ed83456dd6a0b8581998c0365e4651fa2997e5093b49243b7f35391afaa7a3d9",
+      "url": "https://static.crates.io/crates/wasip3/wasip3-0.6.0+wasi-0.3.0-rc-2026-03-15.crate"
+    },
+    "windows-sys-0.59.0": {
+      "sha256": "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b",
+      "url": "https://static.crates.io/crates/windows-sys/windows-sys-0.59.0.crate"
+    },
+    "windows-targets-0.52.6": {
+      "sha256": "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973",
+      "url": "https://static.crates.io/crates/windows-targets/windows-targets-0.52.6.crate"
+    },
+    "windows_aarch64_gnullvm-0.52.6": {
+      "sha256": "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3",
+      "url": "https://static.crates.io/crates/windows_aarch64_gnullvm/windows_aarch64_gnullvm-0.52.6.crate"
+    },
+    "windows_aarch64_msvc-0.52.6": {
+      "sha256": "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469",
+      "url": "https://static.crates.io/crates/windows_aarch64_msvc/windows_aarch64_msvc-0.52.6.crate"
+    },
+    "windows_i686_gnu-0.52.6": {
+      "sha256": "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b",
+      "url": "https://static.crates.io/crates/windows_i686_gnu/windows_i686_gnu-0.52.6.crate"
+    },
+    "windows_i686_gnullvm-0.52.6": {
+      "sha256": "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66",
+      "url": "https://static.crates.io/crates/windows_i686_gnullvm/windows_i686_gnullvm-0.52.6.crate"
+    },
+    "windows_i686_msvc-0.52.6": {
+      "sha256": "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66",
+      "url": "https://static.crates.io/crates/windows_i686_msvc/windows_i686_msvc-0.52.6.crate"
+    },
+    "windows_x86_64_gnu-0.52.6": {
+      "sha256": "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78",
+      "url": "https://static.crates.io/crates/windows_x86_64_gnu/windows_x86_64_gnu-0.52.6.crate"
+    },
+    "windows_x86_64_gnullvm-0.52.6": {
+      "sha256": "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d",
+      "url": "https://static.crates.io/crates/windows_x86_64_gnullvm/windows_x86_64_gnullvm-0.52.6.crate"
+    },
+    "windows_x86_64_msvc-0.52.6": {
+      "sha256": "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec",
+      "url": "https://static.crates.io/crates/windows_x86_64_msvc/windows_x86_64_msvc-0.52.6.crate"
+    },
+    "wit-bindgen-0.57.1": {
+      "sha256": "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e",
+      "url": "https://static.crates.io/crates/wit-bindgen/wit-bindgen-0.57.1.crate"
+    },
+    "zerocopy-0.8.17": {
+      "sha256": "aa91407dacce3a68c56de03abe2760159582b846c6a4acd2f456618087f12713",
+      "url": "https://static.crates.io/crates/zerocopy/zerocopy-0.8.17.crate"
+    },
+    "zerocopy-derive-0.8.17": {
+      "sha256": "06718a168365cad3d5ff0bb133aad346959a2074bd4a85c121255a11304a8626",
+      "url": "https://static.crates.io/crates/zerocopy-derive/zerocopy-derive-0.8.17.crate"
+    }
+  },
+  "standard_library_dependency_locks": [
+    {
+      "member": "mingw64/lib/rustlib/src/rust/library/Cargo.lock",
+      "packages": {
+        "addr2line-0.24.2": "dfbe277e56a376000877090da837660b4427aad530e3028d44e0bffe4f89a1c1",
+        "adler2-2.0.0": "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627",
+        "allocator-api2-0.2.21": "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923",
+        "cc-1.2.0": "1aeb932158bd710538c73702db6945cb68a8fb08c519e6e12706b94263b36db8",
+        "cfg-if-1.0.0": "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd",
+        "compiler_builtins-0.1.152": "2153cf213eb259361567720ce55f6446f17acd0ccca87fb6dc05360578228a58",
+        "dlmalloc-0.2.7": "d9b5e0d321d61de16390ed273b647ce51605b575916d3c25e6ddf27a1e140035",
+        "fortanix-sgx-abi-0.5.0": "57cafc2274c10fab234f176b25903ce17e690fca7597090d50880e047a0389c5",
+        "getopts-0.2.21": "14dbbfd5c71d70241ecf9e6f13737f7b5ce823821063188d7e46c41d371eebd5",
+        "gimli-0.31.1": "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f",
+        "hashbrown-0.15.2": "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289",
+        "hermit-abi-0.5.0": "fbd780fe5cc30f81464441920d82ac8740e2e46b29a6fad543ddd075229ce37e",
+        "libc-0.2.171": "c19937216e9d3aa9956d9bb8dfc0b0c8beb6058fc4f7a4dc4d850edf86a237d6",
+        "memchr-2.7.4": "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3",
+        "miniz_oxide-0.8.3": "b8402cab7aefae129c6977bb0ff1b8fd9a04eb5b51efc50a70bea51cda0c7924",
+        "object-0.36.7": "62948e14d923ea95ea2c7c86c71013138b66525b86bdc08d2dcc262bdb497b87",
+        "proc-macro2-1.0.93": "60946a68e5f9d28b0dc1c21bb8a97ee7d018a8b322fa57838ba31cc878e22d99",
+        "quote-1.0.38": "0e4dccaaaf89514f546c693ddc140f729f958c247918a13380cccc6078391acc",
+        "r-efi-4.5.0": "e9e935efc5854715dfc0a4c9ef18dc69dee0ec3bf9cc3ab740db831c0fdd86a3",
+        "r-efi-alloc-1.0.0": "31d6f09fe2b6ad044bc3d2c34ce4979796581afd2f1ebc185837e02421e02fd7",
+        "rand-0.9.0": "3779b94aeb87e8bd4e834cee3650289ee9e0d5677f976ecdb6d219e5f4f6cd94",
+        "rand_core-0.9.0": "b08f3c9802962f7e1b25113931d94f43ed9725bebc59db9d0c3e9a23b67e15ff",
+        "rand_xorshift-0.4.0": "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a",
+        "rustc-demangle-0.1.24": "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f",
+        "shlex-1.3.0": "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64",
+        "syn-2.0.98": "36147f1a48ae0ec2b5b3bc5b537d267457555a10dc06f3dbc8cb11ba3006d3b1",
+        "unicode-ident-1.0.16": "a210d160f08b701c8721ba1c726c11662f877ea6b7094007e1ca9a1041945034",
+        "unicode-width-0.1.14": "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af",
+        "unwinding-0.2.5": "51f06a05848f650946acef3bf525fe96612226b61f74ae23ffa4e98bfbb8ab3c",
+        "wasi-0.11.0+wasi-snapshot-preview1": "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423",
+        "windows-sys-0.59.0": "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b",
+        "windows-targets-0.52.6": "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973",
+        "windows_aarch64_gnullvm-0.52.6": "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3",
+        "windows_aarch64_msvc-0.52.6": "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469",
+        "windows_i686_gnu-0.52.6": "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b",
+        "windows_i686_gnullvm-0.52.6": "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66",
+        "windows_i686_msvc-0.52.6": "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66",
+        "windows_x86_64_gnu-0.52.6": "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78",
+        "windows_x86_64_gnullvm-0.52.6": "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d",
+        "windows_x86_64_msvc-0.52.6": "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec",
+        "zerocopy-0.8.17": "aa91407dacce3a68c56de03abe2760159582b846c6a4acd2f456618087f12713",
+        "zerocopy-derive-0.8.17": "06718a168365cad3d5ff0bb133aad346959a2074bd4a85c121255a11304a8626"
+      },
+      "path": "assets/native-toolchains/1.87.0-2/library-Cargo.lock",
+      "sha256": "0b408243b7d57c70dc26025ab900108445367aa9b5f013afa544d73ac1d8cea6",
+      "source": {
+        "buildinfo_sha256": "3c1de4bc0557ab7d3cec9aa8f00a8dda725bc4182b99c68ff9ffe78501ff2bc6",
+        "kind": "rust-src",
+        "notices": [
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-MIT",
+            "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1"
+          }
+        ],
+        "pkgbuild_sha256": "d3c06b5a2a762993c7a7f9a6aec10473131cfee38f4b6891cb663ec64e0c8a68",
+        "sha256": "28802c18142f167254f525ea77f4c9e7be00cac8760ea6da5297625e0e9977a7",
+        "signature_sha256": "daf0d9d42309bd555b7fc4ae2117d11274ed60d30a9df0a3e3e8e507d282d306",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-rust-src-1.87.0-2-any.pkg.tar.zst",
+        "version": "1.87.0-2"
+      },
+      "version": "1.87.0-2"
+    },
+    {
+      "member": "mingw64/lib/rustlib/src/rust/library/Cargo.lock",
+      "packages": {
+        "addr2line-0.24.2": "dfbe277e56a376000877090da837660b4427aad530e3028d44e0bffe4f89a1c1",
+        "adler2-2.0.0": "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627",
+        "cc-1.2.0": "1aeb932158bd710538c73702db6945cb68a8fb08c519e6e12706b94263b36db8",
+        "cfg-if-1.0.0": "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd",
+        "compiler_builtins-0.1.158": "164cdc689e4c6d69417f77a5f48be240c291e84fbef0b1281755dc754b19c809",
+        "dlmalloc-0.2.8": "8cff88b751e7a276c4ab0e222c3f355190adc6dde9ce39c851db39da34990df7",
+        "fortanix-sgx-abi-0.5.0": "57cafc2274c10fab234f176b25903ce17e690fca7597090d50880e047a0389c5",
+        "getopts-0.2.21": "14dbbfd5c71d70241ecf9e6f13737f7b5ce823821063188d7e46c41d371eebd5",
+        "gimli-0.31.1": "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f",
+        "hashbrown-0.15.3": "84b26c544d002229e640969970a2e74021aadf6e2f96372b9c58eff97de08eb3",
+        "hermit-abi-0.5.0": "fbd780fe5cc30f81464441920d82ac8740e2e46b29a6fad543ddd075229ce37e",
+        "libc-0.2.172": "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa",
+        "memchr-2.7.4": "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3",
+        "miniz_oxide-0.8.8": "3be647b768db090acb35d5ec5db2b0e1f1de11133ca123b9eacf5137868f892a",
+        "object-0.36.7": "62948e14d923ea95ea2c7c86c71013138b66525b86bdc08d2dcc262bdb497b87",
+        "r-efi-5.2.0": "74765f6d916ee2faa39bc8e68e4f3ed8949b48cccdac59983d287a7cb71ce9c5",
+        "r-efi-alloc-2.0.0": "e43c53ff1a01d423d1cb762fd991de07d32965ff0ca2e4f80444ac7804198203",
+        "rand-0.9.1": "9fbfd9d094a40bf3ae768db9361049ace4c0e04a4fd6b359518bd7b73a73dd97",
+        "rand_core-0.9.3": "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38",
+        "rand_xorshift-0.4.0": "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a",
+        "rustc-demangle-0.1.24": "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f",
+        "rustc-literal-escaper-0.0.2": "0041b6238913c41fe704213a4a9329e2f685a156d1781998128b4149c230ad04",
+        "shlex-1.3.0": "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64",
+        "unicode-width-0.1.14": "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af",
+        "unwinding-0.2.6": "8393f2782b6060a807337ff353780c1ca15206f9ba2424df18cb6e733bd7b345",
+        "wasi-0.11.0+wasi-snapshot-preview1": "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423",
+        "windows-sys-0.59.0": "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b",
+        "windows-targets-0.52.6": "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973",
+        "windows_aarch64_gnullvm-0.52.6": "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3",
+        "windows_aarch64_msvc-0.52.6": "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469",
+        "windows_i686_gnu-0.52.6": "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b",
+        "windows_i686_gnullvm-0.52.6": "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66",
+        "windows_i686_msvc-0.52.6": "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66",
+        "windows_x86_64_gnu-0.52.6": "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78",
+        "windows_x86_64_gnullvm-0.52.6": "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d",
+        "windows_x86_64_msvc-0.52.6": "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+      },
+      "path": "assets/native-toolchains/1.88.0-2/library-Cargo.lock",
+      "sha256": "7268d3fb5ef43bb35d9d59a54ddf9f31c2aa43de0e664cfe203c655c4154b7aa",
+      "source": {
+        "buildinfo_sha256": "2922ce1978323e5e86d030778a3d51b62c820f5739d2b39cbbcae2069a7f01e4",
+        "kind": "rust-src",
+        "notices": [
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-MIT",
+            "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1"
+          }
+        ],
+        "pkgbuild_sha256": "2d6e01d61f7f6e54dd17725761d573b44d1dc7621fe9451379bb7ee7bc461c92",
+        "sha256": "42a03247080cf18d720e2a311f5c2b718f6fcc7b70724b2ffe555772ac1a9506",
+        "signature_sha256": "00eabe9af2a6ecbf598cd6feab70fb99edca21aba365e5d29ac2482c0d708847",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-rust-src-1.88.0-2-any.pkg.tar.zst",
+        "version": "1.88.0-2"
+      },
+      "version": "1.88.0-2"
+    },
+    {
+      "member": "mingw64/lib/rustlib/src/rust/library/Cargo.lock",
+      "packages": {
+        "addr2line-0.24.2": "dfbe277e56a376000877090da837660b4427aad530e3028d44e0bffe4f89a1c1",
+        "adler2-2.0.0": "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627",
+        "cc-1.2.0": "1aeb932158bd710538c73702db6945cb68a8fb08c519e6e12706b94263b36db8",
+        "cfg-if-1.0.0": "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd",
+        "compiler_builtins-0.1.158": "164cdc689e4c6d69417f77a5f48be240c291e84fbef0b1281755dc754b19c809",
+        "dlmalloc-0.2.8": "8cff88b751e7a276c4ab0e222c3f355190adc6dde9ce39c851db39da34990df7",
+        "fortanix-sgx-abi-0.5.0": "57cafc2274c10fab234f176b25903ce17e690fca7597090d50880e047a0389c5",
+        "getopts-0.2.21": "14dbbfd5c71d70241ecf9e6f13737f7b5ce823821063188d7e46c41d371eebd5",
+        "gimli-0.31.1": "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f",
+        "hashbrown-0.15.3": "84b26c544d002229e640969970a2e74021aadf6e2f96372b9c58eff97de08eb3",
+        "hermit-abi-0.5.0": "fbd780fe5cc30f81464441920d82ac8740e2e46b29a6fad543ddd075229ce37e",
+        "libc-0.2.172": "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa",
+        "memchr-2.7.4": "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3",
+        "miniz_oxide-0.8.8": "3be647b768db090acb35d5ec5db2b0e1f1de11133ca123b9eacf5137868f892a",
+        "object-0.36.7": "62948e14d923ea95ea2c7c86c71013138b66525b86bdc08d2dcc262bdb497b87",
+        "r-efi-5.2.0": "74765f6d916ee2faa39bc8e68e4f3ed8949b48cccdac59983d287a7cb71ce9c5",
+        "r-efi-alloc-2.0.0": "e43c53ff1a01d423d1cb762fd991de07d32965ff0ca2e4f80444ac7804198203",
+        "rand-0.9.1": "9fbfd9d094a40bf3ae768db9361049ace4c0e04a4fd6b359518bd7b73a73dd97",
+        "rand_core-0.9.3": "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38",
+        "rand_xorshift-0.4.0": "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a",
+        "rustc-demangle-0.1.24": "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f",
+        "rustc-literal-escaper-0.0.2": "0041b6238913c41fe704213a4a9329e2f685a156d1781998128b4149c230ad04",
+        "shlex-1.3.0": "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64",
+        "unicode-width-0.1.14": "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af",
+        "unwinding-0.2.6": "8393f2782b6060a807337ff353780c1ca15206f9ba2424df18cb6e733bd7b345",
+        "wasi-0.11.0+wasi-snapshot-preview1": "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423",
+        "windows-sys-0.59.0": "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b",
+        "windows-targets-0.52.6": "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973",
+        "windows_aarch64_gnullvm-0.52.6": "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3",
+        "windows_aarch64_msvc-0.52.6": "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469",
+        "windows_i686_gnu-0.52.6": "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b",
+        "windows_i686_gnullvm-0.52.6": "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66",
+        "windows_i686_msvc-0.52.6": "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66",
+        "windows_x86_64_gnu-0.52.6": "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78",
+        "windows_x86_64_gnullvm-0.52.6": "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d",
+        "windows_x86_64_msvc-0.52.6": "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+      },
+      "path": "assets/native-toolchains/1.88.0-3/library-Cargo.lock",
+      "sha256": "7268d3fb5ef43bb35d9d59a54ddf9f31c2aa43de0e664cfe203c655c4154b7aa",
+      "source": {
+        "buildinfo_sha256": "de1529b6c22a7ce884a84e8d4a85378f5d599b9a03b0c000216041d130894005",
+        "kind": "rust-src",
+        "notices": [
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-MIT",
+            "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1"
+          }
+        ],
+        "pkgbuild_sha256": "f0b57bae2953151149d4e8a88d5792c657b2fcefcbd6cc12c269d813a5e5f70c",
+        "sha256": "8299503cfd22caa9f4a56950e89cffb7b0561f334d6cf510a549555b2a0ab4af",
+        "signature_sha256": "0d2c537a76700f93f06ce29dd4f9798fbe5782d1206ba8521b51416ea9c90c5d",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-rust-src-1.88.0-3-any.pkg.tar.zst",
+        "version": "1.88.0-3"
+      },
+      "version": "1.88.0-3"
+    },
+    {
+      "member": "mingw64/lib/rustlib/src/rust/library/Cargo.lock",
+      "packages": {
+        "addr2line-0.25.0": "9acbfca36652500c911ddb767ed433e3ed99b032b5d935be73c6923662db1d43",
+        "adler2-2.0.1": "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa",
+        "cc-1.2.0": "1aeb932158bd710538c73702db6945cb68a8fb08c519e6e12706b94263b36db8",
+        "cfg-if-1.0.1": "9555578bc9e57714c812a1f84e4fc5b4d21fcb063490c624de019f7464c91268",
+        "dlmalloc-0.2.9": "d01597dde41c0b9da50d5f8c219023d63d8f27f39a27095070fd191fddc83891",
+        "fortanix-sgx-abi-0.5.0": "57cafc2274c10fab234f176b25903ce17e690fca7597090d50880e047a0389c5",
+        "getopts-0.2.23": "cba6ae63eb948698e300f645f87c70f76630d505f23b8907cf1e193ee85048c1",
+        "gimli-0.32.0": "93563d740bc9ef04104f9ed6f86f1e3275c2cdafb95664e26584b9ca807a8ffe",
+        "hashbrown-0.15.4": "5971ac85611da7067dbfcabef3c70ebb5606018acd9e2a3903a0da507521e0d5",
+        "hermit-abi-0.5.2": "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c",
+        "libc-0.2.174": "1171693293099992e19cddea4e8b849964e9846f4acee11b3948bcc337be8776",
+        "memchr-2.7.5": "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0",
+        "miniz_oxide-0.8.9": "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316",
+        "object-0.37.1": "03fd943161069e1768b4b3d050890ba48730e590f57e56d4aa04e7e090e61b4a",
+        "r-efi-5.3.0": "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f",
+        "r-efi-alloc-2.1.0": "dc2f58ef3ca9bb0f9c44d9aa8537601bcd3df94cc9314a40178cadf7d4466354",
+        "rand-0.9.1": "9fbfd9d094a40bf3ae768db9361049ace4c0e04a4fd6b359518bd7b73a73dd97",
+        "rand_core-0.9.3": "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38",
+        "rand_xorshift-0.4.0": "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a",
+        "rustc-demangle-0.1.25": "989e6739f80c4ad5b13e0fd7fe89531180375b18520cc8c82080e4dc4035b84f",
+        "rustc-literal-escaper-0.0.2": "0041b6238913c41fe704213a4a9329e2f685a156d1781998128b4149c230ad04",
+        "shlex-1.3.0": "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64",
+        "unicode-width-0.2.1": "4a1a07cc7db3810833284e8d372ccdc6da29741639ecc70c9ec107df0fa6154c",
+        "unwinding-0.2.7": "7d80f6c2bfede213d9a90b4a14f3eb99b84e33c52df6c1a15de0a100f5a88751",
+        "wasi-0.11.1+wasi-snapshot-preview1": "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b",
+        "windows-sys-0.59.0": "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b",
+        "windows-targets-0.52.6": "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973",
+        "windows_aarch64_gnullvm-0.52.6": "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3",
+        "windows_aarch64_msvc-0.52.6": "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469",
+        "windows_i686_gnu-0.52.6": "8e9b5ad5ab802e97eb8e295ac6720e509ee4c243f69d781394014ebfe8bbfa0b",
+        "windows_i686_gnullvm-0.52.6": "0eee52d38c090b3caa76c563b86c3a4bd71ef1a819287c19d586d7334ae8ed66",
+        "windows_i686_msvc-0.52.6": "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66",
+        "windows_x86_64_gnu-0.52.6": "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78",
+        "windows_x86_64_gnullvm-0.52.6": "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d",
+        "windows_x86_64_msvc-0.52.6": "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+      },
+      "path": "assets/native-toolchains/1.89.0-3/library-Cargo.lock",
+      "sha256": "9649746aa908c1bcb22ecc1d40f51ef5830cb4834ef2c31d8997fce3bd101684",
+      "source": {
+        "buildinfo_sha256": "f7ea1dfb5043891b6e2277cf148e7bc12d441cc11d862cab821377c5d00d5621",
+        "kind": "rust-src",
+        "notices": [
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-APACHE",
+            "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+          },
+          {
+            "member": "mingw64/share/licenses/rust-src/LICENSE-MIT",
+            "sha256": "b71bd43a069ca0641a9ecfe585ca7b3c53b5cc1608f8b68321168698e28b5ea1"
+          }
+        ],
+        "pkgbuild_sha256": "49631e5d440f85c6ea716b095b11c9c88d65892b7306d79c1d5c9f02f4064296",
+        "sha256": "c48d7baad991dfd686a494fe0a716f05a0171d1340954b8993eee406b0af9a3a",
+        "signature_sha256": "f47aad44024a247485d8b0c4a3f23fb427ff39154317332d8d70515a6c45fae9",
+        "signer": "5F944B027F7FE2091985AA2EFA11531AA0AA7F57",
+        "url": "https://repo.msys2.org/mingw/mingw64/mingw-w64-x86_64-rust-src-1.89.0-3-any.pkg.tar.zst",
+        "version": "1.89.0-3"
+      },
+      "version": "1.89.0-3"
+    },
+    {
+      "member": "rustc-1.98.1-src/library/Cargo.lock",
+      "packages": {
+        "addr2line-0.25.1": "1b5d307320b3181d6d7954e663bd7c774a838b8220fe0593c86d9fb09f498b4b",
+        "adler2-2.0.1": "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa",
+        "cc-1.2.0": "1aeb932158bd710538c73702db6945cb68a8fb08c519e6e12706b94263b36db8",
+        "cfg-if-1.0.4": "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801",
+        "dlmalloc-0.2.13": "9f5b01c17f85ee988d832c40e549a64bd89ab2c9f8d8a613bdf5122ae507e294",
+        "foldhash-0.2.0": "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb",
+        "fortanix-sgx-abi-0.6.1": "5efc85edd5b83e8394f4371dd0da6859dff63dd387dab8568fece6af4cde6f84",
+        "getopts-0.2.24": "cfe4fbac503b8d1f88e6676011885f34b7174f46e59956bba534ba83abded4df",
+        "gimli-0.32.3": "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7",
+        "hashbrown-0.17.1": "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a",
+        "hermit-abi-0.5.2": "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c",
+        "libc-0.2.185": "52ff2c0fe9bc6cb6b14a0592c2ff4fa9ceb83eea9db979b0487cd054946a2b8f",
+        "memchr-2.7.6": "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273",
+        "miniz_oxide-0.8.9": "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316",
+        "moto-rt-0.16.0": "29aea9f7dfeb258e030a84e0ec38a9c2ec2063d4f45eb2db31445cfc40b3dba1",
+        "object-0.37.3": "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe",
+        "r-efi-5.3.0": "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f",
+        "r-efi-alloc-2.1.0": "dc2f58ef3ca9bb0f9c44d9aa8537601bcd3df94cc9314a40178cadf7d4466354",
+        "rand-0.9.2": "6db2770f06117d490610c7488547d543617b21bfa07796d7a12f6f1bd53850d1",
+        "rand_core-0.9.3": "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38",
+        "rand_xorshift-0.4.0": "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a",
+        "rustc-demangle-0.1.27": "b50b8869d9fc858ce7266cce0194bd74df58b9d0e3f6df3a9fc8eb470d95c09d",
+        "rustc-literal-escaper-0.0.8": "bfe6f213fb658c8fb95baabd5420393438cf5a98d707f5dd701d9197c705f71e",
+        "shlex-1.3.0": "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64",
+        "unwinding-0.2.8": "60612c845ef41699f39dc8c5391f252942c0a88b7d15da672eff0d14101bbd6d",
+        "vex-sdk-0.27.1": "79e5fe15afde1305478b35e2cb717fff59f485428534cf49cfdbfa4723379bf6",
+        "wasip1-1.0.0": "b5e26842486624357dbeb8f0381cf1fb42f022291fd787d4a816768fec8cc760",
+        "wasip2-1.0.3+wasi-0.2.9": "20064672db26d7cdc89c7798c48a0fdfac8213434a1186e5ef29fd560ae223d6",
+        "wasip3-0.6.0+wasi-0.3.0-rc-2026-03-15": "ed83456dd6a0b8581998c0365e4651fa2997e5093b49243b7f35391afaa7a3d9",
+        "wit-bindgen-0.57.1": "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
+      },
+      "path": "assets/native-toolchains/1.98.1/library-Cargo.lock",
+      "sha256": "d1c5dbdf53bfebd7de60f26a171819db3b28ebfd75f3fa99c3286893a5a7b7a6",
+      "source": {
+        "sha256": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
+        "url": "https://static.rust-lang.org/dist/rustc-1.98.1-src.tar.xz"
+      },
+      "version": "1.98.1"
     }
   ],
   "status": "unqualified-native-candidate-inputs",
   "unresolved": [
-    "Independent source/build/license review and native compiler/std notice correspondence remain required.",
-    "Native Rust notices cover the full original Cargo graphs; exact linked features/license alternatives are unreviewed.",
-    "Original native crate notice text gaps: anes-0.1.6, block-0.1.6, crc-catalog-2.4.0, crunchy-0.2.2, fxhash-0.2.1, mac-0.1.1, malloc_buf-0.0.6, objc-foundation-0.1.1, objc_id-0.1.1, phf-0.10.1, phf_codegen-0.10.0, phf_generator-0.10.0, phf_macros-0.11.2, phf_shared-0.10.0, profiling-1.0.16, profiling-procmacros-1.0.16, selectors-0.25.0, servo_arc-0.3.0, simd_helpers-0.1.0, valuable-0.1.1, winapi-i686-pc-windows-gnu-0.4.0, winapi-x86_64-pc-windows-gnu-0.4.0, wit-bindgen-rt-0.39.0, zune-core-0.4.12, zune-jpeg-0.4.14, zune-jpeg-0.4.20",
-    "Qualify GUI/GPU/audio, dynamic components/data and final clean installation on the supported Windows baseline."
+    "Independent distribution review and final native package qualification remain required.",
+    "Original Rust notice omissions and explicit declaration supplements are recorded in RUST_NOTICE_DECISIONS.md.",
+    "Qualify GUI/GPU/audio, dynamic components/data and final installation on the supported Windows baseline."
   ]
 }

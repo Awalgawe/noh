@@ -450,7 +450,7 @@ resources.preview=Fast preview is unavailable. Restore the complete application 
 resources.details=Technical details
 error.dependencies=A required runtime library is missing or incompatible. Restore the complete application folder, or check Resources and tools in Settings.
 resources.recheck=Check again
-resources.microsoft=Official Microsoft Visual C++ runtime
+resources.microsoft=Download the Microsoft component
 
 subtitle.transcribing_gpu=Transcribing on GPU…
 subtitle.transcribing_cpu=Transcribing on CPU…

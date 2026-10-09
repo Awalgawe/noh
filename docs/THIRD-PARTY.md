@@ -11,7 +11,8 @@ The Windows candidate uses MSYS2 libmpv **0.40.0-4**, dynamically loaded through
 `libloading` 0.8.9 (ISC). The producer declares `GPL-2.0-or-later`; its linked
 FFmpeg build declares GPLv3 or later. This replaces the historical upstream CI
 LGPL runtime. Original license alternatives and the full combined component
-inventory require independent review before distribution.
+inventory are covered by the exact-input Windows material review in
+[WINDOWS_REDISTRIBUTION.md](WINDOWS_REDISTRIBUTION.md).
 
 `assets/preview-runtime.json` and `assets/windows-native.lock.json` pin the exact
 binary/source packages, patches, recipe and runtime file hashes. The portable
@@ -36,19 +37,34 @@ copies this inventory as `bin/speech/SPEECH-BUNDLE.json`; the outer manifest
 covers it too. The inventory keys retain upstream filenames; runtime/models
 are in `bin/speech/` and the `*-LICENSE.txt` notices are in `licenses/`.
 Executables, libraries and model weights remain outside Git. No media upload,
-startup download, system installation or additional Python runtime is needed.
+startup model download or additional Python runtime is needed. The Windows
+speech tool requires the external Microsoft Visual C++ v14 x64 runtime. The
+ordinary installer offers its direct Microsoft download when missing; Microsoft's
+installer and DLLs are not redistributed in NOH packages.
 
 The delivery acquisition script extracts NVIDIA's full 61,498-byte license from
 the checksum-pinned cuBLAS archive, not from a reformatted web notice. The two
 model license URLs identify immutable upstream commits; their existing file
-hashes are unchanged. This preserves texts, but does not establish a completed
-CUDA redistribution review.
+hashes are unchanged. The reviewed CUDA distribution basis is recorded separately
+in [WINDOWS_REDISTRIBUTION.md](WINDOWS_REDISTRIBUTION.md).
 
 ## Rust dependencies
 
 `Cargo.lock` pins the current dependency versions. Their individual licenses
-continue to apply. A complete distribution notice inventory is still required
-before a public release.
+continue to apply. The reviewed Windows materials include the complete locked
+NOH/native graphs and additional Rust standard-library dependency sources and
+notices; see [RUST_NOTICE_DECISIONS.md](RUST_NOTICE_DECISIONS.md).
+
+## Windows installer
+
+The optional ordinary Windows installer uses **Inno Setup 7.1.0**, copyright
+1997-2026 Jordan Russell and portions copyright 2000-2026 Martijn Laan.
+Its [original licence](https://jrsoftware.org/files/is/license.txt) permits use
+and redistribution with its notices retained.
+The installer keeps the producer's notices and installs the original licence
+as `licenses/INNO-SETUP-LICENSE.txt`. Wrapper sources and the same licence are
+provided alongside the release. See [Inno Setup](https://jrsoftware.org/isinfo.php)
+and its [source code](https://github.com/jrsoftware/issrc/tree/is-7_1_0).
 
 Candidate source materials include `cargo vendor --locked --offline` output for
 the complete lockfile and a generated `RUST-INVENTORY.json` with version/source
@@ -188,22 +204,17 @@ obligations for that build; the `-L` notice alone is not a complete release proc
 
 ## Candidate delivery materials and remaining gaps
 
-The selected Windows Whisper binaries import four Visual C++ runtime
-DLLs (`msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll`, `vcomp140.dll`).
-These were absent from the old development bundle. The delivery lock now pins
-Microsoft's 14.51.36247.0 installer, its embedded x64 CAB, individual DLL hashes
-and the original runtime-use license document. Acquisition extracts those files
-without running the installer and places DLLs beside the speech executable.
-The runtime-use EULA alone does not grant redistribution: the applicable Visual
-Studio redistribution grant still needs review before any public artifact upload.
-The official [STL source](https://github.com/microsoft/STL#block-diagram) covers
-the C++ standard library; it treats VCRuntime/VCStartup as separate components.
-Whisper b5130 also has an LLVM OpenMP acquisition path requiring Clang 20.x on
-Windows. LLVM's [OpenMP source](https://github.com/llvm/llvm-project/tree/main/openmp)
-is public, but using it requires a rebuild rather than a drop-in DLL rename.
-Whisper has not been rebuilt. The new Microsoft inputs have been extracted and
-their static import closure checked locally; a final package/native transcription
-qualification remains outstanding.
+The Windows Whisper binaries import four Microsoft Visual C++ runtime DLLs:
+`msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll` and `vcomp140.dll`.
+NOH's public package and source-material archives exclude these files, their CABs
+and Microsoft's installer. Users obtain the x64 v14 runtime directly from
+[Microsoft](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+This is a separately installed speech prerequisite, not part of Windows itself.
+The tested version is 14.51.36247.0; later compatible v14 versions are supported.
+Whisper/CUDA binaries and models remain unchanged. Acquisition and PE auditing
+bind the exception to exact locked speech image hashes; unrelated missing imports
+still fail. Neither a registry entry nor an import audit proves working native
+transcription. Installed and missing-runtime behavior must be tested.
 
 `assets/delivery-windows.lock.json` binds the MSYS2 native lock and whisper.cpp
 b5130 sources. The native lock contains 112 signed binary/source package pairs,
@@ -214,14 +225,23 @@ revisions. Four original native Cargo graphs contribute 653 checksum-pinned crat
 archives and original available notices. These graphs include unused platforms
 and tests; they do not establish which features were actually linked.
 
-Original producer notices and pinned mpv/FFmpeg source notices are copied to the
+Original producer notices and 99 pinned source notices are copied to the
 portable. Full paired source archives, recipes and patches are separate materials.
-Some packages omit standalone notices from their binary archives; their original
-terms remain in the retained sources pending attribution review. Twenty-six native
-crate archives lack original notice texts, listed exactly in the native lock and
-notice report. Native Rust 1.87/1.88/1.89 standard-library correspondence, compiler
-exceptions, static/header coverage, chosen alternatives and dynamically loaded
-data/plugins remain review and native qualification requirements. Source recipe
+All 112 native package identities now have materialized notices, including the
+26 packages whose binary archives omitted standalone terms. Twenty-six native
+crate archives omit standalone notice files. Exact upstream root notices now
+supplement thirteen; fourteen explicit per-archive declarations (including the
+separate NOH dispatch dependency) are accompanied by pinned standard license
+texts and their original Cargo metadata. The notice report distinguishes these
+supplements from original texts. See [notice decisions](RUST_NOTICE_DECISIONS.md).
+The exact four native Rust toolchain packages now supply their original generated
+standard-library notices, matching rust-src archives and producer recipes.
+The five standard-library Cargo.lock graphs also supply 92 distinct dependency
+archives and their original notices, including the dependencies missing from the
+producer notice output.
+[Windows distribution review](WINDOWS_REDISTRIBUTION.md) records source coverage,
+license alternatives, compiler exceptions and CUDA distribution conditions.
+Final package behavior remains a separate qualification requirement. Source recipe
 correspondence does not assert a bit-identical rebuild or redistribution clearance.
 The native lock's `coverage_audit` names the remaining recipe-only build tools,
 native Rust toolchain versions and optional data omitted by the runtime collector:
@@ -255,7 +275,8 @@ remain unreviewed; exact bottle build materials and license coverage remain
 explicit unresolved gates. Homebrew receipts and SBOMs retained
 by the portable packager are supplementary evidence, not a compliance attestation.
 
-`assets/delivery-policy.json` records these gaps and has no qualification records.
+`assets/delivery-policy.json` records the reviewed Windows distribution materials
+and the remaining native qualification gates. macOS materials remain unreviewed.
 The draft verifier refuses unresolved platforms and requires independently
 reviewed evidence bound to the exact candidate manifest hash. None of the new
 inventories establishes that a public binary release is ready.

@@ -560,7 +560,7 @@ fn run_process(
             Some(path),
             if dependencies {
                 format!(
-                    "Transcription runtime could not load its dependencies ({status}). Restore the complete application folder and keep runtime libraries beside whisper-cli. No final subtitle was published."
+                    "Transcription runtime could not load its dependencies ({status}). Keep the complete application folder together. On Windows, install or repair the Microsoft Visual C++ v14 Redistributable (x64) from https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist before retrying. No final subtitle was published."
                 )
             } else {
                 format!("Subtitle process failed ({status}). No final subtitle was published.")
@@ -843,8 +843,19 @@ mod tests {
         assert!(
             failure
                 .detail
-                .contains("Restore the complete application folder")
+                .contains("Keep the complete application folder together")
         );
+        assert!(
+            failure
+                .detail
+                .contains("Microsoft Visual C++ v14 Redistributable (x64)")
+        );
+        assert!(
+            failure.detail.contains(
+                "https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist"
+            )
+        );
+        assert!(failure.detail.contains("No final subtitle was published"));
     }
     #[test]
     fn progress_uses_only_backend_reports_and_reserves_published_completion() {

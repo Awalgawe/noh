@@ -16,25 +16,54 @@
       ]
     },
     "windows-x64": {
-      "redistribution_unresolved": [
-        "MSYS2 paired native sources/recipes/notices are collected but static/header coverage, linked features, compiler/std correspondence and license alternatives require independent review.",
-        "Whisper/CUDA and Visual C++ runtime redistribution grants and Rust compiled-source/notice inventories are not reviewed."
-      ],
+      "redistribution_unresolved": [],
       "target": "x86_64-pc-windows-gnu",
       "unresolved": [
-        "Execute the fixed MSYS2 Windows portable acquisition/build on a clean hosted runner; local acquisition and synthetic native probes do not qualify the final downloaded package.",
-        "Review all 112 signed binary/source package pairs with matching PKGBUILD/BUILDINFO hashes, seven complete native Git repositories, exact static/header dependencies and dynamically loaded data/plugins.",
-        "Review native Cargo linked features and license alternatives: four original graphs provide 653 checksum-pinned crate archives. Their 26 original notice-text gaps are named in windows-native.lock.json; some entries are unused-platform/test inputs. Establish native Rust 1.87/1.88/1.89 standard-library/compiler notice correspondence.",
-        "Review exact NVIDIA redistribution terms, all Whisper/CUDA native dependencies and the matching b5130 build recipe.",
-        "Review the applicable Visual Studio redistribution grant for the four pinned Microsoft DLLs. The runtime-use EULA alone does not grant redistribution.",
-        "Review the 486-crate NOH vendor notice inventory, attribution, license alternatives, Rust standard-library/toolchain/native notices, difflib 0.4.0 notice applicability and the missing dispatch 0.2.0 original text.",
-        "Qualify the isolated export/preview DLL folders, dynamically loaded components and supported Windows/API-set baseline against the final native package.",
-        "Qualify final ZIP on a clean Windows user profile without development runtimes, with downloaded-file protection, physical audio/GPU, preview, transcription and export."
+        "Build the final Windows portable once from a clean public source commit, preserve its exact source/build identity and supply complete reviewed materials.",
+        "Qualify final normal/delay PE closure, fresh extraction and isolated application configuration without developer PATH; record the actual supported Windows baseline and external Microsoft prerequisite version.",
+        "Qualify actual GUI preview/GPU/audio-device operation, CPU/CUDA offline transcription, caption rendering and media export; distinguish technical device checks from human listening and from a clean OS installation.",
+        "Check the final downloaded archive and hashes under normal Windows download protection, documenting unsigned publisher/reputation behavior without disabling security."
       ]
     }
   },
   "qualification_records": [],
-  "redistribution_records": [],
+  "redistribution_records": [
+    {
+      "evidence": {
+        "cuda_terms": {
+          "path": "docs/WINDOWS_REDISTRIBUTION.md",
+          "sha256": "157a1d2506cc876ac64197013cee63b34897c1a85700ca0cf684e973533ded8b"
+        },
+        "native_corresponding_sources": {
+          "path": "docs/WINDOWS_REDISTRIBUTION.md",
+          "sha256": "157a1d2506cc876ac64197013cee63b34897c1a85700ca0cf684e973533ded8b"
+        },
+        "native_notices": {
+          "path": "docs/WINDOWS_REDISTRIBUTION.md",
+          "sha256": "157a1d2506cc876ac64197013cee63b34897c1a85700ca0cf684e973533ded8b"
+        },
+        "rust_sources_notices": {
+          "path": "docs/WINDOWS_REDISTRIBUTION.md",
+          "sha256": "157a1d2506cc876ac64197013cee63b34897c1a85700ca0cf684e973533ded8b"
+        }
+      },
+      "inputs": {
+        "Cargo.lock": "2f588955258d2df69728115ad06ae3fc4bb4dcbdb3be39337cc83772c5fa3030",
+        "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "assets/delivery-windows.lock.json": "29ef275d01c409cee973d1869c11f36379cfaaef704a3684e44bea6812f5f544",
+        "assets/preview-runtime.json": "72c92e5eb5d128913798f80a06a03294db798519809201458d0b17c29a4112a4",
+        "assets/rust-notices.lock.json": "2b15127c3bd09079f7c4fcd3cc02b256bc020b12636fa6a544529c6e7f0946fb",
+        "assets/speech-bundle.json": "4bef71e92e5f3857e6d06e3a0b95971bc60448e838a6cf822fe9045d344c089f",
+        "assets/windows-native.lock.json": "de8481277cc2e37a70773f69dcc304eb13be44f2db65c84d6f3324d1e26331ed",
+        "rust_standard_library_source": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
+        "tools/rust_notices.py": "326b00b96d7840e4fb86e9ea496e5c3144e97480dbdd8c9eea2a72d682a8783c",
+        "tools/windows_runtime.py": "090d182a40c72503f982457c1b2e1225586bdcfdb378e27d5b8573e23863c860"
+      },
+      "platform": "windows-x64",
+      "review_basis": "Actor/Critic windows-release v8; substantive v6 material approval, corrected locked-input fingerprint and LF serialization. Final native qualification is separate.",
+      "substantive_critic_turn": "01a11df9-6984-7bf2-ae57-9fa83050ec3e"
+    }
+  ],
   "rust_source": {
     "sha256": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
     "url": "https://static.rust-lang.org/dist/rustc-1.98.1-src.tar.xz"

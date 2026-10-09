@@ -9,11 +9,6 @@
     "https://docs.nvidia.com/cuda/archive/11.8.0/eula/index.html"
   ],
   "sha256": {
-    "msvcp140.dll": "7c26614e1d733892c2deac7e245ce115504b1d80592dd0a01b08e3e5a55f89ca",
-    "vcruntime140.dll": "d1f4225df2cd877dbf130d5668a021dce3f94118455ff5ec952061c30afc9ce7",
-    "vcruntime140_1.dll": "a7146c08f89fe5b04541ab507cdb59ff7b44534d4ba3c668a426c6450a03434e",
-    "vcomp140.dll": "95d4ce4a6802d1e18b5e0e1722cc30ea72ca7e033f83828f05c0b7b993fe7cbf",
-    "VISUAL-CPP-LICENSE.txt": "c15f0776c632b97bc3b01dbc3090ae347bb406235ae7132601bbaba91624e4fc",
     "cublas64_11.dll": "8ca516b96b29c2fba2344909a896bc1cd7951f6cd11fe595a8a3929c02cccbed",
     "cublasLt64_11.dll": "3d06ca4e4893adb7a153ecd23a540e92817c967312b44646d8c3f91b089196e6",
     "CUDA-RUNTIME-LICENSE.txt": "b9ee12782ca117b887588d99ae1b8c24deb59105e05417fe28ffbd7a55896dd1",
@@ -42,5 +37,19 @@
   },
   "runtime_sha256": "0b29b2175bb17ec26da29677cbc7c467c57d103245144d62a49a703f6bc3fdae",
   "cuda_cublas": "https://developer.download.nvidia.com/compute/cuda/redist/libcublas/windows-x86_64/libcublas-windows-x86_64-11.11.3.6-archive.zip",
-  "cuda_cublas_sha256": "67b0934a6359e4ee26fff823c356021589d392c4fd49ca12624f570edc08e2b9"
+  "cuda_cublas_sha256": "67b0934a6359e4ee26fff823c356021589d392c4fd49ca12624f570edc08e2b9",
+  "windows_prerequisite": {
+    "name": "Microsoft Visual C++ v14 Redistributable",
+    "architecture": "x64",
+    "tested_version": "14.51.36247.0",
+    "version_policy": "Use the tested version or a newer compatible v14 runtime. Older versions are not qualified by this package.",
+    "download_url": "https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist",
+    "files": [
+      "msvcp140.dll",
+      "vcruntime140.dll",
+      "vcruntime140_1.dll",
+      "vcomp140.dll"
+    ],
+    "distribution": "External prerequisite supplied directly by Microsoft; not included in NOH archives."
+  }
 }

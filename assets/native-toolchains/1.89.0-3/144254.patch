@@ -1,0 +1,34 @@
+From c193f3039f561aad497fdaced3f320bd889bdb0d Mon Sep 17 00:00:00 2001
+From: Maksim Bondarenkov <maksapple2306@gmail.com>
+Date: Mon, 21 Jul 2025 15:47:37 +0300
+Subject: [PATCH] opt-dist: make `artifact-dir` an absolute path for `opt-dist
+ local`
+
+...like for CI environments. the same logic applied as for `build_dir`. fixes the issue where some
+intermediate steps fail due to path being relative to an active directory
+---
+ src/tools/opt-dist/src/main.rs | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/tools/opt-dist/src/main.rs b/src/tools/opt-dist/src/main.rs
+index d0e6badede6e7..42170ff39d724 100644
+--- a/src/tools/opt-dist/src/main.rs
++++ b/src/tools/opt-dist/src/main.rs
+@@ -62,7 +62,7 @@ enum EnvironmentCmd {
+         python: String,
+ 
+         /// Directory where artifacts (like PGO profiles or rustc-perf) of this workflow
+-        /// will be stored.
++        /// will be stored. Relative to `checkout_dir`
+         #[arg(long, default_value = "opt-artifacts")]
+         artifact_dir: Utf8PathBuf,
+ 
+@@ -150,7 +150,7 @@ fn create_environment(args: Args) -> anyhow::Result<(Environment, Vec<String>)>
+                 .python_binary(python)
+                 .checkout_dir(checkout_dir.clone())
+                 .host_llvm_dir(llvm_dir)
+-                .artifact_dir(artifact_dir)
++                .artifact_dir(checkout_dir.join(artifact_dir))
+                 .build_dir(checkout_dir.join(build_dir))
+                 .prebuilt_rustc_perf(rustc_perf_checkout_dir)
+                 .shared_llvm(llvm_shared)

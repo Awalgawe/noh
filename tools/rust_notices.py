@@ -124,10 +124,12 @@ def generate(materials, cache, supplements, fetcher, evidence_root=None):
     output.mkdir(exist_ok=False)
     records = []
     missing = []
+    original_missing = []
     text = ["NOH Rust dependency notices\nUnreviewed original notice materials.\n"
             "Coverage: entire locked vendor graph, including crates not linked on this platform.\n"
             "Rust standard-library/toolchain and native runtime materials are recorded separately.\n"
-            "SPDX expressions are recorded without selecting alternatives or attesting obligations.\n\n"]
+            "Explicit per-archive declaration supplements record selected alternatives; other expressions remain unselected.\n"
+            "Standard texts are distinguished from original copyright notices. Redistribution still requires review.\n\n"]
     for crate in sorted(crates, key=lambda c: (c["name"], c["version"])):
         identity = crate["name"] + "-" + crate["version"]
         if not re.fullmatch(r"[A-Za-z0-9_.+\-]+", identity):
@@ -177,6 +179,36 @@ def generate(materials, cache, supplements, fetcher, evidence_root=None):
                     raise ValueError("Upstream notice blob mismatch")
                 texts.append((item | {"origin": "pinned-upstream", "revision": supplement["revision"]}, data))
         if not texts:
+            original_missing.append(identity)
+        declaration = supplements.get("declared_license_supplements", {}).get(identity)
+        if declaration:
+            # A bounded, per-archive decision, never an automatic SPDX fallback.
+            # Preserve the publisher's actual declaration and attribution, and
+            # identify the standard text as such rather than inventing an original.
+            manifest = (directory / "Cargo.toml").read_bytes()
+            package = tomllib.loads(manifest.decode("utf-8"))["package"]
+            choices = re.split(r"\s+OR\s+|\s*/\s*", package.get("license", ""))
+            if (checksums["package"] != declaration["package_sha256"]
+                    or hashlib.sha256(manifest).hexdigest() != checksums["files"]["Cargo.toml"]
+                    or package.get("license") != declaration["declared_license"]
+                    or package.get("authors", []) != declaration["authors"]
+                    or declaration["selected_license"] not in choices):
+                raise ValueError("Declared-license supplement does not match published metadata: " + identity)
+            spec = declaration["text"]
+            relative = PurePosixPath(spec["path"])
+            if (relative.is_absolute() or ".." in relative.parts or "\\" in str(relative)
+                    or ":" in str(relative) or relative.parts[:2] != ("assets", "license-texts")):
+                raise ValueError("Unsafe standard-license text path")
+            data = ((evidence_root or Path(__file__).resolve().parent.parent) / str(relative)).read_bytes()
+            if hashlib.sha256(data).hexdigest() != spec["sha256"]:
+                raise ValueError("Standard-license text changed")
+            texts.extend([
+                ({"path": "Cargo.toml", "sha256": hashlib.sha256(manifest).hexdigest(),
+                  "origin": "published-license-declaration-and-authors"}, manifest),
+                (spec | {"origin": "standard-license-text", "selected_license": declaration["selected_license"],
+                         "basis": declaration["basis"]}, data),
+            ])
+        if not texts:
             missing.append(identity)
         text.append("=" * 72 + "\n" + identity + "\nDeclared license: " + str(crate["license"])
                     + "\nRegistry source: " + crate["source"] + "\n")
@@ -189,8 +221,12 @@ def generate(materials, cache, supplements, fetcher, evidence_root=None):
         if not texts:
             text.append("MISSING ORIGINAL NOTICE TEXT; maintainer resolution required.\n")
         record = crate | {"package_sha256": checksums["package"], "notice_files": files}
+        if declaration:
+            record["declared_license_supplement"] = declaration
         if correspondence:
             record["source_correspondence"] = correspondence
+        if supplement and supplement.get("source_revision_limit"):
+            record["source_revision_limit"] = supplement["source_revision_limit"]
         records.append(record)
     notice = output / "RUST-NOTICES.txt"
     notice.write_text("".join(text), encoding="utf-8", newline="\n")
@@ -198,7 +234,8 @@ def generate(materials, cache, supplements, fetcher, evidence_root=None):
               "scope_limitations": ["The Cargo inventory excludes the Rust standard library/toolchain and native runtimes; any standard-library notice is recorded separately.",
                                     "Preserved texts do not attest license-expression choices or all distribution obligations."],
               "notice_sha256": hashlib.sha256(notice.read_bytes()).hexdigest(),
-              "missing_notice_texts": missing, "crates": records, "supplement_unresolved": supplements["unresolved"]}
+              "missing_notice_texts": missing, "missing_original_notice_texts": original_missing,
+              "crates": records, "supplement_unresolved": supplements["unresolved"]}
     if "standard_library" in supplements:
         report["standard_library"] = standard_library_notices(supplements["standard_library"], output)
     (output / "RUST-NOTICE-INVENTORY.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

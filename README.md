@@ -56,8 +56,8 @@ Already have a complete portable build?
 - **Mac:** extract the portable ZIP, move `NOH.app` to **Applications**, then open it.
   The current development build is not yet approved for ordinary macOS distribution.
 
-Complete portable builds include the media tools and speech models; no terminal
-or separate runtime installation is needed. Follow the [installation guide](docs/INSTALLING.md)
+Complete portable builds include the media tools and speech models. Windows local
+transcription requires the Microsoft Visual C++ v14 x64 runtime supplied by Microsoft. Follow the [installation guide](docs/INSTALLING.md)
 for setup, updates and removal, then [make your first video](docs/APP.md#make-your-first-video).
 Developers can [build from source](docs/BUILDING.md).
 
