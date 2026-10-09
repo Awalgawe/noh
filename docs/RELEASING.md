@@ -1,17 +1,19 @@
 # Release readiness
 
 Publishing the source repository and distributing a supported application are
-separate steps. Windows 0.1.0 portable is qualified; its installer is tracked separately.
+separate steps. Windows 0.1.0 portable and its separately built installer have
+distinct qualification reports and share the same application bytes.
 
 ## Prepared delivery chain
 
-The checked-in workflows are preparatory. Windows compilation and synthetic
-delivery controls have passed on GitHub; this does not qualify a portable release.
+PR validation, portable preparation and installer packaging use distinct stages.
+Qualification applies to the exact tested artifacts, not to every future build.
 
 | Workflow | Trigger and output | Authority |
 | --- | --- | --- |
 | `pr.yml` | PRs and main pushes; select affected checks on Windows, Linux, macOS ARM64 and Intel. Shared/unknown changes select all platforms. Documentation-only changes avoid native builds. | Read-only tests and one shared RustSec audit, followed by the required `PR checks` aggregate. No distributions. |
-| `release.yml` | Manual dispatch on main: `verify` (default) tests portable packages without uploading them; `build` uploads reviewed candidates; `draft` prepares an independently qualified draft. Windows x64, macOS ARM64 or both. | Preflight before expensive work. Write token only in the draft branch; no automatic publication. |
+| `release.yml` | Manual dispatch on main: `verify` (default) tests portable packages without uploading them; `build` uploads reviewed candidates; `draft` prepares an independently qualified draft; `installer` wraps the qualified Windows portable. Portable targets: Windows x64, macOS ARM64 or both. | Preflight before expensive work. Write tokens only in staging jobs; no automatic publication. |
+| `windows-installers.yml` | Reusable Windows installer stage called by Release on main. Exact payload verification, wrapper compilation, install/reinstall/removal tests and an unpublished review draft. | Reuses the released application bytes; records the wrapper commit and run separately. Local graphics acceptance is required if hosted OpenGL is unavailable. |
 | `delivery-candidates.yml` | Reusable Release build engine; direct dispatch remains private-only. PRs run synthetic delivery controls. | Read-only token; optional Mac signing uses separate protected steps. Artifact upload requires reviewed redistribution materials. |
 | `delivery-draft.yml` | Reusable Release verifier and draft creator; direct dispatch remains private-only. | Exact run/attempt/commit and artifact verification; independently reviewed inert draft upload. |
 | `rust-audit.yml` | Reusable audit, manifest/lockfile push changes and manual dispatch. No NOH compilation. | Vulnerabilities, unsoundness advisories and acquisition errors fail the job. Public diagnostic uploads are optional. |
@@ -21,9 +23,9 @@ delivery controls have passed on GitHub; this does not qualify a portable releas
 Native builds and standard tests have passed for all three operating systems,
 including both Mac architectures. That evidence does not qualify an installable
 package. Linux and macOS Intel have no delivery packager and are excluded from
-Release targets. Windows Setup installers remain a separate private prototype;
-the Release entrypoint prepares portable ZIPs. The new entrypoint has been
-checked locally, but not executed on hosted runners.
+Release targets. The public Windows installer stage has passed on hosted runners;
+the older private update/install prototypes are separate. See the
+[installer report](WINDOWS_0_1_0_INSTALLER.md) for the exact run and local acceptance.
 
 The build driver is `tools/delivery-build.ps1`; the acquisition, source and ZIP
 controls are in `tools/delivery.py`. Standard runners are `windows-2025` x64 and
@@ -110,8 +112,9 @@ commit and DELIVERY digest in `assets/delivery-policy.json`. Its
 [qualification report](WINDOWS_0_1_0_QUALIFICATION.md) covers build/source identity,
 PE imports, fresh extraction/configuration, the external Microsoft prerequisite,
 actual preview/GPU/audio-device operation, transcription, captions/export and
-exact downloaded-byte attachment/Defender checks. The installer is excluded
-pending interactive qualification. Mac material review, native packaging and
+exact downloaded-byte attachment/Defender checks. The
+[installer report](WINDOWS_0_1_0_INSTALLER.md) adds wrapper and installation acceptance.
+Mac material review, native packaging and
 signing/notarization remain unresolved; Windows acceptance does not clear Mac gates.
 
 Public Actions binary artifacts are distributions. Before uploading them, the

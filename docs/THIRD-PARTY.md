@@ -57,14 +57,14 @@ notices; see [RUST_NOTICE_DECISIONS.md](RUST_NOTICE_DECISIONS.md).
 
 ## Windows installer
 
-The guided Windows installer is implemented but excluded from the 0.1.0 public
-release pending interactive qualification. Its wrapper uses **Inno Setup 7.1.0**, copyright
+The Windows 0.1.0 release includes a guided installer with separately recorded
+[qualification and limits](WINDOWS_0_1_0_INSTALLER.md). Its wrapper uses **Inno Setup 7.1.0**, copyright
 1997-2026 Jordan Russell and portions copyright 2000-2026 Martijn Laan.
 Its [original licence](https://jrsoftware.org/files/is/license.txt) permits use
 and redistribution with its notices retained.
 The installer keeps the producer's notices and installs the original licence
-as `licenses/INNO-SETUP-LICENSE.txt`. The wrapper builder preserves sources and the same licence for any future
-qualified installer distribution. See [Inno Setup](https://jrsoftware.org/isinfo.php)
+as `licenses/INNO-SETUP-LICENSE.txt`. The release's `-installer-sources.zip`
+preserves the wrapper sources and the same licence. See [Inno Setup](https://jrsoftware.org/isinfo.php)
 and its [source code](https://github.com/jrsoftware/issrc/tree/is-7_1_0).
 
 Candidate source materials include `cargo vendor --locked --offline` output for
