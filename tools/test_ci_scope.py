@@ -16,6 +16,8 @@ class ScopeTests(unittest.TestCase):
     def test_windows_tools_are_isolated(self):
         self.assertEqual(ci_scope.select(["tools/windows-qa.ps1", "docs/BUILDING.md"]),
                          {"windows": True, "unix": False})
+        self.assertEqual(ci_scope.select(["tools/public-installer.py", "tools/installer/public-verify.iss"]),
+                         {"windows": True, "unix": False})
 
     def test_unix_checks_keep_all_unix_architectures(self):
         self.assertEqual(ci_scope.select(["tools/verify-unix.sh"]),

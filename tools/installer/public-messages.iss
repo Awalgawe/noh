@@ -1,4 +1,25 @@
-[CustomMessages]
+﻿[CustomMessages]
+en.PublicVerifying=Verifying files
+en.PublicVerifyingDescription=Checking the files before installation. You can cancel this step.
+en.PublicTemporaryFiles=Temporary downloads and extracted files are stored below and removed after installation or cancellation. Files you saved beside the installer are kept.
+fr.PublicVerifying=Vérification des fichiers
+fr.PublicVerifyingDescription=Vérification des fichiers avant l’installation. Vous pouvez annuler cette étape.
+fr.PublicTemporaryFiles=Les téléchargements et fichiers extraits temporaires sont stockés ci-dessous, puis supprimés après installation ou annulation. Les fichiers que vous avez enregistrés à côté de l’installateur sont conservés.
+de.PublicVerifying=Dateien werden geprüft
+de.PublicVerifyingDescription=Die Dateien werden vor der Installation geprüft. Sie können diesen Schritt abbrechen.
+de.PublicTemporaryFiles=Temporäre Downloads und entpackte Dateien werden hier gespeichert und nach der Installation oder dem Abbruch entfernt. Selbst neben dem Installationsprogramm gespeicherte Dateien bleiben erhalten.
+es.PublicVerifying=Verificando los archivos
+es.PublicVerifyingDescription=Comprobando los archivos antes de instalar. Puede cancelar este paso.
+es.PublicTemporaryFiles=Las descargas y los archivos extraídos temporales se guardan aquí y se eliminan tras instalar o cancelar. Se conservan los archivos guardados por usted junto al instalador.
+ja.PublicVerifying=ファイルを検証中
+ja.PublicVerifyingDescription=インストール前にファイルを確認しています。この手順はキャンセルできます。
+ja.PublicTemporaryFiles=一時ダウンロードと展開したファイルは以下に保存され、インストールまたはキャンセル後に削除されます。インストーラーの隣に保存したファイルは保持されます。
+ko.PublicVerifying=파일 확인 중
+ko.PublicVerifyingDescription=설치 전에 파일을 확인합니다. 이 단계를 취소할 수 있습니다.
+ko.PublicTemporaryFiles=임시 다운로드 및 압축 해제 파일은 아래에 저장되며 설치 또는 취소 후 삭제됩니다. 설치 프로그램 옆에 직접 저장한 파일은 유지됩니다.
+zh.PublicVerifying=正在验证文件
+zh.PublicVerifyingDescription=安装前正在检查文件。您可以取消此步骤。
+zh.PublicTemporaryFiles=临时下载和解压的文件保存在以下位置，安装或取消后会被删除。您自行保存在安装程序旁边的文件会被保留。
 en.SpeechTitle=Automatic subtitles
 en.SpeechDescription=One Windows component is needed for local transcription.
 en.SpeechExplanation=NOH can download the Microsoft Visual C++ component directly from Microsoft and open its installer. Windows may ask for administrator approval. Your media stays on this computer. You can skip this now and still preview, export and use existing subtitles.

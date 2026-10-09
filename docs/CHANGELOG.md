@@ -5,6 +5,15 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
+## Unreleased
+
+- Use one Windows web installation wizard: embed the small application payload
+  and download only the selected optional components, without launching another
+  NOH installer.
+- Show cancellable verification progress for large component archives and existing
+  content. Display the temporary location before installation and clean owned
+  downloads/extracted files on success, failure or normal cancellation.
+
 ## 0.1.1 — 2026-10-09
 
 Download the [Windows installers and portable ZIP](https://github.com/Awalgawe/noh/releases/tag/v0.1.1).

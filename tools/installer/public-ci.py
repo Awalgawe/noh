@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import zipfile
 
@@ -90,7 +91,7 @@ def prepare(work):
     # workflow may fix the wrapper without rebuilding the qualified application.
     for name in ('tools/public-installer.py', 'tools/installer/public.iss',
                  'tools/installer/public-messages.iss', 'tools/installer/public-profile.iss',
-                 'tools/installer/public-web.iss', 'tools/installer/public-web.py',
+                 'tools/installer/public-verify.iss',
                  'tools/installer/public-ci.py', 'tools/installer/public-content.iss',
                  'tools/public_components.py', 'assets/installer-extraction.lock.json'):
         checked_in = subprocess.check_output(['git', 'show', os.environ['GITHUB_SHA'] + ':' + name], cwd=ROOT)
@@ -114,10 +115,28 @@ def run(work, name, args, timeout=600, env=None, allow_missing_opengl=False, exp
     print(json.dumps(record), flush=True)
     require((result.returncode != 0) if expect_failure else (result.returncode == 0),
             name + " returned an unexpected exit; inspect " + name + ".log")
+    # Normal completion and rejection must not leave multi-gigabyte downloads.
+    for arg in args:
+        if not str(arg).upper().startswith('/LOG='):
+            continue
+        text = Path(str(arg)[5:]).read_text(encoding='utf-8-sig')
+        for folder in re.findall(r'Created temporary directory: ([^\r\n]+)', text):
+            temporary = Path(folder).resolve()
+            require(temporary.is_relative_to(Path(tempfile.gettempdir()).resolve())
+                    and temporary.name.startswith('is-'), 'Unexpected installer temporary path')
+            deadline = time.monotonic() + 10
+            while temporary.exists() and time.monotonic() < deadline:
+                time.sleep(0.1)
+            require(not temporary.exists(), 'Installer left temporary content: ' + str(temporary))
+            record['temporary_content_removed'] = True
     return record
 
 
 def build(work):
+    run(work, 'native-verification', [sys.executable, ROOT / 'tools/installer/verify-native.py',
+        '--compiler', os.environ['NOH_ISCC_DIRECTORY'], '--output', work / 'test-verification'], 180)
+    run(work, 'native-acquisition', [sys.executable, ROOT / 'tools/installer/acquisition-native.py',
+        '--compiler', os.environ['NOH_ISCC_DIRECTORY'], '--output', work / 'test-acquisition'], 600)
     source = delivery.read(work / 'SOURCE.json')['source_commit']
     public_components.prepare(work / 'portable', source, work / 'components')
     run(work, 'compile-maintenance', [sys.executable, ROOT / 'tools/public-installer.py',
@@ -129,9 +148,10 @@ def build(work):
             '--bundle', work / 'portable', '--commit', source, '--profile', profile,
             '--components', work / 'components', '--helper', work / 'output/maintenance/noh-components.exe',
             '--compiler', os.environ['NOH_ISCC_DIRECTORY'], '--output', work / 'output' / profile], 1200)
-    run(work, 'compile-web', [sys.executable, ROOT / 'tools/installer/public-web.py',
-        '--profiles', work / 'output', '--compiler', os.environ['NOH_ISCC_DIRECTORY'],
-        '--output', work / 'output/web'], 180)
+    run(work, 'compile-web', [sys.executable, ROOT / 'tools/public-installer.py',
+        '--bundle', work / 'portable', '--commit', source, '--profile', 'minimal', '--web',
+        '--components', work / 'components', '--helper', work / 'output/maintenance/noh-components.exe',
+        '--compiler', os.environ['NOH_ISCC_DIRECTORY'], '--output', work / 'output/web'], 1200)
 
 
 def registration():
@@ -198,7 +218,7 @@ def test_additions(work, setup, record, components):
             require(delivery.inventory(installed) == before, 'Rejected component operation changed the installation')
             if corrupt:
                 log = (work / (name + '-inno.log')).read_text(encoding='utf-8-sig')
-                require('Adjacent component archive checksum mismatch' in log, 'Failure did not reach the corrupt archive guard')
+                require('Component archive checksum mismatch' in log, 'Failure did not reach the corrupt archive guard')
         else:
             verify_installed(installed, record['profile_files'][expected])
 
@@ -297,12 +317,16 @@ def test(work):
                 {key: helper_spec[key] for key in ('size', 'sha256')}, 'Profile includes another maintenance helper')
     web = work / 'output/web' / records['web']['installer']['name']
     require(delivery.digest(web) == records['web']['installer']['sha256'], 'Web installer changed')
-    # Exercise the final web executable before public URLs exist, using its exact
-    # hash-checked adjacent cache. Real HTTPS download acceptance follows staging.
+    # Web uses the same one-wizard component engine as Minimal. Before public
+    # URLs exist, verify exact adjacent component archives; HTTPS follows staging.
+    require(records['web']['web'] and records['web']['distribution_profile'] == 'minimal',
+            'Web installer must embed only the Minimal application')
+    catalog = delivery.read(work / 'components/COMPONENTS.json')
+    for item in catalog['groups'].values():
+        os.link(work / 'components' / item['name'], web.parent / item['name'])
     for profile in PROFILES:
-        asset = records[profile]['installer']
-        require(records['web']['profiles'][profile] == asset, 'Web installer references different bytes')
-        os.link(work / 'output' / profile / asset['name'], web.parent / asset['name'])
+        require(records['web']['profile_files'][profile] == records[profile]['installed_files'],
+                'Web and offline installers must install identical profile bytes')
     results = [test_profile(work / ('test-' + p), p, records, web) for p in PROFILES]
     additions = test_additions(work / 'test-additions',
         work / 'output/minimal' / records['minimal']['installer']['name'], records['minimal'], work / 'components')
@@ -310,9 +334,9 @@ def test(work):
     guard.mkdir()
     isolated_web = guard / web.name
     shutil.copy2(web, isolated_web)
-    (guard / records['minimal']['installer']['name']).write_bytes(b'Corrupt download cache')
+    (guard / catalog['groups']['media']['name']).write_bytes(b'Corrupt component archive')
     rejects = []
-    for profile in ('minimal', 'unknown'):
+    for profile in ('standard', 'unknown'):
         rejects.append(run(guard, 'reject-' + profile, [isolated_web, '/PROFILE=' + profile,
             '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/DIR=' + str(guard / 'application'),
             '/LOG=' + str(guard / (profile + '-inno.log'))], expect_failure=True))
@@ -325,7 +349,7 @@ def test(work):
               "host": platform.platform(), "profiles": results, "additions": additions,
               "rejections": rejects, "artifacts": records,
               "limitations": ["Silent profile and cached web installation; no interactive wizard acceptance.",
-                              "The web executable verifies adjacent cached installers; real HTTPS acquisition is a separate acceptance check.",
+                              "The web executable verifies adjacent component archives; real HTTPS acquisition is a separate acceptance check.",
                               "Microsoft prerequisite download is not executed in silent mode.",
                               "The exact OpenGL-unavailable runner error is recorded, not a GUI pass; local installed-GUI validation is required before publication when it occurs.",
                               "Audio/GPU/media qualification of the source portable remains a separate release gate.",

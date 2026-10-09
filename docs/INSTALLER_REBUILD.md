@@ -55,8 +55,9 @@ The official release pipeline continues to require its published input hashes.
    are generated locally, so no maintainer filesystem path is required.
 6. If distributing your derivative, provide its modified sources and build
    materials, update its download locations/catalog and notices, and test the
-   resulting installations. Build a matching web selector from those new offline
-   installers with `tools/installer/public-web.py`. Their hashes necessarily differ
+   resulting installations. Build the matching single-wizard web installer with
+   `tools/public-installer.py --web --profile minimal`, using the same portable,
+   component catalog and new helper. Its hashes necessarily differ
    from official NOH artifacts; do not replace or relabel the originals.
 
 The source archives include the code which embeds and loads the decoder, not

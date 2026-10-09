@@ -23,7 +23,7 @@ COMPILER = {
     "is7z-x64.dll": "822206aa54b53516c336300329f87236b83bf55562e63bc9a25b1ebf064e903b",
 }
 PROFILES = ('minimal', 'standard', 'complete')
-WRAPPERS = ('public.iss', 'public-messages.iss', 'public-profile.iss', 'public-content.iss')
+WRAPPERS = ('public.iss', 'public-messages.iss', 'public-profile.iss', 'public-content.iss', 'public-verify.iss')
 
 
 def includes(profile, name):
@@ -107,7 +107,9 @@ def decoder_sources(cache):
     return paths
 
 
-def build(bundle, commit, compiler, output, profile='complete', components=None, helper=None, maintenance=False):
+def build(bundle, commit, compiler, output, profile='complete', components=None, helper=None, maintenance=False, web=False):
+    if web and (maintenance or profile != 'minimal'):
+        raise ValueError('Web setup embeds only the Minimal application and uses the shared component wizard')
     bundle, compiler, output = (p.resolve() for p in (bundle, compiler, output))
     manifest = delivery.verify_bundle(bundle, "x86_64-pc-windows-gnu", commit)
     delivery.authorize_redistribution("windows-x64")
@@ -151,6 +153,8 @@ def build(bundle, commit, compiler, output, profile='complete', components=None,
              '#define NohProfile ' + quoted(profile),
              '#define NohProfileTitle ' + quoted(profile.title()),
              '#define NohMaintenance ' + str(int(maintenance)),
+             '#define NohWeb ' + str(int(web)),
+             '#define DefaultProfile ' + quoted('standard' if web else profile),
              '#define NohApplicationHash ' + quoted(delivery.digest(bundle / 'noh.exe')),
              '#define EmbeddedMedia ' + quoted(str(not maintenance and profile != 'minimal')),
              '#define EmbeddedSpeech ' + quoted(str(not maintenance and profile == 'complete')),
@@ -213,13 +217,14 @@ def build(bundle, commit, compiler, output, profile='complete', components=None,
     with (output / "compiler.log").open('wb') as log:
         subprocess.run([str(compiler / "ISCC.exe"), str(source / "public.iss")],
                        check=True, stdout=log, stderr=subprocess.STDOUT, timeout=1200)
-    asset = output / ('noh-components.exe' if maintenance else f"NOH-{version}-windows-x64-{profile.title()}-Setup.exe")
+    title = 'Web' if web else profile.title()
+    asset = output / ('noh-components.exe' if maintenance else f"NOH-{version}-windows-x64-{title}-Setup.exe")
     if not asset.is_file() or asset.stat().st_size >= delivery.LIMIT:
         raise ValueError("Installer is missing or exceeds the release asset limit")
     delivery.verify_bundle(bundle, "x86_64-pc-windows-gnu", commit)
     # Retain a portable description instead of leaking local build paths in the
     # public source materials. The builder regenerates public-payload.iss.
-    label = 'maintenance' if maintenance else profile
+    label = 'maintenance' if maintenance else ('web' if web else profile)
     materials = output / f"NOH-{version}-windows-x64-{label}-installer-sources.zip"
     with zipfile.ZipFile(materials, 'x', zipfile.ZIP_DEFLATED) as archive:
         for name in WRAPPERS + ("INNO-SETUP-LICENSE.txt", "noh.ico"):
@@ -243,6 +248,7 @@ def build(bundle, commit, compiler, output, profile='complete', components=None,
     record = {"schema_version": 1, "status": "unqualified-installer-wrapper", "source_commit": commit,
               "distribution_profile": profile, "installed_files": files,
               "maintenance": maintenance,
+              "web": web,
               "profile_files": {content: result[1] for content, result in profiles.items()},
               "portable_manifest_sha256": delivery.digest(bundle / "manifest.json"),
               "installer": {"name": asset.name, "size": asset.stat().st_size, "sha256": delivery.digest(asset)},
@@ -265,5 +271,6 @@ if __name__ == '__main__':
     parser.add_argument('--components', type=Path, required=True)
     parser.add_argument('--helper', type=Path)
     parser.add_argument('--maintenance', action='store_true')
+    parser.add_argument('--web', action='store_true', help='One wizard: embed Minimal and download selected components')
     args = parser.parse_args()
-    build(args.bundle, args.commit, args.compiler, args.output, args.profile, args.components, args.helper, args.maintenance)
+    build(args.bundle, args.commit, args.compiler, args.output, args.profile, args.components, args.helper, args.maintenance, args.web)

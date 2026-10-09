@@ -1,5 +1,49 @@
 # Windows component delivery in 0.1.1
 
+## Next installer revision (not yet published)
+
+The old Web selector downloaded a complete offline Setup executable to Inno's
+unique temporary folder, verified it, and opened a second NOH wizard. Both Inno's
+download verification and the selector's additional SHA-256 pass could block the
+UI after transfer completion. Normal setup exit removed its temporary folder,
+but the wizard did not explain that location or lifecycle.
+
+The replacement Web build uses `public-installer.py --web --profile minimal`:
+one ordinary installer embeds the application and the matching maintenance helper,
+defaults to Standard, and downloads only the selected component archives. Offline
+profiles and in-app maintenance keep sharing the same acquisition implementation.
+Downloaded archives are verified before extraction; installed files still have
+their independent Inno `Hash` checks. The verification page reports progress and
+supports cancellation between bounded reads.
+
+The Ready page identifies the unique temporary folder. Setup removes owned
+archives and extraction directories after copying, after acquisition failure,
+and on normal cancellation/exit. It never deletes the user's downloaded Web
+executable or adjacent archives. Force termination/power loss can leave Windows
+temporary files; this is not a persistent NOH download cache. Native CI checks
+temporary-directory removal alongside installation, repair and rejection.
+
+This is installer work: reuse the identified GitHub-built application and native
+components. Build final wrappers on GitHub; local diagnostic builds are not release
+artifacts. Interactive cancellation/HTTPS and final-byte qualification are required
+before publishing this revision.
+
+Native regression checks cover empty/boundary/large files, changed or missing
+files, and a cancellation event during SHA-256 verification. A second harness
+executes the shared acquisition code against a synthetic loopback archive:
+success, cancellation during transfer and extraction, retry after each, and a
+corrupt adjacent archive that must remain untouched. These checks run in the
+existing Windows installer stage; they do not install the application.
+
+Interactive testing of the prototype reached real public HTTPS acquisition,
+visible verification progress and the extraction cancellation confirmation through
+Windows accessibility and keyboard input. It exposed an existing extraction
+cancellation path that returned without an exception: the acquisition engine now
+explicitly checks `AbortedByUser` before it can start installation. The failed
+prototype's installation was rolled back and its temporary files removed.
+Screenshot capture still times out, so this is not visual layout approval or
+qualification of final GitHub-built bytes.
+
 ## Historical recovery inventory
 
 The public root `741da7a` already contains `tools/setup_profiles.rs`,

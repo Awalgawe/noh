@@ -12,6 +12,7 @@ WINDOWS_ONLY = {
     "tools/windows_test_runtime.py", "tools/windows_runtime.py",
     "tools/runtime_cache.py", "tools/test-runtime-cache.py",
     "tools/build-installer.ps1", "tools/installer-tools.ps1",
+    "tools/public-installer.py",
     "tools/prepare-setup-draft.ps1", "tools/setup_delivery.py",
     "tools/test_setup_delivery.py", "tools/update-setup-clients.ps1",
     "tools/update-setup-integration.ps1", "tools/update-setup-probe.ps1",
