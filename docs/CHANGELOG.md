@@ -5,7 +5,9 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
-## 0.1.1 — Unreleased
+## 0.1.1 — 2026-10-09
+
+Download the [Windows installers and portable ZIP](https://github.com/Awalgawe/noh/releases/tag/v0.1.1).
 
 - Restore Minimal, Standard and Complete Windows installers and a small web selector.
 - Offer missing media tools and transcription downloads during setup and from

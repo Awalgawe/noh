@@ -6,10 +6,13 @@ export a selected moment as a vertical short.
 
 ## Open the app
 
-Start with the [installation guide](INSTALLING.md) to extract and place a complete
-portable build. Then open **noh.exe** on Windows or **NOH.app** on Mac.
-Windows downloads are available from the [latest release](https://github.com/Awalgawe/noh/releases/latest).
-See the [installation guide](INSTALLING.md); other platforms require a [source build](BUILDING.md).
+Install the Windows app from the [latest release](https://github.com/Awalgawe/noh/releases/latest),
+then open **NOH** from the Start menu. With a portable copy, extract the complete
+ZIP and open **noh.exe**. Choose the Standard or Complete profile for editing;
+Minimal can download the media tools when you need them.
+
+See the [installation guide](INSTALLING.md). macOS and Linux currently require
+a [source build](BUILDING.md).
 
 ## Make your first video
 
@@ -50,8 +53,10 @@ Enable **Show on the video** in the lyrics menu when you want burned-in text.
 Caption placement and size can be adjusted. Text that cannot fit is reported
 instead of silently cropped.
 
-Complete portable builds include their speech runtime and models. Source builds
-may require paths in **Settings → Advanced lyrics settings**.
+The Complete installer and portable ZIP include the speech runtime and models.
+Other installed profiles can add them through **Resolve missing resources →
+Add or repair components**. Source builds may require paths in
+**Settings → Advanced lyrics settings**.
 
 ## Before closing
 
@@ -77,15 +82,18 @@ installation of updates is currently disabled in ordinary builds.
 
 If NOH reports missing resources, choose **Resolve missing resources**. Options
 shows which tool or model is unavailable, its expected path and repair guidance.
-After restoring files or changing paths, use **Check again**. The check runs in
+In an installed Windows copy, choose **Add or repair components** to open the
+download wizard. You can add content without uninstalling. After restoring files
+or changing paths, use **Check again**. The check runs in
 the background; other features remain available when their dependencies work.
 Restoring the fast-preview library requires restarting NOH.
 
 - **Export is unavailable:** wait for source checking to finish, or read the
   message in the bottom bar. Check the soundtrack, media paths and destination.
 - **The destination already exists:** choose another name; NOH preserves it.
-- **No transcription engine:** use a complete portable build or configure your
-  local runtime and models in advanced settings.
+- **No transcription engine:** add the Complete profile from the missing-resource
+  settings, use the complete portable ZIP, or configure existing tools and models
+  in advanced settings.
 - **A preview takes time:** let the first preparation finish. Preview working
   copies do not replace the original export sources.
 
