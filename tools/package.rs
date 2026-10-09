@@ -674,7 +674,7 @@ mod tests {
             .map(|entry| entry.unwrap().file_name().into_string().unwrap())
             .collect();
         names.sort();
-        assert_eq!(names.len(), 17);
+        assert_eq!(names.len(), 19);
         assert!(names.contains(&"APP.md".into()));
         assert!(names.contains(&"CLI.md".into()));
         assert_eq!(
@@ -691,12 +691,14 @@ mod tests {
                 "PROJECT_EXPORT.md",
                 "README.md",
                 "RELEASING.md",
+                "RUST_NOTICE_DECISIONS.md",
                 "SHORT_PRESETS.md",
                 "THIRD-PARTY.md",
                 "UPDATES.md",
                 "UPDATE_NATIVE_GATES.md",
                 "UPDATE_RECOVERY.md",
                 "UPDATE_RELEASE.md",
+                "WINDOWS_REDISTRIBUTION.md",
             ]
         );
         let index = fs::read_to_string(output.path().join("docs/README.md")).unwrap();
