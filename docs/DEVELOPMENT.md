@@ -91,8 +91,9 @@ without rebuilding the whole runtime unless executable behavior also changes.
 
 ## Known limitations
 
-- Public ready-to-use releases are not available. Linux and Intel Mac
-  distributions remain unqualified; macOS signing/notarization is incomplete.
+- Windows installer and portable downloads are available on
+  [GitHub Releases](https://github.com/Awalgawe/noh/releases/latest). Linux and
+  macOS distributions remain unqualified; macOS signing/notarization is incomplete.
 - Automatic installation of updates is disabled in ordinary builds.
 - The desktop does not automatically restore a closed editing session.
 - HDR tone mapping and a verified end-to-end color-management contract are absent.

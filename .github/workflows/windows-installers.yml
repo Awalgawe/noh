@@ -1,47 +1,34 @@
 name: Windows installers
 
 on:
-  workflow_dispatch:
-    inputs:
-      source_run_id:
-        description: Successful Windows Setup producer run ID (reuse without compiling)
-        required: false
-        type: string
-      source_attempt:
-        description: Exact producer run attempt
-        required: false
-        type: string
-      source_commit:
-        description: Exact 40-character application source commit
-        required: false
-        type: string
   workflow_call:
     inputs:
       source_run_id:
-        required: true
         type: string
+        required: true
       source_attempt:
-        required: true
         type: string
+        required: true
       source_commit:
-        required: true
         type: string
+        required: true
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  group: windows-installers-${{ inputs.source_commit }}
+  group: windows-installers-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   public-installer:
-    if: github.repository_id == '1411000018' && github.ref == 'refs/heads/main'
+    if: github.repository_id == '1411000018' && github.ref == 'refs/heads/main' && github.workflow == 'Release'
     runs-on: windows-2025
-    timeout-minutes: 25
+    timeout-minutes: 35
     permissions:
       contents: write
+      actions: read
     defaults:
       run:
         shell: pwsh
@@ -58,16 +45,22 @@ jobs:
         with:
           python-version: '3.14'
       - name: Check installer validation guards
-        run: python -m unittest discover -s tools/installer -p test_public_ci.py
-      - name: Verify the already qualified release and exact source identity
+        run: python -m unittest discover -s tools/installer -p 'test_*.py'
+      - name: Verify the successful Release build and exact source identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOH_DELIVERY_WORKFLOW_ID: ${{ vars.NOH_DELIVERY_WORKFLOW_ID }}
+          NOH_SOURCE_RUN: ${{ inputs.source_run_id }}
+          NOH_SOURCE_ATTEMPT: ${{ inputs.source_attempt }}
+          NOH_SOURCE_COMMIT: ${{ inputs.source_commit }}
         run: python tools/installer/public-ci.py prepare
       - name: Install the pinned Inno Setup compiler on this disposable runner
         run: |
           $compiler = ./tools/installer-tools.ps1 -Directory "$env:RUNNER_TEMP/noh-inno"
           "NOH_ISCC_DIRECTORY=$compiler" >> $env:GITHUB_ENV
-      - name: Compile only the installer around unchanged release application bytes
+      - name: Package three profiles and the web selector from unchanged application bytes
         run: python tools/installer/public-ci.py build
-      - name: Test install, installed payload, application launch, reinstall and uninstall
+      - name: Test profiles, component additions, repair, rejection and removal
         run: python tools/installer/public-ci.py test
       - name: Retain exact tested bytes and evidence in an unpublished draft
         env:
@@ -80,96 +73,3 @@ jobs:
             Write-Output $_.Name
             Get-Content -LiteralPath $_.FullName -Tail 20
           }
-
-  installers:
-    if: github.event.repository.private && github.ref == 'refs/heads/codex/setup-release'
-    runs-on: windows-2025
-    timeout-minutes: 45
-    permissions:
-      contents: write
-      actions: read
-    defaults:
-      run:
-        shell: pwsh
-    env:
-      SOURCE_RUN: ${{ inputs.source_run_id }}
-      SOURCE_ATTEMPT: ${{ inputs.source_attempt }}
-      SOURCE_COMMIT: ${{ inputs.source_commit }}
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.14'
-      - name: Fetch exact successful producer bytes with independent trust
-        env:
-          NOH_SETUP_PUBLIC_KEYS: ${{ vars.NOH_SETUP_PUBLIC_KEYS }}
-        run: |
-          $PSNativeCommandUseErrorActionPreference = $true
-          if ([string]::IsNullOrWhiteSpace($env:NOH_SETUP_PUBLIC_KEYS)) { throw 'Independent Setup public keys are required' }
-          [IO.File]::WriteAllText("$env:RUNNER_TEMP/noh-public-keys.json", $env:NOH_SETUP_PUBLIC_KEYS)
-          python tools/setup_delivery.py fetch --run-id "$env:SOURCE_RUN" --attempt "$env:SOURCE_ATTEMPT" --commit "$env:SOURCE_COMMIT" --output staged --public-keys "$env:RUNNER_TEMP/noh-public-keys.json"
-      - name: Restore pinned installer compiler archive
-        id: inno-cache
-        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
-        with:
-          path: ${{ runner.temp }}/noh-inno/innosetup-7.1.0-x64.exe
-          key: noh-inno-v1-7.1.0-0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f
-      - name: Prepare the verified compiler
-        run: |
-          $compiler = ./tools/installer-tools.ps1 -Directory "$env:RUNNER_TEMP/noh-inno"
-          "NOH_ISCC_DIRECTORY=$compiler" >> $env:GITHUB_ENV
-      - name: Save verified compiler archive
-        if: steps.inno-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
-        with:
-          path: ${{ runner.temp }}/noh-inno/innosetup-7.1.0-x64.exe
-          key: ${{ steps.inno-cache.outputs.cache-primary-key }}
-      - name: Authenticate packages and build three offline installers
-        run: |
-          $provenance = Get-Content staged/provenance.json -Raw | ConvertFrom-Json
-          foreach ($profile in @('minimal','standard','complete')) {
-            ./tools/build-installer.ps1 -CandidateDirectory "$PWD/staged/candidate" -ExpectedCandidateSha256 $provenance.candidate_sha256 -ExpectedCommit $env:SOURCE_COMMIT -PublicKeys "$env:RUNNER_TEMP/noh-public-keys.json" -CompilerDirectory $env:NOH_ISCC_DIRECTORY -OutputDirectory "$PWD/installers" -Mode offline -Profile $profile
-          }
-      - name: Stage the authenticated payloads in a resumable private draft
-        run: |
-          $PSNativeCommandUseErrorActionPreference = $true
-          python tools/setup_delivery.py draft --candidate staged/candidate --installers installers --wrapper-commit "$env:GITHUB_SHA"
-      - name: Build the downloader with private asset URLs
-        run: |
-          $provenance = Get-Content staged/provenance.json -Raw | ConvertFrom-Json
-          ./tools/build-installer.ps1 -CandidateDirectory "$PWD/staged/candidate" -ExpectedCandidateSha256 $provenance.candidate_sha256 -ExpectedCommit $env:SOURCE_COMMIT -PublicKeys "$env:RUNNER_TEMP/noh-public-keys.json" -CompilerDirectory $env:NOH_ISCC_DIRECTORY -OutputDirectory "$PWD/installers" -Mode web -DownloadSources "$PWD/installers/download-sources.json"
-      - name: Retain exact installers before remote finalization
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: noh-windows-installers
-          compression-level: 0
-          retention-days: 7
-          if-no-files-found: error
-          path: |
-            installers/**
-            staged/provenance.json
-      - name: Add the four installers and verify every private draft digest
-        run: |
-          $PSNativeCommandUseErrorActionPreference = $true
-          python tools/setup_delivery.py draft --candidate staged/candidate --installers installers --wrapper-commit "$env:GITHUB_SHA" --finish
-          $result = Get-Content installers/draft-result.json -Raw | ConvertFrom-Json
-          "Private CI draft: $($result.url). Native acceptance: pending. No publication." >> $env:GITHUB_STEP_SUMMARY
-      - name: Retain draft receipt and bounded diagnostics
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: noh-windows-installer-diagnostics
-          retention-days: 7
-          if-no-files-found: warn
-          path: |
-            installers/*.json
-            installers/source-*/*.log
-            installers/source-*/*.json
-            staged/provenance.json
-      - name: Record compiler cache observation
-        if: always()
-        run: |
-          'Inno archive cache: outcome=${{ steps.inno-cache.outcome }}, exact hit=${{ steps.inno-cache.outputs.cache-hit }}. No application compilation in this job.' >> $env:GITHUB_STEP_SUMMARY

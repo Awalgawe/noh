@@ -1,13 +1,6 @@
 name: Native Linux and macOS
 
 on:
-  workflow_dispatch:
-    inputs:
-      platform:
-        description: Native platform to diagnose (PR validation always checks all)
-        type: choice
-        default: all
-        options: [all, linux, mac-arm, mac-intel, linux-mac-arm]
   workflow_call:
     inputs:
       skip_audit:
@@ -34,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.platform == 'linux-mac-arm' && '["ubuntu-24.04","macos-15"]' || github.event_name == 'workflow_dispatch' && inputs.platform == 'linux' && '["ubuntu-24.04"]' || github.event_name == 'workflow_dispatch' && inputs.platform == 'mac-arm' && '["macos-15"]' || github.event_name == 'workflow_dispatch' && inputs.platform == 'mac-intel' && '["macos-15-intel"]' || '["ubuntu-24.04","macos-15","macos-15-intel"]') }}
+        os: [ubuntu-24.04, macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     env:

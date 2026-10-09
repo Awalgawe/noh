@@ -1,30 +1,6 @@
 name: Prepare an independently qualified public draft
 
 on:
-  workflow_dispatch:
-    inputs:
-      source_run_id:
-        description: Successful delivery-candidates workflow run ID
-        type: string
-        required: true
-      source_attempt:
-        description: Exact successful run attempt
-        type: string
-        required: true
-      source_commit:
-        description: Exact 40-character source commit retained on main
-        type: string
-        required: true
-      target:
-        description: Must match exactly the source run platforms
-        type: choice
-        options: [windows-x64, macos-arm64, all]
-        default: windows-x64
-      create_draft:
-        description: Create a DRAFT only after independent environment review
-        type: boolean
-        default: false
-
   workflow_call:
     inputs:
       source_run_id:
@@ -53,7 +29,7 @@ concurrency:
 
 jobs:
   verify:
-    if: github.ref == 'refs/heads/main' && (github.event.repository.private || github.workflow == 'Release')
+    if: github.ref == 'refs/heads/main' && github.workflow == 'Release'
     runs-on: windows-2025
     timeout-minutes: 45
     outputs:
@@ -82,7 +58,7 @@ jobs:
 
   draft:
     needs: verify
-    if: inputs.create_draft && github.ref == 'refs/heads/main' && (github.event.repository.private || github.workflow == 'Release')
+    if: inputs.create_draft && github.ref == 'refs/heads/main' && github.workflow == 'Release'
     environment: noh-public-draft
     runs-on: windows-2025
     timeout-minutes: 30

@@ -493,3 +493,8 @@ updates.error_target=没有适用于此版本的兼容更新。
 updates.error_storage=无法保存更新。请检查可用空间和文件夹权限。
 updates.error_other=更新失败。请先查看恢复说明再重试。
 updates.safe_close=继续之前，请保存或导出所需内容。此会话将关闭，且不会自动恢复。请仅在工作已妥善保存且没有正在运行的媒体任务时继续。
+
+resources.install=添加或修复组件
+resources.installing=组件安装程序已打开。
+resources.installed=组件设置已结束。请重启 NOH 以启用新添加的视频预览。
+resources.install_failed=组件设置已取消或无法完成。

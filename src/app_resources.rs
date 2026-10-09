@@ -22,8 +22,22 @@ pub struct State {
     pub issues: Vec<Issue>,
     pub preview: Option<Issue>,
     pub retry_media: bool,
+    #[cfg(windows)]
+    installer: Option<Receiver<std::result::Result<(), String>>>,
+    #[cfg(windows)]
+    installer_result: Option<std::result::Result<(), String>>,
 }
 impl State {
+    pub fn installing(&self) -> bool {
+        #[cfg(windows)]
+        {
+            self.installer.is_some()
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
     pub fn invalidate(&mut self) {
         self.last = None;
         if let Some((_, cancel, _, _)) = &self.active {
@@ -135,6 +149,8 @@ impl Drop for State {
 
 impl NohApp {
     pub(super) fn retry_resource_media(&mut self, ctx: &egui::Context) {
+        #[cfg(windows)]
+        self.poll_component_installer();
         if self.resources.retry_media && self.resources.ffmpeg_available() && !self.engine_locked()
         {
             self.resources.retry_media = false;
@@ -167,6 +183,8 @@ impl NohApp {
     }
     pub(super) fn resource_settings(&mut self, ui: &mut egui::Ui) {
         let l = self.locale.language;
+        #[cfg(windows)]
+        self.component_installer_controls(ui);
         if self.resources.last.as_ref() != self.resources.desired.as_ref()
             || self.resources.active.is_some()
         {
@@ -225,11 +243,130 @@ impl NohApp {
             );
         }
     }
+
+    #[cfg(windows)]
+    fn poll_component_installer(&mut self) {
+        let Some(receiver) = &self.resources.installer else {
+            return;
+        };
+        let result = match receiver.try_recv() {
+            Ok(result) => result,
+            Err(mpsc::TryRecvError::Empty) => return,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                Err("Component installer worker stopped.".into())
+            }
+        };
+        self.resources.installer = None;
+        if result.is_ok() {
+            if self.ffmpeg.is_none() {
+                self.ffmpeg = noh::find_ffmpeg(None).ok();
+            }
+            if let Ok(exe) = std::env::current_exe()
+                && let Some(folder) = exe.parent()
+            {
+                self.subtitles.load_bundled(folder);
+            }
+            self.resources.invalidate();
+            self.resources.retry_media = true;
+        }
+        self.resources.installer_result = Some(result);
+    }
+
+    #[cfg(windows)]
+    fn component_installer_controls(&mut self, ui: &mut egui::Ui) {
+        let l = self.locale.language;
+        if self.resources.unavailable()
+            && ui
+                .add_enabled(
+                    !self.engine_locked() && self.resources.installer.is_none(),
+                    egui::Button::new(l.text("resources.install")),
+                )
+                .clicked()
+        {
+            let profile = if self.resources.speech_issue().is_some() {
+                "complete"
+            } else {
+                "standard"
+            };
+            let (sender, receiver) = mpsc::channel();
+            let repaint = ui.ctx().clone();
+            let language = l.code();
+            self.resources.installer_result = None;
+            self.resources.installer = Some(receiver);
+            // The same installed maintenance helper handles setup-time and later
+            // additions. Its own window owns consent, progress and cancellation.
+            // Do not join this worker on app close: the user may close NOH while
+            // the ordinary installer finishes replacing an in-use media tool.
+            std::thread::spawn(move || {
+                let result = (|| -> std::result::Result<(), String> {
+                    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+                    let folder = exe.parent().ok_or("Executable folder unavailable")?;
+                    let helper = folder.join("noh-components.exe");
+                    if !helper.is_file() {
+                        return Err("Component installer is missing. Repair NOH using the official installer.".into());
+                    }
+                    let status = std::process::Command::new(helper)
+                        .arg(format!("/PROFILE={profile}"))
+                        .arg(format!("/LANG={language}"))
+                        .arg(format!("/DIR={}", folder.display()))
+                        .status()
+                        .map_err(|e| e.to_string())?;
+                    if !status.success() {
+                        return Err(format!("Component setup did not complete ({status})."));
+                    }
+                    Ok(())
+                })();
+                let _ = sender.send(result);
+                repaint.request_repaint();
+            });
+        }
+        if self.resources.installer.is_some() {
+            ui.label(l.text("resources.installing"));
+            ui.ctx().request_repaint_after(Duration::from_millis(250));
+        }
+        if let Some(result) = &self.resources.installer_result {
+            match result {
+                Ok(()) => {
+                    ui.add(egui::Label::new(l.text("resources.installed")).wrap());
+                }
+                Err(detail) => {
+                    ui.add(egui::Label::new(l.text("resources.install_failed")).wrap());
+                    egui::CollapsingHeader::new(l.text("resources.details"))
+                        .id_salt("component-installer-error")
+                        .show(ui, |ui| {
+                            ui.add(egui::Label::new(detail).wrap());
+                        });
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn pending_component_setup_blocks_media_and_failure_preserves_configuration() {
+        let mut app = NohApp::default();
+        app.ffmpeg = Some("user-selected-ffmpeg.exe".into());
+        app.subtitles.transcriber = "user-selected-whisper.exe".into();
+        let (sender, receiver) = mpsc::channel();
+        app.resources.installer = Some(receiver);
+        assert!(app.engine_locked());
+        app.poll_component_installer();
+        assert!(app.engine_locked());
+        sender.send(Err("Cancelled test setup".into())).unwrap();
+        app.poll_component_installer();
+        assert!(!app.engine_locked());
+        assert!(app.resources.installer_result.as_ref().unwrap().is_err());
+        assert_eq!(
+            app.ffmpeg.as_deref(),
+            Some(std::path::Path::new("user-selected-ffmpeg.exe"))
+        );
+        assert_eq!(app.subtitles.transcriber, "user-selected-whisper.exe");
+        assert!(!app.resources.retry_media);
+    }
     fn missing() -> Issue {
         Issue {
             component: Component::Speech,

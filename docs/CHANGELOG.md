@@ -5,6 +5,18 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
+## 0.1.1 — Unreleased
+
+- Restore Minimal, Standard and Complete Windows installers and a small web selector.
+- Offer missing media tools and transcription downloads during setup and from
+  NOH's resource settings. Existing installations can add or repair content
+  without uninstalling, while preserving user files and already installed content.
+- Keep downloads outside the GUI thread, check exact archive hashes and retain
+  the seven interface languages. Restart NOH to initialize newly added preview support.
+- Consolidate CI around PR validation and Release; remove obsolete measurement
+  and private installer workflows. Package installers from an identified successful
+  Release build without compiling the application again.
+
 ## 0.1.0 — 2026-10-09
 
 The first public Windows x64 release, with an installer and a portable ZIP, is available from

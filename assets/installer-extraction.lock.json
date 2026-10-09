@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "decoder": "is7z-x64.dll",
+  "sha256": "822206aa54b53516c336300329f87236b83bf55562e63bc9a25b1ebf064e903b",
+  "version": "26.02",
+  "source_commit": "42d4dfc68fc845be12d2ae4fdbe3429db5e580a7",
+  "source_url": "https://codeload.github.com/jrsoftware/is7z/zip/42d4dfc68fc845be12d2ae4fdbe3429db5e580a7",
+  "source_sha256": "f97c65f0b5aca85e56fcf663e6dfe3ea204270ed794232a00d63ec22823ebbf2",
+  "binary_update_commit": "d0acb2d3046a08676906040300ffbab0d69189c6",
+  "source_correspondence": "Upstream 26.02 source with Inno changes, last source revision before the same-day Inno binary update; not a reproducible-build claim.",
+  "installer_source": {
+    "version": "7.1.0",
+    "commit": "7d634620f1d1caca6c76e8398da7133153db9e7b",
+    "url": "https://codeload.github.com/jrsoftware/issrc/zip/7d634620f1d1caca6c76e8398da7133153db9e7b",
+    "sha256": "2c8390491392f1a807fa53480e52360c6cde57ef8e8bd616c7852e68e6d5c871"
+  }
+}

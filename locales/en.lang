@@ -493,3 +493,8 @@ updates.error_target=No compatible update is available for this build.
 updates.error_storage=The update could not be saved. Check free space and folder permissions.
 updates.error_other=The update failed. Check the recovery instructions before trying again.
 updates.safe_close=Save or export what you need before continuing. This session will close and will not be restored automatically. Continue only when your work is safe; no media tasks may be running.
+
+resources.install=Add or repair components
+resources.installing=The component installer is open.
+resources.installed=Component setup finished. Restart NOH to enable a newly added video preview.
+resources.install_failed=Component setup was cancelled or could not finish.

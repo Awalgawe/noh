@@ -493,3 +493,8 @@ updates.error_target=Für diese Version ist kein kompatibles Update verfügbar.
 updates.error_storage=Das Update konnte nicht gespeichert werden. Prüfen Sie Speicherplatz und Ordnerrechte.
 updates.error_other=Das Update ist fehlgeschlagen. Lesen Sie vor einem neuen Versuch die Wiederherstellungsanleitung.
 updates.safe_close=Speichern oder exportieren Sie vor dem Fortfahren alles, was Sie benötigen. Diese Sitzung wird geschlossen und nicht automatisch wiederhergestellt. Fahren Sie nur fort, wenn Ihre Arbeit gesichert ist und keine Medienaufgaben laufen.
+
+resources.install=Komponenten hinzufügen oder reparieren
+resources.installing=Das Komponenten-Installationsprogramm ist geöffnet.
+resources.installed=Komponenten eingerichtet. Starten Sie NOH neu, um eine neu hinzugefügte Videovorschau zu aktivieren.
+resources.install_failed=Die Komponenteneinrichtung wurde abgebrochen oder konnte nicht abgeschlossen werden.

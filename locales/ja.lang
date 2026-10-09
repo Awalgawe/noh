@@ -493,3 +493,8 @@ updates.error_target=このビルドに対応するアップデートはあり�
 updates.error_storage=アップデートを保存できません。空き容量とフォルダーの権限を確認してください。
 updates.error_other=アップデートに失敗しました。再試行する前に復旧手順を確認してください。
 updates.safe_close=続行する前に必要な作業を保存または書き出してください。このセッションは閉じられ、自動的には復元されません。作業を安全に保存し、メディア処理が実行されていない場合のみ続行してください。
+
+resources.install=コンポーネントを追加または修復
+resources.installing=コンポーネントのインストーラーが開いています。
+resources.installed=コンポーネントの設定が終了しました。追加した動画プレビューを有効にするには NOH を再起動してください。
+resources.install_failed=コンポーネントの設定がキャンセルされたか、完了できませんでした。

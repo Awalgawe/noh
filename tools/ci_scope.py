@@ -17,7 +17,6 @@ WINDOWS_ONLY = {
     "tools/update-setup-integration.ps1", "tools/update-setup-probe.ps1",
     "assets/setup-tools.lock.json", "assets/setup-baseline.lock.json",
     "assets/delivery-windows.lock.json", "assets/windows-native.lock.json",
-    ".github/workflows/windows-setup.yml",
     ".github/workflows/windows-installers.yml",
 }
 UNIX_ONLY = {"tools/verify-unix.sh", ".github/workflows/native.yml"}

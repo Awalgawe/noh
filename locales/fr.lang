@@ -493,3 +493,8 @@ updates.error_target=Aucune mise à jour compatible n’est disponible pour cett
 updates.error_storage=Impossible d’enregistrer la mise à jour. Vérifiez l’espace libre et les droits du dossier.
 updates.error_other=La mise à jour a échoué. Consultez les instructions de réparation avant de réessayer.
 updates.safe_close=Conservez ou exportez ce dont vous avez besoin avant de continuer. Cette session sera fermée et ne sera pas restaurée automatiquement. Continuez uniquement quand votre travail est à l’abri ; aucune tâche média ne doit être en cours.
+
+resources.install=Ajouter ou réparer les composants
+resources.installing=L’installateur de composants est ouvert.
+resources.installed=La préparation des composants est terminée. Relancez NOH pour activer un aperçu vidéo nouvellement ajouté.
+resources.install_failed=La préparation des composants a été annulée ou n’a pas pu aboutir.
