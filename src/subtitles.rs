@@ -843,8 +843,19 @@ mod tests {
         assert!(
             failure
                 .detail
-                .contains("Restore the complete application folder")
+                .contains("Keep the complete application folder together")
         );
+        assert!(
+            failure
+                .detail
+                .contains("Microsoft Visual C++ v14 Redistributable (x64)")
+        );
+        assert!(
+            failure.detail.contains(
+                "https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist"
+            )
+        );
+        assert!(failure.detail.contains("No final subtitle was published"));
     }
     #[test]
     fn progress_uses_only_backend_reports_and_reserves_published_completion() {
