@@ -58,7 +58,7 @@ jobs:
         run: |
           $compiler = ./tools/installer-tools.ps1 -Directory "$env:RUNNER_TEMP/noh-inno"
           "NOH_ISCC_DIRECTORY=$compiler" >> $env:GITHUB_ENV
-      - name: Package three profiles and the web selector from unchanged application bytes
+      - name: Package offline profiles and the shared web wizard from unchanged application bytes
         run: python tools/installer/public-ci.py build
       - name: Test profiles, component additions, repair, rejection and removal
         run: python tools/installer/public-ci.py test

@@ -12,7 +12,7 @@ from unittest.mock import patch
 spec = importlib.util.spec_from_file_location("public_ci", Path(__file__).with_name("public-ci.py"))
 ci = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ci)
-spec = importlib.util.spec_from_file_location('public_web', Path(__file__).with_name('public-web.py'))
+spec = importlib.util.spec_from_file_location('public_installer', Path(__file__).resolve().parents[1] / 'public-installer.py')
 web = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(web)
 
@@ -61,38 +61,14 @@ class InstallerGuards(unittest.TestCase):
                 verify.assert_called_once_with(root / 'work/portable', 'x86_64-pc-windows-gnu', source)
                 self.assertEqual(ci.delivery.read(root / 'work/SOURCE.json')['source_commit'], source)
 
-    def profile_records(self, root):
-        for profile in ci.PROFILES:
-            folder = root / profile
-            folder.mkdir()
-            asset = folder / f'NOH-0.1.0-windows-x64-{profile.title()}-Setup.exe'
-            asset.write_bytes(profile.encode())
-            ci.delivery.write(folder / 'INSTALLER.json', {
-                'source_commit': '1' * 40, 'portable_manifest_sha256': '2' * 64,
-                'distribution_profile': profile,
-                'installer': {'name': asset.name, 'sha256': ci.delivery.digest(asset), 'size': asset.stat().st_size}})
-
-    def test_web_rejects_changed_offline_installer_before_compiling(self):
+    def test_web_cannot_embed_a_full_installer_or_be_a_maintenance_helper(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            self.profile_records(root)
-            next((root / 'minimal').glob('*.exe')).write_bytes(b'changed')
-            with patch.object(web.subprocess, 'run') as compiler:
-                with self.assertRaisesRegex(ValueError, 'bytes changed'):
-                    web.build(root, root / 'compiler', root / 'output')
-                compiler.assert_not_called()
+            for profile, maintenance in [('complete', False), ('standard', False), ('minimal', True)]:
+                with self.assertRaisesRegex(ValueError, 'Web setup embeds only'):
+                    web.build(root, 'a' * 40, root, root / 'output', profile=profile,
+                              maintenance=maintenance, web=True)
             self.assertFalse((root / 'output').exists())
-
-    def test_web_rejects_mixed_application_identity(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.profile_records(root)
-            path = root / 'standard/INSTALLER.json'
-            record = ci.delivery.read(path)
-            record['source_commit'] = 'a' * 40
-            ci.delivery.write(path, record)
-            with self.assertRaisesRegex(ValueError, 'Mixed application'):
-                web.build(root, root / 'compiler', root / 'output')
 
     def test_public_installer_messages_cover_all_seven_languages(self):
         translations = {}

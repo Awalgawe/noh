@@ -30,7 +30,11 @@ OutputDir={#OutputDirectory}
 OutputBaseFilename=noh-components
 DisableDirPage=yes
 #else
+#if NohWeb
+OutputBaseFilename=NOH-{#NohVersion}-windows-x64-Web-Setup
+#else
 OutputBaseFilename=NOH-{#NohVersion}-windows-x64-{#NohProfileTitle}-Setup
+#endif
 #endif
 SetupIconFile={#NohIcon}
 UninstallDisplayIcon={app}\noh.exe
@@ -72,12 +76,14 @@ var
   ContentDownload: TDownloadWizardPage;
   ContentExtraction: TExtractionWizardPage;
   MediaRequested, SpeechRequested: Boolean;
+  ContentPrepared: Boolean;
   MinimumProfile: Integer;
   SpeechPage: TInputOptionWizardPage;
   DownloadPage: TDownloadWizardPage;
 
 #include "public-catalog.iss"
 #include "public-profile.iss"
+#include "public-verify.iss"
 #include "public-content.iss"
 
 function RuntimeReady: Boolean;
@@ -101,7 +107,10 @@ end;
 
 procedure InitializeWizard;
 begin
+  WizardForm.ReadyMemo.WordWrap := True;
+  WizardForm.ReadyMemo.ScrollBars := ssVertical;
   InitializeContent;
+  InitializeVerification;
   SpeechPage := CreateInputOptionPage(wpSelectTasks, CustomMessage('SpeechTitle'),
     CustomMessage('SpeechDescription'), CustomMessage('SpeechExplanation'), False, False);
   SpeechPage.Add(CustomMessage('SpeechChoice'));
@@ -109,6 +118,23 @@ begin
   DownloadPage := CreateDownloadPage(CustomMessage('RuntimeDownloadTitle'),
     CustomMessage('RuntimeDownloadDescription'), nil);
   DownloadPage.ShowBaseNameInsteadOfUrl := True;
+end;
+
+function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoTypeInfo,
+  MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
+begin
+  Result := MemoDirInfo + NewLine + NewLine + MemoTasksInfo + NewLine + NewLine +
+    CustomMessage('PublicTemporaryFiles') + NewLine + Space + ExpandConstant('{tmp}');
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then CleanupContent;
+end;
+
+procedure DeinitializeSetup;
+begin
+  CleanupContent;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -165,6 +191,8 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := InstallationError;
+  // Refuse the installation transaction unless acquisition actually completed.
+  if (Result = '') and not ContentPrepared then Result := CustomMessage('PublicDownloadFailed');
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -174,6 +202,7 @@ var
 begin
   Result := True;
   if CurPageID <> wpReady then exit;
+  ContentPrepared := False;
   Error := InstallationError;
   if Error <> '' then begin
     SuppressibleMsgBox(Error, mbError, MB_OK, IDOK);
@@ -181,9 +210,11 @@ begin
     exit;
   end;
   Result := PrepareContent;
+  ContentPrepared := Result;
   if not Result or (SelectedProfile < 2) or RuntimeReady or not SpeechPage.Values[0] then exit;
   // Silent installation never grants consent to an external elevated installer.
   if WizardSilent then exit;
+  ContentPrepared := False;
   DownloadPage.Clear;
   DownloadPage.Add(RuntimeUrl, 'vc_redist.x64.exe', RuntimeHash);
   DownloadPage.Show;
@@ -208,6 +239,7 @@ begin
     exit;
   end;
   Result := RuntimeReady;
+  ContentPrepared := Result;
   if not Result then
     SuppressibleMsgBox(CustomMessage('RuntimeNotInstalled'), mbInformation, MB_OK, IDOK);
 end;

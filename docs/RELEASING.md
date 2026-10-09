@@ -16,7 +16,7 @@ dispatched independently and do not start additional push or PR runs.
 | --- | --- | --- |
 | `pr.yml` | PRs and main pushes; select affected checks on Windows, Linux, macOS ARM64 and Intel. Shared/unknown changes select all platforms. Documentation-only changes avoid native builds. | Read-only tests and one shared RustSec audit, followed by the required `PR checks` aggregate. No distributions. |
 | `release.yml` | Manual dispatch on main: `verify` (default) tests portable packages without uploading them; `build` uploads reviewed candidates; `draft` prepares an independently qualified draft; `installer` wraps the qualified Windows portable. Portable targets: Windows x64, macOS ARM64 or both. | Preflight before expensive work. Write tokens only in staging jobs; no automatic publication. |
-| `windows-installers.yml` | Reusable Windows installer stage called by Release on main. Produces Minimal, Standard and Complete offline installers plus a small web selector. Tests exact profile contents, installation, repair, profile mismatch rejection and removal before creating an unpublished review draft. | Reuses the released application bytes; records the wrapper commit and run separately. Local graphics acceptance is required if hosted OpenGL is unavailable. |
+| `windows-installers.yml` | Reusable Windows installer stage called by Release on main. Produces Minimal, Standard and Complete offline installers plus a Web installer using the same wizard. Tests exact profile contents, installation, repair, cancellation, profile mismatch rejection and removal before creating an unpublished review draft. | Reuses the released application bytes; records the wrapper commit and run separately. Local graphics acceptance is required if hosted OpenGL is unavailable. |
 | `delivery-candidates.yml` | Reusable Release build engine. Synthetic delivery controls also run inside PR validation. | Read-only token; optional Mac signing uses separate protected steps. Artifact upload requires reviewed redistribution materials. |
 | `delivery-draft.yml` | Reusable Release verifier and draft creator. | Exact run/attempt/commit and artifact verification; independently reviewed inert draft upload. |
 | `rust-audit.yml` | Reusable audit called by PR validation and Release. No NOH compilation. | Vulnerabilities, unsoundness advisories and acquisition errors fail the job. Public diagnostic uploads are optional. |
@@ -29,9 +29,10 @@ current Windows installer workflow preserves the three content profiles and web
 selection in ordinary per-user public installers. It does not enable the private
 updater/controller protocol. Minimal includes the application, CLI and MCP but
 no FFmpeg, preview runtime or speech files. Standard adds FFmpeg and preview;
-Complete adds Whisper and models. The web selector downloads only the chosen
-offline installer from the official release and checks its compiled-in SHA-256
-before starting it. Existing installations keep their profile and folder;
+Complete adds Whisper and models. The Web installer embeds Minimal and downloads
+the selected component archives from the official release, verifies their
+compiled-in SHA-256 with progress and cancellation, and installs them in the same
+wizard. It explains and cleans up its temporary storage. Existing installations keep their profile and folder;
 the selected content can grow without uninstalling. Minimal setup and the installed
 `noh-components.exe` helper share the acquisition/extraction code. The GUI starts
 that helper from its missing-resource panel and rechecks availability afterwards.
@@ -230,8 +231,10 @@ offline profile with `--profile <minimal|standard|complete> --helper <helper-exe
 Each invocation also requires `--bundle <portable-folder> --commit <source-sha>
 --components <component-folder> --compiler <Inno-Setup-7.1.0-folder> --output <new-folder>`.
 It verifies the portable manifest, content archives, input authority and compiler
-pins before generating its exact file list. `tools/installer/public-web.py` binds
-the small selector to the three resulting installers.
+pins before generating its exact file list. Build Web with the same
+`tools/public-installer.py --web --profile minimal --helper <helper-exe>` and
+the matching bundle, component catalogue, compiler and output arguments above.
+Web acquires components through the shared wizard; it does not launch an offline installer.
 It does not rebuild NOH. Preserve `INSTALLER.json`, the wrapper source ZIP and
 native install/uninstall evidence alongside the original delivery identity.
 Qualify this additional executable independently before advertising it.

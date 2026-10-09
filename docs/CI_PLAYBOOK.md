@@ -263,7 +263,8 @@ release operations. Reused binaries retain their original embedded source identi
 
 For NOH, use the **Release** entrypoint on `main`: `build` prepares portable
 candidates, `draft` stages independently qualified output, and `installer` wraps
-the qualified Windows portable into three offline profiles and a web selector
+the qualified Windows portable into three offline profiles and a Web installer
+that embeds Minimal and acquires optional components in the same wizard,
 without compiling NOH. Ordinary pushes run PR
 validation; they do not start a release build. The five reusable workflow files
 have no independent dispatch/push/PR triggers. The measurement workflows and
