@@ -1,9 +1,6 @@
 name: Windows installers
 
 on:
-  push:
-    branches: [codex/windows-release-installer]
-    paths: ['.github/workflows/windows-installers.yml', 'tools/installer/**']
   workflow_dispatch:
     inputs:
       source_run_id:
@@ -40,7 +37,7 @@ concurrency:
 
 jobs:
   public-installer:
-    if: github.repository_id == '1411000018' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/windows-release-installer')
+    if: github.repository_id == '1411000018' && github.ref == 'refs/heads/main'
     runs-on: windows-2025
     timeout-minutes: 25
     permissions:
