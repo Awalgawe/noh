@@ -190,3 +190,21 @@ those unchanged assets to an ordinary GitHub release. The tag must identify the
 compiled source commit. A subsequent documentation/qualification commit may add
 the release link and evidence without rebuilding or relabelling that binary.
 The hosted draft path keeps its separate run/protected-environment requirements.
+
+The ordinary Windows installer is a separate wrapper around those exact portable
+bytes. `tools/public-installer.py --bundle <portable-folder> --commit <source-sha>
+--compiler <Inno-Setup-7.1.0-folder> --output <new-folder>` verifies the portable
+manifest, input authority and compiler pins before generating its exact file list.
+It does not rebuild NOH. Preserve `INSTALLER.json`, the wrapper source ZIP and
+native install/uninstall evidence alongside the original delivery identity.
+Qualify this additional executable independently before advertising it.
+
+The wizard installs per user, detects the tested Microsoft v14 x64 prerequisite,
+and offers a direct download only when needed. It pins the Microsoft-signed
+14.51.36247.0 installer by SHA-256, displays download progress/cancellation,
+opens Microsoft's own licence/install UI, then checks the prerequisite again.
+No Microsoft binary or installer is embedded or mirrored. Skipping the option
+keeps preview/export/existing subtitles available. Silent NOH installation does
+not launch the external installer; provisioning that prerequisite is a separate
+administrator action. Native acceptance must distinguish a simulated missing
+prerequisite from an actually absent system installation.

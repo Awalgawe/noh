@@ -11,7 +11,8 @@ The Windows candidate uses MSYS2 libmpv **0.40.0-4**, dynamically loaded through
 `libloading` 0.8.9 (ISC). The producer declares `GPL-2.0-or-later`; its linked
 FFmpeg build declares GPLv3 or later. This replaces the historical upstream CI
 LGPL runtime. Original license alternatives and the full combined component
-inventory require independent review before distribution.
+inventory are covered by the exact-input Windows material review in
+[WINDOWS_REDISTRIBUTION.md](WINDOWS_REDISTRIBUTION.md).
 
 `assets/preview-runtime.json` and `assets/windows-native.lock.json` pin the exact
 binary/source packages, patches, recipe and runtime file hashes. The portable
@@ -36,19 +37,34 @@ copies this inventory as `bin/speech/SPEECH-BUNDLE.json`; the outer manifest
 covers it too. The inventory keys retain upstream filenames; runtime/models
 are in `bin/speech/` and the `*-LICENSE.txt` notices are in `licenses/`.
 Executables, libraries and model weights remain outside Git. No media upload,
-startup download, system installation or additional Python runtime is needed.
+startup model download or additional Python runtime is needed. The Windows
+speech tool requires the external Microsoft Visual C++ v14 x64 runtime. The
+ordinary installer offers its direct Microsoft download when missing; Microsoft's
+installer and DLLs are not redistributed in NOH packages.
 
 The delivery acquisition script extracts NVIDIA's full 61,498-byte license from
 the checksum-pinned cuBLAS archive, not from a reformatted web notice. The two
 model license URLs identify immutable upstream commits; their existing file
-hashes are unchanged. This preserves texts, but does not establish a completed
-CUDA redistribution review.
+hashes are unchanged. The reviewed CUDA distribution basis is recorded separately
+in [WINDOWS_REDISTRIBUTION.md](WINDOWS_REDISTRIBUTION.md).
 
 ## Rust dependencies
 
 `Cargo.lock` pins the current dependency versions. Their individual licenses
-continue to apply. A complete distribution notice inventory is still required
-before a public release.
+continue to apply. The reviewed Windows materials include the complete locked
+NOH/native graphs and additional Rust standard-library dependency sources and
+notices; see [RUST_NOTICE_DECISIONS.md](RUST_NOTICE_DECISIONS.md).
+
+## Windows installer
+
+The optional ordinary Windows installer uses **Inno Setup 7.1.0**, copyright
+1997-2026 Jordan Russell and portions copyright 2000-2026 Martijn Laan.
+Its [original licence](https://jrsoftware.org/files/is/license.txt) permits use
+and redistribution with its notices retained.
+The installer keeps the producer's notices and installs the original licence
+as `licenses/INNO-SETUP-LICENSE.txt`. Wrapper sources and the same licence are
+provided alongside the release. See [Inno Setup](https://jrsoftware.org/isinfo.php)
+and its [source code](https://github.com/jrsoftware/issrc/tree/is-7_1_0).
 
 Candidate source materials include `cargo vendor --locked --offline` output for
 the complete lockfile and a generated `RUST-INVENTORY.json` with version/source

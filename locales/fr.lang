@@ -450,7 +450,7 @@ resources.preview=L’aperçu rapide est indisponible. Rétablissez le dossier c
 resources.details=Détails techniques
 error.dependencies=Une bibliothèque nécessaire manque ou est incompatible. Rétablissez le dossier complet de l’application ou consultez Ressources et outils dans les options.
 resources.recheck=Vérifier à nouveau
-resources.microsoft=Runtime Microsoft Visual C++ officiel
+resources.microsoft=Télécharger le composant Microsoft
 
 subtitle.transcribing_gpu=Transcription sur GPU…
 subtitle.transcribing_cpu=Transcription sur CPU…

@@ -450,7 +450,7 @@ resources.preview=Die schnelle Vorschau ist nicht verfügbar. Stellen Sie den vo
 resources.details=Technische Details
 error.dependencies=Eine benötigte Laufzeitbibliothek fehlt oder ist inkompatibel. Stellen Sie den vollständigen Anwendungsordner wieder her oder prüfen Sie Ressourcen und Werkzeuge in den Einstellungen.
 resources.recheck=Erneut prüfen
-resources.microsoft=Offizielle Microsoft Visual C++-Laufzeit
+resources.microsoft=Microsoft-Komponente herunterladen
 
 subtitle.transcribing_gpu=Transkription auf GPU…
 subtitle.transcribing_cpu=Transkription auf CPU…

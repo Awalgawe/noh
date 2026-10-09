@@ -24,6 +24,9 @@ import plistlib
 spec = importlib.util.spec_from_file_location("delivery_release", Path(__file__).with_name("delivery-release.py"))
 release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
+spec = importlib.util.spec_from_file_location("public_installer", Path(__file__).with_name("public-installer.py"))
+public_installer = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(public_installer)
 COMMIT = "a" * 40
 
 
@@ -51,6 +54,38 @@ def pe_fixture(name=None, delay=False):
 
 
 class DeliveryTests(unittest.TestCase):
+    def test_public_installer_rejects_changed_portable_before_compiler(self):
+        (self.bundle / 'noh.exe').write_bytes(b'changed after qualification')
+        with patch.object(public_installer.subprocess, 'run') as compile_process:
+            with self.assertRaisesRegex(ValueError, 'checksum mismatch'):
+                public_installer.build(self.bundle, COMMIT, self.root / 'compiler', self.root / 'installer')
+            compile_process.assert_not_called()
+        self.assertFalse((self.root / 'installer').exists())
+
+    def test_public_installer_rejects_microsoft_payload_even_with_updated_manifest(self):
+        (self.bundle / 'vc_redist.x64.exe').write_bytes(b'not a distributable NOH input')
+        self.manifest['sha256']['vc_redist.x64.exe'] = delivery.digest(self.bundle / 'vc_redist.x64.exe')
+        delivery.write(self.bundle / 'manifest.json', self.manifest)
+        with patch.object(delivery, 'authorize_redistribution'), patch.object(public_installer.subprocess, 'run') as compile_process:
+            with self.assertRaisesRegex(ValueError, 'must not be redistributed'):
+                public_installer.build(self.bundle, COMMIT, self.root / 'compiler', self.root / 'installer')
+            compile_process.assert_not_called()
+
+    def test_public_installer_rejects_changed_compiler_before_output(self):
+        compiler = self.root / 'compiler'
+        compiler.mkdir()
+        (compiler / 'ISCC.exe').write_bytes(b'wrong compiler')
+        with patch.object(delivery, 'authorize_redistribution'), patch.object(public_installer.subprocess, 'run') as compile_process:
+            with self.assertRaisesRegex(ValueError, 'compiler pin mismatch'):
+                public_installer.build(self.bundle, COMMIT, compiler, self.root / 'installer')
+            compile_process.assert_not_called()
+        self.assertFalse((self.root / 'installer').exists())
+
+    def test_public_installer_paths_cannot_inject_script_directives(self):
+        for value in ('bad"; Flags: external', 'bad\n[Run]', 'bad{code:Injected}'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                public_installer.quoted(value)
+
     def test_native_notices_hash_all_sources_but_materialize_only_notice_inputs(self):
         crates = self.root / 'native-crates'
         crates.mkdir()

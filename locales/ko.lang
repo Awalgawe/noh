@@ -450,7 +450,7 @@ resources.preview=빠른 미리보기를 사용할 수 없습니다. 앱 폴더 
 resources.details=기술 세부 정보
 error.dependencies=필요한 런타임 라이브러리가 없거나 호환되지 않습니다. 앱 폴더 전체를 복원하거나 설정의 리소스 및 도구를 확인하세요.
 resources.recheck=다시 확인
-resources.microsoft=공식 Microsoft Visual C++ 런타임
+resources.microsoft=Microsoft 구성 요소 다운로드
 
 subtitle.transcribing_gpu=GPU로 음성 인식 중…
 subtitle.transcribing_cpu=CPU로 음성 인식 중…

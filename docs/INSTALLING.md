@@ -1,20 +1,37 @@
 # Download and install NOH
 
-Download the Windows x64 portable ZIP from the
+Download the Windows x64 installer or portable ZIP from the
 [latest GitHub release](https://github.com/Awalgawe/noh/releases/latest).
-Choose the application ZIP from **Assets**. The separate `-materials.zip` and
+Choose **Setup.exe** for guided installation, or the application ZIP for a
+portable copy. The separate `-materials.zip`, `-installer-sources.zip` and
 GitHub's **Source code** downloads contain sources and build materials.
 
 Read the release notes for tested Windows versions and package checksums.
 The public Windows download is a complete portable application, with media
 libraries and local speech models. It does not require Rust, Python or a
-separate FFmpeg installation. There is no public installer or automatic updater.
+separate FFmpeg installation. Automatic updating is not enabled.
 Allow space for both the ZIP and its extracted folder, plus your media/exports.
 
 macOS and Linux currently require a [source build](BUILDING.md). The experimental
 Mac portable is not signed or notarized and is not offered as a supported download.
 
 ## Windows
+
+### Guided installation
+
+Open **NOH-<version>-windows-x64-Setup.exe** and follow the wizard. It installs
+NOH for your Windows account and adds a Start menu shortcut. If the Microsoft
+component needed for automatic subtitles is missing, the wizard offers to
+download it directly from Microsoft and opens Microsoft's installer. Leave the
+option selected and follow the prompts; Windows may request administrator
+approval for that component. NOH itself installs without administrator rights.
+
+The download is checked before it runs. You can cancel it or go Back and clear
+the automatic-subtitles option. Preview, export and existing SRT subtitles still
+work when you skip this optional step. After installing the component later,
+use **Resolve missing components**, then **Check again** in NOH.
+
+### Portable copy
 
 1. Save the complete portable ZIP to your computer.
 2. Right-click it and choose **Extract All**. Choose a folder you can write to,
@@ -29,7 +46,9 @@ later launches. NOH's portable package has no installation wizard.
 Microsoft describes the extraction steps in its
 [ZIP guide](https://support.microsoft.com/en-us/windows/experience/storage-filemanagement/zip-and-unzip-files).
 
-For local transcription, install the **Microsoft Visual C++ v14 Redistributable
+For local transcription in a portable copy, use **Download the Microsoft
+component** in NOH's missing-components settings, open the downloaded installer,
+then choose **Check again**. You can also install the **Microsoft Visual C++ v14 Redistributable
 (x64)** from [Microsoft](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
 The package is tested with version **14.51.36247.0**; use this or a newer compatible
 v14 runtime. Older versions are not qualified by this package. Microsoft's
@@ -67,7 +86,8 @@ portable copy, close NOH and extract the complete new package into a new folder.
 Check that it opens before removing the previous copy. Keep any media or exports
 you saved inside the old folder before deleting it.
 
-To remove NOH, close it and delete its portable folder on Windows. Media and exports saved elsewhere remain in place.
+For the installed version, use Windows **Apps & features** to uninstall NOH.
+For a portable copy, close NOH and delete its folder. Media and exports saved elsewhere remain in place.
 The small language-preference file is stored separately and is not removed with
 the application.
 

@@ -450,7 +450,7 @@ resources.preview=快速预览不可用。请恢复完整的应用程序文件�
 resources.details=技术详情
 error.dependencies=所需运行库缺失或不兼容。请恢复完整的应用程序文件夹，或查看设置中的资源与工具。
 resources.recheck=重新检查
-resources.microsoft=微软官方 Visual C++ 运行库
+resources.microsoft=下载 Microsoft 组件
 
 subtitle.transcribing_gpu=正在使用 GPU 转写…
 subtitle.transcribing_cpu=正在使用 CPU 转写…

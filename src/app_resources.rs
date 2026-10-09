@@ -221,7 +221,7 @@ impl NohApp {
         {
             ui.hyperlink_to(
                 l.text("resources.microsoft"),
-                "https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist",
+                "https://aka.ms/vc14/vc_redist.x64.exe",
             );
         }
     }

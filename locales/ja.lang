@@ -450,7 +450,7 @@ resources.preview=高速プレビューを利用できません。アプリの�
 resources.details=技術的な詳細
 error.dependencies=必要な実行時ライブラリがないか互換性がありません。アプリのフォルダー全体を復元するか、設定のリソースとツールを確認してください。
 resources.recheck=再確認
-resources.microsoft=Microsoft公式Visual C++ランタイム
+resources.microsoft=Microsoft コンポーネントをダウンロード
 
 subtitle.transcribing_gpu=GPUで文字起こし中…
 subtitle.transcribing_cpu=CPUで文字起こし中…

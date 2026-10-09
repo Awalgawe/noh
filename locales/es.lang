@@ -450,7 +450,7 @@ resources.preview=La vista previa rápida no está disponible. Restaura la carpe
 resources.details=Detalles técnicos
 error.dependencies=Falta una biblioteca necesaria o es incompatible. Restaura la carpeta completa de la aplicación o consulta Recursos y herramientas en los ajustes.
 resources.recheck=Comprobar de nuevo
-resources.microsoft=Runtime oficial de Microsoft Visual C++
+resources.microsoft=Descargar el componente de Microsoft
 
 subtitle.transcribing_gpu=Transcribiendo con GPU…
 subtitle.transcribing_cpu=Transcribiendo con CPU…
