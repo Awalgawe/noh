@@ -1,11 +1,16 @@
 # Prepared macOS signing and notarization
 
+See [code signing for GitHub releases](CODE_SIGNING.md) for the shared Windows/Mac
+provider decision and current account prerequisites. Developer ID is for
+distribution outside the Mac App Store, including GitHub Releases.
+
 This procedure is prepared and tested with simulated commands on Windows. It has
 not signed or submitted a real application. Native acceptance remains required
 on the exact final Apple Silicon package. No Apple account, certificate or secret
 has been created or configured by this preparation.
 
-The manual candidate workflow defaults to `compile-only` and `sign_macos=false`.
+The Release workflow's `verify` and `build` stages request portable candidates;
+`sign_macos=false` remains the default.
 Signing requires `main`, `portable`, `macos-arm64` or `all`, and the protected
 `noh-macos-signing` environment. Configure that environment with an independent
 required reviewer, prevention of self-review and a main-only deployment policy.
