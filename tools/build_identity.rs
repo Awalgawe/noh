@@ -376,23 +376,33 @@ mod tests {
         assert_eq!(cargo_info(None), None);
     }
 
-    fn repository() -> Option<tempfile::TempDir> {
+    // Fixture creation writes objects/indexes and can exceed the production
+    // metadata probe's five-second budget on hosted Windows runners. Keep it
+    // bounded, but preserve stderr/status instead of converting errors to None.
+    fn fixture_git(root: &Path, args: &[&str]) {
+        let output = process::run(git_command(root, args), Duration::from_secs(30))
+            .unwrap_or_else(|error| panic!("Git fixture {args:?}: {error}"));
+        assert!(
+            output.status.success(),
+            "Git fixture {args:?} failed with {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn repository() -> tempfile::TempDir {
         let root = tempfile::tempdir().unwrap();
-        if git(root.path(), &["init", "--quiet"]).is_none() {
-            eprintln!("Git unavailable; skipping temporary Git repository checks");
-            return None;
-        }
+        fixture_git(root.path(), &["init", "--quiet"]);
         project(root.path());
         fs::write(root.path().join(".gitignore"), b"/target/\n").unwrap();
         let hooks = root.path().join("disabled-hooks");
-        git(
+        fixture_git(
             root.path(),
             &["config", "core.hooksPath", hooks.to_str().unwrap()],
-        )
-        .unwrap();
-        git(root.path(), &["config", "core.autocrlf", "false"]).unwrap();
-        git(root.path(), &["add", "."]).unwrap();
-        git(
+        );
+        fixture_git(root.path(), &["config", "core.autocrlf", "false"]);
+        fixture_git(root.path(), &["add", "."]);
+        fixture_git(
             root.path(),
             &[
                 "-c",
@@ -407,16 +417,13 @@ mod tests {
                 "-m",
                 "synthetic test repository",
             ],
-        )
-        .unwrap();
-        Some(root)
+        );
+        root
     }
 
     #[test]
     fn git_records_clean_dirty_and_ignored_files_without_changing_revision() {
-        let Some(root) = repository() else {
-            return;
-        };
+        let root = repository();
         let clean = git_info(root.path());
         assert!(clean.revision.is_some());
         assert_eq!(clean.dirty, Some(false));
@@ -427,7 +434,7 @@ mod tests {
         let dirty = git_info(root.path());
         assert_eq!(dirty.revision, clean.revision);
         assert_eq!(dirty.dirty, Some(true));
-        git(root.path(), &["checkout", "--", "src/lib.rs"]).unwrap();
+        fixture_git(root.path(), &["checkout", "--", "src/lib.rs"]);
         fs::write(root.path().join("src/new.rs"), b"untracked").unwrap();
         assert_eq!(git_info(root.path()).dirty, Some(true));
         assert!(clean.watches.contains(&root.path().join(".git/index")));
@@ -437,11 +444,9 @@ mod tests {
 
     #[test]
     fn worktree_revision_and_watches_use_indirected_git_and_common_dirs() {
-        let Some(root) = repository() else {
-            return;
-        };
+        let root = repository();
         let worktree = tempfile::tempdir().unwrap();
-        git(
+        fixture_git(
             root.path(),
             &[
                 "worktree",
@@ -451,8 +456,7 @@ mod tests {
                 worktree.path().to_str().unwrap(),
                 "HEAD",
             ],
-        )
-        .unwrap();
+        );
         let original = git_info(root.path());
         let info = git_info(worktree.path());
         assert_eq!(info.revision, original.revision);
@@ -498,7 +502,7 @@ pub struct GitInfo {
     pub dirty: Option<bool>,
     pub watches: Vec<PathBuf>,
 }
-fn git(root: &Path, args: &[&str]) -> Option<Output> {
+fn git_command(root: &Path, args: &[&str]) -> Command {
     let mut command = Command::new("git");
     command
         .arg("-C")
@@ -522,7 +526,11 @@ fn git(root: &Path, args: &[&str]) -> Option<Output> {
     ] {
         command.env_remove(key);
     }
-    run(command)
+    command
+}
+
+fn git(root: &Path, args: &[&str]) -> Option<Output> {
+    run(git_command(root, args))
 }
 
 pub fn git_info(root: &Path) -> GitInfo {
