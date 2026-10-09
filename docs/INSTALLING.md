@@ -1,20 +1,36 @@
 # Download and install NOH
 
-Download the Windows x64 portable ZIP from the
+Download NOH for Windows x64 from the
 [latest GitHub release](https://github.com/Awalgawe/noh/releases/latest).
-Choose the application ZIP (`NOH-<version>-windows-x64.zip`). The separate `-materials.zip` and
-GitHub's **Source code** downloads contain sources and build materials.
+Choose **`NOH-<version>-windows-x64-Setup.exe`** for guided installation, or
+`NOH-<version>-windows-x64.zip` for a portable copy. The separate `-materials.zip`,
+`-installer-sources.zip` and GitHub's **Source code** downloads contain sources and build materials.
 
 Read the release notes for tested Windows versions and package checksums.
-The public Windows download is a complete portable application, with media
+Both Windows downloads include the application, media
 libraries and local speech models. It does not require Rust, Python or a
 separate FFmpeg installation. Automatic updating is not enabled.
-Allow space for both the ZIP and its extracted folder, plus your media/exports.
+Allow space for the download and installed files, plus your media/exports.
 
 macOS and Linux currently require a [source build](BUILDING.md). The experimental
 Mac portable is not signed or notarized and is not offered as a supported download.
 
 ## Windows
+
+### Guided installation
+
+1. Open **NOH-<version>-windows-x64-Setup.exe** and choose your language.
+2. Keep the proposed installation folder or choose another writable folder.
+3. If the Microsoft component for automatic subtitles is missing, the wizard
+   offers to download it. Microsoft's installer presents its own licence and may
+   request administrator approval. You can leave this optional component for later.
+4. Finish installation, then open **NOH** from the Start menu. A desktop shortcut
+   is optional.
+
+NOH installs for your Windows account without requiring administrator rights.
+It includes the same application, media tools and speech models as the portable ZIP.
+The optional Microsoft download is separate; it is skipped when a compatible
+runtime is already present. NOH itself does not need an Internet connection for editing.
 
 ### Portable copy
 
@@ -70,6 +86,11 @@ Automatic update installation is disabled in ordinary builds. To update a
 portable copy, close NOH and extract the complete new package into a new folder.
 Check that it opens before removing the previous copy. Keep any media or exports
 you saved inside the old folder before deleting it.
+
+For an installed copy, close NOH and run the new release's installer. To remove
+it, open Windows **Settings > Apps**, select **NOH**, then choose **Uninstall**.
+User-created files in the installation folder are preserved; keep your media
+and exports in your own folders.
 
 To remove the portable copy, close NOH and delete its folder. Media and exports saved elsewhere remain in place.
 The small language-preference file is stored separately and is not removed with

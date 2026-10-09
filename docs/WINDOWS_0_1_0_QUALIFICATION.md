@@ -1,9 +1,9 @@
 # Windows 0.1.0 portable qualification
 
 This record covers the ordinary Windows x64 portable ZIP and its corresponding
-source/materials ZIP. The installer is excluded: its source and wrapper compile
-were reviewed, but the native UI tool refused the interactive test launch.
-It is not an accepted installer or a published download for this release.
+source/materials ZIP. The installer wraps those unchanged application bytes;
+its separate build identity and acceptance results are recorded in the
+[installer qualification report](WINDOWS_0_1_0_INSTALLER.md).
 
 ## Exact source and artifacts
 
@@ -77,6 +77,6 @@ and [Defender scan documentation](https://learn.microsoft.com/en-us/defender-end
 
 The application binaries and source snapshot are frozen at the compiled commit.
 Current online installation instructions and release notes identify the
-portable-only offering; packaged guides reflect the earlier build-source
+installer and portable offering; packaged guides reflect the earlier build-source
 snapshot and include generic installer instructions. This metadata update does
 not rebuild or relabel the application. Automatic application updating is disabled.

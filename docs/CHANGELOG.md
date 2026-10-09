@@ -7,7 +7,7 @@ builds are not public releases.
 
 ## 0.1.0 — 2026-10-09
 
-The first public Windows x64 portable release is available from
+The first public Windows x64 release, with an installer and a portable ZIP, is available from
 [GitHub Releases](https://github.com/Awalgawe/noh/releases/tag/v0.1.0).
 
 ### Added
@@ -29,13 +29,15 @@ The first public Windows x64 portable release is available from
 - PR checks that select affected platforms and avoid native builds for documentation.
 - A separate manual pipeline for package verification, candidate builds and release drafts.
 - A Windows x64 portable package with bundled media tools and local speech models.
+- A per-user Windows installer, Start-menu shortcut and uninstaller, built and
+  tested through the standard Release pipeline from the qualified portable bytes.
+- An optional direct Microsoft prerequisite download in the installation wizard.
 - A direct Microsoft download action when the optional transcription prerequisite is missing.
 - Corresponding native/Rust source archives, build recipes and original licence notices.
 
 ### Known limitations
 
 - macOS and Linux packages are not available; these targets require source builds.
-- The guided Windows installer is implemented but awaits interactive qualification; this release provides the portable ZIP.
 - macOS distribution signing and notarization are not complete.
 - Automatic update installation is disabled in ordinary builds.
 - The desktop does not restore the editing session after closing.

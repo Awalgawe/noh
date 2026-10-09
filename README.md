@@ -40,12 +40,14 @@ NOH is focused on repeating visual sequences, music and short extracts. It is no
 
 **[Download NOH for Windows](https://github.com/Awalgawe/noh/releases/latest)**
 
-Choose the application ZIP (`NOH-<version>-windows-x64.zip`) in the release assets. Extract the complete
-ZIP, then open `noh.exe`. Keep the `bin`, `docs` and `licenses` folders together.
-The separate `-materials.zip` contains source code and build materials.
+Choose **`NOH-<version>-windows-x64-Setup.exe`** and follow the installation wizard.
+Then open **NOH** from the Start menu. A portable ZIP is also available: extract
+the complete `NOH-<version>-windows-x64.zip`, then open `noh.exe`.
+The separate `-materials.zip` and `-installer-sources.zip` contain sources and build materials.
 
-The portable package includes the media tools and local speech models. If the
-Microsoft component needed for automatic subtitles is missing, NOH provides a
+Both packages include the media tools and local speech models. If the
+Microsoft component needed for automatic subtitles is missing, the installer
+offers to download it directly from Microsoft. In a portable copy, NOH provides a
 **Download the Microsoft component** action. Install it, then choose **Check
 again**. Preview, export and existing subtitles also work without that component.
 
