@@ -68,35 +68,35 @@
       "evidence": {
         "audio_gpu": {
           "path": "docs/release-evidence/windows-0.1.1.json",
-          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+          "sha256": "2f6f495ae3955f1c3b1fd44468d937f30489eb008e76f78ae256d8632e16c70e"
         },
         "clean_install": {
           "path": "docs/release-evidence/windows-0.1.1.json",
-          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+          "sha256": "2f6f495ae3955f1c3b1fd44468d937f30489eb008e76f78ae256d8632e16c70e"
         },
         "corresponding_sources": {
           "path": "docs/release-evidence/windows-0.1.1.json",
-          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+          "sha256": "2f6f495ae3955f1c3b1fd44468d937f30489eb008e76f78ae256d8632e16c70e"
         },
         "download_protection": {
           "path": "docs/release-evidence/windows-0.1.1.json",
-          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+          "sha256": "2f6f495ae3955f1c3b1fd44468d937f30489eb008e76f78ae256d8632e16c70e"
         },
         "media_export": {
           "path": "docs/release-evidence/windows-0.1.1.json",
-          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+          "sha256": "2f6f495ae3955f1c3b1fd44468d937f30489eb008e76f78ae256d8632e16c70e"
         },
         "native_import_closure": {
           "path": "docs/release-evidence/windows-0.1.1.json",
-          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+          "sha256": "2f6f495ae3955f1c3b1fd44468d937f30489eb008e76f78ae256d8632e16c70e"
         },
         "offline_transcription": {
           "path": "docs/release-evidence/windows-0.1.1.json",
-          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+          "sha256": "2f6f495ae3955f1c3b1fd44468d937f30489eb008e76f78ae256d8632e16c70e"
         },
         "rust_notices": {
           "path": "docs/release-evidence/windows-0.1.1.json",
-          "sha256": "ade1c84999b45b556286c6f7bb8d276050a2e4f64248e2e0ba33792ce192b801"
+          "sha256": "2f6f495ae3955f1c3b1fd44468d937f30489eb008e76f78ae256d8632e16c70e"
         }
       },
       "platform": "windows-x64",
