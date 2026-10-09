@@ -1,7 +1,7 @@
 # Release readiness
 
 Publishing the source repository and distributing a supported application are
-separate steps. No public binary release is currently qualified.
+separate steps. Windows 0.1.0 portable is qualified; its installer is tracked separately.
 
 ## Prepared delivery chain
 
@@ -200,6 +200,23 @@ manifest, input authority and compiler pins before generating its exact file lis
 It does not rebuild NOH. Preserve `INSTALLER.json`, the wrapper source ZIP and
 native install/uninstall evidence alongside the original delivery identity.
 Qualify this additional executable independently before advertising it.
+
+`windows-installers.yml` also has a public Windows job for the initial 0.1.0
+release. It verifies the existing release tag, portable ZIP and manifest hashes,
+then compiles the unchanged wrapper with the pinned Inno compiler. The application
+is not rebuilt. Its receipt distinguishes the application commit from the wrapper
+workflow commit and run/attempt, and records the actual installer SHA-256.
+The hosted test installs into a disposable path containing spaces, checks every
+installed payload hash, launches the GUI and CLI, reinstalls, and uninstalls while
+checking that a user-created file survives. Silent installation does not exercise
+the Microsoft prerequisite wizard. Existing portable media qualification remains
+valid for the unchanged installed application bytes.
+
+Successful output is retained in an unpublished review draft to avoid Actions
+artifact-storage quotas. This job never publishes that draft or changes the live
+release. After reviewing the exact results and any required interactive checks,
+add those same tested bytes and wrapper sources to the ordinary release, together
+with their checksum and provenance. Do not publish the temporary review draft.
 
 The wizard installs per user, detects the tested Microsoft v14 x64 prerequisite,
 and offers a direct download only when needed. It pins the Microsoft-signed
