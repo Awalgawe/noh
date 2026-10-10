@@ -103,6 +103,47 @@
       "review_round": "windows-0.1.1-portable-v1",
       "scope": "Ordinary portable and corresponding materials only; installer wrappers and publication excluded",
       "source_commit": "9a8ee751d95c5950c3dffab0eb34ca8493d8e8f0"
+    },
+    {
+      "delivery_sha256": "afebb0d5f864863c3ddf74b58e4e1128bbbb7b9cd5225f0b9ddcd303feb5dca9",
+      "evidence": {
+        "audio_gpu": {
+          "path": "docs/release-evidence/windows-0.1.2.json",
+          "sha256": "b022c746f1c4bbe510e82e91e3ccd22ec4c3034383c8cdb0d829dc344e5898da"
+        },
+        "clean_install": {
+          "path": "docs/release-evidence/windows-0.1.2.json",
+          "sha256": "b022c746f1c4bbe510e82e91e3ccd22ec4c3034383c8cdb0d829dc344e5898da"
+        },
+        "corresponding_sources": {
+          "path": "docs/release-evidence/windows-0.1.2.json",
+          "sha256": "b022c746f1c4bbe510e82e91e3ccd22ec4c3034383c8cdb0d829dc344e5898da"
+        },
+        "download_protection": {
+          "path": "docs/release-evidence/windows-0.1.2.json",
+          "sha256": "b022c746f1c4bbe510e82e91e3ccd22ec4c3034383c8cdb0d829dc344e5898da"
+        },
+        "media_export": {
+          "path": "docs/release-evidence/windows-0.1.2.json",
+          "sha256": "b022c746f1c4bbe510e82e91e3ccd22ec4c3034383c8cdb0d829dc344e5898da"
+        },
+        "native_import_closure": {
+          "path": "docs/release-evidence/windows-0.1.2.json",
+          "sha256": "b022c746f1c4bbe510e82e91e3ccd22ec4c3034383c8cdb0d829dc344e5898da"
+        },
+        "offline_transcription": {
+          "path": "docs/release-evidence/windows-0.1.2.json",
+          "sha256": "b022c746f1c4bbe510e82e91e3ccd22ec4c3034383c8cdb0d829dc344e5898da"
+        },
+        "rust_notices": {
+          "path": "docs/release-evidence/windows-0.1.2.json",
+          "sha256": "b022c746f1c4bbe510e82e91e3ccd22ec4c3034383c8cdb0d829dc344e5898da"
+        }
+      },
+      "platform": "windows-x64",
+      "review_round": "windows-0.1.2-portable-v1",
+      "scope": "Ordinary portable and corresponding materials only; installer wrappers and publication excluded",
+      "source_commit": "d0ed2872411dd361621271c3a7927b8741ac8524"
     }
   ],
   "redistribution_records": [

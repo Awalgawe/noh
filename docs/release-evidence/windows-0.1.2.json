@@ -1,0 +1,209 @@
+{
+  "assets": {
+    "NOH-0.1.2-windows-x64-materials.zip": {
+      "sha256": "149b1546911ee8e4559ec69d1dfab6a5ddfe8386791779eeec70cfcaac048fe3",
+      "size": 1277127570
+    },
+    "NOH-0.1.2-windows-x64.zip": {
+      "sha256": "5d88e9c17b90ef8a7dc17b583bc77026ddc5554fa2cb12a109ff10e0d6f150b6",
+      "size": 1312782885
+    }
+  },
+  "build": {
+    "build_fingerprint": "095609c34a63146546b2a590ef6325447100e42249310270ff730ef4950e1923",
+    "cargo_version": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+    "features": [
+      "default",
+      "gui",
+      "mcp"
+    ],
+    "git_dirty": false,
+    "git_revision": "d0ed2872411dd361621271c3a7927b8741ac8524",
+    "options_sha256": "1ce6dbc5a54de1b0150f5325181b44153788a587c82a2d1467dd89d9b611a4e8",
+    "package_version": "0.1.2",
+    "profile": "release",
+    "rustc_version": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "schema_version": 1,
+    "source_sha256": "e336cfae6b8499fc610dc1596d79b475a5ce561a517bbd2f7383d2ef2945be9d",
+    "target": "x86_64-pc-windows-gnu"
+  },
+  "bundled_notices_comparison": {
+    "added": [],
+    "baseline": "Published 0.1.1 notices",
+    "changed": [],
+    "normalized_text_identical": true,
+    "removed": []
+  },
+  "delivery_sha256": "afebb0d5f864863c3ddf74b58e4e1128bbbb7b9cd5225f0b9ddcd303feb5dca9",
+  "download_protection": {
+    "archive_sha256_after": "5d88e9c17b90ef8a7dc17b583bc77026ddc5554fa2cb12a109ff10e0d6f150b6",
+    "attachment_services": {
+      "EXE": {
+        "policy_after": 1,
+        "policy_before": 1,
+        "save_hresult": 0,
+        "zone_identifier": "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=https://api.github.com/repos/Awalgawe/noh/actions/artifacts/11654411296/zip\r\n"
+      },
+      "PORTABLE": {
+        "policy_after": 1,
+        "policy_before": 1,
+        "save_hresult": 0,
+        "zone_identifier": "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=https://api.github.com/repos/Awalgawe/noh/actions/artifacts/11654411296/zip\r\n"
+      }
+    },
+    "defender_exit": 0,
+    "defender_seconds": 15.297,
+    "executable_sha256_after": "105bef57722ca96a9e49e7f071a9b8eee9aec929bed2f63f79a34dd13fa7698e",
+    "limits": "Downloaded GitHub Actions envelope, with the nested portable and executable marked using their actual HTTPS origin. No browser, interactive SmartScreen reputation approval or security-setting change.",
+    "origin": "https://api.github.com/repos/Awalgawe/noh/actions/artifacts/11654411296/zip (nested portable archive and executable)",
+    "protection": {
+      "AMServiceEnabled": true,
+      "AntivirusEnabled": true,
+      "AntivirusSignatureLastUpdated": "2026-10-09T17:11:21+02:00",
+      "AntivirusSignatureVersion": "1.459.644.0",
+      "RealTimeProtectionEnabled": true
+    },
+    "signature_status": "NotSigned",
+    "threats_reported": 0
+  },
+  "integration": {
+    "failed": 0,
+    "ignored": 12,
+    "log_archive_sha256": "b35e852a0bbcf13611da33b898eae2faca2223241b99ab5df601295601fbb827",
+    "log_member": "build _ Candidate windows-x64/6_Compile executables or build portable from explicit locked inputs.txt",
+    "passed": 477,
+    "run": 38010666324,
+    "suites": 22
+  },
+  "limitations": [
+    "No Authenticode signing or SmartScreen reputation is claimed.",
+    "Fresh application configuration on the recorded existing Windows host, not a fresh OS or universal hardware compatibility.",
+    "Microsoft runtime was already installed; no fresh-system prerequisite installation is claimed.",
+    "Native audio-device playback was observed; no human listening test is claimed.",
+    "Installer, on-demand download and public-URL qualification are separate from this portable record."
+  ],
+  "materials_comparison": {
+    "added": [],
+    "baseline": "Exact published 0.1.1 corresponding materials",
+    "changed": [
+      "BUILD-ENVIRONMENT.json",
+      "NOH-source.zip",
+      "PE-IMPORTS.json"
+    ],
+    "identical_files": 25490,
+    "removed": []
+  },
+  "native_acceptance": {
+    "bundled_preview_libraries_observed": 130,
+    "failed_capture_cases": 0,
+    "fresh_application_profile": true,
+    "fresh_os_installation": false,
+    "gpu": "NVIDIA GeForce RTX 4060",
+    "gui_capture_cases": 84,
+    "gui_states": [
+      "ready",
+      "resources-options"
+    ],
+    "host": "Windows 10 Pro 22H2 x64, build 19045",
+    "languages": [
+      "en",
+      "fr",
+      "de",
+      "es",
+      "ja",
+      "ko",
+      "zh"
+    ],
+    "path": "Windows system directories only",
+    "play_pause_seek_handoffs": 6,
+    "playing_audio_device_observations": 2,
+    "preview_frames": 690,
+    "scales": [
+      1,
+      1.5,
+      2
+    ],
+    "sizes": [
+      "420x760",
+      "980x850"
+    ],
+    "speech": [
+      {
+        "cuda0_observed": false,
+        "exit": 0,
+        "expected_words": true,
+        "mode": "cpu",
+        "seconds": 7.515
+      },
+      {
+        "cuda0_observed": true,
+        "exit": 0,
+        "expected_words": true,
+        "mode": "cuda",
+        "seconds": 1.641
+      }
+    ],
+    "speech_fixture": "Synthetic French speech; no user media",
+    "theme": "dark",
+    "visually_inspected": [
+      {
+        "case": "resources-options-fr-dark-1-420x760",
+        "observation": "Narrow French resource dialog: repair action fits, warnings wrap within the panel, tool paths and disclosure controls are readable; lower content continues in the scroll area.",
+        "passed": true,
+        "path": "captures/resources-options-fr-dark-1-420x760.png",
+        "sha256": "3cb73e895a822f8e4c6e8dac82bab2a9fe76aab15b1907d609f2d8281b0acb35"
+      },
+      {
+        "case": "resources-options-ja-dark-2-420x760",
+        "observation": "Japanese at scale 2: glyphs render, repair label fits and warnings wrap inside the narrow dialog; lower content reaches the scroll viewport boundary.",
+        "passed": true,
+        "path": "captures/resources-options-ja-dark-2-420x760.png",
+        "sha256": "65f00f2500bf329bc5f733b68df152887ef4687ced862a85b4afa5932d74c408"
+      },
+      {
+        "case": "resources-options-de-dark-1-980x850",
+        "observation": "German wide resource dialog: long repair label remains within the button, multiline diagnostic text fits the panel; expected synthetic missing-resource warnings are visible.",
+        "passed": true,
+        "path": "captures/resources-options-de-dark-1-980x850.png",
+        "sha256": "458752161d7529cce5dc07e80a351293a09271de9d54e77c540bbff03e837fcb"
+      },
+      {
+        "case": "ready-fr-dark-1-980x850",
+        "observation": "French ready state: media/audio inputs, transport, timeline and enabled export button fit the window; preview is near the end fade at 7.9 of 8 seconds.",
+        "passed": true,
+        "path": "captures/ready-fr-dark-1-980x850.png",
+        "sha256": "d72dc4b97d876edc9851c78590a02750f599eb4df6fae4391b5a716c32fd94f6"
+      }
+    ]
+  },
+  "native_reuse": {
+    "basis": "Exact SHA-256 equality with the qualified 0.1.1 runtime/model payload",
+    "unchanged_files": 266
+  },
+  "platform": "windows-x64",
+  "provenance": {
+    "artifact_digest": "sha256:713d1ba88b7874a06b31ba821a640810c93045133a249f8b2f0971673c0257bb",
+    "artifact_id": 11654411296,
+    "attempt": 1,
+    "conclusion": "success",
+    "repository": "Awalgawe/noh",
+    "repository_id": 1411000018,
+    "run_id": 38010666324,
+    "url": "https://github.com/Awalgawe/noh/actions/runs/38010666324",
+    "workflow": ".github/workflows/release.yml",
+    "workflow_id": 379053207
+  },
+  "schema_version": 1,
+  "scope": "Exact Windows x64 portable application and corresponding materials. Installer wrappers, real component downloads and publication are separate acceptance gates.",
+  "source_commit": "d0ed2872411dd361621271c3a7927b8741ac8524",
+  "source_correspondence": {
+    "exact_git_tree_match": true,
+    "git_archive_sha256": "24c77b5a164707514ce46073e415dfc2e23cd11136f2ff43e21f144dfbda0464",
+    "missing_imports": [],
+    "pe_images": 265,
+    "scope": "Archive member names and contents; container metadata need not be identical",
+    "source_commit": "d0ed2872411dd361621271c3a7927b8741ac8524",
+    "source_files": 326
+  },
+  "version": "0.1.2"
+}
