@@ -41,7 +41,8 @@ NOH is focused on repeating visual sequences, music and short extracts. It is no
 **[Download NOH for Windows](https://github.com/Awalgawe/noh/releases/latest)**
 
 Choose **`NOH-<version>-windows-x64-Web-Setup.exe`** for guided installation.
-It downloads the profile you choose:
+It includes NOH and downloads the optional components for your chosen profile
+inside the same installation wizard:
 
 | Profile | Included content |
 | --- | --- |

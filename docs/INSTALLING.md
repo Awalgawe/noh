@@ -3,7 +3,8 @@
 Download NOH for Windows x64 from the
 [latest GitHub release](https://github.com/Awalgawe/noh/releases/latest).
 Choose **`NOH-<version>-windows-x64-Web-Setup.exe`** for guided installation.
-This small download lets you choose a profile and downloads its installer.
+It includes NOH and downloads only the optional components for your chosen
+profile. Download, verification and installation stay in the same wizard.
 
 | Profile | Content | Offline installer filename |
 | --- | --- | --- |
@@ -42,9 +43,12 @@ Mac portable is not signed or notarized and is not offered as a supported downlo
    is optional.
 
 NOH installs for your Windows account without requiring administrator rights.
-Download progress is shown and can be cancelled. NOH verifies the downloaded
-content before installing it. Once the required components are installed, editing
-and local transcription work without an Internet connection.
+Download, verification and extraction progress are shown and can be cancelled.
+NOH verifies downloaded content before installing it. The confirmation page shows
+the temporary folder used for downloads and extraction; the wizard removes its
+own temporary files after completion, failure or normal cancellation. Archives
+you placed beside the installer yourself are kept. Once the required components
+are installed, editing and local transcription work without an Internet connection.
 
 ### Add or repair components later
 
@@ -56,8 +60,9 @@ same release to add content.
 
 You do not need to uninstall NOH. Already installed content and user files are
 preserved; selecting a smaller profile does not remove components. Failed downloads
-leave the existing installation unchanged, so you can retry. End-to-end cancellation
-during an active download remains unverified in 0.1.1; see the release notes.
+leave the existing installation unchanged, so you can retry. Active-download
+cancellation and subsequent retry were checked with the 0.1.2 Windows release;
+see its notes for the tested environment and remaining limits.
 Avoid starting this while editing a session you need to keep: the wizard may
 need NOH closed to replace files. Restart NOH to enable newly added preview support.
 

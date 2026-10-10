@@ -5,7 +5,9 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
-## 0.1.2 — preparing release
+## 0.1.2 — 2026-10-10
+
+Download the [Windows installers and portable ZIP](https://github.com/Awalgawe/noh/releases/tag/v0.1.2).
 
 - Use one Windows web installation wizard: embed the small application payload
   and download only the selected optional components, without launching another
