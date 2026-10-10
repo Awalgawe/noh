@@ -5,7 +5,7 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
-## Unreleased
+## 0.1.2 — preparing release
 
 - Use one Windows web installation wizard: embed the small application payload
   and download only the selected optional components, without launching another
@@ -13,6 +13,8 @@ builds are not public releases.
 - Show cancellable verification progress for large component archives and existing
   content. Display the temporary location before installation and clean owned
   downloads/extracted files on success, failure or normal cancellation.
+- Prevent installation after cancelling extraction, and retain the existing
+  content profile when rerunning Web setup.
 
 ## 0.1.1 — 2026-10-09
 

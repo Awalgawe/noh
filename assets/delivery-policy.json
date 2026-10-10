@@ -174,6 +174,40 @@
       },
       "platform": "windows-x64",
       "review_basis": "Actor/Critic component-delivery-source-v2 submission: root package version only; third-party materials reused from windows-release v8. Exact final-binary qualification is separate."
+    },
+    {
+      "evidence": {
+        "cuda_terms": {
+          "path": "docs/WINDOWS_0_1_2_REDISTRIBUTION.md",
+          "sha256": "31299333a59ee9a947097fbbab0c2ebe8bcf2124f76c639b137618f2f8a2f8a5"
+        },
+        "native_corresponding_sources": {
+          "path": "docs/WINDOWS_0_1_2_REDISTRIBUTION.md",
+          "sha256": "31299333a59ee9a947097fbbab0c2ebe8bcf2124f76c639b137618f2f8a2f8a5"
+        },
+        "native_notices": {
+          "path": "docs/WINDOWS_0_1_2_REDISTRIBUTION.md",
+          "sha256": "31299333a59ee9a947097fbbab0c2ebe8bcf2124f76c639b137618f2f8a2f8a5"
+        },
+        "rust_sources_notices": {
+          "path": "docs/WINDOWS_0_1_2_REDISTRIBUTION.md",
+          "sha256": "31299333a59ee9a947097fbbab0c2ebe8bcf2124f76c639b137618f2f8a2f8a5"
+        }
+      },
+      "inputs": {
+        "Cargo.lock": "3d71afe74c7af866e2cc1dc8eec261bdacb6f804f0b78635be05516f1f93525e",
+        "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "assets/delivery-windows.lock.json": "29ef275d01c409cee973d1869c11f36379cfaaef704a3684e44bea6812f5f544",
+        "assets/preview-runtime.json": "72c92e5eb5d128913798f80a06a03294db798519809201458d0b17c29a4112a4",
+        "assets/rust-notices.lock.json": "2b15127c3bd09079f7c4fcd3cc02b256bc020b12636fa6a544529c6e7f0946fb",
+        "assets/speech-bundle.json": "4bef71e92e5f3857e6d06e3a0b95971bc60448e838a6cf822fe9045d344c089f",
+        "assets/windows-native.lock.json": "de8481277cc2e37a70773f69dcc304eb13be44f2db65c84d6f3324d1e26331ed",
+        "rust_standard_library_source": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
+        "tools/rust_notices.py": "326b00b96d7840e4fb86e9ea496e5c3144e97480dbdd8c9eea2a72d682a8783c",
+        "tools/windows_runtime.py": "090d182a40c72503f982457c1b2e1225586bdcfdb378e27d5b8573e23863c860"
+      },
+      "platform": "windows-x64",
+      "review_basis": "Actor/Critic windows-0.1.2-source-v1 submission: root package version only; third-party inputs unchanged from 0.1.1. Exact final-byte qualification is separate."
     }
   ],
   "rust_source": {
