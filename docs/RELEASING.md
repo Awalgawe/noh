@@ -155,6 +155,12 @@ Linux redistribution and 0.1.2 CI-byte qualification have exact-hash records in
 and the [final-byte report](LINUX_0_1_2_QUALIFICATION.md). Changed inputs or a new
 CI delivery invalidate that acceptance; local QA builds do not clear the gates.
 
+Linux desktop acceptance must also exercise **Add files** with an actual host
+file chooser and confirm that selected media enters the application. Record the
+XDG Desktop Portal backend or `zenity` prerequisite. Test native file-manager
+drag-and-drop separately when available; supplying fixture paths directly does
+not cover either interaction, and Windows Explorer-to-WSLg drops are unsupported.
+
 ### Existing platform evidence
 
 Windows redistribution materials have an exact-input reviewed record in

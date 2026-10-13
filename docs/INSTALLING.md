@@ -112,18 +112,37 @@ enabled. Signing and download reputation are separate from the package checksums
 4. Open a terminal in the extracted folder and run `./NOH.AppDir/AppRun`.
 
 Keep the complete `NOH.AppDir` folder together. It can be moved, including to a
-path with spaces. No administrator installation, Rust or Python is needed.
+path with spaces. The AppDir itself needs no administrator installation, Rust
+or Python.
 FFmpeg, preview support, CPU Whisper Small and Silero VAD are included; local
 transcription works offline. The separate `-materials.zip` contains the exact
 corresponding sources and notices.
 
 The baseline is Ubuntu 24.04 x86_64 with glibc 2.39. Your desktop supplies its
-graphics session, fonts and a working default audio output. Final package tests
+graphics session, fonts, a working default audio output and a file chooser.
+NOH uses an XDG Desktop Portal file chooser or falls back to `zenity` on `PATH`.
+Minimal installations such as Ubuntu under WSL may provide neither. If **Add
+files** does nothing, install a file chooser in Ubuntu:
+
+```sh
+sudo apt-get update
+sudo apt-get install --no-install-recommends zenity
+```
+
+Then click **Add files** again; NOH does not need to be rebuilt. Full Linux
+desktops commonly provide an XDG Desktop Portal backend already. These are host
+desktop components, separate from the bundled media and transcription tools.
+
+Final package tests
 used Ubuntu 24.04.5 under WSLg with Mesa software rendering and PulseAudio;
 physical Linux graphics hardware and other distributions have not been qualified.
 See the [validation report](LINUX_0_1_2_QUALIFICATION.md) for the exact environment.
 In WSLg, an ALSA default-device mapping to its PulseAudio server may need to be
 configured; the report records the Ubuntu-provided configuration used in testing.
+WSLg does not support dragging files from Windows Explorer into Linux windows
+([Microsoft tracking issue](https://github.com/microsoft/wslg/issues/84)).
+Use **Add files** instead: in the Linux chooser, press **Ctrl+L** and enter
+`/mnt/c/Users/` to browse Windows user folders, or `/mnt/d/` for drive D.
 
 The Linux package is unsigned and automatic updates are disabled. To update,
 extract the new version into a new folder. To remove it, close NOH and delete

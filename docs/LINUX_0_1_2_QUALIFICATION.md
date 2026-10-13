@@ -67,3 +67,22 @@ claim a freshly installed OS, physical Linux GPU testing, human listening
 confirmation, or compatibility with every distribution or graphics driver.
 The package is a complete AppDir ZIP, not an AppImage or distribution-specific
 installer. It is unsigned, uses CPU speech, and has no automatic updates.
+
+## File-selection follow-up — 2026-10-13
+
+An interactive user check after publication found that **Add files** silently
+returned without showing a chooser on the minimal WSL Ubuntu installation.
+The earlier GUI automation supplied fixture paths directly; it did not verify
+the operating-system file chooser or dragging files from Windows Explorer.
+
+Host inspection found neither an XDG Desktop Portal file chooser nor `zenity`.
+The packaged `rfd` 0.17.2 backend tries the portal and then `zenity`; if both are
+unavailable it returns no selected files. Ubuntu's `zenity` 4.0.1-1build3 and its
+required dependencies were installed as a host setup correction. No NOH package
+file was changed. The [installation guide](INSTALLING.md#linux-x86_64) now records
+this prerequisite and the Windows-drive paths visible inside the Linux chooser.
+
+Windows Explorer-to-WSLg drag-and-drop is an upstream integration limitation
+([Microsoft issue 84](https://github.com/microsoft/wslg/issues/84)), separate from
+NOH's handling of file drops delivered by a Linux desktop. The earlier acceptance
+does not establish native file-manager drag-and-drop coverage.
