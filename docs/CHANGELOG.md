@@ -5,6 +5,18 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
+## 0.1.3 — in preparation
+
+- Treat cancelling the native file chooser as cancellation, without a false error.
+- Keep the sung-language choices open inside the lyrics menu.
+- Open Linux media, folders and SRT files with Linux default applications under
+  WSL as well, and keep external launch waits off the interface thread.
+- Translate opening confirmations and export/preview cancellation in all seven
+  interface languages.
+- Show export success and its Open buttons after a previous refused file drop.
+- Document the Linux host file chooser and default-application prerequisites,
+  including the Windows Explorer-to-WSLg drop limitation.
+
 ## Linux package addition — 2026-10-13
 
 The [0.1.2 release](https://github.com/Awalgawe/noh/releases/tag/v0.1.2) now also
