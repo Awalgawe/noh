@@ -38,9 +38,9 @@ NOH is focused on repeating visual sequences, music and short extracts. It is no
 
 ## Download and install
 
-**[Download NOH for Windows](https://github.com/Awalgawe/noh/releases/latest)**
+**[Download NOH for Windows and Linux](https://github.com/Awalgawe/noh/releases/latest)**
 
-Choose **`NOH-<version>-windows-x64-Web-Setup.exe`** for guided installation.
+**Windows:** choose **`NOH-<version>-windows-x64-Web-Setup.exe`** for guided installation.
 It includes NOH and downloads the optional components for your chosen profile
 inside the same installation wizard:
 
@@ -63,10 +63,18 @@ offers to download it directly from Microsoft. In a portable copy, NOH provides 
 **Download the Microsoft component** action. Install it, then choose **Check again**.
 Preview, export and existing subtitles also work without that component.
 
-This release was validated on Windows 10 x64 22H2 (build 19045). Read its notes
-for checksums and validation limits. macOS and Linux currently require a
-[source build](docs/BUILDING.md); macOS distribution signing and notarization
-remain incomplete.
+This Windows release was validated on Windows 10 x64 22H2 (build 19045). Read its
+notes for checksums and validation limits.
+
+**Linux x86_64:** download `NOH-<version>-linux-x64.zip`, extract the complete
+archive, then run `./NOH.AppDir/AppRun` from the extracted folder. It includes
+media tools and CPU transcription models. The baseline is Ubuntu 24.04 with
+glibc 2.39; final-byte tests used Ubuntu 24.04.5 under WSLg with software rendering.
+See the [Linux installation steps](docs/INSTALLING.md#linux-x86_64) and
+[validation limits](docs/LINUX_0_1_2_QUALIFICATION.md).
+
+macOS currently requires a [source build](docs/BUILDING.md); distribution signing
+and notarization remain incomplete.
 
 Follow the [installation guide](docs/INSTALLING.md) for setup, updates and removal,
 then [make your first video](docs/APP.md#make-your-first-video).

@@ -5,6 +5,16 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
+## Linux package addition — 2026-10-13
+
+The [0.1.2 release](https://github.com/Awalgawe/noh/releases/tag/v0.1.2) now also
+provides a complete Linux x86_64 AppDir ZIP with media tools and CPU transcription
+models. Its CI-built bytes were validated on the recorded Ubuntu 24.04/WSLg
+baseline, with software graphics and PulseAudio. See the
+[qualification report](LINUX_0_1_2_QUALIFICATION.md) for limits and exact hashes.
+Existing Windows assets are unchanged. The Release workflow selects Windows and
+Linux together by default and retains individual platform targets.
+
 ## 0.1.2 — 2026-10-10
 
 Download the [Windows installers and portable ZIP](https://github.com/Awalgawe/noh/releases/tag/v0.1.2).
