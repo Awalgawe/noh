@@ -50,7 +50,8 @@ public download until that acceptance finishes.
 Native builds and standard tests have passed for all three operating systems,
 including both Mac architectures. That evidence does not qualify an installable
 package. Linux x64 now has an AppDir packager and an Ubuntu 24.04 Release job;
-its exact CI artifacts still require separate qualification. macOS Intel remains
+Linux 0.1.2 has [exact-byte qualification](LINUX_0_1_2_QUALIFICATION.md) within its
+recorded Ubuntu/WSLg limits. Future artifacts require their own qualification. macOS Intel remains
 excluded from Release targets. The public Windows installer stage has passed on hosted runners;
 the older private update/install workflows are retired. See the
 [installer report](WINDOWS_0_1_0_INSTALLER.md) for the exact run and local acceptance.
@@ -74,7 +75,8 @@ hashes and PE dependency closure, and checks the required encoders/libass filter
 seal a complete candidate without uploading binaries or materials. This enables
 disposable preparation checks before redistribution review is complete. Selecting
 `upload_candidate=true` requires that review before acquisition starts. Failure
-diagnostics remain bounded in both modes. No hosted portable preparation run has occurred.
+diagnostics remain bounded in both modes. Hosted Windows and Linux portable runs
+have completed; acceptance applies only to the recorded exact artifacts.
 
 `sign_macos=false` remains the default. An explicit main-branch portable Mac run
 can use the protected `noh-macos-signing` environment and the prepared Developer
@@ -110,7 +112,7 @@ files and altered contents. These assets are developer candidates, not advertise
 downloads. Source materials preserve the NOH Git tree, locked vendored Rust
 crates/notices, generated license metadata, native materials and build environment.
 Rust notices are generated from the complete vendor graph before packaging and
-copied through the shared Windows/macOS packager. Missing original texts remain
+copied into the Windows, Linux and macOS packages. Missing original texts remain
 visible in `RUST-NOTICE-INVENTORY.json`; no license choice or clearance is inferred.
 The same input folder includes the original generated Rust standard-library HTML
 notice. Its pinned hash, compiler release/commit and installed rustc component
@@ -148,8 +150,10 @@ version alone does not establish acceptance on another distribution.
 verification repeat that audit; the latter also checks ELF/AppRun executable
 permissions. Source materials include the exact Ubuntu source records and
 archives, Whisper source/build receipt, Rust vendor sources and original notices.
-Linux redistribution review and exact CI-byte qualification remain open in
-`assets/delivery-policy.json`; local QA execution does not clear those gates.
+Linux redistribution and 0.1.2 CI-byte qualification have exact-hash records in
+`assets/delivery-policy.json`. See [redistribution inputs](LINUX_REDISTRIBUTION.md)
+and the [final-byte report](LINUX_0_1_2_QUALIFICATION.md). Changed inputs or a new
+CI delivery invalidate that acceptance; local QA builds do not clear the gates.
 
 ### Existing platform evidence
 

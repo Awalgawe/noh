@@ -1,8 +1,8 @@
 # Download and install NOH
 
-Download NOH for Windows x64 from the
+Download NOH for Windows or Linux x86_64 from the
 [latest GitHub release](https://github.com/Awalgawe/noh/releases/latest).
-Choose **`NOH-<version>-windows-x64-Web-Setup.exe`** for guided installation.
+For Windows, choose **`NOH-<version>-windows-x64-Web-Setup.exe`** for guided installation.
 It includes NOH and downloads only the optional components for your chosen
 profile. Download, verification and installation stay in the same wizard.
 
@@ -25,7 +25,7 @@ Read the release notes for tested Windows versions and package checksums.
 Automatic updating is not enabled. Allow space for the download, temporary
 extraction and installed files, plus your media and exports.
 
-macOS and Linux currently require a [source build](BUILDING.md). The experimental
+macOS currently requires a [source build](BUILDING.md). The experimental
 Mac portable is not signed or notarized and is not offered as a supported download.
 
 ## Windows
@@ -103,6 +103,32 @@ The Windows binary is not Authenticode-signed. Windows may show an unknown-publi
 or SmartScreen warning. Check that the download came from the official release
 and verify its SHA-256 against `SHA256SUMS`; keep system security protections
 enabled. Signing and download reputation are separate from the package checksums.
+
+## Linux x86_64
+
+1. Download `NOH-<version>-linux-x64.zip` from the official release.
+2. Check its SHA-256 against **`linux-x64-SHA256SUMS`** in the same release.
+3. Extract the whole archive with a tool that preserves Unix executable permissions.
+4. Open a terminal in the extracted folder and run `./NOH.AppDir/AppRun`.
+
+Keep the complete `NOH.AppDir` folder together. It can be moved, including to a
+path with spaces. No administrator installation, Rust or Python is needed.
+FFmpeg, preview support, CPU Whisper Small and Silero VAD are included; local
+transcription works offline. The separate `-materials.zip` contains the exact
+corresponding sources and notices.
+
+The baseline is Ubuntu 24.04 x86_64 with glibc 2.39. Your desktop supplies its
+graphics session, fonts and a working default audio output. Final package tests
+used Ubuntu 24.04.5 under WSLg with Mesa software rendering and PulseAudio;
+physical Linux graphics hardware and other distributions have not been qualified.
+See the [validation report](LINUX_0_1_2_QUALIFICATION.md) for the exact environment.
+In WSLg, an ALSA default-device mapping to its PulseAudio server may need to be
+configured; the report records the Ubuntu-provided configuration used in testing.
+
+The Linux package is unsigned and automatic updates are disabled. To update,
+extract the new version into a new folder. To remove it, close NOH and delete
+its extracted folder, first keeping any media or exports you saved inside it.
+Files elsewhere and separately stored preferences are retained.
 
 ## First launch
 
