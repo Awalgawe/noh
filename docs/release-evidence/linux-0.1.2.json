@@ -1,0 +1,237 @@
+{
+  "assets": {
+    "NOH-0.1.2-linux-x64-materials.zip": {
+      "sha256": "c0086e4515f7fd42d8a6256a930a218fbfa15f2f11dbc0ed54e5d3cfda6bf6b0",
+      "size": 1160374566
+    },
+    "NOH-0.1.2-linux-x64.zip": {
+      "sha256": "dfc0806b22733a38f73d7ce00d734c010ffd1450572c4ce9aae503811c2c9904",
+      "size": 590399188
+    }
+  },
+  "build": {
+    "build_fingerprint": "229f1aa7464e5a0d146fcd66cdf55b44db8122cdd945de123fe39afea839e91f",
+    "cargo_version": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+    "features": [
+      "default",
+      "gui",
+      "mcp"
+    ],
+    "git_dirty": false,
+    "git_revision": "b3863e80128340a13efa108e5c7347a50d932f05",
+    "options_sha256": "551b97d3d4294ccb92195861e537e56157a209494cd818efecad61475fb5c081",
+    "package_version": "0.1.2",
+    "profile": "release",
+    "rustc_version": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "schema_version": 1,
+    "source_sha256": "8632d7b229ab982655f59df181792a320be5723501b25964b9fc0e9179ff8b1d",
+    "target": "x86_64-unknown-linux-gnu"
+  },
+  "ci": {
+    "artifact_digest": "sha256:417030d12f907b7163398c4db1c9ff82bd4f3d8604fa16d3a6548908169c0701",
+    "artifact_id": 11825724301,
+    "attempt": 1,
+    "conclusion": "success",
+    "log_archive_sha256": "7983d67241081035f2e66ce5c8c48edfea3b9da448c3c0b75bd29d16e58a2cde",
+    "run": 38417732392,
+    "target": "linux-x64",
+    "tests": {
+      "failed": 0,
+      "ignored": 12,
+      "passed": 470,
+      "suites": 22
+    },
+    "url": "https://github.com/Awalgawe/noh/actions/runs/38417732392",
+    "workflow": "Release"
+  },
+  "clean_install": {
+    "all_hashes_verified": true,
+    "archive_sha256": "dfc0806b22733a38f73d7ce00d734c010ffd1450572c4ce9aae503811c2c9904",
+    "delivery_sha256": "13e42879d8f0ce1016650eb765299fbdf1d2a422ed1845f49aa5775c2bb8d128",
+    "executable_modes_preserved": true,
+    "extracted_files": 561,
+    "no_administrator_extraction": true,
+    "relocation_with_spaces": true,
+    "removal_preserved_external_media": true,
+    "source_commit": "b3863e80128340a13efa108e5c7347a50d932f05"
+  },
+  "delivery_sha256": "13e42879d8f0ce1016650eb765299fbdf1d2a422ed1845f49aa5775c2bb8d128",
+  "download_protection": {
+    "github_digest_verified": true,
+    "inert_zip_inventory_hashes_sizes_and_elf_verified": true,
+    "origin": "https://api.github.com/repos/Awalgawe/noh/actions/artifacts/11825724301/zip",
+    "os_reputation_scan": "Not claimed for Linux",
+    "package_signing": "unsigned",
+    "transport": "Authenticated GitHub API and HTTPS storage redirect; credentials not forwarded to storage"
+  },
+  "gui": {
+    "capture_ready": true,
+    "capture_sha256": {
+      "export.png": "670f772ebb0f92312df751379a3b666754aa5091376713fad4f2debc9b211e57",
+      "live-preview.png": "8c1c1725779391fdc0761f4f59943242b787c691a3568b5d341ede097e06b44a"
+    },
+    "export_capture_ready": true,
+    "export_timed_out": false,
+    "preview": {
+      "cursor_ms": 1860,
+      "error": null,
+      "explicit_ffmpeg": false,
+      "first_frame_ms": 203.98176,
+      "player": {
+        "audio_available": true,
+        "error": null,
+        "frame": {
+          "height": 360,
+          "id": 33,
+          "position": 1.8333333333333333,
+          "width": 640
+        },
+        "phase": "Ready",
+        "playing": true,
+        "position": 1.8599999999999999,
+        "warning": null
+      },
+      "rendered_preview": false,
+      "short": false,
+      "still": true,
+      "thumbnails": 2
+    },
+    "processes_exited": true,
+    "timed_out": false,
+    "visual_review": "Both 1200x850 captures inspected: rendered synthetic video, waveform and controls readable; export success visible; no clipping observed."
+  },
+  "host": {
+    "audio": "PulseAudio 17, WSLg RDPSink",
+    "audio_setup": "Task test user had no ALSA default mapping to WSLg. Installed the unchanged Ubuntu 99-pulseaudio-default.conf.example as user .asoundrc, without overwriting an existing file. Initial missing-card failure and successful repeat retained locally.",
+    "cpu": "Intel Core i7-4770S",
+    "distribution": "Ubuntu 24.04.5 x86_64 under WSL 2 / WSLg",
+    "glibc": "2.39-0ubuntu8.9",
+    "graphics": "Mesa 25.2.8 llvmpipe LLVM 20.1.2; software rendering; OpenGL 4.5",
+    "kernel": "6.18.54.1-microsoft-standard-WSL2"
+  },
+  "limitations": [
+    "Qualification covers the recorded Ubuntu 24.04 WSLg environment and hosted Ubuntu CI, not every Linux distribution or graphics driver.",
+    "Fresh extraction and isolated application XDG settings, not a freshly installed operating system.",
+    "Graphics used software rendering; physical Linux desktop GPU and direct hardware audio are not qualified. The application successfully opened the WSLg PulseAudio output; no human listening confirmation is claimed.",
+    "The WSLg host requires an ALSA default-device mapping to its audio server; this is host configuration, not a modification of the tested package.",
+    "CPU speech only; no CUDA or other GPU speech backend, no AppImage, no package signing or automatic updates."
+  ],
+  "local_media": {
+    "checks": {
+      "captions": {
+        "exit": 0,
+        "log_sha256": "7168a0effcc395830871f964fe6a23e274b0762a1de8cbead1528668944fbf70",
+        "seconds": 0.544
+      },
+      "decode-export": {
+        "exit": 0,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "seconds": 0.108
+      },
+      "export": {
+        "exit": 0,
+        "log_sha256": "4584043ae9070cc3de423d0e36becba79a98d23b71d309d5081132ce5e216230",
+        "seconds": 0.528
+      },
+      "fixture": {
+        "exit": 0,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "seconds": 0.28
+      },
+      "identity-cli": {
+        "exit": 0,
+        "log_sha256": "d47d695d0d9ad2e8df31fbcfd12f88ff03131c30c486f3d3e22a95a639524d18",
+        "seconds": 0.001
+      },
+      "identity-gui": {
+        "exit": 0,
+        "log_sha256": "d47d695d0d9ad2e8df31fbcfd12f88ff03131c30c486f3d3e22a95a639524d18",
+        "seconds": 0.002
+      },
+      "identity-mcp": {
+        "exit": 0,
+        "log_sha256": "d47d695d0d9ad2e8df31fbcfd12f88ff03131c30c486f3d3e22a95a639524d18",
+        "seconds": 0.001
+      },
+      "no-overwrite": {
+        "exit": 1,
+        "log_sha256": "5d0a333ccdd872e7e7427d95b3509398bc6ad36fcefddd68ad597a9244e62fb1",
+        "seconds": 0.002
+      },
+      "short": {
+        "exit": 0,
+        "log_sha256": "8ff08165c55f2a237b895b48d9f9d87025944c27d5b56f1f1a27de99d582a5f0",
+        "seconds": 0.98
+      }
+    },
+    "export_sha256": "007e85f7883664770f88edb131df7a1b59340c01896093b2558f19587c109672",
+    "gui_export_decoded_without_errors": true,
+    "gui_export_sha256": "ff88448f6a7eb85eb61796481b1f410397cf1d1e43d93f15ee432858a82acf26"
+  },
+  "native_import_closure": {
+    "checked_again_from_inert_download": true,
+    "coverage": "ELF direct imports; dynamic plugins, devices and execution require native acceptance",
+    "images": 228,
+    "maximum_glibc": "2.39",
+    "report_sha256": "d51f76751faf7d755bc38bfd4d75b7d6795ac6747c7df91268bdffff84bd4bc5",
+    "unresolved": []
+  },
+  "native_sources_and_notices": {
+    "all_native_notices_embedded": true,
+    "application_source_sha256": "0989017146285f28dd7d407f9721d324857235fd26209096a607b70a5d6c2174",
+    "exact_git_blob_contents_match_ci_source": true,
+    "git_source_files": 340,
+    "native_lock_matches_reviewed_inputs": true,
+    "native_runtime_matches_lock": true,
+    "runtime_files": 561,
+    "source_comparison_method": "All 340 source files compared byte-for-byte with git cat-file objects at the exact CI commit. Local Windows git archive applies CRLF conversions and is not used as a byte reference.",
+    "source_files": 25337,
+    "source_material_inventory_matches_receipt": true
+  },
+  "offline_transcription": {
+    "checks": {
+      "offline-transcription": {
+        "exit": 0,
+        "log_sha256": "0756a1aefd4482bc04808a36833d95c2935ee16e606711d4ab28337cbedd8c30",
+        "seconds": 78.711
+      }
+    },
+    "network_interfaces": [
+      "lo"
+    ],
+    "phase": "speech",
+    "transcript": "1\n00:00:00,020 --> 00:00:02,650\nThis is a test of local speech recognition.\n\n"
+  },
+  "package_after_tests": {
+    "all_files_unchanged": true,
+    "files": 561
+  },
+  "platform": "linux-x64",
+  "rust_and_speech_correspondence": {
+    "all_crate_notice_records_match_approved_windows_graph": true,
+    "rust_crates": 486,
+    "rust_standard_library": {
+      "component_manifest_sha256": "c4ba83c82b0945e8ac404fbad2c12e8bedc1fd2c41d60a5fca9a2fca19902694",
+      "host": "x86_64-unknown-linux-gnu",
+      "limitations": [
+        "Original generated notices do not select license alternatives or clear redistribution.",
+        "Native target/component correspondence still requires independent review."
+      ],
+      "origin": "installed-rustc-component",
+      "path": "RUST-STANDARD-LIBRARY-COPYRIGHT.html",
+      "sha256": "68129500b616d5838629e68f55ff3aed5e096dacf60ce9eb41bbe599a563afa6",
+      "source_commit": "48a229ceaefd4985c50990b14116b6d856af0985",
+      "status": "unreviewed-original-standard-library-notice",
+      "version": "1.98.1"
+    },
+    "whisper_commands_checked": 41,
+    "whisper_cpu_baseline": "x86-64; SSE2; no AVX requirement",
+    "whisper_recipe_matches_reviewed_recipe": true,
+    "whisper_source": {
+      "sha256": "57e280cee375ab02425b806ad5146b99f6eb9357e3c2b31357c8a6af2e2e44ae",
+      "url": "https://github.com/ggml-org/whisper.cpp/archive/refs/tags/v1.9.4.tar.gz"
+    }
+  },
+  "schema_version": 1,
+  "source_commit": "b3863e80128340a13efa108e5c7347a50d932f05"
+}

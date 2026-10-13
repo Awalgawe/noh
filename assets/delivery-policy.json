@@ -3,10 +3,7 @@
     "linux-x64": {
       "redistribution_unresolved": [],
       "target": "x86_64-unknown-linux-gnu",
-      "unresolved": [
-        "Validate the final CI AppDir/archive, clean extraction/removal and relocation on the declared Ubuntu 24.04 baseline.",
-        "Qualify GUI, playback/audio, CPU offline transcription and media export against the exact downloaded CI bytes."
-      ]
+      "unresolved": []
     },
     "macos-arm64": {
       "redistribution_unresolved": [
@@ -152,6 +149,47 @@
       "review_round": "windows-0.1.2-portable-v1",
       "scope": "Ordinary portable and corresponding materials only; installer wrappers and publication excluded",
       "source_commit": "d0ed2872411dd361621271c3a7927b8741ac8524"
+    },
+    {
+      "delivery_sha256": "13e42879d8f0ce1016650eb765299fbdf1d2a422ed1845f49aa5775c2bb8d128",
+      "evidence": {
+        "audio_gpu": {
+          "path": "docs/release-evidence/linux-0.1.2.json",
+          "sha256": "85893fed561f57fc09d5e47bf7d792df6fabfb5b5706083c4cd83cc165c7f2db"
+        },
+        "clean_install": {
+          "path": "docs/release-evidence/linux-0.1.2.json",
+          "sha256": "85893fed561f57fc09d5e47bf7d792df6fabfb5b5706083c4cd83cc165c7f2db"
+        },
+        "corresponding_sources": {
+          "path": "docs/release-evidence/linux-0.1.2.json",
+          "sha256": "85893fed561f57fc09d5e47bf7d792df6fabfb5b5706083c4cd83cc165c7f2db"
+        },
+        "download_protection": {
+          "path": "docs/release-evidence/linux-0.1.2.json",
+          "sha256": "85893fed561f57fc09d5e47bf7d792df6fabfb5b5706083c4cd83cc165c7f2db"
+        },
+        "media_export": {
+          "path": "docs/release-evidence/linux-0.1.2.json",
+          "sha256": "85893fed561f57fc09d5e47bf7d792df6fabfb5b5706083c4cd83cc165c7f2db"
+        },
+        "native_import_closure": {
+          "path": "docs/release-evidence/linux-0.1.2.json",
+          "sha256": "85893fed561f57fc09d5e47bf7d792df6fabfb5b5706083c4cd83cc165c7f2db"
+        },
+        "offline_transcription": {
+          "path": "docs/release-evidence/linux-0.1.2.json",
+          "sha256": "85893fed561f57fc09d5e47bf7d792df6fabfb5b5706083c4cd83cc165c7f2db"
+        },
+        "rust_notices": {
+          "path": "docs/release-evidence/linux-0.1.2.json",
+          "sha256": "85893fed561f57fc09d5e47bf7d792df6fabfb5b5706083c4cd83cc165c7f2db"
+        }
+      },
+      "platform": "linux-x64",
+      "review_round": "linux-final-v1",
+      "scope": "Complete Linux x86_64 AppDir ZIP and corresponding materials; Ubuntu24.04 WSLg/software-rendering qualification with the limits recorded in the evidence. AppImage and hardware-GPU qualification excluded.",
+      "source_commit": "b3863e80128340a13efa108e5c7347a50d932f05"
     }
   ],
   "redistribution_records": [
