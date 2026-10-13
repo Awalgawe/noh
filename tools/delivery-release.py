@@ -67,7 +67,7 @@ def main():
     parser.add_argument("--run", type=int, required=True)
     parser.add_argument("--attempt", type=int, required=True)
     parser.add_argument("--commit", required=True)
-    parser.add_argument("--target", choices=["windows-x64", "macos-arm64", "all"], required=True)
+    parser.add_argument("--target", choices=delivery.TARGETS, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     repository = os.environ["GITHUB_REPOSITORY"]
@@ -80,7 +80,7 @@ def main():
     comparison = api(repository, f"compare/{args.commit}...main")
     if comparison["status"] not in ("ahead", "identical"):
         raise ValueError("Source commit is not retained on trusted main")
-    platforms = ["windows-x64", "macos-arm64"] if args.target == "all" else [args.target]
+    platforms = delivery.selected_platforms(args.target)
     jobs = api(repository, f"actions/runs/{args.run}/attempts/{args.attempt}/jobs?per_page=100")
     validate_jobs(jobs, platforms, run["path"])
     audit_name = f"rust-audit-{args.run}-{args.attempt}"

@@ -20,7 +20,7 @@ struct Options {
 }
 #[derive(Subcommand)]
 enum Task {
-    /// Build and package a Windows portable folder or a local macOS application.
+    /// Build and package a Windows portable folder, macOS application or Linux AppDir.
     Build {
         /// Use this source tree; explicit-root packaging currently requires Windows.
         #[arg(long)]
@@ -36,7 +36,7 @@ enum Task {
         offline: bool,
         #[arg(long)]
         no_bundle: bool,
-        /// Include media libraries, Whisper and models in a relocatable macOS ZIP.
+        /// Include media libraries, Whisper and models in a macOS bundle or Linux AppDir.
         #[arg(long, requires = "gui", conflicts_with = "no_bundle")]
         portable: bool,
         #[arg(long)]
@@ -116,14 +116,20 @@ fn build(
     if updates && !cfg!(windows) && !no_bundle {
         return Err("Update-enabled bundle qualification currently requires Windows; use --no-bundle for source checks.".into());
     }
-    if portable && !cfg!(target_os = "macos") {
+    if portable && !cfg!(any(target_os = "macos", target_os = "linux")) {
         return Err(
-            "--portable is for macOS; Windows builds already include a portable folder.".into(),
+            "--portable is for macOS/Linux; Windows builds already include a portable folder."
+                .into(),
         );
     }
     if !no_bundle {
-        if !cfg!(any(windows, target_os = "macos")) {
-            return Err("Packaging requires Windows or macOS; use --no-bundle.".into());
+        if !cfg!(any(windows, target_os = "macos", target_os = "linux")) {
+            return Err("Packaging requires Windows, macOS or Linux; use --no-bundle.".into());
+        }
+        if cfg!(target_os = "linux") && (!gui || !mcp || !portable || speech.is_none()) {
+            return Err(
+                "Linux packaging requires --gui --mcp --portable --speech <folder>.".into(),
+            );
         }
         if cfg!(target_os = "macos") {
             if !gui {

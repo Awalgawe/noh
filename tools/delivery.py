@@ -21,6 +21,19 @@ ROOT = Path(__file__).resolve().parents[1]
 LIMIT = 2 * 1024 ** 3  # GitHub release assets must be strictly smaller.
 HEX = re.compile(r"^[0-9a-f]{64}$")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
+PLATFORMS = ('windows-x64', 'linux-x64', 'macos-arm64')
+TARGETS = (*PLATFORMS, 'windows-linux', 'all')
+
+
+def selected_platforms(target):
+    if target == 'all':
+        return list(PLATFORMS)
+    if target == 'windows-linux':
+        return ['windows-x64', 'linux-x64']
+    if target not in PLATFORMS:
+        raise ValueError('Unsupported delivery target')
+    return [target]
+
 # Classification only: minimum-OS and loader behavior still need native acceptance.
 WINDOWS_SYSTEM_DLLS = {name + ".dll" for name in (
     "advapi32 avicap32 avrt bcrypt bcryptprimitives cfgmgr32 combase comctl32 comdlg32 "
@@ -562,6 +575,23 @@ def macos_inputs(cache, destination):
                                     capture_output=True, text=True).stdout.strip()) / "lib/libmpv.2.dylib")})
 
 
+def linux_inputs(cache, destination):
+    from linux_runtime import acquire
+    destination.mkdir(parents=True, exist_ok=False)
+    acquire(ROOT / 'assets/linux-native.lock.json', cache, destination / 'native')
+    checked(['python3', ROOT / 'tools/prepare-linux-speech.py', '--cache', cache,
+             '--output', destination / 'speech'])
+    materials = destination / 'materials'
+    shutil.copytree(destination / 'native/materials', materials)
+    shutil.copy2(destination / 'native/LINUX-INPUTS.json', materials / 'LINUX-INPUTS.json')
+    speech = read(destination / 'speech/WHISPER-BUILD.json')
+    archive = fetch(speech['source'], cache, f"whisper-{speech['version']}.tar.gz")
+    shutil.copy2(archive, materials / archive.name)
+    shutil.copy2(destination / 'speech/WHISPER-BUILD.json', materials / 'WHISPER-BUILD.json')
+    shutil.copy2(ROOT / 'tools/prepare-linux-speech.py', materials / 'prepare-linux-speech.py')
+    common_sources(cache, materials)
+
+
 def sources(destination, cache=None):
     destination.mkdir(parents=True, exist_ok=False)
     checked(["git", "archive", "--format=zip", "--output", destination / "NOH-source.zip", "HEAD"], cwd=ROOT)
@@ -606,9 +636,13 @@ def authorize_redistribution(target):
         raise ValueError("Public artifact upload blocked: " + " | ".join(gaps))
     paths = ["Cargo.lock", "LICENSE", "assets/speech-bundle.json"]
     paths += ["assets/rust-notices.lock.json", "tools/rust_notices.py"]
-    paths += (["assets/delivery-windows.lock.json", "assets/preview-runtime.json",
-               "assets/windows-native.lock.json", "tools/windows_runtime.py"] if target == "windows-x64"
-              else ["assets/delivery-macos.lock.json", "tools/prepare-macos-speech.py"])
+    paths += {
+        'windows-x64': ["assets/delivery-windows.lock.json", "assets/preview-runtime.json",
+                        "assets/windows-native.lock.json", "tools/windows_runtime.py"],
+        'macos-arm64': ["assets/delivery-macos.lock.json", "tools/prepare-macos-speech.py"],
+        'linux-x64': ["assets/linux-native.lock.json", "tools/linux_runtime.py",
+                      "tools/prepare-linux-speech.py"],
+    }[target]
     locks = {name: digest(ROOT / name) for name in paths}
     locks["rust_standard_library_source"] = policy["rust_source"]["sha256"]
     records = [r for r in policy["redistribution_records"] if r.get("platform") == target and r.get("inputs") == locks]
@@ -673,6 +707,9 @@ def seal(bundle, materials, output, target, commit):
         require_pe_closure(audit_pe_bundle(bundle))
         reject_microsoft_payloads(inventory(bundle))
         reject_microsoft_payloads(inventory(materials))
+    if target == 'linux-x64':
+        from linux_elf import audit_bundle
+        audit_bundle(bundle)
     version = manifest["version"]
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", version):
         raise ValueError("Unsafe package version")
@@ -714,7 +751,7 @@ def verify_envelope(folder):
     record = read(folder / "DELIVERY.json")
     if record.get("schema_version") != 1 or record.get("status") != "unqualified":
         raise ValueError("Unsupported candidate record")
-    if record.get("platform") not in ("windows-x64", "macos-arm64") or not COMMIT.fullmatch(record.get("source_commit", "")):
+    if record.get("platform") not in PLATFORMS or not COMMIT.fullmatch(record.get("source_commit", "")):
         raise ValueError("Invalid candidate platform/source identity")
     version = record.get("version", "")
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", version):
@@ -738,6 +775,21 @@ def verify_envelope(folder):
                                          for member in archive.infolist()
                                          if PurePosixPath(member.filename).suffix.lower() in (".exe", ".dll"))
             require_pe_closure(report)
+        if record['platform'] == 'linux-x64' and not name.endswith('-materials.zip'):
+            from linux_elf import audit_images
+            with zipfile.ZipFile(folder / name) as archive:
+                def images():
+                    for member in archive.infolist():
+                        with archive.open(member) as stream:
+                            prefix = stream.read(4)
+                            if prefix == b'\x7fELF':
+                                if (member.external_attr >> 16) & 0o111 != 0o111:
+                                    raise ValueError(f'Linux ELF lost its executable mode: {member.filename}')
+                                yield member.filename, prefix + stream.read()
+                            elif member.filename.endswith('/AppRun'):
+                                if (member.external_attr >> 16) & 0o111 != 0o111:
+                                    raise ValueError('Linux AppRun lost its executable mode')
+                audit_images(images())
     if any(item["size"] >= LIMIT for item in actual.values()):
         raise ValueError("Oversized delivery metadata")
     expected_sums = "".join(f"{digest(folder / name)}  {name}\n" for name in sorted(actual) if name != "SHA256SUMS")
@@ -776,7 +828,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     tasks = parser.add_subparsers(dest="command", required=True)
     acquire = tasks.add_parser("acquire")
-    acquire.add_argument("--platform", choices=["windows-x64", "macos-arm64"], required=True)
+    acquire.add_argument("--platform", choices=PLATFORMS, required=True)
     acquire.add_argument("--cache", type=Path, required=True)
     acquire.add_argument("--output", type=Path, required=True)
     source = tasks.add_parser("sources")
@@ -786,12 +838,12 @@ def main():
     native_sources.add_argument("--cache", type=Path, required=True)
     native_sources.add_argument("--output", type=Path, required=True)
     redistribution = tasks.add_parser("redistribution")
-    redistribution.add_argument("--platform", choices=["windows-x64", "macos-arm64"], required=True)
+    redistribution.add_argument("--platform", choices=PLATFORMS, required=True)
     imports = tasks.add_parser("audit-pe")
     imports.add_argument("--bundle", type=Path, required=True)
     imports.add_argument("--output", type=Path, required=True)
     packing = tasks.add_parser("seal")
-    packing.add_argument("--platform", choices=["windows-x64", "macos-arm64"], required=True)
+    packing.add_argument("--platform", choices=PLATFORMS, required=True)
     packing.add_argument("--bundle", type=Path, required=True)
     packing.add_argument("--materials", type=Path, required=True)
     packing.add_argument("--output", type=Path, required=True)
@@ -801,7 +853,8 @@ def main():
         child.add_argument("--directory", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "acquire":
-        (windows_inputs if args.platform == "windows-x64" else macos_inputs)(args.cache.resolve(), args.output.resolve())
+        {'windows-x64': windows_inputs, 'macos-arm64': macos_inputs,
+         'linux-x64': linux_inputs}[args.platform](args.cache.resolve(), args.output.resolve())
     elif args.command == "sources":
         sources(args.output.resolve(), args.cache.resolve() if args.cache else None)
     elif args.command == "macos-sources":

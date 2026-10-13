@@ -19,6 +19,17 @@ spec.loader.exec_module(web)
 
 class InstallerGuards(unittest.TestCase):
     def test_prepare_preserves_commit_identity_across_zip_extraction(self):
+        for platforms in (['windows-x64'], ['windows-x64', 'linux-x64'], list(ci.delivery.PLATFORMS)):
+            with self.subTest(platforms=platforms):
+                self.prepare_case(platforms)
+
+    def test_combined_run_rejects_missing_failed_or_skipped_linux_before_download(self):
+        for conclusion in ('missing', 'failure', 'skipped'):
+            for platforms in (['windows-x64', 'linux-x64'], list(ci.delivery.PLATFORMS)):
+                with self.subTest(platforms=platforms, conclusion=conclusion):
+                    self.prepare_case(platforms, conclusion)
+
+    def prepare_case(self, platforms, linux_result='success'):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = 'a' * 40
@@ -29,14 +40,20 @@ class InstallerGuards(unittest.TestCase):
             run = {'repository': {'full_name': 'Awalgawe/noh'}, 'head_repository': {'full_name': 'Awalgawe/noh'},
                    'workflow_id': 77, 'head_sha': source, 'head_branch': 'main', 'event': 'workflow_dispatch',
                    'status': 'completed', 'conclusion': 'success', 'run_attempt': 1, 'path': '.github/workflows/release.yml'}
-            jobs = ['preflight', 'build / controls', 'build / rust-audit / Audit Cargo.lock against RustSec',
-                    'build / Candidate windows-x64']
+            names = ['preflight', 'build / controls', 'build / rust-audit / Audit Cargo.lock against RustSec']
+            jobs = [{'name': name, 'conclusion': 'success'} for name in names]
+            for platform in platforms:
+                if platform == 'linux-x64' and linux_result == 'missing':
+                    continue
+                jobs.append({'name': 'build / Candidate ' + platform,
+                             'conclusion': linux_result if platform == 'linux-x64' else 'success'})
             responses = {'': {'id': 1411000018}, '/actions/runs/1': run,
                 '/compare/' + source + '...main': {'status': 'identical'},
                 '/actions/runs/1/attempts/1/jobs?per_page=100': {'total_count': len(jobs),
-                    'jobs': [{'name': name, 'conclusion': 'success'} for name in jobs]},
-                '/actions/runs/1/artifacts?per_page=100': {'total_count': 1, 'artifacts': [
-                    {'id': 9, 'name': 'delivery-windows-x64', 'expired': False, 'digest': 'sha256:' + 'b' * 64}]}}
+                    'jobs': jobs},
+                '/actions/runs/1/artifacts?per_page=100': {'total_count': len(platforms), 'artifacts': [
+                    {'id': 9 + index, 'name': 'delivery-' + platform, 'expired': False,
+                     'digest': 'sha256:' + 'b' * 64} for index, platform in enumerate(platforms)]}}
 
             def download(route, target, digest):
                 self.assertEqual(route, '/actions/artifacts/9/zip')
@@ -57,7 +74,13 @@ class InstallerGuards(unittest.TestCase):
                         'NOH_SOURCE_ATTEMPT': '1', 'NOH_DELIVERY_WORKFLOW_ID': '77', 'GITHUB_SHA': 'c' * 40}):
                 github.return_value.request.side_effect = responses.__getitem__
                 github.return_value.download.side_effect = download
+                if linux_result != 'success':
+                    with self.assertRaisesRegex(ValueError, 'Missing/skipped/failed'):
+                        ci.prepare(root / 'work')
+                    github.return_value.download.assert_not_called()
+                    return
                 ci.prepare(root / 'work')
+                github.return_value.download.assert_called_once()
                 verify.assert_called_once_with(root / 'work/portable', 'x86_64-pc-windows-gnu', source)
                 self.assertEqual(ci.delivery.read(root / 'work/SOURCE.json')['source_commit'], source)
 

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=NOH
+Comment=Edit, transcribe and export media locally
+Exec=AppRun %F
+Icon=noh
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;

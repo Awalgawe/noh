@@ -1,5 +1,16 @@
 {
   "platforms": {
+    "linux-x64": {
+      "redistribution_unresolved": [
+        "Review exact Ubuntu binary/source correspondence, native notices and CPU Whisper build inputs.",
+        "Review the Rust source and notice inventory for the Linux target."
+      ],
+      "target": "x86_64-unknown-linux-gnu",
+      "unresolved": [
+        "Validate the final CI AppDir/archive, clean extraction/removal and relocation on the declared Ubuntu 24.04 baseline.",
+        "Qualify GUI, playback/audio, CPU offline transcription and media export against the exact downloaded CI bytes."
+      ]
+    },
     "macos-arm64": {
       "redistribution_unresolved": [
         "Exact Homebrew bottle sources/resources/patches/build materials and native notices are not reviewed.",

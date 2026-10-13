@@ -54,6 +54,28 @@ def pe_fixture(name=None, delay=False):
 
 
 class DeliveryTests(unittest.TestCase):
+    def test_platform_selection_includes_linux_without_changing_single_platforms(self):
+        self.assertEqual(delivery.selected_platforms('windows-linux'), ['windows-x64', 'linux-x64'])
+        self.assertEqual(delivery.selected_platforms('all'), ['windows-x64', 'linux-x64', 'macos-arm64'])
+        for platform in delivery.PLATFORMS:
+            self.assertEqual(delivery.selected_platforms(platform), [platform])
+        with self.assertRaises(ValueError):
+            delivery.selected_platforms('unknown')
+
+    def test_combined_windows_linux_run_requires_both_successful_candidates(self):
+        platforms = delivery.selected_platforms('windows-linux')
+        names = ['preflight', 'build / controls', 'build / rust-audit / Audit Cargo.lock against RustSec',
+                 'build / Candidate windows-x64', 'build / Candidate linux-x64']
+        jobs = [{'name': name, 'conclusion': 'success'} for name in names]
+        def validate(items):
+            release.validate_jobs({'total_count': len(items), 'jobs': items}, platforms,
+                                  '.github/workflows/release.yml')
+        validate(jobs)
+        for changed in (jobs[:-1], jobs[:-1] + [jobs[-1] | {'conclusion': 'failure'}],
+                        jobs[:-1] + [jobs[-1] | {'conclusion': 'skipped'}]):
+            with self.assertRaises(ValueError):
+                validate(changed)
+
     def test_public_profile_content_boundaries(self):
         files = ['noh.exe', 'bin/noh-cli.exe', 'bin/noh-mcp.exe', 'README.md',
                  'licenses/WHISPER.txt', 'bin/ffmpeg.exe', 'bin/libmpv-2.dll',

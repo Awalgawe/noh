@@ -9,10 +9,10 @@ on:
         options: [verify, build, draft, installer]
         default: verify
       target:
-        description: Windows x64 and/or macOS ARM64 (Linux has no packager yet)
+        description: Windows x64, Linux x64 and/or macOS ARM64
         type: choice
-        options: [windows-x64, macos-arm64, all]
-        default: windows-x64
+        options: [windows-linux, windows-x64, linux-x64, macos-arm64, all]
+        default: windows-linux
       sign_macos:
         description: Use the protected Apple signing/notarization configuration
         type: boolean
@@ -63,7 +63,7 @@ jobs:
               raise SystemExit('Release must run from main')
           stage = os.environ['RELEASE_STAGE']
           target = os.environ['RELEASE_TARGET']
-          if stage not in ('verify', 'build', 'draft', 'installer') or target not in ('windows-x64', 'macos-arm64', 'all'):
+          if stage not in ('verify', 'build', 'draft', 'installer') or target not in delivery.TARGETS:
               raise SystemExit('Unsupported release stage or packaged platform')
           if stage == 'installer' and target != 'windows-x64':
               raise SystemExit('The installer stage requires Windows x64')
@@ -73,7 +73,7 @@ jobs:
               and re.fullmatch(r'[0-9a-f]{40}', os.environ['SOURCE_COMMIT'])
           ):
               raise SystemExit('Draft/installer stages require exact successful run, attempt and source commit')
-          platforms = ['windows-x64', 'macos-arm64'] if target == 'all' else [target]
+          platforms = delivery.selected_platforms(target)
           if stage != 'verify':
               for platform in platforms:
                   delivery.authorize_redistribution(platform)
