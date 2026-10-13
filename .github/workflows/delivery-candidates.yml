@@ -41,19 +41,28 @@ jobs:
   controls:
     runs-on: windows-2025
     timeout-minutes: 10
+    outputs:
+      platforms: ${{ steps.platforms.outputs.platforms }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Check delivery controls using synthetic files
         run: python tools/test-delivery.py
+      - name: Resolve the explicitly selected platforms
+        id: platforms
+        env:
+          PYTHONPATH: tools
+          NOH_TARGET: ${{ inputs.target }}
+        run: |
+          python -c "import delivery,json,os; open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8').write('platforms='+json.dumps(delivery.selected_platforms(os.environ['NOH_TARGET']))+'\n')"
       - name: Validate explicit signing request
         if: inputs.sign_macos
         env:
           NOH_BUILD_KIND: ${{ inputs.build_kind }}
           NOH_TARGET: ${{ inputs.target }}
         run: |
-          if ($env:GITHUB_REF -ne 'refs/heads/main' -or $env:NOH_BUILD_KIND -ne 'portable' -or $env:NOH_TARGET -eq 'windows-x64') {
+          if ($env:GITHUB_REF -ne 'refs/heads/main' -or $env:NOH_BUILD_KIND -ne 'portable' -or $env:NOH_TARGET -notin @('macos-arm64','all')) {
             throw 'Mac signing requires main, portable mode and macos-arm64 or all'
           }
 
@@ -64,8 +73,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJSON(inputs.target == 'all' && '["windows-x64","macos-arm64"]' || inputs.target == 'macos-arm64' && '["macos-arm64"]' || '["windows-x64"]') }}
-    runs-on: ${{ matrix.platform == 'windows-x64' && 'windows-2025' || 'macos-26' }}
+        platform: ${{ fromJSON(needs.controls.outputs.platforms) }}
+    runs-on: ${{ matrix.platform == 'windows-x64' && 'windows-2025' || matrix.platform == 'linux-x64' && 'ubuntu-24.04' || 'macos-26' }}
     timeout-minutes: 180
     environment:
       name: ${{ inputs.sign_macos && matrix.platform == 'macos-arm64' && 'noh-macos-signing' || 'noh-candidate-build' }}
@@ -103,11 +112,30 @@ jobs:
         with:
           python-version: '3.14'
       - name: Compile executables or build portable from explicit locked inputs
+        if: matrix.platform != 'linux-x64'
         shell: pwsh
         env:
           NOH_BUILD_KIND: ${{ inputs.build_kind }}
           NOH_SIGN_MACOS: ${{ inputs.sign_macos && matrix.platform == 'macos-arm64' && 'true' || 'false' }}
         run: ./tools/delivery-build.ps1 -Platform $env:NOH_DELIVERY_PLATFORM -BuildKind $env:NOH_BUILD_KIND
+      - name: Set up the Linux compiler, packager and virtual display
+        if: matrix.platform == 'linux-x64'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential cmake pkg-config python3 \
+            libasound2-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev libegl1-mesa-dev \
+            patchelf xvfb xauth desktop-file-utils
+          python3 tools/test-linux-elf.py
+          python3 tools/test-linux-inputs.py
+          python3 tools/test-linux-package.py
+      - name: Compile and verify the Linux AppDir from locked inputs
+        if: matrix.platform == 'linux-x64'
+        shell: bash
+        env:
+          NOH_BUILD_KIND: ${{ inputs.build_kind }}
+          NOH_SIGN_MACOS: 'false'
+        run: xvfb-run -a pwsh -File tools/delivery-build.ps1 -Platform linux-x64 -BuildKind "$NOH_BUILD_KIND"
       - name: Prepare the locked FFmpeg backend for Windows tests
         if: matrix.platform == 'windows-x64' && inputs.build_kind == 'compile-only'
         shell: pwsh
@@ -175,5 +203,6 @@ jobs:
             logs/delivery/BUILD-ENVIRONMENT.json
             logs/delivery/redistribution.log
             logs/delivery/PE-IMPORTS.json
+            logs/delivery/materials/ELF-IMPORTS.json
           if-no-files-found: warn
           retention-days: 7

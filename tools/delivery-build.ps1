@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('windows-x64','macos-arm64')][string]$Platform,
+    [Parameter(Mandatory)][ValidateSet('windows-x64','linux-x64','macos-arm64')][string]$Platform,
     [ValidateSet('compile-only','portable')][string]$BuildKind = 'compile-only'
 )
 $ErrorActionPreference = 'Stop'
@@ -44,6 +44,10 @@ try {
         $env:NOH_LIBMPV = Join-Path $inputs 'native/preview/libmpv-2.dll'
         $env:NOH_NATIVE_NOTICES = Join-Path $inputs 'materials/native-notices'
         $bundle = Join-Path $root 'dist/noh'
+    } elseif ($Platform -eq 'linux-x64') {
+        $env:NOH_LINUX_INPUTS = Join-Path $inputs 'native'
+        $ffmpeg = Join-Path $env:NOH_LINUX_INPUTS 'runtime/bin/ffmpeg'
+        $bundle = Join-Path $root 'dist/NOH-linux-x64'
     } else {
         $paths = Get-Content (Join-Path $inputs 'PATHS.json') -Raw | ConvertFrom-Json
         $ffmpeg = $paths.ffmpeg
@@ -64,11 +68,23 @@ try {
     $env:NOH_EXE = if ($IsWindows) { Join-Path $bundle 'bin/noh-cli.exe' } else { Join-Path $bundle 'NOH.app/Contents/MacOS/bin/noh-cli' }
     $env:NOH_APP_EXE = if ($IsWindows) { Join-Path $bundle 'noh.exe' } else { Join-Path $bundle 'NOH.app/Contents/MacOS/noh-app' }
     $env:NOH_MCP_EXE = if ($IsWindows) { Join-Path $bundle 'bin/noh-mcp.exe' } else { Join-Path $bundle 'NOH.app/Contents/MacOS/bin/noh-mcp' }
+    if ($Platform -eq 'linux-x64') {
+        $appHome = Join-Path $bundle 'NOH.AppDir/usr/lib/noh'
+        $env:NOH_EXE = Join-Path $appHome 'bin/noh-cli'
+        $env:NOH_APP_EXE = Join-Path $appHome 'noh-app'
+        $env:NOH_MCP_EXE = Join-Path $appHome 'bin/noh-mcp'
+        $env:NOH_FFMPEG = Join-Path $appHome 'bin/ffmpeg'
+        $env:NOH_LIBMPV = Join-Path $appHome 'bin/libmpv.so.2'
+        $env:ALSA_PLUGIN_DIR = Join-Path $appHome 'lib/alsa-lib'
+    }
     if ($env:NOH_SIGN_MACOS -ne 'true') { cargo dev verify --media --mcp --offline }
     # Sources are kept as separate assets rather than executable startup inputs.
     Copy-Item -LiteralPath (Join-Path $inputs 'materials') -Destination (Join-Path $logRoot 'materials/native') -Recurse
     if ($IsWindows) {
         Copy-Item -LiteralPath (Join-Path $logRoot 'PE-IMPORTS.json') -Destination (Join-Path $logRoot 'materials/PE-IMPORTS.json')
+    }
+    if ($Platform -eq 'linux-x64') {
+        Copy-Item -LiteralPath (Join-Path $appHome 'ELF-IMPORTS.json') -Destination (Join-Path $logRoot 'materials/ELF-IMPORTS.json')
     }
     Copy-Item -LiteralPath (Join-Path $logRoot 'BUILD-ENVIRONMENT.json') -Destination (Join-Path $logRoot 'materials/BUILD-ENVIRONMENT.json')
     if ($env:NOH_SIGN_MACOS -eq 'true') {

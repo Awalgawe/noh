@@ -58,8 +58,9 @@ def prepare(work):
             'Source is not retained on trusted main')
     inventory = github.request('/actions/runs/' + run_id + '/artifacts?per_page=100')
     platforms = ['windows-x64']
-    if any(a['name'] == 'delivery-macos-arm64' for a in inventory['artifacts']):
-        platforms.append('macos-arm64')
+    for platform in delivery.PLATFORMS:
+        if platform != 'windows-x64' and any(a['name'] == 'delivery-' + platform for a in inventory['artifacts']):
+            platforms.append(platform)
     provenance.validate_jobs(github.request('/actions/runs/' + run_id + '/attempts/' + attempt + '/jobs?per_page=100'),
                              platforms, run_record['path'])
     artifacts = provenance.validate_artifacts(inventory, platforms, 'rust-audit-' + run_id + '-' + attempt)

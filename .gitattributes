@@ -1,4 +1,6 @@
 *.sh text eol=lf
+assets/linux-AppRun text eol=lf
+*.desktop text eol=lf
 *.yml text eol=lf
 *.json text eol=lf
 *.py text eol=lf

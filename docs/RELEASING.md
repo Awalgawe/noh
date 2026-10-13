@@ -15,7 +15,7 @@ dispatched independently and do not start additional push or PR runs.
 | Workflow | Trigger and output | Authority |
 | --- | --- | --- |
 | `pr.yml` | PRs and main pushes; select affected checks on Windows, Linux, macOS ARM64 and Intel. Shared/unknown changes select all platforms. Documentation-only changes avoid native builds. | Read-only tests and one shared RustSec audit, followed by the required `PR checks` aggregate. No distributions. |
-| `release.yml` | Manual dispatch on main: `verify` (default) tests portable packages without uploading them; `build` uploads reviewed candidates; `draft` prepares an independently qualified draft; `installer` wraps the qualified Windows portable. Portable targets: Windows x64, macOS ARM64 or both. | Preflight before expensive work. Write tokens only in staging jobs; no automatic publication. |
+| `release.yml` | Manual dispatch on main: `verify` (default) tests portable packages without uploading them; `build` uploads reviewed candidates; `draft` prepares an independently qualified draft; `installer` wraps the qualified Windows portable. The default `windows-linux` target selects Windows x64 and Linux x64; individual targets and `all` (including macOS ARM64) are available. | Preflight before expensive work. Write tokens only in staging jobs; no automatic publication. |
 | `windows-installers.yml` | Reusable Windows installer stage called by Release on main. Produces Minimal, Standard and Complete offline installers plus a Web installer using the same wizard. Tests exact profile contents, installation, repair, cancellation, profile mismatch rejection and removal before creating an unpublished review draft. | Reuses the released application bytes; records the wrapper commit and run separately. Local graphics acceptance is required if hosted OpenGL is unavailable. |
 | `delivery-candidates.yml` | Reusable Release build engine. Synthetic delivery controls also run inside PR validation. | Read-only token; optional Mac signing uses separate protected steps. Artifact upload requires reviewed redistribution materials. |
 | `delivery-draft.yml` | Reusable Release verifier and draft creator. | Exact run/attempt/commit and artifact verification; independently reviewed inert draft upload. |
@@ -49,14 +49,15 @@ public download until that acceptance finishes.
 
 Native builds and standard tests have passed for all three operating systems,
 including both Mac architectures. That evidence does not qualify an installable
-package. Linux and macOS Intel have no delivery packager and are excluded from
-Release targets. The public Windows installer stage has passed on hosted runners;
+package. Linux x64 now has an AppDir packager and an Ubuntu 24.04 Release job;
+its exact CI artifacts still require separate qualification. macOS Intel remains
+excluded from Release targets. The public Windows installer stage has passed on hosted runners;
 the older private update/install workflows are retired. See the
 [installer report](WINDOWS_0_1_0_INSTALLER.md) for the exact run and local acceptance.
 
 The build driver is `tools/delivery-build.ps1`; the acquisition, source and ZIP
-controls are in `tools/delivery.py`. Standard runners are `windows-2025` x64 and
-`macos-26` Apple Silicon. They use Rust 1.98.1, the locked Cargo graph, the
+controls are in `tools/delivery.py`. Standard runners are `windows-2025` x64,
+`ubuntu-24.04` x64 and `macos-26` Apple Silicon. They use Rust 1.98.1, the locked Cargo graph, the
 existing Windows GNU/LLD configuration, without the updater feature. The default
 `compile-only` mode runs `cargo build --release --locked --features gui,mcp --bins`
 and retains executables only on the disposable runner. Windows then runs the full
@@ -98,8 +99,9 @@ never uses the maintainer's PATH or System32 to satisfy an undeclared dependency
 Installed and missing-prerequisite behavior remains part of native acceptance.
 
 
-Candidate assets are named `NOH-<version>-windows-x64.zip` or
-`NOH-<version>-macos-arm64.zip`, with a separate `-materials.zip`, `DELIVERY.json`
+Candidate assets are named `NOH-<version>-windows-x64.zip`,
+`NOH-<version>-linux-x64.zip` or `NOH-<version>-macos-arm64.zip`,
+with a separate `-materials.zip`, `DELIVERY.json`
 and `SHA256SUMS`. The JSON explicitly says `unqualified`; it records exact Git
 identity, target/features/profile, run/attempt, complete file hashes, archive
 hashes, download sizes and extracted bytes. Files of 2 GiB or more are refused.
@@ -123,6 +125,33 @@ automatic publication. Source/bottle/vendor staging can consume substantial
 runner disk space; actual hosted-runner capacity/time must be measured.
 
 ## Current review boundary
+
+### Linux delivery preparation
+
+`Release` selects `windows-linux` by default. Its two independent candidate jobs
+use Windows 2025 and Ubuntu 24.04; `all` additionally includes macOS ARM64.
+The same selection is checked when staging the exact build run, so a missing,
+failed or skipped Linux job cannot produce a combined Windows/Linux draft.
+The Windows-only installer stage still requires `windows-x64` explicitly.
+
+The Linux job acquires exact Ubuntu binary and corresponding source archives from
+`assets/linux-native.lock.json`, builds the pinned CPU Whisper recipe, and calls
+`cargo dev build --gui --mcp --portable --speech ...`. `NOH_LINUX_INPUTS` identifies
+the acquired native folder; `--ffmpeg` must refer to that folder's runtime.
+The AppDir contains GUI/CLI/MCP, FFmpeg, libmpv, private libraries and both speech
+models. Each ELF receives its own relative `$ORIGIN` library search path.
+glibc and graphics-driver libraries remain host prerequisites; the declared
+qualification baseline is Ubuntu 24.04 x86_64, glibc 2.39. A compatible glibc
+version alone does not establish acceptance on another distribution.
+
+`ELF-IMPORTS.json` records the complete ELF import closure. Seal and inert archive
+verification repeat that audit; the latter also checks ELF/AppRun executable
+permissions. Source materials include the exact Ubuntu source records and
+archives, Whisper source/build receipt, Rust vendor sources and original notices.
+Linux redistribution review and exact CI-byte qualification remain open in
+`assets/delivery-policy.json`; local QA execution does not clear those gates.
+
+### Existing platform evidence
 
 Windows redistribution materials have an exact-input reviewed record in
 `assets/delivery-policy.json`. This covers 112 signed native binary/source

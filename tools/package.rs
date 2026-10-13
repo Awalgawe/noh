@@ -11,6 +11,10 @@ use std::{
 #[path = "package_macos.rs"]
 mod macos;
 
+#[cfg(target_os = "linux")]
+#[path = "package_linux.rs"]
+mod linux;
+
 // These two runtime descriptions are embedded in the helper. Explicit-root
 // Windows packaging may reuse it only when the selected tree has the same bytes.
 pub fn validate_source_root(root: &Path) -> Result<()> {
@@ -98,7 +102,21 @@ pub fn bundle(
         }
         return macos::bundle(root, release, ffmpeg, mcp, portable, speech);
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    {
+        if !gui || !mcp || updates || !portable {
+            return Err(
+                "Linux packaging requires --gui --mcp --portable and disabled updates.".into(),
+            );
+        }
+        return linux::bundle(
+            root,
+            release,
+            ffmpeg,
+            speech.ok_or("Linux packaging requires --speech")?,
+        );
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         let _ = portable;
         bundle_windows(root, release, ffmpeg, gui, mcp, updates, speech)

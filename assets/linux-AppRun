@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+appdir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+export ALSA_PLUGIN_DIR="$appdir/usr/lib/noh/lib/alsa-lib"
+exec "$appdir/usr/lib/noh/noh-app" "$@"

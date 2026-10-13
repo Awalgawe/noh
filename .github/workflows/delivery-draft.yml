@@ -94,9 +94,9 @@ jobs:
             $file=Get-Item -LiteralPath "staged/$name"
             if($file.Length -ne $spec.size -or $file.Length -ge 2147483648 -or (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() -ne $spec.sha256){throw 'Changed or oversized staged asset'}
           }
-          $version=($expected | Where-Object {$_ -match '^NOH-([0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?)-windows-x64\.zip$|^NOH-([0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?)-macos-arm64\.zip$'} | Select-Object -First 1)
+          $version=($expected | Where-Object {$_ -match '^NOH-([0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?)-(windows-x64|linux-x64|macos-arm64)\.zip$'} | Select-Object -First 1)
           if(!$version){throw 'Missing named application package'}
-          $version=$version -replace '^NOH-','' -replace '-(windows-x64|macos-arm64)\.zip$',''
+          $version=$version -replace '^NOH-','' -replace '-(windows-x64|linux-x64|macos-arm64)\.zip$',''
           $tag="v$version"
           # Refuse an existing tag or release; no edits, overwrite or publication toggle.
           $refs=gh api "repos/$env:GITHUB_REPOSITORY/git/matching-refs/tags/$tag" | ConvertFrom-Json
