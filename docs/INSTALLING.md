@@ -133,7 +133,7 @@ Then click **Add files** again; NOH does not need to be rebuilt. Full Linux
 desktops commonly provide an XDG Desktop Portal backend already. These are host
 desktop components, separate from the bundled media and transcription tools.
 
-**Candidate behavior, not yet in the published 0.1.2 ZIP:** opening a video, its
+**Linux 0.1.3 behavior, absent from the published 0.1.2 ZIP:** opening a video, its
 folder or a lyrics file uses `xdg-open`, including under WSL. This requires
 `xdg-utils` and default Linux applications: a video player, a file manager and
 a text editor associated with `.srt` files. The published **0.1.2** binary still

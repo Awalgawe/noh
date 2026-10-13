@@ -211,7 +211,7 @@ Clear remaining qualification items only after reviewing those exact results.
    retain one complete candidate build. Save the run ID, attempt, source commit,
    artifact IDs and hashes. Do not precede this with a disposable `verify` build
    unless a specific unresolved build question warrants it. `target=all` means
-   Windows x64 and macOS ARM64, not Linux or Intel Mac.
+   Windows x64, Linux x64 and macOS ARM64; Intel Mac remains excluded.
 3. Download and inspect the exact artifacts, perform native qualification and
    commit the independently reviewed evidence/qualification record. Keep the
    original application bytes and source commit. A metadata-only review does not
