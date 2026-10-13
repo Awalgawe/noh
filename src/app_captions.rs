@@ -510,7 +510,7 @@ impl NohApp {
             self.job = Some(Job::burn(request, move || ctx.request_repaint()));
         }
         if let Some(path) = open {
-            self.open(&path);
+            self.open(&path, ctx);
         }
         if cancelling_preparation
             && self.captions.running.is_none()
@@ -693,11 +693,11 @@ mod tests {
         app.start_subtitles(&ctx);
         app.start_caption(&ctx, false);
         assert!(app.job.is_none());
-        app.outcome = Some("ui.export_cancelled_confirmed".into());
+        app.outcome = Some("status.export_cancelled".into());
         app.subtitles.outcome = Some("ui.subtitle_cancelled".into());
         assert!(app.receive_job_event(Event::Cancelled));
         assert_eq!(app.captions.outcome.unwrap().key, "ui.caption_cancelled");
-        assert_eq!(app.outcome.unwrap().key, "ui.export_cancelled_confirmed");
+        assert_eq!(app.outcome.unwrap().key, "status.export_cancelled");
         assert_eq!(app.subtitles.outcome.unwrap().key, "ui.subtitle_cancelled");
     }
 }

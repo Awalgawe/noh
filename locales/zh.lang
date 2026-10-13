@@ -498,3 +498,4 @@ resources.install=添加或修复组件
 resources.installing=组件安装程序已打开。
 resources.installed=组件设置已结束。请重启 NOH 以启用新添加的视频预览。
 resources.install_failed=组件设置已取消或无法完成。
+ui.opened=已在默认应用中打开。

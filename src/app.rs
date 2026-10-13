@@ -70,6 +70,7 @@ struct NohApp {
     preview_artifact: Option<app_state::Artifact>,
     export_artifact: Option<app_state::Artifact>,
     notice: Option<Message>,
+    open_result: Option<std::sync::mpsc::Receiver<std::io::Result<()>>>,
     outcome: Option<Message>,
     cancelling: bool,
     failure_revision: Option<u64>,
@@ -156,6 +157,7 @@ impl Default for NohApp {
             preview_artifact: None,
             export_artifact: None,
             notice: None,
+            open_result: None,
             outcome: None,
             cancelling: false,
             failure_revision: None,
@@ -675,9 +677,9 @@ impl NohApp {
                 }
                 self.outcome = Some(
                     if self.previewing {
-                        "ui.preview_cancelled_confirmed"
+                        "status.preview_cancelled"
                     } else {
-                        "ui.export_cancelled_confirmed"
+                        "status.export_cancelled"
                     }
                     .into(),
                 );
@@ -691,8 +693,26 @@ impl NohApp {
         }
         done
     }
-    fn open(&mut self, path: &Path) {
-        if let Err(error) = open::that(path) {
+    fn open(&mut self, path: &Path, ctx: &egui::Context) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.open_result = Some(rx);
+        self.notice = None;
+        let path = path.to_owned();
+        let ctx = ctx.clone();
+        // A desktop launcher can wait for its viewer to close. Never wait on
+        // the render thread. On Linux, honor Linux file associations even in
+        // WSL, where open::that would prefer Windows PowerShell associations.
+        std::thread::spawn(move || {
+            #[cfg(target_os = "linux")]
+            let result = open::with(&path, "xdg-open");
+            #[cfg(not(target_os = "linux"))]
+            let result = open::that(&path);
+            let _ = tx.send(result);
+            ctx.request_repaint();
+        });
+    }
+    fn opened(&mut self, result: std::io::Result<()>) {
+        if let Err(error) = result {
             self.notice = Some(Message::new("error.open", &[error.to_string()]));
         } else {
             self.notice = Some("ui.opened".into());
@@ -943,6 +963,28 @@ mod metadata_tests {
     use app_media::{Analysis, Failure};
     use noh::media::MediaInfo;
 
+    #[test]
+    fn desktop_open_reports_success_and_failure_in_every_language() {
+        let mut app = app();
+        app.opened(Ok(()));
+        for language in Language::ALL {
+            assert!(
+                !app.notice
+                    .as_ref()
+                    .unwrap()
+                    .render(language)
+                    .contains("[missing translation]")
+            );
+        }
+        app.opened(Err(std::io::Error::other("Desktop launcher unavailable")));
+        assert_eq!(app.notice.as_ref().unwrap().key, "error.open");
+        for language in Language::ALL {
+            let rendered = app.notice.as_ref().unwrap().render(language);
+            assert!(!rendered.contains("[missing translation]"));
+            assert!(rendered.contains("Desktop launcher unavailable"));
+        }
+    }
+
     fn app() -> NohApp {
         let mut app = NohApp {
             next_id: 1,
@@ -1093,10 +1135,12 @@ mod metadata_tests {
         app.cancelling = true;
         assert!(app.receive_job_event(Event::Cancelled));
         assert!(app.export_artifact.is_none());
-        assert_eq!(
-            app.outcome.as_ref().unwrap().key,
-            "ui.export_cancelled_confirmed"
-        );
+        assert_eq!(app.outcome.as_ref().unwrap().key, "status.export_cancelled");
+        for key in ["status.export_cancelled", "status.preview_cancelled"] {
+            for language in Language::ALL {
+                assert_ne!(language.text(key), "[missing translation]");
+            }
+        }
     }
 
     #[test]
@@ -1145,17 +1189,14 @@ mod metadata_tests {
     fn subtitle_cancellation_keeps_montage_outcome_separate() {
         let mut app = app();
         app.subtitles.running = true;
-        app.outcome = Some("ui.export_cancelled_confirmed".into());
+        app.outcome = Some("status.export_cancelled".into());
         assert!(app.receive_job_event(Event::Cancelled));
         assert!(app.subtitles.artifact.is_none());
         assert_eq!(
             app.subtitles.outcome.as_ref().unwrap().key,
             "ui.subtitle_cancelled"
         );
-        assert_eq!(
-            app.outcome.as_ref().unwrap().key,
-            "ui.export_cancelled_confirmed"
-        );
+        assert_eq!(app.outcome.as_ref().unwrap().key, "status.export_cancelled");
     }
 
     #[test]

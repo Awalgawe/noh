@@ -266,6 +266,12 @@ impl NohApp {
         })
     }
     fn prepare_views(&mut self, ctx: &egui::Context) {
+        if let Some(receiver) = &self.open_result
+            && let Ok(result) = receiver.try_recv()
+        {
+            self.open_result = None;
+            self.opened(result);
+        }
         if self.capture_state.is_some() {
             self.project.duration_ms = (self.wav_seconds.unwrap_or(0.0) * 1000.0).round() as u64;
             return;
@@ -606,7 +612,7 @@ impl NohApp {
             }
             ContextAction::OpenVideo => {
                 if let Some((path, _, _)) = self.last_export() {
-                    self.open(&path);
+                    self.open(&path, ctx);
                 }
             }
             ContextAction::OpenFolder => {
@@ -614,7 +620,7 @@ impl NohApp {
                     .last_export()
                     .and_then(|(path, _, _)| path.parent().map(Path::to_path_buf))
                 {
-                    self.open(&path);
+                    self.open(&path, ctx);
                 }
             }
             ContextAction::Remove(id) => {
@@ -629,7 +635,7 @@ impl NohApp {
             ContextAction::ReviewLyrics => {
                 self.lyrics_ready = None;
                 if let Some(path) = self.project.track.path.clone() {
-                    self.open(&path);
+                    self.open(&path, ctx);
                 }
             }
             ContextAction::Suggest => {
@@ -647,7 +653,7 @@ impl NohApp {
             ContextAction::OpenSubtitle => {
                 if let Some(artifact) = &self.subtitles.artifact {
                     let path = artifact.path.clone();
-                    self.open(&path);
+                    self.open(&path, ctx);
                 }
             }
             ContextAction::OpenSubtitleFolder => {
@@ -658,7 +664,7 @@ impl NohApp {
                     .and_then(|a| a.path.parent())
                 {
                     let path = path.to_path_buf();
-                    self.open(&path);
+                    self.open(&path, ctx);
                 }
             }
             ContextAction::PlayCaption => self.captions.verify_preview(ctx),
@@ -668,7 +674,7 @@ impl NohApp {
             ContextAction::OpenShort => {
                 if let Some(a) = &self.shorts.export_artifact {
                     let path = a.path.clone();
-                    self.open(&path);
+                    self.open(&path, ctx);
                 }
             }
             ContextAction::OpenShortFolder => {
@@ -679,13 +685,13 @@ impl NohApp {
                     .and_then(|a| a.path.parent())
                 {
                     let path = path.to_path_buf();
-                    self.open(&path);
+                    self.open(&path, ctx);
                 }
             }
             ContextAction::OpenCaption => {
                 if let Some(a) = &self.captions.export_artifact {
                     let path = a.path.clone();
-                    self.open(&path);
+                    self.open(&path, ctx);
                 }
             }
             ContextAction::OpenCaptionFolder => {
@@ -696,7 +702,7 @@ impl NohApp {
                     .and_then(|a| a.path.parent())
                 {
                     let path = path.to_path_buf();
-                    self.open(&path);
+                    self.open(&path, ctx);
                 }
             }
         }

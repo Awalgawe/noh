@@ -50,6 +50,8 @@ impl NohApp {
         {
             return;
         }
+        // A new export attempt supersedes an earlier rejected file drop.
+        self.drop_error = None;
         self.mini_preview.invalidate();
         if !short && !self.project.apply_subtitles {
             self.start(ctx, previewing);
@@ -514,9 +516,9 @@ impl NohApp {
         let outcome: Message = if generating {
             "ui.subtitle_cancelled"
         } else if self.previewing {
-            "ui.preview_cancelled_confirmed"
+            "status.preview_cancelled"
         } else {
-            "ui.export_cancelled_confirmed"
+            "status.export_cancelled"
         }
         .into();
         self.project.outcome = Some(outcome.clone());
@@ -645,9 +647,9 @@ impl NohApp {
             Event::Cancelled => {
                 let running = self.project.running.take().unwrap();
                 let outcome: Message = if running.preview {
-                    "ui.preview_cancelled_confirmed"
+                    "status.preview_cancelled"
                 } else {
-                    "ui.export_cancelled_confirmed"
+                    "status.export_cancelled"
                 }
                 .into();
                 self.project.outcome = Some(outcome.clone());
@@ -712,6 +714,20 @@ fn free_srt_path(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn export_attempt_replaces_a_stale_drop_error_with_its_own_status() {
+        for (short, captions) in [(false, false), (false, true), (true, true)] {
+            let mut app = NohApp::default();
+            app.drop_error = Some("drop.rejected_unsupported".into());
+            app.project.apply_subtitles = captions;
+            app.start_project(&egui::Context::default(), false, short);
+            assert!(app.drop_error.is_none());
+            assert!(
+                app.error.is_some(),
+                "the current missing-media error is retained"
+            );
+        }
+    }
     #[test]
     fn subtitle_names_are_free_bounded_and_cancellable() {
         let folder = tempfile::tempdir().unwrap();

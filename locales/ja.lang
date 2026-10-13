@@ -498,3 +498,4 @@ resources.install=コンポーネントを追加または修復
 resources.installing=コンポーネントのインストーラーが開いています。
 resources.installed=コンポーネントの設定が終了しました。追加した動画プレビューを有効にするには NOH を再起動してください。
 resources.install_failed=コンポーネントの設定がキャンセルされたか、完了できませんでした。
+ui.opened=既定のアプリで開きました。

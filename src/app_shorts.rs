@@ -521,7 +521,7 @@ impl NohApp {
             self.job = Some(Job::short(request, move || ctx.request_repaint()));
         }
         if let Some(path) = open {
-            self.open(&path);
+            self.open(&path, ctx);
         }
         if cancelling_preparation && self.shorts.running.is_none() && self.job.is_none() {
             self.cancelling = false;

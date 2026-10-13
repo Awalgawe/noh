@@ -27,6 +27,7 @@ pub struct State {
     pub(super) lyrics_menu_h: f32,
     /// The menu opened: its first enabled item takes the focus once shown.
     pub(super) lyrics_focus_first: bool,
+    pub(super) lyrics_language_open: bool,
     #[cfg(test)]
     pub tiles: Vec<(u64, Rect)>,
     #[cfg(test)]
@@ -848,7 +849,7 @@ impl NohApp {
             )
             .pick_files()
         {
-            self.drop_files(paths, ctx);
+            self.picked_files(paths, ctx);
         }
     }
     /// "Add files…": every accepted type, sorted like a drop.
@@ -864,6 +865,12 @@ impl NohApp {
             )
             .pick_files()
         {
+            self.picked_files(paths, ctx);
+        }
+    }
+    /// Some native chooser backends return an empty selection on Cancel.
+    fn picked_files(&mut self, paths: Vec<PathBuf>, ctx: &egui::Context) {
+        if !paths.is_empty() {
             self.drop_files(paths, ctx);
         }
     }
@@ -1283,6 +1290,23 @@ mod tests {
         }
         frame(ctx, app, raw);
     }
+    #[test]
+    fn cancelled_native_multi_selection_keeps_project_and_error_unchanged() {
+        let (ctx, mut app) = app(Language::En);
+        app.drop_error = Some("drop.rejected_unsupported".into());
+        let revision = app.revision;
+        app.picked_files(Vec::new(), &ctx);
+        assert_eq!(app.revision, revision);
+        assert!(app.clips.is_empty() && app.wav.is_none());
+        assert_eq!(
+            app.drop_error.as_ref().unwrap().key,
+            "drop.rejected_unsupported"
+        );
+        app.drop_error = None;
+        app.picked_files(Vec::new(), &ctx);
+        assert!(app.drop_error.is_none());
+    }
+
     fn app(language: Language) -> (egui::Context, NohApp) {
         let ctx = egui::Context::default();
         app_locale::install_fonts(&ctx);
