@@ -16,3 +16,13 @@ materials are supplied in the separate materials archive.
 
 No administrator access is needed. Remove the extracted folder to uninstall.
 This does not delete media or settings in your user profile.
+
+This software is based in part on the work of the FreeType Team.
+The original FreeType notice is in
+`NOH.AppDir/usr/lib/noh/licenses/native/libfreetype6/copyright`.
+
+NOH's packager modifies the Ubuntu native binaries' ELF library search paths
+so they resolve the private libraries inside this folder (Linux packaging
+introduced on 2026-10-13). `LINUX-INPUTS.json` retains original hashes and
+`ELF-IMPORTS.json` records the relocated files. The corresponding source and
+packaging scripts are in the materials archive.

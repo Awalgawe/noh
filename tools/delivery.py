@@ -641,7 +641,7 @@ def authorize_redistribution(target):
                         "assets/windows-native.lock.json", "tools/windows_runtime.py"],
         'macos-arm64': ["assets/delivery-macos.lock.json", "tools/prepare-macos-speech.py"],
         'linux-x64': ["assets/linux-native.lock.json", "tools/linux_runtime.py",
-                      "tools/prepare-linux-speech.py"],
+                      "tools/prepare-linux-speech.py", "assets/linux-README.md"],
     }[target]
     locks = {name: digest(ROOT / name) for name in paths}
     locks["rust_standard_library_source"] = policy["rust_source"]["sha256"]

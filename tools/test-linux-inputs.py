@@ -109,6 +109,25 @@ class NativeInputsTests(unittest.TestCase):
                           {'keep': self.member()}, output)
             self.assertEqual((output / 'keep').read_bytes(), b'old content')
 
+    def test_producer_evidence_is_required_and_preserved_without_overwrite(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            record = root / 'producer'
+            record.write_bytes(b'producer bytes')
+            records = {'files': {'rav1e.buildinfo': {'size': 14}}}
+            with mock.patch.object(linux_runtime, 'fetch', return_value=record):
+                linux_runtime.copy_build_records(records, root / 'cache', root / 'materials')
+                target = root / 'materials/ubuntu-build-records/rav1e.buildinfo'
+                self.assertEqual(target.read_bytes(), record.read_bytes())
+                with self.assertRaises(FileExistsError):
+                    linux_runtime.copy_build_records(records, root / 'cache', root / 'materials')
+                with self.assertRaisesRegex(ValueError, 'size differs'):
+                    linux_runtime.copy_build_records({'files': {'other': {'size': 1}}}, root, root)
+                with self.assertRaises(ValueError):
+                    linux_runtime.copy_build_records({'files': {'../escape': {'size': 14}}}, root, root)
+            with self.assertRaises(KeyError):
+                linux_runtime.copy_build_records({}, root, root)
+
 
 class SpeechInputsTests(unittest.TestCase):
     def test_mutated_or_extra_cached_source_is_rejected(self):

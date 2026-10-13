@@ -233,6 +233,20 @@ def copy_members(archive, members, output):
                 target.chmod(spec['mode'])
 
 
+def copy_build_records(records, cache, materials):
+    """Retain producer evidence for Rust embedded in the native libraries."""
+    for filename, spec in records['files'].items():
+        if relative(filename).name != filename:
+            raise ValueError("Expected a bare native build-record filename")
+        record = fetch(spec, cache, 'ubuntu-build-records/' + filename)
+        if record.stat().st_size != spec['size']:
+            raise ValueError(f"Native build-record size differs: {filename}")
+        target = materials / 'ubuntu-build-records' / filename
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with record.open('rb') as source, target.open('xb') as destination:
+            shutil.copyfileobj(source, destination)
+
+
 def acquire(lock_path, cache, output):
     native_host()
     lock = read(lock_path)
@@ -269,6 +283,7 @@ def acquire(lock_path, cache, output):
                 if archive.stat().st_size != spec['size']:
                     raise ValueError(f"Source size differs: {filename}")
                 shutil.copy2(archive, destination / filename)
+        copy_build_records(lock['native_rust_builds'], cache, materials)
         shutil.copy2(lock_path, materials / 'linux-native.lock.json')
         write(staged / 'LINUX-INPUTS.json', {'schema_version': 1, 'lock_sha256': digest(lock_path),
                                            'runtime_files': inventory(runtime),
