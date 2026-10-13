@@ -133,19 +133,21 @@ Then click **Add files** again; NOH does not need to be rebuilt. Full Linux
 desktops commonly provide an XDG Desktop Portal backend already. These are host
 desktop components, separate from the bundled media and transcription tools.
 
-Opening a video, its folder or a lyrics file also requires `xdg-utils` and
-default Linux applications for those files. Use a video player, a file manager,
-and a text editor associated with `.srt` files. NOH uses these Linux associations
-under WSL too. A minimal Ubuntu installation may need, for example:
+**Candidate behavior, not yet in the published 0.1.2 ZIP:** opening a video, its
+folder or a lyrics file uses `xdg-open`, including under WSL. This requires
+`xdg-utils` and default Linux applications: a video player, a file manager and
+a text editor associated with `.srt` files. The published **0.1.2** binary still
+uses Windows associations under WSL; installing these Linux applications does
+not change that older binary. For the candidate on minimal Ubuntu, install for
+example:
 
 ```sh
 sudo apt-get install --no-install-recommends xdg-utils pcmanfm mpv mousepad
 ```
 
-Choose the SRT text editor through your file manager's **Open With** settings
-if lyrics open in a video player. Saving a correction in that editor lets NOH
-reload the lyrics for preview and export.
-
+For the candidate, choose the SRT text editor through your Linux file manager's
+**Open With** settings if lyrics open in a video player. Saving a correction in
+that editor lets NOH reload the lyrics for preview and export.
 
 Final package tests
 used Ubuntu 24.04.5 under WSLg with Mesa software rendering and PulseAudio;

@@ -13,9 +13,12 @@ Minimal can download the media tools when you need them.
 
 On Linux x86_64, extract the complete Linux ZIP and launch `NOH.AppDir/AppRun`.
 The desktop must provide the file chooser, audio and graphics services described
-in the [installation guide](INSTALLING.md#linux-x86_64). Opening exported media,
-folders or lyrics uses Linux's `xdg-open` and its default applications, including
-under WSL. Associate `.srt` files with a text editor to review and save corrections.
+in the [installation guide](INSTALLING.md#linux-x86_64). The corrected Linux
+candidate uses `xdg-open` and Linux default applications to open exported media,
+folders and lyrics, including under WSL. The published **0.1.2**
+ZIP still uses Windows associations under WSL; installing Linux applications
+does not change that older binary. In the candidate, associate `.srt` files with
+a Linux text editor to review and save corrections.
 
 See the [installation guide](INSTALLING.md). macOS currently requires
 a [source build](BUILDING.md).
