@@ -498,3 +498,4 @@ resources.install=Ajouter ou réparer les composants
 resources.installing=L’installateur de composants est ouvert.
 resources.installed=La préparation des composants est terminée. Relancez NOH pour activer un aperçu vidéo nouvellement ajouté.
 resources.install_failed=La préparation des composants a été annulée ou n’a pas pu aboutir.
+ui.opened=Ouvert dans l’application par défaut.

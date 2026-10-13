@@ -11,7 +11,13 @@ then open **NOH** from the Start menu. With a portable copy, extract the complet
 ZIP and open **noh.exe**. Choose the Standard or Complete profile for editing;
 Minimal can download the media tools when you need them.
 
-See the [installation guide](INSTALLING.md). macOS and Linux currently require
+On Linux x86_64, extract the complete Linux ZIP and launch `NOH.AppDir/AppRun`.
+The desktop must provide the file chooser, audio and graphics services described
+in the [installation guide](INSTALLING.md#linux-x86_64). Opening exported media,
+folders or lyrics uses Linux's `xdg-open` and its default applications, including
+under WSL. Associate `.srt` files with a text editor to review and save corrections.
+
+See the [installation guide](INSTALLING.md). macOS currently requires
 a [source build](BUILDING.md).
 
 ## Make your first video

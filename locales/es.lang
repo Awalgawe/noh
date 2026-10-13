@@ -498,3 +498,4 @@ resources.install=Añadir o reparar componentes
 resources.installing=El instalador de componentes está abierto.
 resources.installed=Configuración de componentes terminada. Reinicie NOH para activar la vista previa de vídeo recién añadida.
 resources.install_failed=La configuración de componentes se canceló o no pudo finalizar.
+ui.opened=Abierto en la aplicación predeterminada.

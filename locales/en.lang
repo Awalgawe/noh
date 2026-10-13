@@ -498,3 +498,4 @@ resources.install=Add or repair components
 resources.installing=The component installer is open.
 resources.installed=Component setup finished. Restart NOH to enable a newly added video preview.
 resources.install_failed=Component setup was cancelled or could not finish.
+ui.opened=Opened in the default application.

@@ -498,3 +498,4 @@ resources.install=Komponenten hinzufügen oder reparieren
 resources.installing=Das Komponenten-Installationsprogramm ist geöffnet.
 resources.installed=Komponenten eingerichtet. Starten Sie NOH neu, um eine neu hinzugefügte Videovorschau zu aktivieren.
 resources.install_failed=Die Komponenteneinrichtung wurde abgebrochen oder konnte nicht abgeschlossen werden.
+ui.opened=In der Standardanwendung geöffnet.

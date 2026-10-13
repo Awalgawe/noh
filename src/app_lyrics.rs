@@ -352,7 +352,7 @@ impl NohApp {
                 Action::Import => self.pick_lyrics(ctx),
                 Action::Review => {
                     if let Some(path) = self.project.track.path.clone() {
-                        self.open(&path);
+                        self.open(&path, ctx);
                     }
                 }
                 Action::Remove => {
@@ -501,26 +501,35 @@ impl NohApp {
             };
             // Bounded by the menu: long names truncate instead of widening it.
             let room = ui.available_width() - ui.spacing().item_spacing.x - 8.0;
-            style::framed_select(ui, |ui| {
-                egui::ComboBox::from_id_salt("lyrics-language")
-                    .icon(style::select_chevron)
-                    .width(room.clamp(80.0, 200.0))
-                    .truncate()
-                    .selected_text(selected)
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(
+            // A nested memory-backed ComboBox replaces its parent popup.
+            // Expand bounded choices inside this menu instead.
+            ui.vertical(|ui| {
+                ui.set_width(room.clamp(80.0, 200.0));
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                if ui.add(egui::Button::new(selected).truncate()).clicked() {
+                    self.strip.lyrics_language_open = !self.strip.lyrics_language_open;
+                }
+                if self.strip.lyrics_language_open {
+                    let mut changed = ui
+                        .selectable_value(
                             &mut self.subtitles.language,
                             "auto".into(),
                             l.text("lyrics.auto"),
-                        );
-                        for lang in Language::ALL {
-                            ui.selectable_value(
+                        )
+                        .changed();
+                    for lang in Language::ALL {
+                        changed |= ui
+                            .selectable_value(
                                 &mut self.subtitles.language,
                                 lang.code().into(),
                                 lang.name(),
-                            );
-                        }
-                    });
+                            )
+                            .changed();
+                    }
+                    if changed {
+                        self.strip.lyrics_language_open = false;
+                    }
+                }
             });
         });
     }
@@ -839,6 +848,41 @@ mod tests {
         find(&texts, "Generating…");
         assert!(!open(&ctx));
         assert_eq!(app.lyrics_state(), Chip::Generating);
+    }
+
+    /// Opening the language choices must not replace their parent popup.
+    #[test]
+    fn sung_language_can_be_changed_inside_the_lyrics_menu() {
+        for language in Language::ALL {
+            let (ctx, mut app) = app(language);
+            app.wav = Some("song.wav".into());
+            let texts = frame(&ctx, &mut app, 980.0, vec![]);
+            click(
+                &ctx,
+                &mut app,
+                980.0,
+                find(&texts, language.text("lyrics.title")).center(),
+            );
+            frame(&ctx, &mut app, 980.0, vec![]);
+            let texts = frame(&ctx, &mut app, 980.0, vec![]);
+            click(
+                &ctx,
+                &mut app,
+                980.0,
+                find(&texts, language.text("lyrics.auto")).center(),
+            );
+            frame(&ctx, &mut app, 980.0, vec![]);
+            let texts = frame(&ctx, &mut app, 980.0, vec![]);
+            assert!(open(&ctx), "language choices must leave their menu open");
+            click(
+                &ctx,
+                &mut app,
+                980.0,
+                find(&texts, Language::En.name()).center(),
+            );
+            assert_eq!(app.subtitles.language, "en");
+            assert!(open(&ctx));
+        }
     }
 
     /// Without the speech bundle, Generate is disabled and says why.
