@@ -50,7 +50,7 @@ public download until that acceptance finishes.
 Native builds and standard tests have passed for all three operating systems,
 including both Mac architectures. That evidence does not qualify an installable
 package. Linux x64 now has an AppDir packager and an Ubuntu 24.04 Release job;
-Linux 0.1.2 has [exact-byte qualification](LINUX_0_1_2_QUALIFICATION.md) within its
+Linux 0.1.3 has [exact-byte qualification](LINUX_0_1_3_QUALIFICATION.md) within its
 recorded Ubuntu/WSLg limits. Future artifacts require their own qualification. macOS Intel remains
 excluded from Release targets. The public Windows installer stage has passed on hosted runners;
 the older private update/install workflows are retired. See the
@@ -150,9 +150,9 @@ version alone does not establish acceptance on another distribution.
 verification repeat that audit; the latter also checks ELF/AppRun executable
 permissions. Source materials include the exact Ubuntu source records and
 archives, Whisper source/build receipt, Rust vendor sources and original notices.
-Linux redistribution and 0.1.2 CI-byte qualification have exact-hash records in
+Linux redistribution and 0.1.3 CI-byte qualification have exact-hash records in
 `assets/delivery-policy.json`. See [redistribution inputs](LINUX_REDISTRIBUTION.md)
-and the [final-byte report](LINUX_0_1_2_QUALIFICATION.md). Changed inputs or a new
+and the [final-byte report](LINUX_0_1_3_QUALIFICATION.md). Changed inputs or a new
 CI delivery invalidate that acceptance; local QA builds do not clear the gates.
 
 Linux desktop acceptance must also exercise **Add files** with an actual host

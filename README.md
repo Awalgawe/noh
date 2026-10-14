@@ -71,7 +71,7 @@ archive, then run `./NOH.AppDir/AppRun` from the extracted folder. It includes
 media tools and CPU transcription models. The baseline is Ubuntu 24.04 with
 glibc 2.39; final-byte tests used Ubuntu 24.04.5 under WSLg with software rendering.
 See the [Linux installation steps](docs/INSTALLING.md#linux-x86_64) and
-[validation limits](docs/LINUX_0_1_2_QUALIFICATION.md).
+[validation limits](docs/LINUX_0_1_3_QUALIFICATION.md).
 
 macOS currently requires a [source build](docs/BUILDING.md); distribution signing
 and notarization remain incomplete.
