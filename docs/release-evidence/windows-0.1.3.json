@@ -1,0 +1,199 @@
+{
+  "assets": {
+    "NOH-0.1.3-windows-x64-materials.zip": {
+      "sha256": "bda9cd862be7a0488a9760f44da80d4a625827e804c75e900e3b374efbfde4b9",
+      "size": 1277444531
+    },
+    "NOH-0.1.3-windows-x64.zip": {
+      "sha256": "69ffecd05d9ba7ce1c592c34916bfd3f9f0b8026b8e7f1ac89151784d81a1045",
+      "size": 1312787060
+    }
+  },
+  "build": {
+    "build_fingerprint": "107444cec0c07da37fc751cab188405b98f69bcf808269f63cbda0e9c72a0176",
+    "cargo_version": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+    "features": [
+      "default",
+      "gui",
+      "mcp"
+    ],
+    "git_dirty": false,
+    "git_revision": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e",
+    "options_sha256": "1ce6dbc5a54de1b0150f5325181b44153788a587c82a2d1467dd89d9b611a4e8",
+    "package_version": "0.1.3",
+    "profile": "release",
+    "rustc_version": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "schema_version": 1,
+    "source_sha256": "4cf132b2d1af7a4859d1b620b5eb12cd59c99983c546e3c559555b4bbd903a03",
+    "target": "x86_64-pc-windows-gnu"
+  },
+  "bundled_notices_comparison": {
+    "added": [],
+    "baseline": "Published 0.1.2 notices",
+    "changed": [],
+    "normalized_text_identical": true,
+    "removed": []
+  },
+  "delivery_sha256": "01b7f97e7cceb00731c51024ceab654ebb48a4aedb58f4f54feed77b11fc3df5",
+  "download_protection": {
+    "archive_sha256_after": "69ffecd05d9ba7ce1c592c34916bfd3f9f0b8026b8e7f1ac89151784d81a1045",
+    "attachment_services": {
+      "EXE": {
+        "policy_after": 1,
+        "policy_before": 1,
+        "save_hresult": 0,
+        "zone_identifier": "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=https://api.github.com/repos/Awalgawe/noh/actions/artifacts/11859011146/zip\r\n"
+      },
+      "PORTABLE": {
+        "policy_after": 1,
+        "policy_before": 1,
+        "save_hresult": 0,
+        "zone_identifier": "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=https://api.github.com/repos/Awalgawe/noh/actions/artifacts/11859011146/zip\r\n"
+      }
+    },
+    "defender_exit": 0,
+    "executable_sha256_after": "91b899dc1cad360c08025cf4b2b476f6062706622be778288f467b5a95effd85",
+    "limits": "Downloaded GitHub Actions envelope, with the nested portable and executable marked using their actual HTTPS origin. No browser, interactive SmartScreen reputation approval or security-setting change.",
+    "origin": "https://api.github.com/repos/Awalgawe/noh/actions/artifacts/11859011146/zip (nested portable archive and executable)",
+    "signature_status": "NotSigned",
+    "threats_reported": 0
+  },
+  "integration": {
+    "failed": 0,
+    "ignored": 12,
+    "log_archive_sha256": "0fb780138a3cc71d6612adc42b365ec5ff9bc6a5cd03d61c374546897166350b",
+    "log_member": "build _ Candidate windows-x64/6_Compile executables or build portable from explicit locked inputs.txt",
+    "passed": 481,
+    "run": 38481645547,
+    "suites": 22
+  },
+  "limitations": [
+    "No Authenticode signing or SmartScreen reputation is claimed.",
+    "Fresh application configuration on the recorded existing Windows host, not a fresh OS or universal hardware compatibility.",
+    "Microsoft runtime was already installed; no fresh-system prerequisite installation is claimed.",
+    "Native audio-device playback was observed; no human listening test is claimed.",
+    "Installer, on-demand download and public-URL qualification are separate from this portable record."
+  ],
+  "materials_comparison": {
+    "added": [],
+    "baseline": "Exact published 0.1.2 corresponding materials",
+    "changed": [
+      "BUILD-ENVIRONMENT.json",
+      "NOH-source.zip",
+      "PE-IMPORTS.json"
+    ],
+    "identical_files": 25490,
+    "removed": []
+  },
+  "native_acceptance": {
+    "bundled_preview_libraries_observed": 130,
+    "failed_capture_cases": 0,
+    "fresh_application_profile": true,
+    "fresh_os_installation": false,
+    "gpu": "NVIDIA GPU; actual CUDA transcription verified",
+    "gui_capture_cases": 84,
+    "gui_states": [
+      "ready",
+      "resources-options"
+    ],
+    "host": "Windows 10 Pro 22H2 x64, build 19045",
+    "languages": [
+      "en",
+      "fr",
+      "de",
+      "es",
+      "ja",
+      "ko",
+      "zh"
+    ],
+    "path": "Windows system directories only",
+    "play_pause_seek_handoffs": 6,
+    "playing_audio_device_observations": 2,
+    "preview_frames": 691,
+    "scales": [
+      1,
+      1.5,
+      2
+    ],
+    "sizes": [
+      "420x760",
+      "980x850"
+    ],
+    "speech": [
+      {
+        "cuda0_observed": false,
+        "exit": 0,
+        "expected_words": true,
+        "mode": "cpu"
+      },
+      {
+        "cuda0_observed": true,
+        "exit": 0,
+        "expected_words": true,
+        "mode": "cuda"
+      }
+    ],
+    "speech_fixture": "Synthetic French speech; no user media",
+    "theme": "dark",
+    "visually_inspected": [
+      {
+        "case": "resources-options-fr-dark-1-420x760",
+        "observation": "French options and component action fit the narrow viewport; diagnostic text wraps legibly. Lower scrollable content extends below the captured viewport.",
+        "passed": true,
+        "path": "captures/resources-options-fr-dark-1-420x760.png",
+        "sha256": "3cb73e895a822f8e4c6e8dac82bab2a9fe76aab15b1907d609f2d8281b0acb35"
+      },
+      {
+        "case": "resources-options-ja-dark-2-420x760",
+        "observation": "Japanese glyphs and component action render at scale 2 with wrapped diagnostics and no missing-glyph boxes; lower scroll content is outside the viewport.",
+        "passed": true,
+        "path": "captures/resources-options-ja-dark-2-420x760.png",
+        "sha256": "65f00f2500bf329bc5f733b68df152887ef4687ced862a85b4afa5932d74c408"
+      },
+      {
+        "case": "resources-options-de-dark-1-980x850",
+        "observation": "German modal headings, controls and diagnostics are legible and contained within the options panel; background controls are not assessed behind the modal.",
+        "passed": true,
+        "path": "captures/resources-options-de-dark-1-980x850.png",
+        "sha256": "458752161d7529cce5dc07e80a351293a09271de9d54e77c540bbff03e837fcb"
+      },
+      {
+        "case": "ready-fr-dark-1-980x850",
+        "observation": "French ready state displays synthetic clip, transport, timeline and enabled export button; preview is near the end of the configured fade-out.",
+        "passed": true,
+        "path": "captures/ready-fr-dark-1-980x850.png",
+        "sha256": "d72dc4b97d876edc9851c78590a02750f599eb4df6fae4391b5a716c32fd94f6"
+      }
+    ]
+  },
+  "native_reuse": {
+    "basis": "Exact SHA-256 equality with the qualified 0.1.2 runtime/model payload",
+    "unchanged_files": 266
+  },
+  "platform": "windows-x64",
+  "provenance": {
+    "artifact_digest": "sha256:7d44aa79ba1e92adc13b311222cac67713a837ec93a0b830c757118b08a9ea4d",
+    "artifact_id": 11859011146,
+    "attempt": 1,
+    "conclusion": "success",
+    "repository": "Awalgawe/noh",
+    "repository_id": 1411000018,
+    "run_id": 38481645547,
+    "url": "https://github.com/Awalgawe/noh/actions/runs/38481645547",
+    "workflow": ".github/workflows/release.yml",
+    "workflow_id": 379053207
+  },
+  "schema_version": 1,
+  "scope": "Exact Windows x64 portable application and corresponding materials. Installer wrappers, real component downloads and publication are separate acceptance gates.",
+  "source_commit": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e",
+  "source_correspondence": {
+    "exact_git_tree_match": true,
+    "git_archive_sha256": "4b02a8fa8dcc1a075dbd9ecab70c241f5617cdc6603300f1f84609283cbfa7b4",
+    "missing_imports": [],
+    "pe_images": 265,
+    "scope": "Archive member names and contents; container metadata need not be identical",
+    "source_commit": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e",
+    "source_files": 343
+  },
+  "version": "0.1.3"
+}

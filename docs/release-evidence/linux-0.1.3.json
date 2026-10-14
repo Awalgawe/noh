@@ -1,0 +1,302 @@
+{
+  "actual_desktop_interactions": {
+    "action_count": 73,
+    "checks": {
+      "cancellation": {
+        "observation": "Actual transcription cancellation returned to ready state; a subsequent complete generation succeeded. Broader export/preview cancellation uses separately identified unchanged-source journey evidence.",
+        "passed": true
+      },
+      "chooser_cancel": {
+        "observation": "Escape in reopened native chooser retained ready project without error.",
+        "passed": true
+      },
+      "chooser_selection": {
+        "observation": "Actual Zenity selection imported MP4, accented PNG, WAV and SRT.",
+        "passed": true
+      },
+      "drop_error_recovery": {
+        "observation": "Unsupported TXT drop was rejected; subsequent export replaced stale error with success and Open buttons.",
+        "passed": true
+      },
+      "export": {
+        "observation": "Two actual Export clicks produced complete decodable files and visible success.",
+        "passed": true
+      },
+      "native_file_drop": {
+        "observation": "Actual PCManFM drag added a third visual clip.",
+        "passed": true
+      },
+      "no_overwrite": {
+        "observation": "Second GUI export selected -2 suffix and preserved original SHA-256; both complete files decoded successfully.",
+        "passed": true
+      },
+      "open_export": {
+        "observation": "System MPV initially blocked on unresponsive WSLg PulseAudio. Verified service recovery restored actual Open video, frame display, seeking and normal window closure; host incident retained in evidence.",
+        "passed": true
+      },
+      "open_folder": {
+        "observation": "Open folder launched PCManFM with actual export directory and file.",
+        "passed": true
+      },
+      "preview_play_pause": {
+        "observation": "Real Play/Pause rendered advancing frames and paused at 1.8 seconds; measured WSLg output during initial playback.",
+        "passed": true
+      },
+      "subtitle_editor": {
+        "observation": "Missing SRT association was corrected in isolated host profile. Mousepad launched from NOH; typed and saved correction appeared in preview while NOH stayed responsive.",
+        "passed": true
+      },
+      "sung_language": {
+        "observation": "Nested menu stayed open; English choice remained selected.",
+        "passed": true
+      },
+      "transcription": {
+        "observation": "Actual Generate again produced the expected local English transcript; separate exact-package offline CLI test also passed.",
+        "passed": true
+      }
+    },
+    "control_released": true,
+    "host_incidents": [
+      "Fresh isolated XDG profile needed a default SRT editor association.",
+      "WSLg PulseAudio stopped responding; verified service restart restored playback. No underlying WSLg fix or human listening confirmation is claimed."
+    ],
+    "local_evidence_manifest_sha256": "6c781c188fda531113077ca35f5c1380f90703a7fb89b8010c1240440c9d7822",
+    "local_evidence_retained_privately": true,
+    "package_modified": false,
+    "scope": "Actual final CI package interactions detailed in JOURNEY.md; broader unchanged-source cases are identified separately in LINUX-JOURNEY-CONTINUITY.json.",
+    "source_commit": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e",
+    "status": "passed"
+  },
+  "assets": {
+    "NOH-0.1.3-linux-x64-materials.zip": {
+      "sha256": "ecd64a1cacf8f7b9cbe2e501da115340820ebfcb682a66078c7fefc932616d47",
+      "size": 1160387102
+    },
+    "NOH-0.1.3-linux-x64.zip": {
+      "sha256": "d6c20c821ecc60d97f25e756bc0738a3e3eef7edbdcd5492368bdf771523a927",
+      "size": 590398412
+    }
+  },
+  "build": {
+    "build_fingerprint": "65a8bfb7a59917c7db09f6fbe66df647c6c3a9947cf16c1b79e1d991eee96f9d",
+    "cargo_version": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+    "features": [
+      "default",
+      "gui",
+      "mcp"
+    ],
+    "git_dirty": false,
+    "git_revision": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e",
+    "options_sha256": "551b97d3d4294ccb92195861e537e56157a209494cd818efecad61475fb5c081",
+    "package_version": "0.1.3",
+    "profile": "release",
+    "rustc_version": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "schema_version": 1,
+    "source_sha256": "a4a50f002d041f738eee429d99fedca4fe8a586105e0cdecdd6003eb31d0b9fa",
+    "target": "x86_64-unknown-linux-gnu"
+  },
+  "ci": {
+    "artifact_digest": "sha256:87a324c8f7df4a81fabdb7926eef305a36f9ca07e60e38c649bfe883ac55dc0c",
+    "artifact_id": 11858898238,
+    "attempt": 1,
+    "conclusion": "success",
+    "run": 38481645547,
+    "target": "windows-linux",
+    "tests": {
+      "failed": 0,
+      "ignored": 12,
+      "log_archive_sha256": "0fb780138a3cc71d6612adc42b365ec5ff9bc6a5cd03d61c374546897166350b",
+      "log_member": "build _ Candidate linux-x64/8_Compile and verify the Linux AppDir from locked inputs.txt",
+      "passed": 474,
+      "run": 38481645547,
+      "suites": 22
+    },
+    "url": "https://github.com/Awalgawe/noh/actions/runs/38481645547"
+  },
+  "clean_install": {
+    "all_hashes_verified": true,
+    "archive_sha256": "d6c20c821ecc60d97f25e756bc0738a3e3eef7edbdcd5492368bdf771523a927",
+    "build": {
+      "build_fingerprint": "65a8bfb7a59917c7db09f6fbe66df647c6c3a9947cf16c1b79e1d991eee96f9d",
+      "cargo_version": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+      "features": [
+        "default",
+        "gui",
+        "mcp"
+      ],
+      "git_dirty": false,
+      "git_revision": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e",
+      "options_sha256": "551b97d3d4294ccb92195861e537e56157a209494cd818efecad61475fb5c081",
+      "package_version": "0.1.3",
+      "profile": "release",
+      "rustc_version": "rustc 1.98.1 (48a229cea 2026-09-01)",
+      "schema_version": 1,
+      "source_sha256": "a4a50f002d041f738eee429d99fedca4fe8a586105e0cdecdd6003eb31d0b9fa",
+      "target": "x86_64-unknown-linux-gnu"
+    },
+    "delivery_sha256": "0bbf87d9eba04b1506f12a36ea504a5c9daf626198b7c112dab7a466a0a9c4ec",
+    "executable_modes_preserved": true,
+    "extracted_files": 561,
+    "no_administrator_extraction": true,
+    "relocation_with_spaces": true,
+    "removal_preserved_external_media": true,
+    "source_commit": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e"
+  },
+  "delivery_sha256": "0bbf87d9eba04b1506f12a36ea504a5c9daf626198b7c112dab7a466a0a9c4ec",
+  "download_protection": {
+    "github_digest_verified": true,
+    "origin": "https://api.github.com/repos/Awalgawe/noh/actions/artifacts/11858898238/zip",
+    "os_reputation_scan": "Not claimed for Linux",
+    "package_signing": "unsigned",
+    "transport": "Authenticated GitHub API and HTTPS storage; credentials not forwarded to storage"
+  },
+  "host": {
+    "audio": "Server Name: pulseaudio\nServer Version: 17.0-25-gc3305\nDefault Sample Specification: s16le 2ch 44100Hz\nDefault Sink: RDPSink",
+    "distribution": "Ubuntu 24.04.5 LTS",
+    "graphics": "    Accelerated: no\nOpenGL vendor string: Mesa\nOpenGL renderer string: llvmpipe (LLVM 20.1.2, 256 bits)\nOpenGL version string: 4.5 (Compatibility Profile) Mesa 25.2.8-0ubuntu0.24.04.4",
+    "kernel": "6.18.54.1-microsoft-standard-WSL2",
+    "scope": "Existing Ubuntu 24.04 WSLg host; no fresh OS or physical Linux desktop acceptance claimed",
+    "versions": "libc6 2.39-0ubuntu8.9\nmousepad 0.6.1-1build2\nmpv 0.37.0-1ubuntu4\npcmanfm 1.3.2-4build2\nxdg-utils 1.1.3-4.1ubuntu3\nzenity 4.0.1-1build3"
+  },
+  "limitations": [
+    "Ubuntu 24.04 x86_64 under WSL 2/WSLg; other distributions and physical Linux graphics/audio hardware are not qualified.",
+    "Fresh extraction and isolated application configuration on an existing host, not a fresh operating-system installation.",
+    "Native Linux file-manager drag-and-drop tested; Windows Explorer-to-WSLg drag-and-drop remains unsupported.",
+    "Host requires a working portal or Zenity chooser and installed default desktop applications for folder/video/SRT opening.",
+    "Software-rendered graphics and WSLg PulseAudio; no human listening confirmation.",
+    "WSLg PulseAudio stopped responding during local UI acceptance; restarting that verified host service restored playback. No fix for the underlying WSLg issue is included.",
+    "CPU speech only, no AppImage, package signing or automatic update claim."
+  ],
+  "local_media": {
+    "build": {
+      "build_fingerprint": "65a8bfb7a59917c7db09f6fbe66df647c6c3a9947cf16c1b79e1d991eee96f9d",
+      "cargo_version": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+      "features": [
+        "default",
+        "gui",
+        "mcp"
+      ],
+      "git_dirty": false,
+      "git_revision": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e",
+      "options_sha256": "551b97d3d4294ccb92195861e537e56157a209494cd818efecad61475fb5c081",
+      "package_version": "0.1.3",
+      "profile": "release",
+      "rustc_version": "rustc 1.98.1 (48a229cea 2026-09-01)",
+      "schema_version": 1,
+      "source_sha256": "a4a50f002d041f738eee429d99fedca4fe8a586105e0cdecdd6003eb31d0b9fa",
+      "target": "x86_64-unknown-linux-gnu"
+    },
+    "checks": {
+      "captions": {
+        "exit": 0,
+        "log_sha256": "f8d6b40ae32c9a50cb7cd889fbdf0b42ddf57e65f7145c7f33e9d747d08c197a"
+      },
+      "decode-export": {
+        "exit": 0,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "export": {
+        "exit": 0,
+        "log_sha256": "c5b5091cfa7c937de6a0238740caa9c688b4ebc703daf1358335e6ce0eb1b183"
+      },
+      "fixture": {
+        "exit": 0,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "identity-cli": {
+        "exit": 0,
+        "log_sha256": "8e48c81ec4467581bf2721c6ab4eb00eae7437bfa4b88a58177b15655f8571cb"
+      },
+      "identity-gui": {
+        "exit": 0,
+        "log_sha256": "8e48c81ec4467581bf2721c6ab4eb00eae7437bfa4b88a58177b15655f8571cb"
+      },
+      "identity-mcp": {
+        "exit": 0,
+        "log_sha256": "8e48c81ec4467581bf2721c6ab4eb00eae7437bfa4b88a58177b15655f8571cb"
+      },
+      "no-overwrite": {
+        "exit": 1,
+        "log_sha256": "e4716432bcb202a7d34ca0d0c8a29689dd7aedf7ba00a92a18ba4e7d5f9237d3"
+      },
+      "short": {
+        "exit": 0,
+        "log_sha256": "c3c5d96430336ee56afa3b3ee651343c440c2997b341f87303a62fbf1b1b765b"
+      }
+    },
+    "export_sha256": "007e85f7883664770f88edb131df7a1b59340c01896093b2558f19587c109672",
+    "phase": "media"
+  },
+  "native_import_closure": {
+    "coverage": "ELF direct imports; dynamic plugins, devices and execution require native acceptance",
+    "images": 228,
+    "maximum_glibc": "2.39",
+    "report_sha256": "7821ca50f748e25fbaef9925f3ac76bdbf824bf8d5d5535426a6876adbf44a73",
+    "unresolved": []
+  },
+  "offline_transcription": {
+    "checks": {
+      "offline-transcription": {
+        "exit": 0,
+        "log_sha256": "6ac0fa24218c3740ad95b5cca1f9a00bac7b5773811c5f5f893463681cfbd042"
+      }
+    },
+    "network_interfaces": [
+      "lo"
+    ],
+    "phase": "speech",
+    "transcript": "1\n00:00:00,020 --> 00:00:02,650\nThis is a test of local speech recognition.\n\n"
+  },
+  "package_after_tests": {
+    "all_files_unchanged": true,
+    "delivery_sha256": "0bbf87d9eba04b1506f12a36ea504a5c9daf626198b7c112dab7a466a0a9c4ec",
+    "files": 561,
+    "source_commit": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e"
+  },
+  "platform": "linux-x64",
+  "prior_broad_journey_continuity": {
+    "application_implementation_and_tools_unchanged": true,
+    "approved_journey_source": "e7c3f15c8e4be98c81cfb76715c81cf237b23d1f",
+    "cargo_toml_change": "Package version only, 0.1.2 to 0.1.3",
+    "changed_files": [
+      "Cargo.lock",
+      "Cargo.toml",
+      "assets/delivery-policy.json",
+      "assets/linux-README.md",
+      "docs/APP.md",
+      "docs/CHANGELOG.md",
+      "docs/INSTALLING.md",
+      "docs/RELEASE_0_1_3_INPUTS.md",
+      "docs/RELEASING.md"
+    ],
+    "critic_turn": "01a1375b-c2ec-7a93-90bf-b56c22d144e8",
+    "prior_journey_evidence_manifest_sha256": "ac3bdb4ca128d8cade8651f7a5c0d910d456327a9000237cda982a2cff13e27b",
+    "release_source": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e",
+    "scope": "Reuse broad actual Linux UI journey evidence only for unchanged implementation; final CI byte identity and native spotchecks remain separately required."
+  },
+  "schema_version": 1,
+  "scope": "Exact CI Linux x64 AppDir portable and corresponding materials on the recorded Ubuntu 24.04 WSLg host.",
+  "source_commit": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e",
+  "source_correspondence": {
+    "application_source_sha256": "3539af0a1ac2b10ed7a068c8291cb03f58425eede98df37917187308078f2f8c",
+    "comparison": {
+      "added": [],
+      "baseline": "Exact published Linux 0.1.2 materials",
+      "changed": [
+        "BUILD-ENVIRONMENT.json",
+        "ELF-IMPORTS.json",
+        "NOH-source.zip"
+      ],
+      "identical_files": 25334,
+      "removed": []
+    },
+    "elf_images": 228,
+    "exact_git_blob_contents_match": true,
+    "material_files": 25337,
+    "method": "Raw git cat-file blob bytes, not Windows checkout line endings",
+    "source_commit": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e",
+    "source_files": 343,
+    "unresolved_imports": []
+  },
+  "version": "0.1.3"
+}

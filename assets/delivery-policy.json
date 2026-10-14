@@ -190,6 +190,88 @@
       "review_round": "linux-final-v1",
       "scope": "Complete Linux x86_64 AppDir ZIP and corresponding materials; Ubuntu24.04 WSLg/software-rendering qualification with the limits recorded in the evidence. AppImage and hardware-GPU qualification excluded.",
       "source_commit": "b3863e80128340a13efa108e5c7347a50d932f05"
+    },
+    {
+      "delivery_sha256": "01b7f97e7cceb00731c51024ceab654ebb48a4aedb58f4f54feed77b11fc3df5",
+      "evidence": {
+        "audio_gpu": {
+          "path": "docs/release-evidence/windows-0.1.3.json",
+          "sha256": "58b07230422fe26b6c749e8c5a8610e6f10fcbe91fcd1f1fbe8dea7add7a4783"
+        },
+        "clean_install": {
+          "path": "docs/release-evidence/windows-0.1.3.json",
+          "sha256": "58b07230422fe26b6c749e8c5a8610e6f10fcbe91fcd1f1fbe8dea7add7a4783"
+        },
+        "corresponding_sources": {
+          "path": "docs/release-evidence/windows-0.1.3.json",
+          "sha256": "58b07230422fe26b6c749e8c5a8610e6f10fcbe91fcd1f1fbe8dea7add7a4783"
+        },
+        "download_protection": {
+          "path": "docs/release-evidence/windows-0.1.3.json",
+          "sha256": "58b07230422fe26b6c749e8c5a8610e6f10fcbe91fcd1f1fbe8dea7add7a4783"
+        },
+        "media_export": {
+          "path": "docs/release-evidence/windows-0.1.3.json",
+          "sha256": "58b07230422fe26b6c749e8c5a8610e6f10fcbe91fcd1f1fbe8dea7add7a4783"
+        },
+        "native_import_closure": {
+          "path": "docs/release-evidence/windows-0.1.3.json",
+          "sha256": "58b07230422fe26b6c749e8c5a8610e6f10fcbe91fcd1f1fbe8dea7add7a4783"
+        },
+        "offline_transcription": {
+          "path": "docs/release-evidence/windows-0.1.3.json",
+          "sha256": "58b07230422fe26b6c749e8c5a8610e6f10fcbe91fcd1f1fbe8dea7add7a4783"
+        },
+        "rust_notices": {
+          "path": "docs/release-evidence/windows-0.1.3.json",
+          "sha256": "58b07230422fe26b6c749e8c5a8610e6f10fcbe91fcd1f1fbe8dea7add7a4783"
+        }
+      },
+      "platform": "windows-x64",
+      "review_round": "release-0.1.3-final-bytes-v1",
+      "scope": "Ordinary portable and corresponding materials only; installer wrappers and publication excluded",
+      "source_commit": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e"
+    },
+    {
+      "delivery_sha256": "0bbf87d9eba04b1506f12a36ea504a5c9daf626198b7c112dab7a466a0a9c4ec",
+      "evidence": {
+        "audio_gpu": {
+          "path": "docs/release-evidence/linux-0.1.3.json",
+          "sha256": "685af12aa8550de8d8f5ad8e68680ae9f900c4cfa0570d3b6a87065a57d4d2bc"
+        },
+        "clean_install": {
+          "path": "docs/release-evidence/linux-0.1.3.json",
+          "sha256": "685af12aa8550de8d8f5ad8e68680ae9f900c4cfa0570d3b6a87065a57d4d2bc"
+        },
+        "corresponding_sources": {
+          "path": "docs/release-evidence/linux-0.1.3.json",
+          "sha256": "685af12aa8550de8d8f5ad8e68680ae9f900c4cfa0570d3b6a87065a57d4d2bc"
+        },
+        "download_protection": {
+          "path": "docs/release-evidence/linux-0.1.3.json",
+          "sha256": "685af12aa8550de8d8f5ad8e68680ae9f900c4cfa0570d3b6a87065a57d4d2bc"
+        },
+        "media_export": {
+          "path": "docs/release-evidence/linux-0.1.3.json",
+          "sha256": "685af12aa8550de8d8f5ad8e68680ae9f900c4cfa0570d3b6a87065a57d4d2bc"
+        },
+        "native_import_closure": {
+          "path": "docs/release-evidence/linux-0.1.3.json",
+          "sha256": "685af12aa8550de8d8f5ad8e68680ae9f900c4cfa0570d3b6a87065a57d4d2bc"
+        },
+        "offline_transcription": {
+          "path": "docs/release-evidence/linux-0.1.3.json",
+          "sha256": "685af12aa8550de8d8f5ad8e68680ae9f900c4cfa0570d3b6a87065a57d4d2bc"
+        },
+        "rust_notices": {
+          "path": "docs/release-evidence/linux-0.1.3.json",
+          "sha256": "685af12aa8550de8d8f5ad8e68680ae9f900c4cfa0570d3b6a87065a57d4d2bc"
+        }
+      },
+      "platform": "linux-x64",
+      "review_round": "release-0.1.3-final-bytes-v1",
+      "scope": "Linux portable and corresponding materials on the recorded Ubuntu/WSLg host",
+      "source_commit": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e"
     }
   ],
   "redistribution_records": [
