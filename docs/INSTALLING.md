@@ -61,7 +61,7 @@ same release to add content.
 You do not need to uninstall NOH. Already installed content and user files are
 preserved; selecting a smaller profile does not remove components. Failed downloads
 leave the existing installation unchanged, so you can retry. Active-download
-cancellation and subsequent retry were checked with the 0.1.2 Windows release;
+cancellation and subsequent retry were checked with the 0.1.3 Windows release;
 see its notes for the tested environment and remaining limits.
 Avoid starting this while editing a session you need to keep: the wizard may
 need NOH closed to replace files. Restart NOH to enable newly added preview support.
@@ -133,26 +133,24 @@ Then click **Add files** again; NOH does not need to be rebuilt. Full Linux
 desktops commonly provide an XDG Desktop Portal backend already. These are host
 desktop components, separate from the bundled media and transcription tools.
 
-**Linux 0.1.3 behavior, absent from the published 0.1.2 ZIP:** opening a video, its
-folder or a lyrics file uses `xdg-open`, including under WSL. This requires
-`xdg-utils` and default Linux applications: a video player, a file manager and
-a text editor associated with `.srt` files. The published **0.1.2** binary still
-uses Windows associations under WSL; installing these Linux applications does
-not change that older binary. For the candidate on minimal Ubuntu, install for
-example:
+**Linux 0.1.3:** opening a video, its folder or a lyrics file uses
+`xdg-open`, including under WSL. This requires `xdg-utils` and default Linux
+applications: a video player, a file manager and a text editor associated with
+`.srt` files. Upgrade older packages to obtain this corrected behavior. On
+minimal Ubuntu, install for example:
 
 ```sh
 sudo apt-get install --no-install-recommends xdg-utils pcmanfm mpv mousepad
 ```
 
-For the candidate, choose the SRT text editor through your Linux file manager's
+Choose the SRT text editor through your Linux file manager's
 **Open With** settings if lyrics open in a video player. Saving a correction in
 that editor lets NOH reload the lyrics for preview and export.
 
 Final package tests
 used Ubuntu 24.04.5 under WSLg with Mesa software rendering and PulseAudio;
 physical Linux graphics hardware and other distributions have not been qualified.
-See the [validation report](LINUX_0_1_2_QUALIFICATION.md) for the exact environment.
+See the [validation report](LINUX_0_1_3_QUALIFICATION.md) for the exact environment.
 In WSLg, an ALSA default-device mapping to its PulseAudio server may need to be
 configured; the report records the Ubuntu-provided configuration used in testing.
 WSLg does not support dragging files from Windows Explorer into Linux windows

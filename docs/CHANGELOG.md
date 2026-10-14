@@ -5,7 +5,12 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
-## 0.1.3 — in preparation
+## 0.1.3 — 2026-10-14
+
+Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.1.3).
+Both application packages come from the same CI build; Windows installers reuse
+its application bytes. See the [Linux qualification report](LINUX_0_1_3_QUALIFICATION.md)
+for actual desktop checks and the Ubuntu/WSLg limits.
 
 - Treat cancelling the native file chooser as cancellation, without a false error.
 - Keep the sung-language choices open inside the lyrics menu.
