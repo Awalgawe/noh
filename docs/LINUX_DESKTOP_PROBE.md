@@ -11,6 +11,9 @@ The guest uses Canonical's dated 20260926 cloud image with its published SHA-256
 cloud-init's NoCloud seed, distribution GNOME/GDM/PipeWire packages, QEMU/KVM's
 virtual GPU and HDA audio, and a normal GDM automatic login. Installed package
 versions are retained; package repositories are resolved at preparation time.
+Because SSH opens the guest user manager before desktop packages are installed,
+the probe reloads that manager and starts the newly installed vendor audio units.
+The HDA device is output-only, matching QEMU's WAV recording backend.
 KVM absence, failed provisioning, a missing real Wayland session or missing audio
 services fail the probe. Software graphics and virtual audio cannot establish
 physical-device behavior or human listening quality.
@@ -21,6 +24,8 @@ The ephemeral SSH key, seed and VM disks are never uploaded. Evidence includes
 runner/guest identity, package versions, boot/provisioning logs, actual guest
 scanout and a synthetic tone recorded by QEMU. Screen and audio inspection are
 required before claiming that this route is usable. No host desktop is controlled.
+Guest package inventory and scanout are also collected after a failed desktop or
+audio check, while preserving the failing exit status.
 
 This small probe uses existing QEMU, cloud-init and OpenSSH commands. Quickemu's
 documented Linux flow requires ordinary interactive installation; the existing

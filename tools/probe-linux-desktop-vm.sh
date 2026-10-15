@@ -90,7 +90,7 @@ qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -smp 3 -m 6144 \
     -drive "file=$work/guest.qcow2,format=qcow2,if=virtio" \
     -drive "file=$work/seed.img,format=raw,if=virtio,readonly=on" \
     -device virtio-vga -device qemu-xhci -device usb-tablet \
-    -device intel-hda -device hda-duplex,audiodev=sound \
+    -device intel-hda -device hda-output,audiodev=sound \
     -audiodev "wav,id=sound,path=$evidence/virtual-audio.wav" \
     -netdev user,id=net,hostfwd=tcp:127.0.0.1:2222-:22 -device virtio-net-pci,netdev=net \
     -display vnc=127.0.0.1:9 -serial "file:$evidence/serial.log" \
@@ -114,7 +114,8 @@ timeout 20m ssh "${ssh_args[@]}" noh@127.0.0.1 'sudo cloud-init status --wait --
 ssh "${ssh_args[@]}" noh@127.0.0.1 'sudo cat /var/log/cloud-init-output.log' \
     > "$evidence/cloud-init-output.log"
 test "$cloud_status" = 0 || { cat "$evidence/cloud-init-status.txt"; exit "$cloud_status"; }
-timeout 180s ssh "${ssh_args[@]}" noh@127.0.0.1 bash -s > "$evidence/guest.txt" 2>&1 <<'GUEST'
+guest_status=0
+timeout 180s ssh "${ssh_args[@]}" noh@127.0.0.1 bash -s > "$evidence/guest.txt" 2>&1 <<'GUEST' || guest_status=$?
 set -euo pipefail
 cat /etc/os-release
 uname -a
@@ -138,6 +139,10 @@ loginctl show-session "$session"
 pgrep -a -u "$(id -u)" gnome-shell
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+# SSH started this user manager before cloud-init installed desktop packages.
+# Apply the newly installed vendor units to that already-running manager.
+systemctl --user daemon-reload
+systemctl --user start pipewire pipewire-pulse wireplumber
 systemctl --user is-active pipewire pipewire-pulse wireplumber
 pactl info
 pactl list short sinks
@@ -172,5 +177,6 @@ with socket.socket(socket.AF_UNIX) as connection:
             if 'return' in reply:
                 break
 PY
+test "$guest_status" = 0 || { cat "$evidence/guest.txt"; exit "$guest_status"; }
 echo 'GNOME Wayland and PipeWire guest probe completed; inspect the screen and audio evidence.'
 echo 'Infrastructure feasibility only. No NOH candidate or physical device was qualified.'
