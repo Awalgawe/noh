@@ -134,8 +134,22 @@ if [[ "${image_spec[4]}" = iso ]]; then
     wait "$http_pid" || true
     http_pid=
     archive_boot installer
-    grep -Eq '^NOH_INSTALL_FINALIZE_COMPLETE[[:space:]]*$' "$evidence/installer-serial.log"
-    grep -Eq '^NOH_INSTALL_FINALIZE_EXIT=0[[:space:]]*$' "$evidence/installer-serial.log"
+    if ! grep -Eq '^NOH_INSTALL_FINALIZE_COMPLETE[[:space:]]*$' "$evidence/installer-serial.log" ||
+       ! grep -Eq '^NOH_INSTALL_FINALIZE_EXIT=0[[:space:]]*$' "$evidence/installer-serial.log"; then
+        echo 'Mint finalization was not confirmed; reading installer logs from the stopped disk.'
+        # virt-cat inspects the disk read-only. Recover the actual installer
+        # failure before the disposable runner removes its disk; never infer
+        # successful installation from poweroff or repair the disk here.
+        sudo apt-get install -y --no-install-recommends libguestfs-tools
+        readback_status=0
+        timeout 180s sudo env LIBGUESTFS_BACKEND=direct virt-cat --format=qcow2 \
+            -a "$work/guest.qcow2" /var/log/installer/syslog /var/log/installer/debug \
+            2> "$evidence/installer-readback.log" |
+            sed -E 's/[$]6[$][^[:space:]]+/[REDACTED_PASSWORD_HASH]/g' \
+                > "$evidence/installer-details.log" || readback_status=$?
+        printf 'Installer log readback exit: %s\n' "$readback_status" >> "$evidence/installer-readback.log"
+        exit 1
+    fi
     # Installation has powered off; the next boot uses only its installed disk.
     # Release the owned ISO and extracted boot files before desktop provisioning.
     rm -- "$work/base.img" "$work/mint-vmlinuz" "$work/mint-initrd"

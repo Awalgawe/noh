@@ -108,6 +108,15 @@ SSH with passwords disabled, independently of cloud-init's first boot, so that
 cloud-init failures can be retrieved. The installed kernel also logs to serial;
 an SSH timeout retains a QMP boot screen. These are diagnostics and transport
 preparation, not evidence that the original Mint failure has been resolved.
+If finalization is not confirmed after poweroff, `virt-cat` reads the installed
+disk's installer logs without modifying it. The generated password hash is
+redacted before retention. Readback cannot turn installation failure into a pass.
+
+Fedora's minimal GNOME session does not install Nautilus automatically. Its
+GNOME file-chooser portal uses Nautilus, so the adapter explicitly installs both
+Nautilus and the GNOME portal. The prior image had the portal and Zenity but no
+Nautilus; its runtime checks passed while chooser/import screens stayed empty.
+Those screens are incomplete observations, not desktop qualification.
 
 Each case requires the selected OS, a real GDM, SDDM or LightDM login on seat0, the selected desktop,
 with openSUSE's autologin user also set in `/etc/sysconfig/displaymanager`.
@@ -202,6 +211,7 @@ Checked on 2026-10-15:
 - [Mint's success-hook invocation](https://github.com/linuxmint/ubiquity/blob/master/ubiquity/frontend/base.py) and [standard in-target helper](https://github.com/linuxmint/ubiquity/blob/master/d-i/source/debian-installer-utils/in-target).
 - [GNOME portal Open label](https://github.com/GNOME/nautilus/blob/main/src/nautilus-portal.c) and [chooser mnemonic support](https://github.com/GNOME/nautilus/blob/main/src/resources/ui/nautilus-file-chooser.blp).
 - [KDE file-widget Name field](https://invent.kde.org/frameworks/kio/-/blob/master/src/filewidgets/kfilewidget.cpp).
+- [GNOME portal's Nautilus dependency](https://sources.debian.org/src/xdg-desktop-portal-gnome/50.0-1/debian/changelog/) and [read-only disk log extraction with virt-cat](https://libguestfs.org/virt-cat.1.html).
 
 Existing QEMU, cloud-init and OpenSSH commands provide the VM lifecycle; the NOH
 helpers only bind candidate identity, distribution setup and application evidence.

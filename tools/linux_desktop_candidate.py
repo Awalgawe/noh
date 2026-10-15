@@ -132,7 +132,8 @@ def rpm_arch_provisioning(row, image):
         commands = [
             ['dnf', 'install', '-y', 'https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-44.noarch.rpm'],
             ['dnf', 'install', '-y', '--allowerasing', 'ffmpeg', 'mpv-libs', 'mpv', 'python3',
-             'gnome-session-wayland-session', 'gdm', 'kernel', 'kernel-modules', 'kernel-modules-extra',
+             'gnome-session-wayland-session', 'gdm', 'nautilus', 'xdg-desktop-portal-gnome',
+             'kernel', 'kernel-modules', 'kernel-modules-extra',
              'pipewire', 'pipewire-pulseaudio', 'pipewire-alsa', 'wireplumber', 'pulseaudio-utils',
              'alsa-utils', 'mesa-dri-drivers', 'mesa-libEGL', 'mesa-libGL', 'libxkbcommon-x11',
              'libXcursor', 'libXrandr', 'libXi', 'libXinerama', 'libstdc++', 'dejavu-sans-fonts',
