@@ -120,6 +120,9 @@ and requires both repository names to resolve. Serial completion and exit-zero
 markers are mandatory, alongside the existing installation-finalization guards.
 This repairs the test installer network; it does not alter the candidate or
 qualify Mint without the subsequent installed-desktop tests.
+Network diagnostics set `PAGER=cat`: run 38814284580 reached the early command
+but `nmcli device show` opened an interactive pager on the serial terminal and
+waited for Return until the installer deadline. No NOH check ran in that trial.
 
 Fedora's minimal GNOME session does not install Nautilus automatically. Its
 GNOME file-chooser portal uses Nautilus, so the adapter explicitly installs both

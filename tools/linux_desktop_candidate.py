@@ -235,6 +235,7 @@ def mint_preseed(args):
     # enp0s4 is the sole NIC in this adapter's fixed Q35 device layout.
     network = '; '.join([
         'exec >/dev/ttyS0 2>&1', 'set -e',
+        'export PAGER=cat',
         "trap 'echo NOH_INSTALL_NETWORK_EXIT=$?' 0",
         'echo NOH_INSTALL_NETWORK_BEGIN',
         'nmcli device show enp0s4',
