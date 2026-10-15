@@ -14,6 +14,9 @@ builds are not public releases.
   fresh directory. Final-package desktop qualification remains pending.
 - Find the Linux distribution's FFmpeg when launched from `/`, `/usr` or
   `/usr/bin`, while continuing to reject implicit working-directory lookup.
+- Keep Linux preview audio active while ALSA recovers from a temporary buffer
+  underrun, instead of permanently switching to silent preview. Device loss,
+  recovery failures and a stalled audio clock still trigger silent fallback.
 - Verify the installed-dependency contract in final archives and retain the
   linked Linux installation guide. Test one sealed candidate across the
   [Linux validation matrix](LINUX_VALIDATION.md), with separate desktop gates.
