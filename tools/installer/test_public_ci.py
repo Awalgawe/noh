@@ -47,6 +47,9 @@ class InstallerGuards(unittest.TestCase):
                     continue
                 jobs.append({'name': 'build / Candidate ' + platform,
                              'conclusion': linux_result if platform == 'linux-x64' else 'success'})
+                if platform == 'linux-x64':
+                    jobs[-1]['steps'] = [{'name': 'Test the same Linux candidate across the distribution matrix',
+                                         'conclusion': linux_result}]
             responses = {'': {'id': 1411000018}, '/actions/runs/1': run,
                 '/compare/' + source + '...main': {'status': 'identical'},
                 '/actions/runs/1/attempts/1/jobs?per_page=100': {'total_count': len(jobs),
@@ -54,6 +57,11 @@ class InstallerGuards(unittest.TestCase):
                 '/actions/runs/1/artifacts?per_page=100': {'total_count': len(platforms), 'artifacts': [
                     {'id': 9 + index, 'name': 'delivery-' + platform, 'expired': False,
                      'digest': 'sha256:' + 'b' * 64} for index, platform in enumerate(platforms)]}}
+            if 'linux-x64' in platforms:
+                inventory = responses['/actions/runs/1/artifacts?per_page=100']
+                inventory['artifacts'].append({'id': 20, 'name': 'linux-validation-1-1',
+                                              'expired': False, 'digest': 'sha256:' + 'd' * 64})
+                inventory['total_count'] += 1
 
             def download(route, target, digest):
                 self.assertEqual(route, '/actions/artifacts/9/zip')
