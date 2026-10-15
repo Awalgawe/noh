@@ -41,6 +41,13 @@
       "digest": "08754e28d91b1680086c6211ef4df13559e766fff7cdb4006489b14b5d281f08",
       "os_id": "arch", "version_id": null, "session": "plasma.desktop",
       "reboot_after_provisioning": true
+    },
+    "mint-22.3": {
+      "url": "https://mirrors.edge.kernel.org/linuxmint/stable/22.3/linuxmint-22.3-cinnamon-64bit.iso",
+      "algorithm": "sha256",
+      "digest": "a081ab202cfda17f6924128dbd2de8b63518ac0531bcfe3f1a1b88097c459bd4",
+      "os_id": "linuxmint", "version_id": "22.3", "session": "cinnamon",
+      "format": "iso", "installation_method": "ubiquity-preseed"
     }
   }
 }

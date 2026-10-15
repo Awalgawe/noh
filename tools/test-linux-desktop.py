@@ -8,6 +8,7 @@ from pathlib import Path
 import struct
 import tempfile
 import unittest
+from unittest.mock import patch
 import wave
 
 import linux_desktop_candidate as desktop
@@ -15,6 +16,44 @@ from delivery import inventory
 
 
 class DesktopEvidenceTests(unittest.TestCase):
+    def test_acquisition_cleanup_preserves_verified_payload_and_local_envelope(self):
+        def envelope_at(path):
+            path.mkdir()
+            (path / 'DELIVERY.json').write_text('{}')
+            return path
+
+        def acquire(args, destination):
+            (destination / 'transport.zip').write_bytes(b'fixture transport')
+            return envelope_at(destination / 'envelope')
+
+        def unpack(envelope, payload):
+            app = payload / 'NOH.AppDir'
+            app.mkdir()
+            (app / 'AppRun').write_text('fixture executable')
+            return {'source_commit': 'a' * 40, 'run_id': '1', 'run_attempt': '1',
+                    'bundle_files': inventory(payload)}, 'b' * 64
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            external = envelope_at(root / 'caller-envelope')
+            for source in (None, external):
+                output = root / ('acquired' if source is None else 'local')
+                args = argparse.Namespace(commit='a' * 40, run=1, attempt=1, workflow=1,
+                                          output=output, envelope=source)
+                with patch.object(desktop, 'acquire', acquire), patch.object(desktop, 'unpack_candidate', unpack), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    desktop.prepare(args)
+                self.assertTrue((external / 'DELIVERY.json').is_file())
+                self.assertTrue((output / 'CANDIDATE.json').is_file())
+                with desktop.tarfile.open(output / 'payload.tar') as archive:
+                    self.assertEqual(archive.extractfile('NOH.AppDir/AppRun').read(), b'fixture executable')
+                if source is None:
+                    self.assertFalse((output / 'envelope').exists())
+                    self.assertFalse((output / 'payload').exists())
+                    self.assertFalse((output / 'transport.zip').exists())
+                else:
+                    self.assertTrue((output / 'payload/NOH.AppDir/AppRun').is_file())
+
     def test_xorg_uses_observed_shell_environment_without_inventing_desktop_values(self):
         observed = desktop.desktop_environment('DISPLAY=:1\nUNRELATED=excluded\n',
                     b'DISPLAY=:0\0XAUTHORITY=/run/user/1000/gdm/Xauthority\0XDG_CURRENT_DESKTOP=GNOME\0')
@@ -23,15 +62,32 @@ class DesktopEvidenceTests(unittest.TestCase):
         self.assertNotIn('XDG_CURRENT_DESKTOP', desktop.desktop_environment('', b'DISPLAY=:0\0'))
 
     def test_configured_images_match_required_cases(self):
-        for name in ('ubuntu-24.04', 'ubuntu-26.04', 'debian-13', 'fedora-44', 'opensuse-tumbleweed', 'arch'):
+        for name in ('ubuntu-24.04', 'ubuntu-26.04', 'debian-13', 'fedora-44', 'opensuse-tumbleweed', 'arch', 'mint-22.3'):
             row, image = desktop.case_inputs(name)
             self.assertEqual(row['id'], name)
-            self.assertEqual(row['desktop'], 'KDE' if name in ('arch', 'opensuse-tumbleweed') else 'GNOME')
+            expected = 'KDE' if name in ('arch', 'opensuse-tumbleweed') else ('Cinnamon' if name == 'mint-22.3' else 'GNOME')
+            self.assertEqual(row['desktop'], expected)
             self.assertTrue(image['url'].startswith('https://'))
             self.assertEqual(image['version_id'] is None, name in ('arch', 'opensuse-tumbleweed'))
-        for name in ('mint-22.3', 'not-a-case'):
+        for name in ('not-a-case',):
             with self.assertRaises(ValueError):
                 desktop.case_inputs(name)
+
+    def test_mint_rejects_live_boot_and_requires_installer_success(self):
+        for mount, marker in (('overlay overlay', True), ('squashfs /dev/loop0', True),
+                              ('ext4 /dev/vda2', False), ('', True)):
+            with self.assertRaisesRegex(ValueError, 'installed disk'):
+                desktop.require_installed_mint(mount, marker)
+        desktop.require_installed_mint('ext4 /dev/vda2', True)
+        with tempfile.TemporaryDirectory() as folder:
+            key, output = Path(folder) / 'key.pub', Path(folder) / 'user-data'
+            key.write_text('ssh-ed25519 fixture-only')
+            desktop.cloud_config(argparse.Namespace(case='mint-22.3', public_key=key, output=output))
+            config = json.loads(output.read_text().split('\n', 1)[1])
+            self.assertEqual(config['write_files'][0]['path'], '/etc/lightdm/lightdm.conf.d/90-noh-test.conf')
+            self.assertIn('autologin-session=cinnamon', config['write_files'][0]['content'])
+            self.assertIn('pipewire-audio', config['packages'])
+            self.assertNotIn('gdm3', config['packages'])
 
     def test_debian_uses_xorg_session_and_pulseaudio(self):
         with tempfile.TemporaryDirectory() as folder:

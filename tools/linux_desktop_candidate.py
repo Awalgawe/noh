@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import secrets
 import shutil
 import subprocess
 import tarfile
@@ -20,15 +21,22 @@ import zipfile
 from delivery import ROOT, COMMIT, LIMIT, digest, inventory, read, write, zip_members
 from linux_matrix import CHECKS, MATRIX, unpack_candidate
 
+APT_RUNTIME_PACKAGES = ['pulseaudio-utils', 'alsa-utils', 'pciutils', 'python3',
+                        'ffmpeg', 'libmpv2', 'libasound2-plugins', 'libgl1-mesa-dri', 'libegl1',
+                        'libxkbcommon-x11-0', 'libxcursor1', 'libxrandr2', 'libxi6', 'libxinerama1',
+                        'libstdc++6', 'fonts-dejavu-core', 'binutils', 'espeak-ng', 'zenity', 'xdg-utils']
+
 
 def case_inputs(name):
     row = next((r for r in read(MATRIX)['required_desktops'] if r['id'] == name), None)
     image = read(ROOT / 'assets/linux-desktop-images.json')['images'].get(name)
-    if not row or not image or row['desktop'] not in ('GNOME', 'KDE'):
-        raise ValueError('This provisioning adapter supports only configured GNOME/KDE cases')
+    if not row or not image or row['desktop'] not in ('GNOME', 'KDE', 'Cinnamon'):
+        raise ValueError('This provisioning adapter supports only configured desktop cases')
     if (image['algorithm'] not in ('sha256', 'sha512') or not image['url'].startswith('https://')
             or not re.fullmatch('[0-9a-f]{' + str(64 if image['algorithm'] == 'sha256' else 128) + '}', image['digest'])):
         raise ValueError('Desktop image must have a pinned HTTPS URL and supported digest')
+    if image.get('format', 'qcow2') not in ('qcow2', 'iso'):
+        raise ValueError('Unsupported desktop image format')
     return row, image
 
 
@@ -91,15 +99,19 @@ def prepare(args):
         for path in sorted(payload.iterdir()):
             archive.add(path, arcname=path.name)
     write(args.output / 'CANDIDATE.json', identity)
+    if not args.envelope:
+        # These are owned download/unpack intermediates beneath the new output
+        # directory. Keep the verified payload and provenance; never remove a
+        # caller-supplied local envelope. Mint's installer needs the disk space.
+        shutil.rmtree(payload)
+        shutil.rmtree(envelope)
+        (args.output / 'transport.zip').unlink()
     print(json.dumps({k: v for k, v in identity.items() if k != 'bundle_files'}))
 
 
 def debian_provisioning(row, image):
     gdm_config = {'ubuntu': '/etc/gdm3/custom.conf', 'debian': '/etc/gdm3/daemon.conf'}[image['os_id']]
-    packages = ['gnome-session', 'gdm3', 'pulseaudio-utils', 'alsa-utils', 'pciutils', 'python3',
-                'ffmpeg', 'libmpv2', 'libasound2-plugins', 'libgl1-mesa-dri', 'libegl1',
-                'libxkbcommon-x11-0', 'libxcursor1', 'libxrandr2', 'libxi6', 'libxinerama1',
-                'libstdc++6', 'fonts-dejavu-core', 'binutils', 'espeak-ng', 'zenity', 'xdg-utils']
+    packages = ['gnome-session', 'gdm3', *APT_RUNTIME_PACKAGES]
     packages += ['pipewire-audio'] if row['audio'] == 'pipewire' else ['pulseaudio', 'gnome-session-xsession', 'xserver-xorg']
     commands = []
     if image['os_id'] == 'ubuntu':
@@ -156,9 +168,17 @@ def rpm_arch_provisioning(row, image):
 
 def cloud_config(args):
     row, image = case_inputs(args.case)
-    debian_family = image['os_id'] in ('ubuntu', 'debian')
-    packages, commands, files, manager = (debian_provisioning(row, image) if debian_family
-                                        else rpm_arch_provisioning(row, image))
+    debian_family = image['os_id'] in ('ubuntu', 'debian', 'linuxmint')
+    if image['os_id'] == 'linuxmint':
+        packages = ['lightdm', 'cinnamon', 'pipewire-audio', *APT_RUNTIME_PACKAGES]
+        commands = []
+        files = [{'path': '/etc/lightdm/lightdm.conf.d/90-noh-test.conf', 'content':
+                  '[Seat:*]\nautologin-user=noh\nautologin-user-timeout=0\n'
+                  'autologin-session=cinnamon\nuser-session=cinnamon\n'}]
+        manager = 'lightdm'
+    else:
+        packages, commands, files, manager = (debian_provisioning(row, image) if debian_family
+                                            else rpm_arch_provisioning(row, image))
     if not image.get('reboot_after_provisioning'):
         commands += [['modprobe', 'virtio_gpu'], ['modprobe', 'snd_hda_intel']]
     if row['desktop'] == 'GNOME':
@@ -189,6 +209,59 @@ def cloud_config(args):
         config['preserve_hostname'] = True
     args.output.write_text('#cloud-config\n' + json.dumps(config, indent=2) + '\n')
     write(args.output.with_suffix('.image.json'), image)
+
+
+def mint_preseed(args):
+    """Use Mint's Ubiquity installer on the disposable guest's only disk."""
+    _, image = case_inputs('mint-22.3')
+    if image.get('installation_method') != 'ubiquity-preseed':
+        raise ValueError('Mint installer identity is not configured')
+    # The random test password is never printed or used for SSH. NoCloud supplies
+    # the sole SSH public key and disables password authentication after install.
+    password_hash = subprocess.run(['openssl', 'passwd', '-6', '-stdin'], check=True,
+                                   input=secrets.token_urlsafe(32) + '\n', text=True,
+                                   capture_output=True).stdout.strip()
+    args.output.write_text(f'''d-i debian-installer/locale string en_US.UTF-8
+ubiquity localechooser/supported-locales multiselect en_US.UTF-8
+ubiquity languagechooser/language-name select English
+ubiquity countrychooser/shortlist select US
+d-i keyboard-configuration/layoutcode string us
+d-i keyboard-configuration/modelcode string pc105
+d-i console-setup/ask_detect boolean false
+d-i netcfg/get_hostname string noh-mint-test
+d-i netcfg/get_domain string local
+d-i time/zone string UTC
+d-i clock-setup/utc boolean true
+d-i partman-auto/disk string /dev/vda
+d-i partman-auto/method string regular
+d-i partman-auto/choose_recipe select atomic
+d-i partman-lvm/device_remove_lvm boolean true
+d-i partman-md/device_remove_md boolean true
+d-i partman-partitioning/confirm_write_new_label boolean true
+d-i partman/choose_partition select finish
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+d-i passwd/user-fullname string NOH Test
+d-i passwd/username string noh
+d-i passwd/user-password-crypted password {password_hash}
+d-i passwd/auto-login boolean true
+d-i user-setup/encrypt-home boolean false
+d-i grub-installer/only_debian boolean true
+d-i grub-installer/bootdev string /dev/vda
+ubiquity ubiquity/download_updates boolean false
+ubiquity ubiquity/use_nonfree boolean false
+ubiquity ubiquity/poweroff boolean true
+ubiquity ubiquity/reboot boolean false
+ubiquity ubiquity/reboot_on_failure boolean false
+ubiquity ubiquity/success_command string in-target apt-get update && in-target apt-get install -y --no-install-recommends openssh-server cloud-init && rm -f /target/etc/cloud/cloud-init.disabled && touch /target/var/lib/noh-unattended-install-complete
+''')
+    args.output.chmod(0o600)
+
+
+def require_installed_mint(root_mount, installation_marker):
+    if (not root_mount.split() or root_mount.split()[0] not in ('ext4', 'btrfs', 'xfs')
+            or not installation_marker):
+        raise ValueError('Mint must boot its installed disk; a live ISO cannot qualify this case')
 
 
 def command(arguments, timeout=30):
@@ -224,8 +297,18 @@ def guest(args):
         raise ValueError('Guest OS differs from the selected desktop case')
     if command(['systemd-detect-virt']).strip() != 'kvm':
         raise ValueError('This adapter requires a KVM guest, not a container or nested compositor')
+    if image.get('installation_method') == 'ubiquity-preseed':
+        root_mount = command(['findmnt', '--noheadings', '--output', 'FSTYPE,SOURCE', '/']).strip()
+        marker = Path('/var/lib/noh-unattended-install-complete').is_file()
+        require_installed_mint(root_mount, marker)
+        write(args.output / 'installation.json', {'method': 'ubiquity-preseed', 'root_mount': root_mount,
+                                                 'installer_success_marker': marker})
     session = None
-    login_service, shell_name = ('gdm-autologin', 'gnome-shell') if row['desktop'] == 'GNOME' else ('sddm-autologin', 'plasmashell')
+    login_service, shell_name, desktop_token = {
+        'GNOME': ('gdm-autologin', 'gnome-shell', 'GNOME'),
+        'KDE': ('sddm-autologin', 'plasmashell', 'KDE'),
+        'Cinnamon': ('lightdm-autologin', 'cinnamon', 'X-Cinnamon'),
+    }[row['desktop']]
     for _ in range(24):
         for line in command(['loginctl', 'list-sessions', '--no-legend']).splitlines():
             values = command(['loginctl', 'show-session', line.split()[0]])
@@ -253,7 +336,7 @@ def guest(args):
                                                     'observed_environment': observed_environment})
     os.environ.update(observed_environment)
     os.environ['XDG_SESSION_TYPE'] = row['display']
-    if row['desktop'] not in os.environ.get('XDG_CURRENT_DESKTOP', '').split(':'):
+    if desktop_token not in os.environ.get('XDG_CURRENT_DESKTOP', '').split(':'):
         raise ValueError('Selected desktop is absent from the actual desktop manager environment')
     command(['systemctl', '--user', 'daemon-reload'])
     services = ['pipewire', 'pipewire-pulse', 'wireplumber'] if row['audio'] == 'pipewire' else ['pulseaudio']
@@ -365,6 +448,9 @@ def main():
     p.add_argument('--public-key', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.set_defaults(fn=cloud_config)
+    p = sub.add_parser('mint-preseed')
+    p.add_argument('--output', type=Path, required=True)
+    p.set_defaults(fn=mint_preseed)
     p = sub.add_parser('guest')
     p.add_argument('--case', required=True)
     p.add_argument('--output', type=Path, required=True)

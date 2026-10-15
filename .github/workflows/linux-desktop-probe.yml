@@ -14,12 +14,12 @@ on:
       suite:
         description: All configured desktops or a bounded subset
         type: choice
-        options: [all, baseline, additional]
+        options: [all, baseline, additional, mint]
         default: all
       source_run:
         description: Successful Linux Release run containing the candidate
         type: string
-        default: '38757764365'
+        default: '38784097315'
       source_attempt:
         description: Exact source run attempt
         type: string
@@ -27,7 +27,7 @@ on:
       source_commit:
         description: Exact source commit retained on main
         type: string
-        default: '51c5c29214986d453db5499a8b386ccf6c971743'
+        default: '392b3a5799cd4848dd9f18310efe05a99e0e55c2'
 
 permissions:
   contents: read
@@ -45,7 +45,7 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        case: ${{ fromJSON(inputs.suite == 'additional' && '["fedora-44","opensuse-tumbleweed","arch"]' || inputs.suite == 'baseline' && '["ubuntu-24.04","ubuntu-26.04","debian-13"]' || '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch"]') }}
+        case: ${{ fromJSON(inputs.suite == 'mint' && '["mint-22.3"]' || inputs.suite == 'additional' && '["fedora-44","opensuse-tumbleweed","arch"]' || inputs.suite == 'baseline' && '["ubuntu-24.04","ubuntu-26.04","debian-13"]' || '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch","mint-22.3"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -57,9 +57,9 @@ jobs:
       - name: Acquire and verify the exact existing candidate without rebuilding
         env:
           GH_TOKEN: ${{ github.token }}
-          SOURCE_RUN: ${{ inputs.source_run || '38757764365' }}
+          SOURCE_RUN: ${{ inputs.source_run || '38784097315' }}
           SOURCE_ATTEMPT: ${{ inputs.source_attempt || '1' }}
-          SOURCE_COMMIT: ${{ inputs.source_commit || '51c5c29214986d453db5499a8b386ccf6c971743' }}
+          SOURCE_COMMIT: ${{ inputs.source_commit || '392b3a5799cd4848dd9f18310efe05a99e0e55c2' }}
         run: |
           python3 tools/linux_desktop_candidate.py prepare --repository "$GITHUB_REPOSITORY" \
             --workflow 379053207 --run "$SOURCE_RUN" --attempt "$SOURCE_ATTEMPT" \

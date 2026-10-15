@@ -12,12 +12,17 @@ mkdir -p "$evidence"
 exec > >(tee "$evidence/probe.log") 2>&1
 work=$(mktemp -d "${RUNNER_TEMP:-/tmp}/noh-desktop-vm.XXXXXX")
 qemu_pid=
+http_pid=
 cleanup() {
     result=$?
     trap - EXIT
     if [[ -n "$qemu_pid" ]] && kill -0 "$qemu_pid" 2>/dev/null; then
         kill "$qemu_pid"
         wait "$qemu_pid" || true
+    fi
+    if [[ -n "$http_pid" ]] && kill -0 "$http_pid" 2>/dev/null; then
+        kill "$http_pid"
+        wait "$http_pid" || true
     fi
     printf '%s\n' "$result" > "$evidence/exit-code.txt"
     # The disposable runner owns the image/seed/key; never upload them.
@@ -49,21 +54,27 @@ image = json.load(open(sys.argv[1]))
 for name in ('url', 'algorithm', 'digest'):
     print(image[name])
 print('true' if image.get('reboot_after_provisioning') else 'false')
+print(image.get('format', 'qcow2'))
 PY
 )
-test "${#image_spec[@]}" = 4
+test "${#image_spec[@]}" = 5
 curl --fail --location --retry 2 --max-time 300 "${image_spec[0]}" -o "$work/base.img"
 printf '%s  %s\n' "${image_spec[2]}" "$work/base.img" | "${image_spec[1]}sum" --check
-qemu-img create -f qcow2 -F qcow2 -b "$work/base.img" "$work/guest.qcow2" 16G
+if [[ "${image_spec[4]}" = iso ]]; then
+    qemu-img create -f qcow2 "$work/guest.qcow2" 40G
+else
+    qemu-img create -f qcow2 -F qcow2 -b "$work/base.img" "$work/guest.qcow2" 16G
+fi
 printf 'instance-id: noh-desktop-probe\nlocal-hostname: noh-desktop-probe\n' > "$work/meta-data"
 cloud-localds "$work/seed.img" "$work/user-data" "$work/meta-data"
+seed_args=(-drive "file=$work/seed.img,format=raw,if=virtio,readonly=on")
 
 # QEMU, cloud-init and SSH provide the lifecycle; no container or nested compositor.
 # VNC and SSH are loopback-only. The monitor is a private Unix socket.
 start_guest() {
     qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -smp 3 -m 6144 \
     -drive "file=$work/guest.qcow2,format=qcow2,if=virtio" \
-    -drive "file=$work/seed.img,format=raw,if=virtio,readonly=on" \
+    "$@" \
     -device virtio-vga,xres=1280,yres=1024 -device qemu-xhci -device usb-tablet \
     -device intel-hda -device hda-output,audiodev=sound \
     -audiodev "wav,id=sound,path=$evidence/virtual-audio.wav" \
@@ -73,7 +84,49 @@ start_guest() {
     -no-reboot > "$evidence/qemu.log" 2>&1 &
     qemu_pid=$!
 }
-start_guest
+archive_boot() {
+    local stage=$1
+    mv "$evidence/serial.log" "$evidence/$stage-serial.log"
+    mv "$evidence/qemu.log" "$evidence/$stage-qemu.log"
+    mv "$evidence/virtual-audio.wav" "$evidence/$stage-audio.wav"
+}
+if [[ "${image_spec[4]}" = iso ]]; then
+    test "$case_id" = mint-22.3
+    sudo apt-get install -y --no-install-recommends xorriso genisoimage
+    mapfile -t initrds < <(isoinfo -R -f -i "$work/base.img" | grep -E '^/casper/initrd(\.(gz|lz|lz4))?$')
+    test "${#initrds[@]}" = 1 || { echo 'The official Mint ISO must contain one supported initrd.'; exit 1; }
+    xorriso -osirrox on -indev "$work/base.img" \
+        -extract /casper/vmlinuz "$work/mint-vmlinuz" -extract "${initrds[0]}" "$work/mint-initrd"
+    mkdir "$work/http"
+    python3 "$root/tools/linux_desktop_candidate.py" mint-preseed --output "$work/http/preseed.cfg"
+    python3 -m http.server 8123 --bind 127.0.0.1 --directory "$work/http" \
+        > "$evidence/installer-http.log" 2>&1 &
+    http_pid=$!
+    ready=false
+    for ((i=0; i<10; i++)); do
+        kill -0 "$http_pid"
+        if curl --fail --silent --max-time 2 http://127.0.0.1:8123/preseed.cfg >/dev/null; then ready=true; break; fi
+        sleep 1
+    done
+    "$ready" || { echo 'The private installer seed server did not become ready.'; exit 1; }
+    kill -0 "$http_pid"
+    # The live installer receives no NoCloud seed. Only the subsequent disk boot
+    # configures the desktop; the ISO/kernel/initrd are then completely detached.
+    start_guest -drive "file=$work/base.img,format=raw,media=cdrom,readonly=on" \
+        -kernel "$work/mint-vmlinuz" -initrd "$work/mint-initrd" \
+        -append 'boot=casper automatic-ubiquity url=http://10.0.2.2:8123/preseed.cfg noprompt console=tty0 console=ttyS0,115200n8'
+    timeout 20m tail --pid="$qemu_pid" -f /dev/null
+    wait "$qemu_pid"
+    qemu_pid=
+    kill "$http_pid"
+    wait "$http_pid" || true
+    http_pid=
+    archive_boot installer
+    # Installation has powered off; the next boot uses only its installed disk.
+    # Release the owned ISO and extracted boot files before desktop provisioning.
+    rm -- "$work/base.img" "$work/mint-vmlinuz" "$work/mint-initrd"
+fi
+start_guest "${seed_args[@]}"
 transport_args=(-i "$work/key" -o BatchMode=yes -o ConnectTimeout=5
     -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$work/known-hosts")
 ssh_args=(-p 2222 "${transport_args[@]}")
@@ -108,10 +161,8 @@ if [[ "${image_spec[3]}" = true ]]; then
     timeout 90s tail --pid="$qemu_pid" -f /dev/null
     wait "$qemu_pid"
     qemu_pid=
-    mv "$evidence/serial.log" "$evidence/provisioning-serial.log"
-    mv "$evidence/qemu.log" "$evidence/provisioning-qemu.log"
-    mv "$evidence/virtual-audio.wav" "$evidence/provisioning-audio.wav"
-    start_guest
+    archive_boot provisioning
+    start_guest "${seed_args[@]}"
     wait_for_ssh
     timeout 3m ssh "${ssh_args[@]}" noh@127.0.0.1 'sudo cloud-init status --wait --long' \
         > "$evidence/cloud-init-after-reboot.txt" 2>&1
