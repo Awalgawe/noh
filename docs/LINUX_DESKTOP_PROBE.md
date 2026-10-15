@@ -92,6 +92,12 @@ after establishing read/write access for its own user immediately before every
 QEMU launch, and checks that access. It never grants world-wide device access.
 
 Each case requires the selected OS, a real GDM, SDDM or LightDM login on seat0, the selected desktop,
+with openSUSE's autologin user also set in `/etc/sysconfig/displaymanager`.
+Its SDDM package explicitly replaces `Autologin.User` with that value, including
+an empty value; the prior trial therefore remained at the greeter. Preparation
+changes only that key and requires its expected value. Display-manager journal
+and observed login sessions are retained for future setup failures.
+The remaining requirements include the selected
 Wayland/X11 session, the selected PipeWire/PulseAudio server and a virtual PCI
 audio sink. The adapter records its initial mixer state, unmutes this disposable
 virtual device and sets 75% volume, then verifies/records the resulting state.
@@ -111,8 +117,27 @@ actual GUI import/video/audio preview, export/full decode/no overwrite and packa
 CPU transcription from synthetic speech. Its explicit GUI capture harness is
 retained; it is not described as manual chooser or pointer interaction.
 
-A separate ordinary AppRun startup, without capture injection, remains visible
-for a QMP scanout. QEMU records the application's preview audio through its virtual
+A separate ordinary AppRun startup, without capture injection, receives real
+QEMU input events: focus its window, open the file chooser, cancel, reopen, enter the retained
+synthetic video's pathname and confirm selection. Every stage has a QMP scanout
+and the exact input sequence is retained. The helper requires the application
+to remain running and the Zenity fallback process to be absent. rfd prefers the
+desktop portal, whose chooser can still be open without a Zenity process. All
+chooser closure, cancellation and import conclusions therefore require independent
+review of the retained screens: visible chooser, clean return after cancellation,
+and imported thumbnail/preview. No Xvfb, input injection into the
+application, OCR or renderer override is used in the native guests.
+
+The same synthetic export already decoded and checked for no-overwrite is retained
+and rehashed before `xdg-open`. The test account explicitly selects the installed
+distribution `mpv.desktop` MIME handler; this does not claim a distribution default.
+Its normal player configuration keeps the last video frame visible and disables
+audio, so the external player cannot contaminate NOH's tone evidence. The exact
+player process arguments, video-output log and real scanout are retained. Opening
+the output still requires independent screen review. These additions exercise the
+unchanged candidate, without rebuilding or modifying any delivered file.
+
+QEMU records the application's preview audio through its virtual
 HDA output. Unlike the earlier infrastructure experiment, no separate tone player
 runs: the audio check requires a quarter-second window dominated by the preview's
 440 Hz signal. Raw audio, the application capture/report, normal desktop scanout,
@@ -140,6 +165,8 @@ Checked on 2026-10-15:
 - [Official Arch cloud-image recipe](https://github.com/archlinux/arch-boxes/blob/master/images/cloud-image.sh) and [image mirror](https://geo.mirror.pkgbuild.com/images/latest/).
 - [Official Mint 22.3 Cinnamon ISO/checksums](https://linuxmint.com/edition.php?id=326), [Mint's Ubiquity preseed options](https://github.com/linuxmint/ubiquity/blob/master/debian/ubiquity.templates) and [an existing Packer preseed implementation](https://github.com/mrlesmithjr/packer-templates/blob/master/http/linuxmint/preseed.cfg). Only the installer mechanism is reused; obsolete server/kernel/package choices from the historical example are excluded.
 - [cloud-init NoCloud](https://docs.cloud-init.io/en/latest/reference/datasources/nocloud.html), [GNOME automatic login](https://help.gnome.org/system-admin-guide/login-automatic.html) and [QEMU invocation](https://www.qemu.org/docs/master/system/invocation.html).
+- [QEMU keyboard/monitor commands](https://www.qemu.org/docs/master/system/monitor.html), [xdg-mime](https://manpages.debian.org/trixie/xdg-utils/xdg-mime.1.en.html) and [mpv configuration/options](https://mpv.io/manual/master/).
+- [openSUSE's SDDM autologin override](https://api.opensuse.org/public/source/openSUSE:Factory/sddm/0001-Read-the-DISPLAYMANAGER_AUTOLOGIN-value-from-sysconf.patch).
 
 Existing QEMU, cloud-init and OpenSSH commands provide the VM lifecycle; the NOH
 helpers only bind candidate identity, distribution setup and application evidence.

@@ -24,7 +24,7 @@ from linux_matrix import CHECKS, MATRIX, unpack_candidate
 APT_RUNTIME_PACKAGES = ['pulseaudio-utils', 'alsa-utils', 'pciutils', 'python3',
                         'ffmpeg', 'libmpv2', 'libasound2-plugins', 'libgl1-mesa-dri', 'libegl1',
                         'libxkbcommon-x11-0', 'libxcursor1', 'libxrandr2', 'libxi6', 'libxinerama1',
-                        'libstdc++6', 'fonts-dejavu-core', 'binutils', 'espeak-ng', 'zenity', 'xdg-utils']
+                        'libstdc++6', 'fonts-dejavu-core', 'binutils', 'espeak-ng', 'zenity', 'xdg-utils', 'mpv']
 
 
 def case_inputs(name):
@@ -130,7 +130,7 @@ def rpm_arch_provisioning(row, image):
     if image['os_id'] == 'fedora':
         commands = [
             ['dnf', 'install', '-y', 'https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-44.noarch.rpm'],
-            ['dnf', 'install', '-y', '--allowerasing', 'ffmpeg', 'mpv-libs', 'python3',
+            ['dnf', 'install', '-y', '--allowerasing', 'ffmpeg', 'mpv-libs', 'mpv', 'python3',
              'gnome-session-wayland-session', 'gdm', 'kernel', 'kernel-modules', 'kernel-modules-extra',
              'pipewire', 'pipewire-pulseaudio', 'pipewire-alsa', 'wireplumber', 'pulseaudio-utils',
              'alsa-utils', 'mesa-dri-drivers', 'mesa-libEGL', 'mesa-libGL', 'libxkbcommon-x11',
@@ -144,7 +144,7 @@ def rpm_arch_provisioning(row, image):
     if image['os_id'] == 'opensuse-tumbleweed':
         commands = [
             ['zypper', '--non-interactive', 'install', '--no-recommends', '--', 'kernel-default', '-kernel-default-base',
-             'python3', 'ffmpeg-8', 'libmpv2', 'plasma6-desktop', 'plasma6-session-x11', 'sddm',
+             'python3', 'ffmpeg-8', 'libmpv2', 'mpv', 'plasma6-desktop', 'plasma6-session-x11', 'sddm',
              'xorg-x11-server', 'pipewire', 'pipewire-pulseaudio', 'pipewire-alsa', 'wireplumber',
              'pulseaudio-utils', 'alsa-utils', 'Mesa-dri', 'Mesa-libEGL1', 'libglvnd', 'libxkbcommon-x11-0',
              'libXcursor1', 'libXrandr2', 'libXi6', 'libXinerama1', 'dejavu-fonts',
@@ -153,6 +153,10 @@ def rpm_arch_provisioning(row, image):
              'https://ftp.gwdg.de/pub/linux/misc/packman/suse/openSUSE_Tumbleweed/Essentials/', 'packman-essentials'],
             ['zypper', '--non-interactive', '--gpg-auto-import-keys', 'refresh', 'packman-essentials'],
             ['zypper', '--non-interactive', 'dist-upgrade', '--from', 'packman-essentials', '--allow-vendor-change'],
+            # SUSE's SDDM patch replaces Autologin.User with this sysconfig key,
+            # even when it is empty. Use its distribution-supported preference.
+            ['sed', '-i', 's/^DISPLAYMANAGER_AUTOLOGIN=.*/DISPLAYMANAGER_AUTOLOGIN="noh"/', '/etc/sysconfig/displaymanager'],
+            ['grep', '-qx', 'DISPLAYMANAGER_AUTOLOGIN="noh"', '/etc/sysconfig/displaymanager'],
         ]
     elif image['os_id'] == 'arch':
         commands = [['pacman', '-Syu', '--noconfirm', '--needed', 'linux', 'ffmpeg', 'mpv', 'python',
@@ -314,9 +318,11 @@ def guest(args):
         'Cinnamon': ('lightdm-autologin', 'cinnamon', 'X-Cinnamon'),
     }[row['desktop']]
     for _ in range(24):
+        observed_sessions = []
         for line in command(['loginctl', 'list-sessions', '--no-legend']).splitlines():
             values = command(['loginctl', 'show-session', line.split()[0]])
             data = dict(item.split('=', 1) for item in values.splitlines() if '=' in item)
+            observed_sessions.append(data)
             if (data.get('Name') == 'noh' and data.get('Type') == row['display'] and
                     data.get('Seat') == 'seat0' and data.get('Active') == 'yes' and
                     data.get('Service') == login_service and data.get('Remote') == 'no'):
@@ -325,6 +331,7 @@ def guest(args):
         if session:
             break
         time.sleep(5)
+    write(args.output / 'observed-sessions.json', observed_sessions)
     if not session:
         raise ValueError('The required real display-manager desktop session did not start')
     shell_pid = command(['pgrep', '-x', '-u', str(os.getuid()), shell_name]).strip()
@@ -386,7 +393,7 @@ def guest(args):
     (args.output / 'runtime-routes.txt').write_text(command(['ip', '-4', 'route']) + command(['ip', '-6', 'route']))
     with (args.output / 'runtime.log').open('w') as log:
         subprocess.run(['python3', str(ROOT / 'tools/probe-linux-host.py'), '--appdir', str(ROOT / 'NOH.AppDir'),
-                        '--graphics', 'wayland' if row['display'] == 'wayland' else 'surfaceless', '--gui',
+                        '--graphics', 'wayland' if row['display'] == 'wayland' else 'surfaceless', '--gui', '--retain-media',
                         '--speech-fixture', str(speech), '--output', str(args.output / 'result.json')],
                        check=True, stdout=log, stderr=subprocess.STDOUT, timeout=600)
     report = read(args.output / 'result.json')
@@ -411,10 +418,69 @@ def guest(args):
           'elf_sha256': expected_elf, 'checks': {name: 'passed' for name in CHECKS},
           'candidate': {k: v for k, v in identity.items() if k != 'bundle_files'},
           'normal_startup_pid': app.pid,
-          'limits': ['GUI import/preview uses the existing explicit capture harness; normal startup is separately observed.',
+          'limits': ['Runtime GUI preview uses the explicit capture harness; separate QMP chooser/cancellation/import and desktop output opening require screen review.',
                      'QMP screen and recorded application audio still require independent inspection.',
                      'No physical-device or human-listening qualification; full seven-case matrix remains required.']})
     print('Native runtime checks passed; screen/audio review and full matrix coverage remain pending.')
+
+
+def open_output(args):
+    """Use the actual desktop's MIME opener on the byte-identical CLI export."""
+    observation = read(args.output / 'case.json')
+    session = read(args.output / 'session.json')
+    report = read(args.output / 'result.json')
+    export = (args.output / 'media/composition.mp4').resolve()
+    if digest(export) != report['synthetic_export_sha256']:
+        raise ValueError('Retained export differs from the decoded/no-overwrite-tested output')
+    app = Path(f'/proc/{observation["normal_startup_pid"]}/exe')
+    if app.resolve(strict=True) != (ROOT / 'NOH.AppDir/usr/lib/noh/noh-app').resolve():
+        raise ValueError('The ordinary candidate application is no longer running')
+    chooser = subprocess.run(['pgrep', '-x', '-u', str(os.getuid()), 'zenity'], capture_output=True, timeout=10)
+    if chooser.returncode != 1:
+        raise ValueError('The Zenity fallback remains running, or its process state could not be checked')
+    # rfd prefers the desktop portal. Absence of the Zenity fallback does not
+    # establish chooser closure; all UI conclusions require the retained screens.
+    os.environ.update({k: v for k, v in session['manager'].items() if v is not None})
+    os.environ.update(XDG_RUNTIME_DIR=f'/run/user/{os.getuid()}',
+                      DBUS_SESSION_BUS_ADDRESS=f'unix:path=/run/user/{os.getuid()}/bus')
+    # Explicit test-account preferences, not a claim about a distro's defaults.
+    # Disable external-player audio so only NOH can supply the recorded 440 Hz tone.
+    config = Path.home() / '.config/mpv'
+    config.mkdir(parents=True, exist_ok=True)
+    settings = f'audio=no\nkeep-open=yes\nlog-file={args.output.resolve() / "output-player.log"}\n'
+    with (config / 'mpv.conf').open('x') as file:
+        file.write(settings)
+    command(['xdg-mime', 'default', 'mpv.desktop', 'video/mp4'])
+    association = command(['xdg-mime', 'query', 'default', 'video/mp4']).strip()
+    if association != 'mpv.desktop':
+        raise ValueError('The test account did not retain its chosen desktop video handler')
+    with (args.output / 'xdg-open.log').open('x') as log:
+        opener = subprocess.Popen(['xdg-open', str(export)], stdin=subprocess.DEVNULL,
+                                  stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    player = None
+    for _ in range(40):
+        found = subprocess.run(['pgrep', '-x', '-u', str(os.getuid()), 'mpv'], text=True, capture_output=True, timeout=5)
+        if found.returncode not in (0, 1):
+            raise ValueError('Unable to inspect the desktop output player')
+        for pid in found.stdout.split():
+            arguments = Path(f'/proc/{pid}/cmdline').read_bytes().split(b'\0')
+            if any(str(export).encode() in argument for argument in arguments):
+                player = {'pid': int(pid), 'arguments': [arg.decode() for arg in arguments if arg]}
+        if player:
+            break
+        if opener.poll() not in (None, 0):
+            raise ValueError('The ordinary desktop opener failed; see xdg-open.log')
+        time.sleep(.25)
+    if not player:
+        raise ValueError('The desktop association did not launch a player for the exact output')
+    time.sleep(3)
+    player_log = (args.output / 'output-player.log').read_text()
+    if 'VO: [' not in player_log:
+        raise ValueError('The desktop player did not establish a video output')
+    write(args.output / 'output-opening.json', {'status': 'awaiting-review', 'export_sha256': digest(export),
+          'association': association, 'explicit_player_settings': settings, 'player': player,
+          'opener_exit_code': opener.poll(), 'limits': ['Actual output screen still requires independent review.',
+                                                      'External-player audio is disabled to preserve NOH-only tone evidence.']})
 
 
 def audio_report(args):
@@ -470,6 +536,9 @@ def main():
     p.add_argument('--case', required=True)
     p.add_argument('--output', type=Path, required=True)
     p.set_defaults(fn=guest)
+    p = sub.add_parser('open-output')
+    p.add_argument('--output', type=Path, required=True)
+    p.set_defaults(fn=open_output)
     p = sub.add_parser('audio-report')
     p.add_argument('--input', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)

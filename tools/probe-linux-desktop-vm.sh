@@ -183,6 +183,20 @@ ssh "${ssh_args[@]}" noh@127.0.0.1 'mkdir noh-candidate && tar -xf payload.tar -
 timeout 12m ssh "${ssh_args[@]}" noh@127.0.0.1 \
     "python3 /home/noh/noh-candidate/tools/linux_desktop_candidate.py guest --case '$case_id' --output /home/noh/noh-evidence" \
     > "$evidence/guest.log" 2>&1 || guest_status=$?
+ssh "${ssh_args[@]}" noh@127.0.0.1 'sudo journalctl -b --no-pager -u display-manager.service' \
+    > "$evidence/display-manager.log" || guest_status=1
+if [[ "$guest_status" = 0 ]]; then
+    if timeout 90s python3 "$root/tools/probe-linux-desktop-ui.py" --socket "$work/qmp.sock" \
+        --output "$evidence/chooser" --phase chooser &&
+       timeout 60s ssh "${ssh_args[@]}" noh@127.0.0.1 \
+        'python3 /home/noh/noh-candidate/tools/linux_desktop_candidate.py open-output --output /home/noh/noh-evidence' &&
+       timeout 30s python3 "$root/tools/probe-linux-desktop-ui.py" --socket "$work/qmp.sock" \
+        --output "$evidence/output-opening" --phase output; then
+        echo 'Desktop interaction observations retained; screen review remains required.'
+    else
+        guest_status=1
+    fi
+fi
 scp -r -P 2222 "${transport_args[@]}" noh@127.0.0.1:noh-evidence "$evidence/runtime" || guest_status=1
 ssh "${ssh_args[@]}" noh@127.0.0.1 \
     'if command -v dpkg-query >/dev/null; then dpkg-query -W; elif command -v rpm >/dev/null; then rpm -qa; else pacman -Q; fi' \
