@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "distribution": "linux-host-runtime",
+  "architecture": "x86_64",
+  "minimum_glibc": "2.39",
+  "ffmpeg": {"command": "ffmpeg", "minimum_major": 6, "encoders": ["libx264", "aac", "pcm_s16le"]},
+  "libmpv": {"soname": "libmpv.so.2", "client_api_major": 2},
+  "ubuntu_24_04_packages": ["ffmpeg", "libmpv2", "libasound2t64", "libegl1", "libgl1", "libwayland-client0", "libwayland-cursor0", "libwayland-egl1", "libxkbcommon0", "libxkbcommon-x11-0", "libxcursor1", "libxrandr2", "libxi6", "libxinerama1", "libstdc++6"],
+  "fedora_44_packages": ["ffmpeg", "mpv-libs", "alsa-lib", "pipewire-alsa", "mesa-libEGL", "mesa-libGL", "libxkbcommon-x11", "libXcursor", "libXrandr", "libXi", "libXinerama", "libstdc++"],
+  "fedora_codec_requirement": "The selected FFmpeg must provide libx264, AAC and PCM encoders. Fedora ffmpeg-free alone may not satisfy this contract; use a distribution-compatible full-codec provider."
+}

@@ -67,14 +67,29 @@ class DeliveryTests(unittest.TestCase):
         names = ['preflight', 'build / controls', 'build / rust-audit / Audit Cargo.lock against RustSec',
                  'build / Candidate windows-x64', 'build / Candidate linux-x64']
         jobs = [{'name': name, 'conclusion': 'success'} for name in names]
+        jobs[-1]['steps'] = [{'name': 'Test the same Linux candidate across the distribution matrix',
+                             'conclusion': 'success'}]
         def validate(items):
             release.validate_jobs({'total_count': len(items), 'jobs': items}, platforms,
                                   '.github/workflows/release.yml')
         validate(jobs)
         for changed in (jobs[:-1], jobs[:-1] + [jobs[-1] | {'conclusion': 'failure'}],
-                        jobs[:-1] + [jobs[-1] | {'conclusion': 'skipped'}]):
+                        jobs[:-1] + [jobs[-1] | {'conclusion': 'skipped'}],
+                        jobs[:-1] + [jobs[-1] | {'steps': []}],
+                        jobs[:-1] + [jobs[-1] | {'steps': [{'name': jobs[-1]['steps'][0]['name'], 'conclusion': 'skipped'}]}]):
             with self.assertRaises(ValueError):
                 validate(changed)
+
+    def test_linux_matrix_artifact_is_required_and_not_staged_as_a_package(self):
+        artifact = {'name': 'delivery-linux-x64', 'expired': False, 'digest': 'sha256:' + 'a' * 64}
+        matrix = artifact | {'name': 'linux-validation-123-2'}
+        def validate(items):
+            return release.validate_artifacts({'total_count': len(items), 'artifacts': items},
+                                              ['linux-x64'], linux_matrix_name='linux-validation-123-2')
+        self.assertEqual(validate([artifact, matrix]), [artifact])
+        for items in ([artifact], [matrix], [artifact, matrix | {'name': 'linux-validation-123-1'}]):
+            with self.assertRaises(ValueError):
+                validate(items)
 
     def test_public_profile_content_boundaries(self):
         files = ['noh.exe', 'bin/noh-cli.exe', 'bin/noh-mcp.exe', 'README.md',

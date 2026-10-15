@@ -1,15 +1,20 @@
-//! Relocatable Linux AppDir built from explicitly acquired native inputs.
+//! Linux AppDir with declared host media dependencies and private CPU speech.
 use super::{Result, hash_bundle, publish, query_build, same_build};
 use std::{fs, os::unix::fs::PermissionsExt, path::Path, process::Command, time::Duration};
 
 pub(super) fn bundle(root: &Path, release: &Path, ffmpeg: &Path, speech: &Path) -> Result<()> {
-    let native = std::env::var_os("NOH_LINUX_INPUTS")
-        .ok_or("Set NOH_LINUX_INPUTS to the output of delivery.py acquire --platform linux-x64")?;
-    let native = Path::new(&native).canonicalize()?;
-    if ffmpeg.canonicalize()? != native.join("runtime/bin/ffmpeg").canonicalize()? {
-        return Err(
-            "Linux packaging requires FFmpeg from the selected locked native inputs.".into(),
-        );
+    let mut preflight = Command::new("python3");
+    preflight
+        .arg(root.join("tools/linux_host.py"))
+        .arg("--ffmpeg")
+        .arg(ffmpeg);
+    let output = crate::process::run(preflight, Duration::from_secs(90))?;
+    if !output.status.success() {
+        return Err(format!(
+            "Linux host requirements failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
     }
     let dist = root.join("dist");
     fs::create_dir_all(&dist)?;
@@ -47,8 +52,6 @@ pub(super) fn bundle(root: &Path, release: &Path, ffmpeg: &Path, speech: &Path) 
         .arg(root.join("tools/linux_package.py"))
         .arg("--appdir")
         .arg(&appdir)
-        .arg("--native")
-        .arg(&native)
         .arg("--speech")
         .arg(speech);
     let output = crate::process::run(command, Duration::from_secs(600))?;
@@ -69,9 +72,11 @@ pub(super) fn bundle(root: &Path, release: &Path, ffmpeg: &Path, speech: &Path) 
         serde_json::to_vec_pretty(&serde_json::json!({
             "schema_version": 2, "package": "noh", "version": build["package_version"],
             "build": build, "runtime_dependencies": {
-                "distribution": "portable-linux-appdir", "architecture": "x86_64",
-                "minimum_glibc": "2.39", "speech_backend": "cpu", "updates": false
-            }, "tools": {"ffmpeg": {"path": "NOH.AppDir/usr/lib/noh/bin/ffmpeg"}},
+                "distribution": "linux-host-runtime", "architecture": "x86_64",
+                "minimum_glibc": "2.39", "speech_backend": "cpu", "updates": false,
+                "contract": "NOH.AppDir/usr/lib/noh/HOST-REQUIREMENTS.json"
+            }, "tools": {"ffmpeg": {"provider": "host", "command": "ffmpeg"},
+                         "libmpv": {"provider": "host", "soname": "libmpv.so.2"}},
             "sha256": hashes
         }))?,
     )?;

@@ -1,5 +1,11 @@
 # Release readiness
 
+Linux 0.1.4 changes to host-owned media dependencies. Its candidate job tests
+one sealed archive across six pinned distribution bases and records exact test
+images/packages. Seven separately reviewed desktop cases, including Mint with
+Cinnamon, remain required before qualification. See [Linux validation](LINUX_VALIDATION.md)
+for scope, commands, evidence and the exact-byte release gate.
+
 Publishing the source repository and distributing a supported application are
 separate steps. Windows 0.1.0 portable and its separately built installer have
 distinct qualification reports and share the same application bytes.
@@ -136,24 +142,28 @@ The same selection is checked when staging the exact build run, so a missing,
 failed or skipped Linux job cannot produce a combined Windows/Linux draft.
 The Windows-only installer stage still requires `windows-x64` explicitly.
 
-The Linux job acquires exact Ubuntu binary and corresponding source archives from
-`assets/linux-native.lock.json`, builds the pinned CPU Whisper recipe, and calls
-`cargo dev build --gui --mcp --portable --speech ...`. `NOH_LINUX_INPUTS` identifies
-the acquired native folder; `--ffmpeg` must refer to that folder's runtime.
-The AppDir contains GUI/CLI/MCP, FFmpeg, libmpv, private libraries and both speech
-models. Each ELF receives its own relative `$ORIGIN` library search path.
-glibc and graphics-driver libraries remain host prerequisites; the declared
+The Linux job checks host FFmpeg/libmpv against `assets/linux-host.json`, builds
+the pinned CPU Whisper recipe, and calls
+`cargo dev build --gui --mcp --portable --speech ... --ffmpeg /usr/bin/ffmpeg`.
+The AppDir contains GUI/CLI/MCP and CPU speech/models. It contains no shared
+libraries and no private ELF search paths. The host owns the entire media and
+desktop runtime. The old native lock/acquisition tool is historical provenance,
+not an input to new packages. The declared
 qualification baseline is Ubuntu 24.04 x86_64, glibc 2.39. A compatible glibc
 version alone does not establish acceptance on another distribution.
 
 `ELF-IMPORTS.json` records the complete ELF import closure. Seal and inert archive
 verification repeat that audit; the latter also checks ELF/AppRun executable
-permissions. Source materials include the exact Ubuntu source records and
-archives, Whisper source/build receipt, Rust vendor sources and original notices.
+permissions. The new manifest kind also rejects any extra ELF or private
+provider and requires the exact host contract. Source materials include the
+Whisper source/build receipt, Rust vendor sources and original notices; the
+host package manager supplies the media packages and their sources/notices.
 Linux redistribution and 0.1.3 CI-byte qualification have exact-hash records in
 `assets/delivery-policy.json`. See [redistribution inputs](LINUX_REDISTRIBUTION.md)
 and the [final-byte report](LINUX_0_1_3_QUALIFICATION.md). Changed inputs or a new
 CI delivery invalidate that acceptance; local QA builds do not clear the gates.
+The host-runtime architecture needs a fresh exact-input redistribution review;
+the existing published-package authority is deliberately not reused.
 
 Linux desktop acceptance must also exercise **Add files** with an actual host
 file chooser and confirm that selected media enters the application. Record the

@@ -45,8 +45,8 @@ try {
         $env:NOH_NATIVE_NOTICES = Join-Path $inputs 'materials/native-notices'
         $bundle = Join-Path $root 'dist/noh'
     } elseif ($Platform -eq 'linux-x64') {
-        $env:NOH_LINUX_INPUTS = Join-Path $inputs 'native'
-        $ffmpeg = Join-Path $env:NOH_LINUX_INPUTS 'runtime/bin/ffmpeg'
+        $ffmpeg = (Get-Command ffmpeg -CommandType Application).Source
+        $env:NOH_LIBMPV = 'libmpv.so.2'
         $bundle = Join-Path $root 'dist/NOH-linux-x64'
     } else {
         $paths = Get-Content (Join-Path $inputs 'PATHS.json') -Raw | ConvertFrom-Json
@@ -73,9 +73,8 @@ try {
         $env:NOH_EXE = Join-Path $appHome 'bin/noh-cli'
         $env:NOH_APP_EXE = Join-Path $appHome 'noh-app'
         $env:NOH_MCP_EXE = Join-Path $appHome 'bin/noh-mcp'
-        $env:NOH_FFMPEG = Join-Path $appHome 'bin/ffmpeg'
-        $env:NOH_LIBMPV = Join-Path $appHome 'bin/libmpv.so.2'
-        $env:ALSA_PLUGIN_DIR = Join-Path $appHome 'lib/alsa-lib'
+        $env:NOH_FFMPEG = $ffmpeg
+        $env:NOH_LIBMPV = 'libmpv.so.2'
     }
     if ($env:NOH_SIGN_MACOS -ne 'true') { cargo dev verify --media --mcp --offline }
     # Sources are kept as separate assets rather than executable startup inputs.

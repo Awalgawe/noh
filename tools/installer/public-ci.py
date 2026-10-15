@@ -63,7 +63,8 @@ def prepare(work):
             platforms.append(platform)
     provenance.validate_jobs(github.request('/actions/runs/' + run_id + '/attempts/' + attempt + '/jobs?per_page=100'),
                              platforms, run_record['path'])
-    artifacts = provenance.validate_artifacts(inventory, platforms, 'rust-audit-' + run_id + '-' + attempt)
+    artifacts = provenance.validate_artifacts(inventory, platforms, 'rust-audit-' + run_id + '-' + attempt,
+                                              'linux-validation-' + run_id + '-' + attempt)
     artifact = next(a for a in artifacts if a['name'] == 'delivery-windows-x64')
     envelope = work / 'candidate.zip'
     github.download('/actions/artifacts/' + str(artifact['id']) + '/zip', envelope,

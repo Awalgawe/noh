@@ -1,4 +1,121 @@
-# Linux AppDir redistribution inputs
+# Linux distribution architecture
+
+## Host-owned media runtime (unreleased, 2026-10-15)
+
+Decision: keep the relocatable AppDir as a delivery container for NOH and its
+CPU speech executable/models, and obtain **all** dynamically linked media,
+graphics and audio libraries from the distribution. FFmpeg is a host process;
+libmpv is loaded by its host SONAME. No shared library is shipped. The GUI, CLI
+and MCP share the existing discovery path. Linux discovery now accepts the
+explicit distribution PATH directory even when cwd overlaps it. Media processing
+and GUI-thread behavior are unchanged.
+This changes installation requirements: the next package is not self-contained.
+
+### Why the inherited exclusion fix was insufficient
+
+The Fedora 44 report identifies host Mesa binding to an older bundled Wayland,
+an ALSA plugin-directory override incompatible with the host configuration, and
+host PipeWire's ALSA plugin binding to an older libasound/libpipewire after
+libmpv loads. Removing those three libraries fixes examples, not ownership.
+An independent Ubuntu graph inspection found further overlap through XCB
+(libbsd/libmd), Mesa (LLVM/ICU/libxml2), PulseAudio (audio codecs), and ALSA
+plugins that themselves use FFmpeg. Those overlapping graphs cannot be called
+private merely because dependency collection stops at selected SONAMEs.
+Evidence is retained in the ignored pair register and inspection script.
+
+The [pkg2appimage exclusion policy](https://github.com/AppImageCommunity/pkg2appimage/blob/master/excludelist)
+is a useful established approach for constrained AppImages, but explicitly
+records continuing exceptions and GLib conflicts. NOH's general Ubuntu
+FFmpeg/libmpv builds import too much of the desktop ecosystem to establish a
+small, stable private closure by extending that list. The 65-file removal and
+38-test probe inherited by this task are superseded; they do not validate this
+architecture or qualify Fedora.
+
+### Alternatives and project constraints
+
+| Approach | Fit for NOH | Decision |
+| --- | --- | --- |
+| Distribution-owned dependencies, as in native DEB/RPM packages | One provider owns libraries, drivers, plugins and their updates. Existing NOH runtime discovery already supports it. Requires installed media packages and codec capability checks. | Selected ownership model. Keep the existing AppDir envelope; adding DEB/RPM installers is unnecessary to correct library ownership. |
+| Flatpak with a maintained runtime and GL extensions | Controls the runtime/library graph and avoids assuming arbitrary desktop ABI compatibility. Requires a new build manifest, media modules, permissions/portals, delivery and CLI/MCP integration qualification. | Appropriate future self-contained distribution, but larger than this correction. |
+| Private AppDir media graph plus a host exclusion list | Retains the current installation experience only if the graph really is separable. Observed host ALSA/PulseAudio/Mesa dependencies overlap the bundled media graph. | Rejected for the current general-purpose native builds. |
+| Prefer every host SONAME through a global library path | Can recover the reported desktop but changes child-process resolution and mixes codecs/providers opportunistically. | Diagnostic workaround only. |
+
+References: [Debian shared-library dependency policy](https://www.debian.org/doc/debian-policy/ch-sharedlibs.html),
+[Flatpak dependency model](https://docs.flatpak.org/en/latest/dependencies.html),
+and [Flatpak GL extensions](https://docs.flatpak.org/en/latest/extension.html).
+The selection above is a project-specific inference from those mechanisms and
+the measured overlapping graph, not an upstream guarantee for NOH.
+
+### Enforced contract
+
+`assets/linux-host.json` declares x86_64/glibc 2.39, FFmpeg 6 or newer with
+libx264/AAC/PCM encoders, libmpv client API major 2, and distribution package
+names. `tools/linux_host.py` checks the actual provider capabilities before
+packaging. `HOST-REQUIREMENTS.json` is copied into the package and materials.
+The launcher sets neither ALSA_PLUGIN_DIR nor LD_LIBRARY_PATH.
+
+The package contains exactly four ELF images: GUI, CLI, MCP and CPU Whisper.
+The ELF audit rejects any extra ELF, SONAME provider, private dependency or
+RPATH/RUNPATH, even for an unknown future library name. The producer and seal
+both enforce that boundary; inert verification also requires the exact embedded
+host contract and its declared path, even if all archive hashes are recomputed.
+Future incompatible contracts must retain an explicit historical verifier and
+use a new distribution marker. Verification of historical manifests keeps its historical generic ELF
+policy. A new executable or dynamic speech dependency needs an explicit review.
+No per-distribution library-preference script is introduced.
+
+Native lock/acquisition files remain unchanged as historical 0.1.3 provenance;
+the new delivery path no longer uses or distributes their runtime. CPU Whisper,
+its exact source/build receipt, models/notices, NOH/Rust sources and notices
+retain their existing provenance checks. No native package is relabeled as
+NOH's source. Existing redistribution/release approval records cannot authorize
+this new input contract: a future publication still needs fresh exact-input and
+final-package acceptance. No release policy record is changed here.
+
+### Initial architecture probes (v1)
+
+The current local checks are packaging probes using 0.1.3 compiled application
+code, with private RUNPATH metadata removed and input/output hashes recorded.
+They are not a newly compiled candidate or final archive qualification.
+`tools/probe-linux-host.py` creates an EGL/OpenGL context without a window,
+loads ALSA before libmpv, initializes libmpv, then opens the host default PCM
+and writes 960 silent frames. It records loaded paths and worker identities,
+uses host FFmpeg through a real NOH CLI re-encoding export, decodes that output,
+and verifies no-overwrite behavior. `--loader-only` labels partial coverage and
+does not count as the export check.
+
+Ubuntu 24.04 under WSLg passes the Wayland/software-rendering and audio/export
+probe with FFmpeg 6.1.1 and libmpv API 2.2. A Fedora 44 container also passes:
+glibc 2.43, Wayland 1.26.0, Mesa 26.2.4/llvmpipe LLVM 22.1.8, ALSA 1.2.16.1,
+PipeWire 1.6.9, libmpv API 2.5 and FFmpeg 8.1.3 from RPM Fusion free. The initial
+Fedora `ffmpeg-free` installation correctly fails the libx264 requirement.
+Both successful probes perform an actual NOH CLI export, decode and
+no-overwrite check using host discovery from a normal temporary work directory.
+A Fedora container using the WSLg Wayland socket and a synthetic
+PipeWire sink is not GNOME, physical GPU/audio hardware, human listening or
+interactive GUI acceptance. Before publication, qualify the final archive on
+the complete [Linux validation matrix](LINUX_VALIDATION.md) with real preview,
+export, file selection and audio output. Do not infer universal distribution support
+from the glibc floor or from this loader probe.
+
+The Fedora image is the official amd64 manifest
+`registry.fedoraproject.org/fedora@sha256:6fb67bf40d42d33f9805620b7fc04741df3ce328a8804308dfe5d186253f3f81`.
+Package versions, mapped libraries, compiled identities, probe input/output hashes
+and setup logs are in `logs/linux-host-libraries/`. Setup is disposable and
+does not install Fedora packages or enable repositories on the user's desktop.
+The v1 probe exposed a discovery regression from `/`: excluding cwd/bin hid
+the host's `/usr/bin/ffmpeg` through merged `/bin`. Review correctly rejected
+working around it with another cwd. Version 0.1.4 keeps explicit `/usr/bin` or
+`/bin` PATH entries eligible on Linux, while rejecting implicit relative paths
+and arbitrary cwd/bin entries and retaining Windows behavior. The maintained
+export probe now runs from `/` without NOH_FFMPEG. A setup race between PipeWire and WirePlumber was also
+corrected by waiting for the server and default sink, with a process timeout.
+
+## Historical 0.1.3 redistribution record
+
+The following record describes the previously shipped bundled native runtime.
+It is retained for correspondence and is not the new host-runtime inventory.
+
 
 This record describes the inputs to the first Linux x86_64 AppDir, not acceptance
 of a final executable or support for every Linux distribution. The baseline is
