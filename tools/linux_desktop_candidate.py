@@ -212,6 +212,10 @@ def cloud_config(args):
               'write_files': files, 'runcmd': ['set -eu', *commands]}
     if packages:
         config['packages'] = packages
+    if image['os_id'] == 'linuxmint':
+        # Keep the installer's Mint + Ubuntu sources. The Ubuntu cloud-init
+        # template otherwise substitutes Mint's codename into Ubuntu URLs.
+        config['apt'] = {'preserve_sources_list': True}
     if image['os_id'] == 'fedora':
         # The cloud image reports a hostname-setting failure during init-local.
         # No test relies on a custom name: retain the image's hostname instead.
