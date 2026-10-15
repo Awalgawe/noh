@@ -31,6 +31,8 @@ class DesktopEvidenceTests(unittest.TestCase):
             key.write_text('ssh-ed25519 fixture-only')
             desktop.cloud_config(argparse.Namespace(case='debian-13', public_key=key, output=output))
             config = json.loads(output.read_text().split('\n', 1)[1])
+            self.assertNotIn('groups', config)  # These vendor groups already exist in all pinned images.
+            self.assertTrue({'audio', 'video', 'render'}.issubset(config['users'][0]['groups']))
             self.assertEqual(config['write_files'][0]['path'], '/etc/gdm3/daemon.conf')
             self.assertIn('gnome-session-xsession', config['packages'])
             self.assertIn('pulseaudio', config['packages'])
@@ -40,6 +42,7 @@ class DesktopEvidenceTests(unittest.TestCase):
             for name in ('ubuntu-24.04', 'ubuntu-26.04'):
                 desktop.cloud_config(argparse.Namespace(case=name, public_key=key, output=output))
                 config = json.loads(output.read_text().split('\n', 1)[1])
+                self.assertNotIn('groups', config)
                 self.assertEqual(config['write_files'][0]['path'], '/etc/gdm3/custom.conf')
                 self.assertIn('WaylandEnable=true', config['write_files'][0]['content'])
 

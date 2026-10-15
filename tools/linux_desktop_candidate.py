@@ -109,7 +109,7 @@ def cloud_config(args):
                  ['install', '-d', '-o', 'noh', '-g', 'noh', '/home/noh/.config'],
                  ['sh', '-c', 'touch /home/noh/.config/gnome-initial-setup-done; chown noh:noh /home/noh/.config/gnome-initial-setup-done'],
                  ['systemctl', 'set-default', 'graphical.target'], ['systemctl', 'restart', 'gdm3']]
-    config = {'hostname': 'noh-desktop-test', 'groups': ['audio', 'video', 'render'],
+    config = {'hostname': 'noh-desktop-test',
               'users': [{'name': 'noh', 'uid': 1000, 'shell': '/bin/bash',
                          'groups': ['adm', 'sudo', 'audio', 'video', 'render'],
                          'sudo': 'ALL=(ALL) NOPASSWD:ALL', 'lock_passwd': True,
