@@ -134,7 +134,9 @@ if [[ "${image_spec[4]}" = iso ]]; then
     wait "$http_pid" || true
     http_pid=
     archive_boot installer
-    if ! grep -Eq '^NOH_INSTALL_FINALIZE_COMPLETE[[:space:]]*$' "$evidence/installer-serial.log" ||
+    if ! grep -Eq '^NOH_INSTALL_NETWORK_COMPLETE[[:space:]]*$' "$evidence/installer-serial.log" ||
+       ! grep -Eq '^NOH_INSTALL_NETWORK_EXIT=0[[:space:]]*$' "$evidence/installer-serial.log" ||
+       ! grep -Eq '^NOH_INSTALL_FINALIZE_COMPLETE[[:space:]]*$' "$evidence/installer-serial.log" ||
        ! grep -Eq '^NOH_INSTALL_FINALIZE_EXIT=0[[:space:]]*$' "$evidence/installer-serial.log"; then
         echo 'Mint finalization was not confirmed; reading installer logs from the stopped disk.'
         # virt-cat inspects the disk read-only. Recover the actual installer

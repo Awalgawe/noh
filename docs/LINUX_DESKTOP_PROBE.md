@@ -111,6 +111,15 @@ preparation, not evidence that the original Mint failure has been resolved.
 If finalization is not confirmed after poweroff, `virt-cat` reads the installed
 disk's installer logs without modifying it. The generated password hash is
 redacted before retention. Readback cannot turn installation failure into a pass.
+Run 38812080615 recovered the installer logs: NetworkManager inherited the
+initramfs connection as external, remained `CONNECTED_LOCAL`, and package fetches
+failed to resolve both Mint and Ubuntu repository hosts. Before package fetching,
+the standard `partman/early_command` now activates a normal NetworkManager DHCP
+profile on the adapter's sole Q35 NIC. It records the before/after configuration
+and requires both repository names to resolve. Serial completion and exit-zero
+markers are mandatory, alongside the existing installation-finalization guards.
+This repairs the test installer network; it does not alter the candidate or
+qualify Mint without the subsequent installed-desktop tests.
 
 Fedora's minimal GNOME session does not install Nautilus automatically. Its
 GNOME file-chooser portal uses Nautilus, so the adapter explicitly installs both
@@ -209,6 +218,7 @@ Checked on 2026-10-15:
 - [QEMU keyboard/monitor commands](https://www.qemu.org/docs/master/system/monitor.html), [xdg-mime](https://manpages.debian.org/trixie/xdg-utils/xdg-mime.1.en.html) and [mpv configuration/options](https://mpv.io/manual/master/).
 - [openSUSE's SDDM autologin override](https://api.opensuse.org/public/source/openSUSE:Factory/sddm/0001-Read-the-DISPLAYMANAGER_AUTOLOGIN-value-from-sysconf.patch).
 - [Mint's success-hook invocation](https://github.com/linuxmint/ubiquity/blob/master/ubiquity/frontend/base.py) and [standard in-target helper](https://github.com/linuxmint/ubiquity/blob/master/d-i/source/debian-installer-utils/in-target).
+- [NetworkManager connection activation](https://networkmanager.pages.freedesktop.org/NetworkManager/NetworkManager/nmcli.html) and [Debian installer early commands](https://www.debian.org/releases/stable/amd64/apbs04.en.html#preseed-partman).
 - [GNOME portal Open label](https://github.com/GNOME/nautilus/blob/main/src/nautilus-portal.c) and [chooser mnemonic support](https://github.com/GNOME/nautilus/blob/main/src/resources/ui/nautilus-file-chooser.blp).
 - [KDE file-widget Name field](https://invent.kde.org/frameworks/kio/-/blob/master/src/filewidgets/kfilewidget.cpp).
 - [GNOME portal's Nautilus dependency](https://sources.debian.org/src/xdg-desktop-portal-gnome/50.0-1/debian/changelog/) and [read-only disk log extraction with virt-cat](https://libguestfs.org/virt-cat.1.html).

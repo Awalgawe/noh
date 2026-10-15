@@ -229,12 +229,28 @@ def mint_preseed(args):
     public_key = args.public_key.read_text().strip()
     if not re.fullmatch(r'ssh-ed25519 [A-Za-z0-9+/=]+(?: [^\r\n]+)?', public_key):
         raise ValueError('Mint bootstrap requires the generated Ed25519 public key')
+    # The network used to download the preseed is inherited as an external
+    # connection without working DNS. Activate ordinary NetworkManager DHCP
+    # once the live desktop is running, before the installer fetches packages.
+    # enp0s4 is the sole NIC in this adapter's fixed Q35 device layout.
+    network = '; '.join([
+        'exec >/dev/ttyS0 2>&1', 'set -e',
+        "trap 'echo NOH_INSTALL_NETWORK_EXIT=$?' 0",
+        'echo NOH_INSTALL_NETWORK_BEGIN',
+        'nmcli device show enp0s4',
+        'nmcli connection add type ethernet ifname enp0s4 con-name noh-installer ipv4.method auto ipv6.method disabled',
+        'nmcli --wait 60 connection up id noh-installer',
+        'nmcli device show enp0s4',
+        'getent ahostsv4 packages.linuxmint.com',
+        'getent ahostsv4 archive.ubuntu.com',
+        'echo NOH_INSTALL_NETWORK_COMPLETE',
+    ])
     # Ubiquity ignores the success hook's exit status. Retain its actual status
     # on serial, and make SSH bootstrap independent of first-boot cloud-init so
     # that its failure can be diagnosed through the existing transport.
     finalize = '; '.join([
         'exec >/dev/ttyS0 2>&1', 'set -e',
-        "trap 'status=$?; echo NOH_INSTALL_FINALIZE_EXIT=$status' 0",
+        "trap 'echo NOH_INSTALL_FINALIZE_EXIT=$?' 0",
         'echo NOH_INSTALL_FINALIZE_BEGIN',
         'in-target --pass-stdout env DEBIAN_FRONTEND=noninteractive apt-get update',
         'in-target --pass-stdout env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-server cloud-init',
@@ -267,6 +283,7 @@ d-i netcfg/get_hostname string noh-mint-test
 d-i netcfg/get_domain string local
 d-i time/zone string UTC
 d-i clock-setup/utc boolean true
+d-i partman/early_command string {network}
 d-i partman-auto/disk string /dev/vda
 d-i partman-auto/method string regular
 d-i partman-auto/choose_recipe select atomic
@@ -288,6 +305,8 @@ ubiquity ubiquity/use_nonfree boolean false
 ubiquity ubiquity/poweroff boolean true
 ubiquity ubiquity/reboot boolean false
 ubiquity ubiquity/reboot_on_failure boolean false
+ubiquity ubiquity/automation_failure_command string echo NOH_INSTALL_INTERACTION_REQUIRED >/dev/ttyS0
+ubiquity ubiquity/failure_command string echo NOH_INSTALL_FAILED >/dev/ttyS0
 ubiquity ubiquity/success_command string {finalize}
 ''')
     args.output.chmod(0o600)
