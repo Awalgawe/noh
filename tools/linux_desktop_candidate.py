@@ -267,9 +267,10 @@ def mint_preseed(args):
         f'{in_target} chown noh:noh /home/noh/.ssh /home/noh/.ssh/authorized_keys',
         "echo 'PasswordAuthentication no' > /target/etc/ssh/sshd_config.d/90-noh-test.conf",
         f'{in_target} systemctl enable ssh',
-        'install -d /target/etc/default/grub.d',
-        "echo 'GRUB_CMDLINE_LINUX=\"console=tty0 console=ttyS0,115200n8\"' > /target/etc/default/grub.d/90-noh-probe.cfg",
-        f'{in_target} update-grub',
+        # grub-installer already generated this file using the boot parameters
+        # after ---. Verify them instead of invoking GRUB after installer cleanup.
+        "grep -Fq 'console=tty0' /target/boot/grub/grub.cfg",
+        "grep -Fq 'console=ttyS0,115200n8' /target/boot/grub/grub.cfg",
         'touch /target/var/lib/noh-unattended-install-complete',
         'echo NOH_INSTALL_FINALIZE_COMPLETE',
     ])

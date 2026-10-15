@@ -138,7 +138,7 @@ if [[ "${image_spec[4]}" = iso ]]; then
     # configures the desktop; the ISO/kernel/initrd are then completely detached.
     start_guest -drive "file=$base_image,format=raw,media=cdrom,readonly=on" \
         -kernel "$work/mint-vmlinuz" -initrd "$work/mint-initrd" \
-        -append 'boot=casper automatic-ubiquity url=http://10.0.2.2:8123/preseed.cfg noprompt console=tty0 console=ttyS0,115200n8'
+        -append 'boot=casper automatic-ubiquity url=http://10.0.2.2:8123/preseed.cfg noprompt --- console=tty0 console=ttyS0,115200n8'
     timeout 20m tail --pid="$qemu_pid" -f /dev/null
     wait "$qemu_pid"
     qemu_pid=
