@@ -11,6 +11,7 @@ from pathlib import Path
 import platform
 import re
 import secrets
+import shlex
 import shutil
 import subprocess
 import tarfile
@@ -224,8 +225,33 @@ def mint_preseed(args):
     _, image = case_inputs('mint-22.3')
     if image.get('installation_method') != 'ubiquity-preseed':
         raise ValueError('Mint installer identity is not configured')
-    # The random test password is never printed or used for SSH. NoCloud supplies
-    # the sole SSH public key and disables password authentication after install.
+    public_key = args.public_key.read_text().strip()
+    if not re.fullmatch(r'ssh-ed25519 [A-Za-z0-9+/=]+(?: [^\r\n]+)?', public_key):
+        raise ValueError('Mint bootstrap requires the generated Ed25519 public key')
+    # Ubiquity ignores the success hook's exit status. Retain its actual status
+    # on serial, and make SSH bootstrap independent of first-boot cloud-init so
+    # that its failure can be diagnosed through the existing transport.
+    finalize = '; '.join([
+        'exec >/dev/ttyS0 2>&1', 'set -e',
+        "trap 'status=$?; echo NOH_INSTALL_FINALIZE_EXIT=$status' 0",
+        'echo NOH_INSTALL_FINALIZE_BEGIN',
+        'in-target --pass-stdout env DEBIAN_FRONTEND=noninteractive apt-get update',
+        'in-target --pass-stdout env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-server cloud-init',
+        'rm -f /target/etc/cloud/cloud-init.disabled',
+        'install -d -m 700 /target/home/noh/.ssh',
+        "printf '%s\\n' " + shlex.quote(public_key) + ' > /target/home/noh/.ssh/authorized_keys',
+        'chmod 600 /target/home/noh/.ssh/authorized_keys',
+        'in-target --pass-stdout chown noh:noh /home/noh/.ssh /home/noh/.ssh/authorized_keys',
+        "printf '%s\\n' 'PasswordAuthentication no' > /target/etc/ssh/sshd_config.d/90-noh-test.conf",
+        'in-target --pass-stdout systemctl enable ssh',
+        'install -d /target/etc/default/grub.d',
+        "printf '%s\\n' 'GRUB_CMDLINE_LINUX=\"console=tty0 console=ttyS0,115200n8\"' > /target/etc/default/grub.d/90-noh-probe.cfg",
+        'in-target --pass-stdout update-grub',
+        'touch /target/var/lib/noh-unattended-install-complete',
+        'echo NOH_INSTALL_FINALIZE_COMPLETE',
+    ])
+    # The random test password is never printed or used for SSH. Installer
+    # bootstrap and NoCloud use the same sole public key and disable SSH passwords.
     password_hash = subprocess.run(['openssl', 'passwd', '-6', '-stdin'], check=True,
                                    input=secrets.token_urlsafe(32) + '\n', text=True,
                                    capture_output=True).stdout.strip()
@@ -261,7 +287,7 @@ ubiquity ubiquity/use_nonfree boolean false
 ubiquity ubiquity/poweroff boolean true
 ubiquity ubiquity/reboot boolean false
 ubiquity ubiquity/reboot_on_failure boolean false
-ubiquity ubiquity/success_command string in-target apt-get update && in-target apt-get install -y --no-install-recommends openssh-server cloud-init && rm -f /target/etc/cloud/cloud-init.disabled && touch /target/var/lib/noh-unattended-install-complete
+ubiquity ubiquity/success_command string {finalize}
 ''')
     args.output.chmod(0o600)
 
@@ -530,6 +556,7 @@ def main():
     p.add_argument('--output', type=Path, required=True)
     p.set_defaults(fn=cloud_config)
     p = sub.add_parser('mint-preseed')
+    p.add_argument('--public-key', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.set_defaults(fn=mint_preseed)
     p = sub.add_parser('guest')

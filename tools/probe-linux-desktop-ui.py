@@ -73,13 +73,13 @@ def observe(socket_path, output, phase):
             key('ret')
             screen('06-imported', 5)
         else:
-            screen('07-output-opened', 3)
+            screen('boot' if phase == 'boot' else '07-output-opened', 3)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--socket', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--phase', choices=('chooser', 'output'), required=True)
+    parser.add_argument('--phase', choices=('chooser', 'output', 'boot'), required=True)
     args = parser.parse_args()
     observe(args.socket, args.output, args.phase)

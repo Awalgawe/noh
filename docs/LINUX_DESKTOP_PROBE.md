@@ -90,6 +90,17 @@ launch failed with host `/dev/kvm` permission denied. The cause of the changed
 host access was not recorded. The runner now records the device ACL before and
 after establishing read/write access for its own user immediately before every
 QEMU launch, and checks that access. It never grants world-wide device access.
+The subsequent Mint trial passed that launch but exhausted its five-minute SSH
+wait; no installed-system check ran. The installed boot had no serial console,
+and Ubiquity's success hook does not enforce its command's result. This leaves
+the cause unknown. The hook now reports its start, completion and actual exit
+status on serial, with standard `in-target --pass-stdout` diagnostics. The host
+requires explicit completion and exit zero before booting the installed disk.
+It installs the same generated SSH public key in the test account and enables
+SSH with passwords disabled, independently of cloud-init's first boot, so that
+cloud-init failures can be retrieved. The installed kernel also logs to serial;
+an SSH timeout retains a QMP boot screen. These are diagnostics and transport
+preparation, not evidence that the original Mint failure has been resolved.
 
 Each case requires the selected OS, a real GDM, SDDM or LightDM login on seat0, the selected desktop,
 with openSUSE's autologin user also set in `/etc/sysconfig/displaymanager`.
@@ -167,6 +178,7 @@ Checked on 2026-10-15:
 - [cloud-init NoCloud](https://docs.cloud-init.io/en/latest/reference/datasources/nocloud.html), [GNOME automatic login](https://help.gnome.org/system-admin-guide/login-automatic.html) and [QEMU invocation](https://www.qemu.org/docs/master/system/invocation.html).
 - [QEMU keyboard/monitor commands](https://www.qemu.org/docs/master/system/monitor.html), [xdg-mime](https://manpages.debian.org/trixie/xdg-utils/xdg-mime.1.en.html) and [mpv configuration/options](https://mpv.io/manual/master/).
 - [openSUSE's SDDM autologin override](https://api.opensuse.org/public/source/openSUSE:Factory/sddm/0001-Read-the-DISPLAYMANAGER_AUTOLOGIN-value-from-sysconf.patch).
+- [Mint's success-hook invocation](https://github.com/linuxmint/ubiquity/blob/master/ubiquity/frontend/base.py) and [standard in-target helper](https://github.com/linuxmint/ubiquity/blob/master/d-i/source/debian-installer-utils/in-target).
 
 Existing QEMU, cloud-init and OpenSSH commands provide the VM lifecycle; the NOH
 helpers only bind candidate identity, distribution setup and application evidence.

@@ -105,7 +105,7 @@ if [[ "${image_spec[4]}" = iso ]]; then
     xorriso -osirrox on -indev "$work/base.img" \
         -extract /casper/vmlinuz "$work/mint-vmlinuz" -extract "${initrds[0]}" "$work/mint-initrd"
     mkdir "$work/http"
-    python3 "$root/tools/linux_desktop_candidate.py" mint-preseed --output "$work/http/preseed.cfg"
+    python3 "$root/tools/linux_desktop_candidate.py" mint-preseed --public-key "$work/key.pub" --output "$work/http/preseed.cfg"
     python3 -m http.server 8123 --bind 127.0.0.1 --directory "$work/http" \
         > "$evidence/installer-http.log" 2>&1 &
     http_pid=$!
@@ -129,6 +129,8 @@ if [[ "${image_spec[4]}" = iso ]]; then
     wait "$http_pid" || true
     http_pid=
     archive_boot installer
+    grep -Eq '^NOH_INSTALL_FINALIZE_COMPLETE[[:space:]]*$' "$evidence/installer-serial.log"
+    grep -Eq '^NOH_INSTALL_FINALIZE_EXIT=0[[:space:]]*$' "$evidence/installer-serial.log"
     # Installation has powered off; the next boot uses only its installed disk.
     # Release the owned ISO and extracted boot files before desktop provisioning.
     rm -- "$work/base.img" "$work/mint-vmlinuz" "$work/mint-initrd"
@@ -144,6 +146,8 @@ wait_for_ssh() {
         sleep 5
     done
     echo 'Guest SSH did not become ready within five minutes.'
+    timeout 30s python3 "$root/tools/probe-linux-desktop-ui.py" --socket "$work/qmp.sock" \
+        --output "$evidence/boot-failure" --phase boot || true
     return 1
 }
 wait_for_ssh
