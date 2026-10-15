@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Infrastructure feasibility only: this does not qualify a NOH candidate.
+# Native observations of an existing candidate; independent review remains required.
 set -euo pipefail
 umask 077
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 evidence="$root/logs/linux-desktop-probe"
+case_id=${NOH_DESKTOP_CASE:?Select an approved desktop case}
+payload=${NOH_CANDIDATE_PAYLOAD:?Provide the verified candidate payload}
+test -f "$payload"
 mkdir -p "$evidence"
 exec > >(tee "$evidence/probe.log") 2>&1
 work=$(mktemp -d "${RUNNER_TEMP:-/tmp}/noh-desktop-vm.XXXXXX")
@@ -35,52 +38,21 @@ sudo apt-get update -qq
 sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils
 qemu-system-x86_64 --version > "$evidence/qemu-version.txt"
 
-image_url=https://cloud-images.ubuntu.com/noble/20260926/noble-server-cloudimg-amd64.img
-image_sha256=6a81c37564db9b1ee84e141922625e1d7c5b389b99bb3c572e0243607d5bb4d2
-printf '%s\n%s\n' "$image_url" "$image_sha256" > "$evidence/image-identity.txt"
-curl --fail --location --retry 2 --max-time 300 "$image_url" -o "$work/base.img"
-printf '%s  %s\n' "$image_sha256" "$work/base.img" | sha256sum --check
-qemu-img create -f qcow2 -F qcow2 -b "$work/base.img" "$work/guest.qcow2" 16G
 ssh-keygen -q -t ed25519 -N '' -f "$work/key"
-public_key=$(cat "$work/key.pub")
-cat > "$work/user-data" <<EOF
-#cloud-config
-hostname: noh-desktop-probe
-users:
-  - name: noh
-    uid: 1000
-    shell: /bin/bash
-    groups: [adm, sudo, audio, video, render]
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    lock_passwd: true
-    ssh_authorized_keys: ['$public_key']
-ssh_pwauth: false
-package_update: true
-packages:
-  - gnome-session
-  - gdm3
-  - pipewire-audio
-  - pulseaudio-utils
-  - alsa-utils
-  - pciutils
-  - python3
-write_files:
-  - path: /etc/gdm3/custom.conf
-    content: |
-      [daemon]
-      AutomaticLoginEnable=True
-      AutomaticLogin=noh
-      WaylandEnable=true
-      DefaultSession=gnome.desktop
-runcmd:
-  - [sh, -c, 'DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends linux-modules-extra-\$(uname -r)']
-  - [modprobe, virtio_gpu]
-  - [modprobe, snd_hda_intel]
-  - [install, -d, -o, noh, -g, noh, /home/noh/.config]
-  - [sh, -c, 'touch /home/noh/.config/gnome-initial-setup-done; chown noh:noh /home/noh/.config/gnome-initial-setup-done']
-  - [systemctl, set-default, graphical.target]
-  - [systemctl, restart, gdm3]
-EOF
+python3 "$root/tools/linux_desktop_candidate.py" cloud-config --case "$case_id" \
+    --public-key "$work/key.pub" --output "$work/user-data"
+cp "$work/user-data.image.json" "$evidence/image-identity.json"
+mapfile -t image_spec < <(python3 - "$work/user-data.image.json" <<'PY'
+import json, sys
+image = json.load(open(sys.argv[1]))
+for name in ('url', 'algorithm', 'digest'):
+    print(image[name])
+PY
+)
+test "${#image_spec[@]}" = 3
+curl --fail --location --retry 2 --max-time 300 "${image_spec[0]}" -o "$work/base.img"
+printf '%s  %s\n' "${image_spec[2]}" "$work/base.img" | "${image_spec[1]}sum" --check
+qemu-img create -f qcow2 -F qcow2 -b "$work/base.img" "$work/guest.qcow2" 16G
 printf 'instance-id: noh-desktop-probe\nlocal-hostname: noh-desktop-probe\n' > "$work/meta-data"
 cloud-localds "$work/seed.img" "$work/user-data" "$work/meta-data"
 
@@ -97,8 +69,9 @@ qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -smp 3 -m 6144 \
     -qmp "unix:$work/qmp.sock,server=on,wait=off" \
     -no-reboot > "$evidence/qemu.log" 2>&1 &
 qemu_pid=$!
-ssh_args=(-i "$work/key" -p 2222 -o BatchMode=yes -o ConnectTimeout=5
+transport_args=(-i "$work/key" -o BatchMode=yes -o ConnectTimeout=5
     -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$work/known-hosts")
+ssh_args=(-p 2222 "${transport_args[@]}")
 ready=false
 for ((i=0; i<60; i++)); do
     kill -0 "$qemu_pid" || { cat "$evidence/qemu.log"; exit 1; }
@@ -115,59 +88,25 @@ ssh "${ssh_args[@]}" noh@127.0.0.1 'sudo cat /var/log/cloud-init-output.log' \
     > "$evidence/cloud-init-output.log"
 test "$cloud_status" = 0 || { cat "$evidence/cloud-init-status.txt"; exit "$cloud_status"; }
 guest_status=0
-timeout 180s ssh "${ssh_args[@]}" noh@127.0.0.1 bash -s > "$evidence/guest.txt" 2>&1 <<'GUEST' || guest_status=$?
-set -euo pipefail
-cat /etc/os-release
-uname -a
-systemd-detect-virt
-lspci -nnk
-loginctl list-sessions
-session=
-for ((i=0; i<24; i++)); do
-    while read -r candidate _; do
-        if [[ $(loginctl show-session "$candidate" -p Name --value) = noh &&
-              $(loginctl show-session "$candidate" -p Type --value) = wayland ]]; then
-            session=$candidate
-            break
-        fi
-    done < <(loginctl list-sessions --no-legend)
-    [[ -n "$session" ]] && break
-    sleep 5
-done
-test -n "$session"
-loginctl show-session "$session"
-pgrep -a -u "$(id -u)" gnome-shell
-export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
-# SSH started this user manager before cloud-init installed desktop packages.
-# Apply the newly installed vendor units to that already-running manager.
-systemctl --user daemon-reload
-systemctl --user start pipewire pipewire-pulse wireplumber
-systemctl --user is-active pipewire pipewire-pulse wireplumber
-pactl info
-pactl list short sinks
-aplay -l
-python3 - <<'PY'
-import math, struct, wave
-with wave.open('/tmp/noh-desktop-tone.wav', 'wb') as output:
-    output.setparams((1, 2, 48000, 0, 'NONE', 'not compressed'))
-    output.writeframes(b''.join(struct.pack('<h', int(8000 * math.sin(2 * math.pi * 440 * n / 48000)))
-                               for n in range(48000 * 2)))
-PY
-pw-play /tmp/noh-desktop-tone.wav
-GUEST
+scp -P 2222 "${transport_args[@]}" "$payload" noh@127.0.0.1:payload.tar
+ssh "${ssh_args[@]}" noh@127.0.0.1 'mkdir noh-candidate && tar -xf payload.tar -C noh-candidate'
+timeout 12m ssh "${ssh_args[@]}" noh@127.0.0.1 \
+    "python3 /home/noh/noh-candidate/tools/linux_desktop_candidate.py guest --case '$case_id' --output /home/noh/noh-evidence" \
+    > "$evidence/guest.log" 2>&1 || guest_status=$?
+scp -r -P 2222 "${transport_args[@]}" noh@127.0.0.1:noh-evidence "$evidence/runtime" || guest_status=1
 ssh "${ssh_args[@]}" noh@127.0.0.1 "dpkg-query -W -f='\${binary:Package}\t\${Version}\n'" \
     > "$evidence/packages.txt"
 
 # QMP captures the actual guest scanout, independent of the application's capture mode.
 python3 - "$work/qmp.sock" "$evidence/desktop.ppm" <<'PY'
-import json, socket, sys
+import json, socket, sys, time
 with socket.socket(socket.AF_UNIX) as connection:
     connection.settimeout(15)
     connection.connect(sys.argv[1])
     stream = connection.makefile('rwb', buffering=0)
     json.loads(stream.readline())
     for command in ({'execute': 'qmp_capabilities'},
+                    {'execute': 'human-monitor-command', 'arguments': {'command-line': 'sendkey esc'}},
                     {'execute': 'screendump', 'arguments': {'filename': sys.argv[2]}}):
         stream.write(json.dumps(command).encode() + b'\n')
         while True:
@@ -176,7 +115,12 @@ with socket.socket(socket.AF_UNIX) as connection:
                 raise RuntimeError(reply)
             if 'return' in reply:
                 break
+        time.sleep(.5)
 PY
-test "$guest_status" = 0 || { cat "$evidence/guest.txt"; exit "$guest_status"; }
-echo 'GNOME Wayland and PipeWire guest probe completed; inspect the screen and audio evidence.'
-echo 'Infrastructure feasibility only. No NOH candidate or physical device was qualified.'
+kill "$qemu_pid"
+wait "$qemu_pid" || true
+qemu_pid=
+test "$guest_status" = 0 || { cat "$evidence/guest.log"; exit "$guest_status"; }
+python3 "$root/tools/linux_desktop_candidate.py" audio-report \
+    --input "$evidence/virtual-audio.wav" --output "$evidence/application-audio.json"
+echo 'Native candidate checks completed; independent screen/audio review and the full matrix remain required.'

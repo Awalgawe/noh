@@ -1,44 +1,76 @@
-# Linux desktop VM feasibility
+# Linux desktop candidate checks
 
-The manual/branch `Linux desktop VM feasibility` workflow tests whether a standard
-Ubuntu GitHub runner can host an actual Ubuntu 24.04 GNOME Wayland desktop with
-PipeWire. It does not compile, modify, download or qualify NOH, change the approved
-matrix, or publish a release. Existing candidate and container/WSLg evidence stay
-valid. A successful run is a prerequisite for extending desktop acceptance using
-the exact existing candidate, not a qualification result itself.
+This branch/manual workflow tests an existing sealed Linux candidate in actual
+QEMU/KVM desktop VMs. It never recompiles or publishes NOH. The first adapter
+covers Ubuntu 24.04 and 26.04 GNOME/Wayland/PipeWire plus Debian 13
+GNOME/X11/PulseAudio. These are three rows of the unchanged seven-row matrix in
+`assets/linux-validation-matrix.json`; Fedora, openSUSE, Arch and Mint remain
+required. A subset or a successful shell exit cannot qualify the release.
 
-The guest uses Canonical's dated 20260926 cloud image with its published SHA-256,
-cloud-init's NoCloud seed, distribution GNOME/GDM/PipeWire packages, QEMU/KVM's
-virtual GPU and HDA audio, and a normal GDM automatic login. Installed package
-versions are retained; package repositories are resolved at preparation time.
-Because SSH opens the guest user manager before desktop packages are installed,
-the probe reloads that manager and starts the newly installed vendor audio units.
-The HDA device is output-only, matching QEMU's WAV recording backend.
-KVM absence, failed provisioning, a missing real Wayland session or missing audio
-services fail the probe. Software graphics and virtual audio cannot establish
-physical-device behavior or human listening quality.
+The initial infrastructure-only experiment succeeded in run
+[38771109225](https://github.com/Awalgawe/noh/actions/runs/38771109225), using source
+`2d4e8bb106d0f68fd3261d242c203b12d3148ddf`. Its GNOME scanout and synthetic virtual
+audio were independently reviewed. That run did not execute NOH. The earlier
+failed run remains recorded; the SSH user manager started before audio packages
+were installed, requiring a reload/start of their vendor units.
 
-The run is limited to 35 minutes, with a 30-minute process timeout and an owned
-QEMU cleanup trap. SSH/VNC bind only to loopback; QMP uses a private Unix socket.
-The ephemeral SSH key, seed and VM disks are never uploaded. Evidence includes
-runner/guest identity, package versions, boot/provisioning logs, actual guest
-scanout and a synthetic tone recorded by QEMU. Screen and audio inspection are
-required before claiming that this route is usable. No host desktop is controlled.
-Guest package inventory and scanout are also collected after a failed desktop or
-audio check, while preserving the failing exit status.
+## Candidate identity and execution
 
-This small probe uses existing QEMU, cloud-init and OpenSSH commands. Quickemu's
-documented Linux flow requires ordinary interactive installation; the existing
-EtchDroid action mainly wraps QEMU lifecycle/recording and does not provision a
-desktop. Direct invocation keeps this bounded experiment inspectable without a
-third-party action dependency or a new general VM framework.
+The workflow defaults to the exact 0.1.4 candidate from Release run 38757764365,
+attempt 1, source `51c5c29214986d453db5499a8b386ccf6c971743`. Manual inputs may name
+another exact successful Linux Release. The test consumer reuses the release
+consumer's authenticated repository, workflow, branch, commit, attempt, job and
+artifact checks. It verifies GitHub's outer artifact digest, the complete delivery
+envelope/materials and all package members before preparing a guest payload.
+The original candidate identity and separate test-harness commit are retained.
 
-References checked on 2026-10-15:
+Only source helpers, explicit contracts and the same candidate files enter the
+guest. The GitHub token stays on the runner. All candidate files are checked
+before and after execution; no overwrite, rebuild or repackaging of the delivery
+archive occurs. Package prerequisites are installed from distribution repositories;
+their exact versions, dated base-image identities and kernel/device records are
+retained. `assets/linux-desktop-images.json` pins official images by SHA-256 or
+SHA-512. No VM disk, cloud seed or private SSH key is uploaded.
 
-- [GitHub runner virtualization limits](https://docs.github.com/en/actions/concepts/runners/github-hosted-runners): nested VMs are experimental and unsupported.
-- [Canonical image and checksums](https://cloud-images.ubuntu.com/noble/20260926/).
-- [cloud-init NoCloud](https://docs.cloud-init.io/en/latest/reference/datasources/nocloud.html).
-- [GNOME automatic login](https://help.gnome.org/system-admin-guide/login-automatic.html).
-- [QEMU invocation](https://www.qemu.org/docs/master/system/invocation.html).
-- [Quickemu Linux setup](https://github.com/quickemu-project/quickemu/wiki/02-Create-Linux-virtual-machines).
-- [EtchDroid QEMU/KVM action](https://github.com/etchdroid/qemu-kvm-action).
+Each case requires the selected OS, a real GDM login on seat0, GNOME, the selected
+Wayland/X11 session, the selected PipeWire/PulseAudio server and a virtual PCI
+audio sink. A null sink is refused. External IPv4/IPv6 default routes are removed
+after provisioning. GDM settings use Ubuntu's `/etc/gdm3/custom.conf` or Debian's
+`/etc/gdm3/daemon.conf`, matching the distribution package. The directly connected
+SSH transport remains available. The shared host probe then checks ALSA before
+graphics/libmpv before default PCM,
+actual GUI import/video/audio preview, export/full decode/no overwrite and packaged
+CPU transcription from synthetic speech. Its explicit GUI capture harness is
+retained; it is not described as manual chooser or pointer interaction.
+
+A separate ordinary AppRun startup, without capture injection, remains visible
+for a QMP scanout. QEMU records the application's preview audio through its virtual
+HDA output. Unlike the earlier infrastructure experiment, no separate tone player
+runs: the audio check requires a quarter-second window dominated by the preview's
+440 Hz signal. Raw audio, the application capture/report, normal desktop scanout,
+package inventory and diagnostics are retained for independent inspection.
+
+The workflow has read-only repository/actions access, loopback-only SSH/VNC,
+private QMP and an owned-process cleanup trap. Each command is limited to 35
+minutes and each job to 45 minutes. Failed guest checks still retain available
+screen/package evidence and remain failures. Successful observations are marked
+`awaiting-review`; this workflow never writes a final qualification policy record.
+The release gate still requires all seven exact-bound cases and independent review.
+Virtual graphics/audio do not establish physical-device or human-listening quality.
+The earlier WSLg audio incident remains a separate unresolved observation.
+
+## References and reuse
+
+Checked on 2026-10-15:
+
+- [GitHub runner virtualization limits](https://docs.github.com/en/actions/concepts/runners/github-hosted-runners): nested VMs remain experimental and unsupported.
+- [Ubuntu 24.04 image/checksums](https://cloud-images.ubuntu.com/noble/20260926/) and [Ubuntu 26.04](https://cloud-images.ubuntu.com/resolute/20260927/).
+- [Debian 13 dated generic image/checksums](https://cloud.debian.org/images/cloud/trixie/20261001-2618/).
+- [Debian's GNOME Xorg session package](https://packages.debian.org/trixie/gnome-session-xsession).
+- [cloud-init NoCloud](https://docs.cloud-init.io/en/latest/reference/datasources/nocloud.html), [GNOME automatic login](https://help.gnome.org/system-admin-guide/login-automatic.html) and [QEMU invocation](https://www.qemu.org/docs/master/system/invocation.html).
+
+Existing QEMU, cloud-init and OpenSSH commands provide the VM lifecycle; the NOH
+helpers only bind candidate identity, distribution setup and application evidence.
+Quickemu's documented Linux flow requires ordinary interactive installation, and
+EtchDroid's action wraps lifecycle/recording without desktop provisioning. The
+bounded direct invocation avoids an additional action or general VM framework.
