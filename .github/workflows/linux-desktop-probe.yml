@@ -14,7 +14,7 @@ on:
       suite:
         description: All configured desktops or a bounded subset
         type: choice
-        options: [all, baseline, additional, mint]
+        options: [all, cloud, baseline, additional, mint]
         default: all
       source_run:
         description: Successful Linux Release run containing the candidate
@@ -45,7 +45,7 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        case: ${{ fromJSON(inputs.suite == 'mint' && '["mint-22.3"]' || inputs.suite == 'additional' && '["fedora-44","opensuse-tumbleweed","arch"]' || inputs.suite == 'baseline' && '["ubuntu-24.04","ubuntu-26.04","debian-13"]' || '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch","mint-22.3"]') }}
+        case: ${{ fromJSON(inputs.suite == 'mint' && '["mint-22.3"]' || inputs.suite == 'additional' && '["fedora-44","opensuse-tumbleweed","arch"]' || inputs.suite == 'baseline' && '["ubuntu-24.04","ubuntu-26.04","debian-13"]' || inputs.suite == 'cloud' && '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch"]' || '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch","mint-22.3"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

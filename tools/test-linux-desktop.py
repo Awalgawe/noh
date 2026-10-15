@@ -150,7 +150,8 @@ class DesktopEvidenceTests(unittest.TestCase):
                     self.assertNotIn('groups', config['users'][0])
                     self.assertEqual(config['write_files'][0]['path'], path)
                     self.assertIn(f'Session={session}', config['write_files'][0]['content'])
-                    self.assertIn(['systemctl', 'enable', manager], config['runcmd'])
+                    enable = ['systemctl', 'enable', *(['--force'] if name == 'opensuse-tumbleweed' else []), manager]
+                    self.assertIn(enable, config['runcmd'])
                     self.assertFalse(any(cmd[:2] == ['systemctl', 'restart'] for cmd in config['runcmd']))
                     self.assertTrue(any(kernel in cmd for cmd in config['runcmd']))
                     if name == 'opensuse-tumbleweed':

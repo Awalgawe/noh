@@ -157,7 +157,10 @@ test "$schema_status" = 0 || { cat "$evidence/guest-cloud-config-schema.txt"; ex
 if [[ "${image_spec[3]}" = true ]]; then
     # Boot the installed kernel after provisioning its complete graphics/audio
     # modules. Preserve first-boot diagnostics; never test a mismatched module tree.
-    ssh "${ssh_args[@]}" noh@127.0.0.1 'sudo systemctl poweroff --no-block'
+    # A delayed systemd job acknowledges scheduling before SSH is shut down.
+    # Keep scheduling errors fatal and independently require the VM to exit.
+    ssh "${ssh_args[@]}" noh@127.0.0.1 \
+        'sudo systemd-run --unit=noh-provisioned-poweroff --on-active=5s systemctl poweroff'
     timeout 90s tail --pid="$qemu_pid" -f /dev/null
     wait "$qemu_pid"
     qemu_pid=

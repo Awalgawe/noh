@@ -24,8 +24,10 @@ consumer's authenticated repository, workflow, branch, commit, attempt, job and
 artifact checks. It verifies GitHub's outer artifact digest, the complete delivery
 envelope/materials and all package members before preparing a guest payload.
 The original candidate identity and separate test-harness commit are retained.
-The optional `suite` input selects all seven configured cases, the original three
-(`baseline`), Fedora/openSUSE/Arch (`additional`) or Mint alone (`mint`) for bounded trials.
+The optional `suite` input selects all seven configured cases, the six cloud-image
+cases (`cloud`), the original three (`baseline`), Fedora/openSUSE/Arch (`additional`)
+or Mint alone (`mint`) for bounded trials. `cloud` retries those six without
+repeating a separate Mint ISO installation trial.
 Selecting a subset does not change the final acceptance matrix.
 The previous candidate from Release run 38757764365 reproduced a Debian ALSA underrun failure in
 [run 38777802421](https://github.com/Awalgawe/noh/actions/runs/38777802421). It can
@@ -51,7 +53,13 @@ metapackage to select matching kernel/modules. Ubuntu 26.04 no longer provides t
 older `linux-modules-extra-<running-kernel>` package split; a failed request for
 that name correctly stopped the first corrected-candidate trial before NOH.
 openSUSE replaces `kernel-default-base` with the
-complete `kernel-default` in one explicit Zypper transaction. Fedora retains the
+complete `kernel-default` in one explicit Zypper transaction. The
+selected SDDM service explicitly replaces openSUSE's existing legacy display-manager
+alias using `systemctl enable --force`; other distributions keep ordinary enable.
+After clean provisioning, a five-second systemd timer acknowledges the poweroff
+request before SSH shuts down. Scheduling failure is fatal, and the runner still
+requires actual QEMU exit within 90 seconds before restarting the same disk.
+Fedora retains the
 image's hostname: a custom hostname is unnecessary for tests and the image reported
 an early hostname-setting failure. The cloud configuration is schema-checked before
 download and again inside the guest; empty package lists are omitted. Provisioning

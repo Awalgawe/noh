@@ -187,7 +187,9 @@ def cloud_config(args):
         commands += [['install', '-d', '-o', 'noh', '-g', 'noh', '/home/noh/.config'],
                      ['sh', '-c', 'touch /home/noh/.config/gnome-initial-setup-done; chown noh:noh /home/noh/.config/gnome-initial-setup-done']]
     if not debian_family:
-        commands += [['systemctl', 'enable', manager]]
+        # The SUSE base selects display-manager-legacy. Replace its alias only
+        # when selecting our explicit SDDM manager on this disposable guest.
+        commands += [['systemctl', 'enable', *(['--force'] if image['os_id'] == 'opensuse-tumbleweed' else []), manager]]
     commands += [['systemctl', 'set-default', 'graphical.target']]
     if not image.get('reboot_after_provisioning'):
         commands += [['systemctl', 'restart', manager]]
