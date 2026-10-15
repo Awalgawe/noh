@@ -140,6 +140,12 @@ Debconf storage and retrieval byte-for-byte before the CI acquires any image.
 The exact installer source is `ubiquity_24.04.3+mint19.tar.xz`, SHA-256
 `c680a9645a6f9aa11996358d184e2ded491a8e87a95b4e3ff253918e5fa44589`,
 matching its distribution `.dsc`. Its frontend does invoke the configured hook.
+Run 38821337784 restored the verified ISO in 30 seconds and reached finalization:
+SSH/cloud-init packages were installed before a later configuration command
+returned 1. Every target command now explicitly uses the same noninteractive
+Debconf frontend as package installation; `in-target` otherwise forces its
+installer passthrough frontend. Shell tracing records the exact failing command
+if another failure occurs. The traced commands contain no private key/password.
 
 Fedora's minimal GNOME session does not install Nautilus automatically. Its
 GNOME file-chooser portal uses Nautilus, so the adapter explicitly installs both
