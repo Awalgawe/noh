@@ -726,6 +726,21 @@ fn audio_source(path: &Path, position: f64) -> Result<rodio::Decoder<BufReader<F
     }
     Ok(decoder)
 }
+
+fn record_audio_stream_error(failure: &Mutex<Option<String>>, error: rodio::cpal::StreamError) {
+    // CPAL's ALSA backend reports an xrun before recovering the same stream.
+    // Keep it alive for recovery; failed recovery and the progress timeout still
+    // trigger silent fallback.
+    #[cfg(target_os = "linux")]
+    if error == rodio::cpal::StreamError::BufferUnderrun {
+        return;
+    }
+    failure
+        .lock()
+        .unwrap()
+        .get_or_insert_with(|| format!("Audio output stopped: {error}"));
+}
+
 impl Audio {
     fn open(input: &Input, position: f64, remaining: f64, volume: f32) -> Result<Self, String> {
         let failure = Arc::new(Mutex::new(None));
@@ -734,10 +749,7 @@ impl Audio {
         let mut device = rodio::DeviceSinkBuilder::from_default_device()
             .map_err(|e| format!("Audio output unavailable: {e}"))?
             .with_error_callback(move |error| {
-                errors
-                    .lock()
-                    .unwrap()
-                    .get_or_insert_with(|| format!("Audio output stopped: {error}"));
+                record_audio_stream_error(&errors, error);
             })
             .open_sink_or_fallback()
             .map_err(|e| format!("Audio output unavailable: {e}"))?;
@@ -1408,6 +1420,43 @@ fn run(shared: Arc<Shared>) {
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn audio_stream_underrun_allows_alsa_recovery_without_erasing_failure() {
+        let failure = Mutex::new(None);
+        record_audio_stream_error(&failure, rodio::cpal::StreamError::BufferUnderrun);
+        assert!(failure.lock().unwrap().is_none());
+
+        // An underrun must not hide a decoder or earlier device failure.
+        *failure.lock().unwrap() = Some("Preview audio failed: decoder stopped".into());
+        record_audio_stream_error(&failure, rodio::cpal::StreamError::BufferUnderrun);
+        assert_eq!(
+            failure.lock().unwrap().as_deref(),
+            Some("Preview audio failed: decoder stopped")
+        );
+    }
+
+    #[test]
+    fn audio_stream_fatal_errors_preserve_first_failure() {
+        use rodio::cpal::{BackendSpecificError, StreamError};
+        for error in [
+            StreamError::DeviceNotAvailable,
+            StreamError::StreamInvalidated,
+            StreamError::BackendSpecific {
+                err: BackendSpecificError {
+                    description: "ALSA recovery failed".into(),
+                },
+            },
+        ] {
+            let failure = Mutex::new(None);
+            let expected = format!("Audio output stopped: {error}");
+            record_audio_stream_error(&failure, error);
+            assert_eq!(failure.lock().unwrap().as_deref(), Some(expected.as_str()));
+            record_audio_stream_error(&failure, StreamError::DeviceNotAvailable);
+            assert_eq!(failure.lock().unwrap().as_deref(), Some(expected.as_str()));
+        }
+    }
 
     fn mock_video(local_end: f64) -> (mpsc::SyncSender<Decoded>, Video) {
         let (sender, receiver) = mpsc::sync_channel(2);

@@ -1,0 +1,76 @@
+name: Linux desktop candidate checks
+
+on:
+  push:
+    branches: [codex/linux-desktop-vm-probe]
+    paths:
+      - .github/workflows/linux-desktop-probe.yml
+      - tools/probe-linux-desktop-vm.sh
+      - tools/linux_desktop_candidate.py
+      - tools/test-linux-desktop.py
+      - assets/linux-desktop-images.json
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Successful Linux Release run containing the candidate
+        type: string
+        default: '38757764365'
+      source_attempt:
+        description: Exact source run attempt
+        type: string
+        default: '1'
+      source_commit:
+        description: Exact source commit retained on main
+        type: string
+        default: '51c5c29214986d453db5499a8b386ccf6c971743'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: linux-desktop-probe-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  desktop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        case: [ubuntu-24.04, ubuntu-26.04, debian-13]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check native evidence guards before downloading images or candidates
+        run: |
+          bash -n tools/probe-linux-desktop-vm.sh
+          python3 tools/test-linux-desktop.py
+      - name: Acquire and verify the exact existing candidate without rebuilding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run || '38757764365' }}
+          SOURCE_ATTEMPT: ${{ inputs.source_attempt || '1' }}
+          SOURCE_COMMIT: ${{ inputs.source_commit || '51c5c29214986d453db5499a8b386ccf6c971743' }}
+        run: |
+          python3 tools/linux_desktop_candidate.py prepare --repository "$GITHUB_REPOSITORY" \
+            --workflow 379053207 --run "$SOURCE_RUN" --attempt "$SOURCE_ATTEMPT" \
+            --commit "$SOURCE_COMMIT" --output "$RUNNER_TEMP/noh-native-candidate"
+          mkdir -p logs/linux-desktop-probe
+          cp "$RUNNER_TEMP/noh-native-candidate/"{CANDIDATE,source-run,source-artifact}.json logs/linux-desktop-probe/
+      - name: Test actual GNOME desktop with virtual graphics and audio
+        env:
+          NOH_DESKTOP_CASE: ${{ matrix.case }}
+          NOH_CANDIDATE_PAYLOAD: ${{ runner.temp }}/noh-native-candidate/payload.tar
+        run: timeout --signal=TERM --kill-after=30s 35m bash tools/probe-linux-desktop-vm.sh
+      - name: Retain native observations separately from the sealed candidate
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-desktop-${{ matrix.case }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: logs/linux-desktop-probe/
+          if-no-files-found: error
+          retention-days: 7
