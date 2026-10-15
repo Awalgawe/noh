@@ -17,6 +17,8 @@ builds are not public releases.
 - Verify the installed-dependency contract in final archives and retain the
   linked Linux installation guide. Test one sealed candidate across the
   [Linux validation matrix](LINUX_VALIDATION.md), with separate desktop gates.
+- Update the locked Rustls dependency to 0.23.46 for the four security fixes
+  described in its [upstream release](https://github.com/rustls/rustls/releases/tag/v%2F0.23.46).
 
 ## 0.1.3 — 2026-10-14
 

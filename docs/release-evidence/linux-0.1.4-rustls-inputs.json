@@ -1,0 +1,64 @@
+{
+  "baseline_source_commit": "97b99cba0860fadf87670d2203326f86e9b9f5db",
+  "change": "Only rustls moves from 0.23.45 to 0.23.46; its dependency list is unchanged. Host-runtime architecture, native/speech inputs, notice generator and supplements remain unchanged.",
+  "inputs": {
+    "Cargo.lock": "fab8c927225d93f495d41f5dc858460706973f3b51cc4bf268fb8d4c186ec85a",
+    "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "assets/linux-README.md": "b072c23869e1bfc3c0d871a05036032a5c21d9a53b310136a99cd94feee34395",
+    "assets/linux-host.json": "727a330fa36d3d9e03f8fbb9b4181f062a79dfc6de6dcccef1286f75912cd1e8",
+    "assets/rust-notices.lock.json": "2b15127c3bd09079f7c4fcd3cc02b256bc020b12636fa6a544529c6e7f0946fb",
+    "assets/speech-bundle.json": "4bef71e92e5f3857e6d06e3a0b95971bc60448e838a6cf822fe9045d344c089f",
+    "rust_standard_library_source": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
+    "tools/linux_host.py": "e7e95c14e6dc97290c369fdb0d176db69c275d1e1eb7f45b21bf413a05a76183",
+    "tools/linux_package.py": "0df6dcf98d10b268f9907d57456f20b0c0c746b067a759c9e6db676e029332be",
+    "tools/prepare-linux-speech.py": "0653a5371832f06d9aa6b80ce8c65617e333fbd2d994e4d1d4d13b6783c08623",
+    "tools/rust_notices.py": "326b00b96d7840e4fb86e9ea496e5c3144e97480dbdd8c9eea2a72d682a8783c"
+  },
+  "platform": "linux-x64",
+  "prior_input_review": {
+    "path": "docs/release-evidence/linux-0.1.4-inputs.json",
+    "sha256": "aa8df913a5d16446d9093e6255fb042bcb233bade076bf67b31ce61a55b1e67d"
+  },
+  "rustls": {
+    "crate_sha256": "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf",
+    "crate_url": "https://static.crates.io/crates/rustls/rustls-0.23.46.crate",
+    "declared_license": "Apache-2.0 OR ISC OR MIT",
+    "notices": [
+      {
+        "crate_source_link_url": "https://raw.githubusercontent.com/rustls/rustls/f04804fa13341a9b1dc02b5d1dd8a746f2c4b7fb/rustls/LICENSE-APACHE",
+        "identical_to_0_23_45": true,
+        "path": "LICENSE-APACHE",
+        "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+        "upstream_url": "https://raw.githubusercontent.com/rustls/rustls/f04804fa13341a9b1dc02b5d1dd8a746f2c4b7fb/LICENSE-APACHE"
+      },
+      {
+        "crate_source_link_url": "https://raw.githubusercontent.com/rustls/rustls/f04804fa13341a9b1dc02b5d1dd8a746f2c4b7fb/rustls/LICENSE-ISC",
+        "identical_to_0_23_45": true,
+        "path": "LICENSE-ISC",
+        "sha256": "7cfafc877eccc46c0e346ccbaa5c51bb6b894d2b818e617d970211e232785ad4",
+        "upstream_url": "https://raw.githubusercontent.com/rustls/rustls/f04804fa13341a9b1dc02b5d1dd8a746f2c4b7fb/LICENSE-ISC"
+      },
+      {
+        "crate_source_link_url": "https://raw.githubusercontent.com/rustls/rustls/f04804fa13341a9b1dc02b5d1dd8a746f2c4b7fb/rustls/LICENSE-MIT",
+        "identical_to_0_23_45": true,
+        "path": "LICENSE-MIT",
+        "sha256": "709e3175b4212f7b13aa93971c9f62ff8c69ec45ad8c6532a7e0c41d7a7d6f8c",
+        "upstream_url": "https://raw.githubusercontent.com/rustls/rustls/f04804fa13341a9b1dc02b5d1dd8a746f2c4b7fb/LICENSE-MIT"
+      }
+    ],
+    "security_advisories": [
+      "RUSTSEC-2026-0346",
+      "RUSTSEC-2026-0347",
+      "RUSTSEC-2026-0348",
+      "RUSTSEC-2026-0349"
+    ],
+    "upstream_revision": "f04804fa13341a9b1dc02b5d1dd8a746f2c4b7fb",
+    "version": "0.23.46"
+  },
+  "schema_version": 1,
+  "scope_limit": "Input review only. Existing authority does not match the new Cargo.lock; no final candidate is approved.",
+  "status": "submitted for independent input-material review; no final-byte qualification",
+  "third_party_cargo_records_unchanged": 485,
+  "verification": "Archive checksum matches Cargo.lock; all three original license files match the previously reviewed crate byte-for-byte and the pinned upstream commit. CI must still produce and validate the full new vendor/materials inventory.",
+  "version": "0.1.4"
+}
