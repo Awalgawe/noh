@@ -45,7 +45,7 @@ try {
         $env:NOH_NATIVE_NOTICES = Join-Path $inputs 'materials/native-notices'
         $bundle = Join-Path $root 'dist/noh'
     } elseif ($Platform -eq 'linux-x64') {
-        $ffmpeg = (Get-Command ffmpeg -CommandType Application).Source
+        $ffmpeg = (Get-Content -LiteralPath (Join-Path $inputs 'materials/HOST-RUNTIME.json') -Raw | ConvertFrom-Json).ffmpeg
         $env:NOH_LIBMPV = 'libmpv.so.2'
         $bundle = Join-Path $root 'dist/NOH-linux-x64'
     } else {

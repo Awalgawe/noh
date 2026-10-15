@@ -6,8 +6,10 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import shutil
 import stat
 import struct
+import subprocess
 import tarfile
 import tempfile
 import unittest
@@ -54,6 +56,14 @@ def pe_fixture(name=None, delay=False):
 
 
 class DeliveryTests(unittest.TestCase):
+    def test_linux_build_uses_one_verified_ffmpeg_with_duplicate_path_matches(self):
+        powershell = shutil.which('pwsh')
+        if powershell is None:
+            self.skipTest('PowerShell is required for the hosted delivery-script regression')
+        subprocess.run([powershell, '-NoProfile', '-File',
+                        str(Path(__file__).with_name('test-delivery-build.ps1'))],
+                       check=True, capture_output=True, text=True, timeout=30)
+
     def test_platform_selection_includes_linux_without_changing_single_platforms(self):
         self.assertEqual(delivery.selected_platforms('windows-linux'), ['windows-x64', 'linux-x64'])
         self.assertEqual(delivery.selected_platforms('all'), ['windows-x64', 'linux-x64', 'macos-arm64'])
