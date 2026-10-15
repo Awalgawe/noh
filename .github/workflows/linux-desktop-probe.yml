@@ -73,10 +73,17 @@ jobs:
             --commit "$SOURCE_COMMIT" --output "$RUNNER_TEMP/noh-native-candidate"
           mkdir -p logs/linux-desktop-probe
           cp "$RUNNER_TEMP/noh-native-candidate/"{CANDIDATE,source-run,source-artifact}.json logs/linux-desktop-probe/
+      - name: Restore pinned distribution image
+        id: desktop-image
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/noh-desktop-image
+          key: linux-desktop-image-v1-${{ matrix.case }}-${{ hashFiles('assets/linux-desktop-images.json') }}
       - name: Test actual desktop with virtual graphics and audio
         env:
           NOH_DESKTOP_CASE: ${{ matrix.case }}
           NOH_CANDIDATE_PAYLOAD: ${{ runner.temp }}/noh-native-candidate/payload.tar
+          NOH_DESKTOP_IMAGE_CACHE: ${{ runner.temp }}/noh-desktop-image
         run: timeout --signal=TERM --kill-after=30s 35m bash tools/probe-linux-desktop-vm.sh
       - name: Retain native observations separately from the sealed candidate
         if: always()
@@ -86,3 +93,9 @@ jobs:
           path: logs/linux-desktop-probe/
           if-no-files-found: error
           retention-days: 7
+      - name: Save verified distribution image even when desktop testing fails
+        if: always() && steps.desktop-image.outputs.cache-hit != 'true' && hashFiles('logs/linux-desktop-probe/image-verified.txt') != ''
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/noh-desktop-image
+          key: ${{ steps.desktop-image.outputs.cache-primary-key }}

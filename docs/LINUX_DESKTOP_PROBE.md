@@ -123,6 +123,13 @@ qualify Mint without the subsequent installed-desktop tests.
 Network diagnostics set `PAGER=cat`: run 38814284580 reached the early command
 but `nmcli device show` opened an interactive pager on the serial terminal and
 waited for Return until the installer deadline. No NOH check ran in that trial.
+Run 38817034384 failed earlier: the 3 GB ISO transfer exceeded the five-minute
+per-attempt deadline and restarted from zero. Image downloads now allow fifteen
+minutes per attempt within the existing job deadline. GitHub Actions caches only
+the verified original image, keyed by case and pinned image configuration, even
+if subsequent desktop testing fails. Restored bytes are always rehashed before
+use. Guest disks, credentials and partial downloads are never cached. This cache
+has no measured warm-run benefit until a subsequent CI run reports a hit.
 
 Fedora's minimal GNOME session does not install Nautilus automatically. Its
 GNOME file-chooser portal uses Nautilus, so the adapter explicitly installs both

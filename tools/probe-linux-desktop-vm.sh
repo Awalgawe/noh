@@ -56,12 +56,24 @@ print(image.get('format', 'qcow2'))
 PY
 )
 test "${#image_spec[@]}" = 5
-curl --fail --location --retry 2 --max-time 300 "${image_spec[0]}" -o "$work/base.img"
-printf '%s  %s\n' "${image_spec[2]}" "$work/base.img" | "${image_spec[1]}sum" --check
+image_cache=${NOH_DESKTOP_IMAGE_CACHE:-$work/image-cache}
+base_image="$image_cache/base.img"
+if [[ ! -f "$base_image" ]]; then
+    echo "Downloading pinned desktop image: ${image_spec[0]}"
+    curl --fail --location --silent --show-error --retry 2 --retry-max-time 900 --max-time 900 \
+        "${image_spec[0]}" -o "$work/base.img"
+    printf '%s  %s\n' "${image_spec[2]}" "$work/base.img" | "${image_spec[1]}sum" --check
+    mkdir -p "$image_cache"
+    mv -- "$work/base.img" "$base_image"
+else
+    # Cache hits are untrusted bytes until they match the pinned distribution hash.
+    printf '%s  %s\n' "${image_spec[2]}" "$base_image" | "${image_spec[1]}sum" --check
+fi
+printf '%s\n' "${image_spec[2]}" > "$evidence/image-verified.txt"
 if [[ "${image_spec[4]}" = iso ]]; then
     qemu-img create -f qcow2 "$work/guest.qcow2" 40G
 else
-    qemu-img create -f qcow2 -F qcow2 -b "$work/base.img" "$work/guest.qcow2" 16G
+    qemu-img create -f qcow2 -F qcow2 -b "$base_image" "$work/guest.qcow2" 16G
 fi
 printf 'instance-id: noh-desktop-probe\n' > "$work/meta-data"
 # Fedora's early NoCloud hostname update precedes its preserve_hostname user
@@ -105,9 +117,9 @@ archive_boot() {
 if [[ "${image_spec[4]}" = iso ]]; then
     test "$case_id" = mint-22.3
     sudo apt-get install -y --no-install-recommends xorriso genisoimage
-    mapfile -t initrds < <(isoinfo -R -f -i "$work/base.img" | grep -E '^/casper/initrd(\.(gz|lz|lz4))?$')
+    mapfile -t initrds < <(isoinfo -R -f -i "$base_image" | grep -E '^/casper/initrd(\.(gz|lz|lz4))?$')
     test "${#initrds[@]}" = 1 || { echo 'The official Mint ISO must contain one supported initrd.'; exit 1; }
-    xorriso -osirrox on -indev "$work/base.img" \
+    xorriso -osirrox on -indev "$base_image" \
         -extract /casper/vmlinuz "$work/mint-vmlinuz" -extract "${initrds[0]}" "$work/mint-initrd"
     mkdir "$work/http"
     python3 "$root/tools/linux_desktop_candidate.py" mint-preseed --public-key "$work/key.pub" --output "$work/http/preseed.cfg"
@@ -124,7 +136,7 @@ if [[ "${image_spec[4]}" = iso ]]; then
     kill -0 "$http_pid"
     # The live installer receives no NoCloud seed. Only the subsequent disk boot
     # configures the desktop; the ISO/kernel/initrd are then completely detached.
-    start_guest -drive "file=$work/base.img,format=raw,media=cdrom,readonly=on" \
+    start_guest -drive "file=$base_image,format=raw,media=cdrom,readonly=on" \
         -kernel "$work/mint-vmlinuz" -initrd "$work/mint-initrd" \
         -append 'boot=casper automatic-ubiquity url=http://10.0.2.2:8123/preseed.cfg noprompt console=tty0 console=ttyS0,115200n8'
     timeout 20m tail --pid="$qemu_pid" -f /dev/null
@@ -153,8 +165,8 @@ if [[ "${image_spec[4]}" = iso ]]; then
         exit 1
     fi
     # Installation has powered off; the next boot uses only its installed disk.
-    # Release the owned ISO and extracted boot files before desktop provisioning.
-    rm -- "$work/base.img" "$work/mint-vmlinuz" "$work/mint-initrd"
+    # Keep the verified, read-only ISO for the image cache; remove extracted boot files.
+    rm -- "$work/mint-vmlinuz" "$work/mint-initrd"
 fi
 start_guest "${seed_args[@]}"
 transport_args=(-i "$work/key" -o BatchMode=yes -o ConnectTimeout=5
