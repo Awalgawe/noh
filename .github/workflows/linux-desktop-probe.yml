@@ -11,6 +11,11 @@ on:
       - assets/linux-desktop-images.json
   workflow_dispatch:
     inputs:
+      suite:
+        description: All configured desktops or a bounded subset
+        type: choice
+        options: [all, baseline, additional]
+        default: all
       source_run:
         description: Successful Linux Release run containing the candidate
         type: string
@@ -40,7 +45,7 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        case: [ubuntu-24.04, ubuntu-26.04, debian-13]
+        case: ${{ fromJSON(inputs.suite == 'additional' && '["fedora-44","opensuse-tumbleweed","arch"]' || inputs.suite == 'baseline' && '["ubuntu-24.04","ubuntu-26.04","debian-13"]' || '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -61,7 +66,7 @@ jobs:
             --commit "$SOURCE_COMMIT" --output "$RUNNER_TEMP/noh-native-candidate"
           mkdir -p logs/linux-desktop-probe
           cp "$RUNNER_TEMP/noh-native-candidate/"{CANDIDATE,source-run,source-artifact}.json logs/linux-desktop-probe/
-      - name: Test actual GNOME desktop with virtual graphics and audio
+      - name: Test actual desktop with virtual graphics and audio
         env:
           NOH_DESKTOP_CASE: ${{ matrix.case }}
           NOH_CANDIDATE_PAYLOAD: ${{ runner.temp }}/noh-native-candidate/payload.tar

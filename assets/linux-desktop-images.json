@@ -20,6 +20,27 @@
       "algorithm": "sha512",
       "digest": "6f0f93335bdef4ccf523c4317cc663ea52ca23b862667785f3d6d186ab4674a937385ccff0c55996b4b2e4c19e440cdf211e2a75ffa2f6548037ab43950c841d",
       "os_id": "debian", "version_id": "13", "session": "gnome-xorg.desktop"
+    },
+    "fedora-44": {
+      "url": "https://download.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-44-1.7.x86_64.qcow2",
+      "algorithm": "sha256",
+      "digest": "28680fe5b371a5a82ebf43a31926e086a168e59949d03969c5093e7071f90b7f",
+      "os_id": "fedora", "version_id": "44", "session": "gnome.desktop",
+      "reboot_after_provisioning": true
+    },
+    "opensuse-tumbleweed": {
+      "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261014.qcow2",
+      "algorithm": "sha256",
+      "digest": "85a0e94015930f59d4e3332bd7a308a1bcd87111707d1c29ced1ff8a647916f2",
+      "os_id": "opensuse-tumbleweed", "version_id": null, "session": "plasma6.desktop",
+      "reboot_after_provisioning": true
+    },
+    "arch": {
+      "url": "https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg-20261015.611680.qcow2",
+      "algorithm": "sha256",
+      "digest": "08754e28d91b1680086c6211ef4df13559e766fff7cdb4006489b14b5d281f08",
+      "os_id": "arch", "version_id": null, "session": "plasma.desktop",
+      "reboot_after_provisioning": true
     }
   }
 }

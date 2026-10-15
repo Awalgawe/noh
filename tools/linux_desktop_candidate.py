@@ -24,8 +24,8 @@ from linux_matrix import CHECKS, MATRIX, unpack_candidate
 def case_inputs(name):
     row = next((r for r in read(MATRIX)['required_desktops'] if r['id'] == name), None)
     image = read(ROOT / 'assets/linux-desktop-images.json')['images'].get(name)
-    if not row or not image or row['desktop'] != 'GNOME':
-        raise ValueError('This provisioning adapter supports only configured GNOME cases')
+    if not row or not image or row['desktop'] not in ('GNOME', 'KDE'):
+        raise ValueError('This provisioning adapter supports only configured GNOME/KDE cases')
     if (image['algorithm'] not in ('sha256', 'sha512') or not image['url'].startswith('https://')
             or not re.fullmatch('[0-9a-f]{' + str(64 if image['algorithm'] == 'sha256' else 128) + '}', image['digest'])):
         raise ValueError('Desktop image must have a pinned HTTPS URL and supported digest')
@@ -94,8 +94,7 @@ def prepare(args):
     print(json.dumps({k: v for k, v in identity.items() if k != 'bundle_files'}))
 
 
-def cloud_config(args):
-    row, image = case_inputs(args.case)
+def debian_provisioning(row, image):
     gdm_config = {'ubuntu': '/etc/gdm3/custom.conf', 'debian': '/etc/gdm3/daemon.conf'}[image['os_id']]
     packages = ['gnome-session', 'gdm3', 'pulseaudio-utils', 'alsa-utils', 'pciutils', 'python3',
                 'ffmpeg', 'libmpv2', 'libasound2-plugins', 'libgl1-mesa-dri', 'libegl1',
@@ -105,20 +104,82 @@ def cloud_config(args):
     commands = []
     if image['os_id'] == 'ubuntu':
         commands.append(['sh', '-c', 'DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends linux-modules-extra-$(uname -r)'])
-    commands += [['modprobe', 'virtio_gpu'], ['modprobe', 'snd_hda_intel'],
-                 ['install', '-d', '-o', 'noh', '-g', 'noh', '/home/noh/.config'],
-                 ['sh', '-c', 'touch /home/noh/.config/gnome-initial-setup-done; chown noh:noh /home/noh/.config/gnome-initial-setup-done'],
-                 ['systemctl', 'set-default', 'graphical.target'], ['systemctl', 'restart', 'gdm3']]
+    files = [{'path': gdm_config, 'content':
+              '[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin=noh\n'
+              f'WaylandEnable={str(row["display"] == "wayland").lower()}\n'
+              f'DefaultSession={image["session"]}\n'}]
+    return packages, commands, files, 'gdm3'
+
+
+def rpm_arch_provisioning(row, image):
+    """Use the same distribution codec providers as the sealed container matrix."""
+    if image['os_id'] == 'fedora':
+        commands = [
+            ['dnf', 'install', '-y', 'https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-44.noarch.rpm'],
+            ['dnf', 'install', '-y', '--allowerasing', 'ffmpeg', 'mpv-libs', 'python3',
+             'gnome-session-wayland-session', 'gdm', 'kernel', 'kernel-modules', 'kernel-modules-extra',
+             'pipewire', 'pipewire-pulseaudio', 'pipewire-alsa', 'wireplumber', 'pulseaudio-utils',
+             'alsa-utils', 'mesa-dri-drivers', 'mesa-libEGL', 'mesa-libGL', 'libxkbcommon-x11',
+             'libXcursor', 'libXrandr', 'libXi', 'libXinerama', 'libstdc++', 'dejavu-sans-fonts',
+             'pciutils', 'binutils', 'espeak-ng', 'zenity', 'xdg-utils'],
+        ]
+        files = [{'path': '/etc/gdm/custom.conf', 'content':
+                  '[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin=noh\n'
+                  f'WaylandEnable=true\nDefaultSession={image["session"]}\n'}]
+        return [], commands, files, 'gdm'
+    if image['os_id'] == 'opensuse-tumbleweed':
+        commands = [
+            ['zypper', '--non-interactive', 'install', '--no-recommends', 'kernel-default',
+             'python3', 'ffmpeg-8', 'libmpv2', 'plasma6-desktop', 'plasma6-session-x11', 'sddm',
+             'xorg-x11-server', 'pipewire', 'pipewire-pulseaudio', 'pipewire-alsa', 'wireplumber',
+             'pulseaudio-utils', 'alsa-utils', 'Mesa-dri', 'Mesa-libEGL1', 'libglvnd', 'libxkbcommon-x11-0',
+             'libXcursor1', 'libXrandr2', 'libXi6', 'libXinerama1', 'dejavu-fonts',
+             'pciutils', 'binutils', 'espeak-ng', 'zenity', 'xdg-utils'],
+            ['zypper', '--non-interactive', 'addrepo', '--refresh', '--priority', '90',
+             'https://ftp.gwdg.de/pub/linux/misc/packman/suse/openSUSE_Tumbleweed/Essentials/', 'packman-essentials'],
+            ['zypper', '--non-interactive', '--gpg-auto-import-keys', 'refresh', 'packman-essentials'],
+            ['zypper', '--non-interactive', 'dist-upgrade', '--from', 'packman-essentials', '--allow-vendor-change'],
+        ]
+    elif image['os_id'] == 'arch':
+        commands = [['pacman', '-Syu', '--noconfirm', '--needed', 'linux', 'ffmpeg', 'mpv', 'python',
+                     'plasma-desktop', 'plasma-workspace', 'sddm', 'xorg-xwayland',
+                     'pipewire', 'pipewire-audio', 'pipewire-pulse', 'pipewire-alsa', 'wireplumber',
+                     'libpulse', 'alsa-utils', 'mesa', 'libglvnd', 'libxkbcommon-x11',
+                     'libxcursor', 'libxrandr', 'libxi', 'libxinerama', 'ttf-dejavu',
+                     'pciutils', 'binutils', 'espeak-ng', 'zenity', 'xdg-utils']]
+    else:
+        raise ValueError('Unsupported desktop distribution')
+    files = [{'path': '/etc/sddm.conf.d/noh-test.conf', 'content':
+              f'[Autologin]\nUser=noh\nSession={image["session"]}\nRelogin=false\n'}]
+    return [], commands, files, 'sddm'
+
+
+def cloud_config(args):
+    row, image = case_inputs(args.case)
+    debian_family = image['os_id'] in ('ubuntu', 'debian')
+    packages, commands, files, manager = (debian_provisioning(row, image) if debian_family
+                                        else rpm_arch_provisioning(row, image))
+    if not image.get('reboot_after_provisioning'):
+        commands += [['modprobe', 'virtio_gpu'], ['modprobe', 'snd_hda_intel']]
+    if row['desktop'] == 'GNOME':
+        commands += [['install', '-d', '-o', 'noh', '-g', 'noh', '/home/noh/.config'],
+                     ['sh', '-c', 'touch /home/noh/.config/gnome-initial-setup-done; chown noh:noh /home/noh/.config/gnome-initial-setup-done']]
+    if not debian_family:
+        commands += [['systemctl', 'enable', manager]]
+    commands += [['systemctl', 'set-default', 'graphical.target']]
+    if not image.get('reboot_after_provisioning'):
+        commands += [['systemctl', 'restart', manager]]
+    user = {'name': 'noh', 'uid': 1000, 'shell': '/bin/bash',
+            'sudo': 'ALL=(ALL) NOPASSWD:ALL', 'lock_passwd': True,
+            'ssh_authorized_keys': [args.public_key.read_text().strip()]}
+    if debian_family:
+        user['groups'] = ['adm', 'sudo', 'audio', 'video', 'render']
+    # Other images need no distro-specific supplementary groups: the active
+    # logind seat grants device ACLs to the same user running the application.
     config = {'hostname': 'noh-desktop-test',
-              'users': [{'name': 'noh', 'uid': 1000, 'shell': '/bin/bash',
-                         'groups': ['adm', 'sudo', 'audio', 'video', 'render'],
-                         'sudo': 'ALL=(ALL) NOPASSWD:ALL', 'lock_passwd': True,
-                         'ssh_authorized_keys': [args.public_key.read_text().strip()]}],
+              'users': [user],
               'ssh_pwauth': False, 'package_update': True, 'packages': packages,
-              'write_files': [{'path': gdm_config, 'content':
-                               '[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin=noh\n'
-                               f'WaylandEnable={str(row["display"] == "wayland").lower()}\n'
-                               f'DefaultSession={image["session"]}\n'}], 'runcmd': commands}
+              'write_files': files, 'runcmd': commands}
     args.output.write_text('#cloud-config\n' + json.dumps(config, indent=2) + '\n')
     write(args.output.with_suffix('.image.json'), image)
 
@@ -151,40 +212,42 @@ def guest(args):
     identity = read(ROOT / 'CANDIDATE.json')
     verify_bundle(ROOT, identity)
     actual_os = platform.freedesktop_os_release()
-    if actual_os.get('ID') != image['os_id'] or actual_os.get('VERSION_ID') != image['version_id']:
+    if (actual_os.get('ID') != image['os_id'] or
+            (image['version_id'] is not None and actual_os.get('VERSION_ID') != image['version_id'])):
         raise ValueError('Guest OS differs from the selected desktop case')
     if command(['systemd-detect-virt']).strip() != 'kvm':
         raise ValueError('This adapter requires a KVM guest, not a container or nested compositor')
     session = None
+    login_service, shell_name = ('gdm-autologin', 'gnome-shell') if row['desktop'] == 'GNOME' else ('sddm-autologin', 'plasmashell')
     for _ in range(24):
         for line in command(['loginctl', 'list-sessions', '--no-legend']).splitlines():
             values = command(['loginctl', 'show-session', line.split()[0]])
             data = dict(item.split('=', 1) for item in values.splitlines() if '=' in item)
             if (data.get('Name') == 'noh' and data.get('Type') == row['display'] and
                     data.get('Seat') == 'seat0' and data.get('Active') == 'yes' and
-                    data.get('Service') == 'gdm-autologin' and data.get('Remote') == 'no'):
+                    data.get('Service') == login_service and data.get('Remote') == 'no'):
                 session = data
                 break
         if session:
             break
         time.sleep(5)
     if not session:
-        raise ValueError('The required real GDM desktop session did not start')
-    shell_pid = command(['pgrep', '-x', '-u', str(os.getuid()), 'gnome-shell']).strip()
+        raise ValueError('The required real display-manager desktop session did not start')
+    shell_pid = command(['pgrep', '-x', '-u', str(os.getuid()), shell_name]).strip()
     if not re.fullmatch('[1-9][0-9]*', shell_pid):
-        raise ValueError('A unique GNOME shell owned by the desktop user is required')
+        raise ValueError('A unique desktop shell owned by the desktop user is required')
     os.environ.update(XDG_RUNTIME_DIR=f'/run/user/{os.getuid()}',
                       DBUS_SESSION_BUS_ADDRESS=f'unix:path=/run/user/{os.getuid()}/bus')
     # A compositor with elevated scheduling capabilities may restrict procfs reads.
     shell_environment = subprocess.run(['sudo', 'cat', f'/proc/{shell_pid}/environ'], check=True,
                                        capture_output=True, timeout=30).stdout
     observed_environment = desktop_environment(command(['systemctl', '--user', 'show-environment']), shell_environment)
-    write(args.output / 'desktop-environment.json', {'session': session, 'gnome_shell_pid': int(shell_pid),
+    write(args.output / 'desktop-environment.json', {'session': session, 'shell': shell_name, 'shell_pid': int(shell_pid),
                                                     'observed_environment': observed_environment})
     os.environ.update(observed_environment)
     os.environ['XDG_SESSION_TYPE'] = row['display']
-    if 'GNOME' not in os.environ.get('XDG_CURRENT_DESKTOP', '').split(':'):
-        raise ValueError('GNOME is absent from the actual desktop manager environment')
+    if row['desktop'] not in os.environ.get('XDG_CURRENT_DESKTOP', '').split(':'):
+        raise ValueError('Selected desktop is absent from the actual desktop manager environment')
     command(['systemctl', '--user', 'daemon-reload'])
     services = ['pipewire', 'pipewire-pulse', 'wireplumber'] if row['audio'] == 'pipewire' else ['pulseaudio']
     command(['systemctl', '--user', 'start', *services])

@@ -23,11 +23,12 @@ class DesktopEvidenceTests(unittest.TestCase):
         self.assertNotIn('XDG_CURRENT_DESKTOP', desktop.desktop_environment('', b'DISPLAY=:0\0'))
 
     def test_configured_images_match_required_cases(self):
-        for name in ('ubuntu-24.04', 'ubuntu-26.04', 'debian-13'):
+        for name in ('ubuntu-24.04', 'ubuntu-26.04', 'debian-13', 'fedora-44', 'opensuse-tumbleweed', 'arch'):
             row, image = desktop.case_inputs(name)
             self.assertEqual(row['id'], name)
-            self.assertEqual(row['desktop'], 'GNOME')
+            self.assertEqual(row['desktop'], 'KDE' if name in ('arch', 'opensuse-tumbleweed') else 'GNOME')
             self.assertTrue(image['url'].startswith('https://'))
+            self.assertEqual(image['version_id'] is None, name in ('arch', 'opensuse-tumbleweed'))
         for name in ('mint-22.3', 'not-a-case'):
             with self.assertRaises(ValueError):
                 desktop.case_inputs(name)
@@ -70,6 +71,26 @@ class DesktopEvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'additional'):
                 desktop.verify_bundle(root, identity)
 
+    def test_rpm_arch_desktops_select_real_sessions_and_boot_installed_kernel(self):
+        with tempfile.TemporaryDirectory() as folder:
+            key, output = Path(folder) / 'key.pub', Path(folder) / 'user-data'
+            key.write_text('ssh-ed25519 fixture-only')
+            for name, manager, path, session, kernel in (
+                ('fedora-44', 'gdm', '/etc/gdm/custom.conf', 'gnome.desktop', 'kernel-modules-extra'),
+                ('opensuse-tumbleweed', 'sddm', '/etc/sddm.conf.d/noh-test.conf', 'plasma6.desktop', 'kernel-default'),
+                ('arch', 'sddm', '/etc/sddm.conf.d/noh-test.conf', 'plasma.desktop', 'linux'),
+            ):
+                with self.subTest(name=name):
+                    desktop.cloud_config(argparse.Namespace(case=name, public_key=key, output=output))
+                    config = json.loads(output.read_text().split('\n', 1)[1])
+                    image = json.loads(output.with_suffix('.image.json').read_text())
+                    self.assertTrue(image['reboot_after_provisioning'])
+                    self.assertNotIn('groups', config['users'][0])
+                    self.assertEqual(config['write_files'][0]['path'], path)
+                    self.assertIn(f'Session={session}', config['write_files'][0]['content'])
+                    self.assertIn(['systemctl', 'enable', manager], config['runcmd'])
+                    self.assertFalse(any(cmd[:2] == ['systemctl', 'restart'] for cmd in config['runcmd']))
+                    self.assertTrue(any(kernel in cmd for cmd in config['runcmd']))
     def test_audio_rejects_silence_and_wrong_frequency(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

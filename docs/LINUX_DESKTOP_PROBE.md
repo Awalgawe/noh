@@ -2,10 +2,11 @@
 
 This branch/manual workflow tests an existing sealed Linux candidate in actual
 QEMU/KVM desktop VMs. It never recompiles or publishes NOH. The first adapter
-covers Ubuntu 24.04 and 26.04 GNOME/Wayland/PipeWire plus Debian 13
-GNOME/X11/PulseAudio. These are three rows of the unchanged seven-row matrix in
-`assets/linux-validation-matrix.json`; Fedora, openSUSE, Arch and Mint remain
-required. A subset or a successful shell exit cannot qualify the release.
+covers Ubuntu 24.04 and 26.04 GNOME/Wayland/PipeWire, Debian 13
+GNOME/X11/PulseAudio, Fedora 44 GNOME/Wayland/PipeWire, openSUSE Tumbleweed
+KDE/X11/PipeWire and Arch KDE/Wayland/PipeWire. Mint/Cinnamon still needs an
+installation adapter. All seven rows in `assets/linux-validation-matrix.json`
+remain required. A subset or a successful shell exit cannot qualify the release.
 
 The initial infrastructure-only experiment succeeded in run
 [38771109225](https://github.com/Awalgawe/noh/actions/runs/38771109225), using source
@@ -23,6 +24,13 @@ consumer's authenticated repository, workflow, branch, commit, attempt, job and
 artifact checks. It verifies GitHub's outer artifact digest, the complete delivery
 envelope/materials and all package members before preparing a guest payload.
 The original candidate identity and separate test-harness commit are retained.
+The optional `suite` input selects all six configured cases, the original three
+(`baseline`) or Fedora/openSUSE/Arch (`additional`) for bounded provisioning trials.
+Selecting a subset does not change the final acceptance matrix.
+The default candidate reproduced a Debian ALSA underrun failure in
+[run 38777802421](https://github.com/Awalgawe/noh/actions/runs/38777802421). It can
+still support provisioning trials; final acceptance must explicitly select the
+new candidate containing the audio recovery correction.
 
 Only source helpers, explicit contracts and the same candidate files enter the
 guest. The GitHub token stays on the runner. All candidate files are checked
@@ -31,12 +39,24 @@ archive occurs. Package prerequisites are installed from distribution repositori
 their exact versions, dated base-image identities and kernel/device records are
 retained. `assets/linux-desktop-images.json` pins official images by SHA-256 or
 SHA-512. No VM disk, cloud seed or private SSH key is uploaded.
+Fedora uses RPM Fusion and openSUSE uses Packman Essentials for the same host codec
+providers as the container checks. Arch performs a full package upgrade. Those
+three guests shut down after provisioning and boot their installed kernel before
+testing, so graphics/audio modules match the running kernel. First-boot logs and
+audio are retained separately. Rolling releases retain their actual OS metadata,
+package versions and kernel in addition to the immutable base-image identity;
+their evolving version string is not compared to a fixed release number. The
+dated Arch and openSUSE filenames are pinned beneath rotating official mirror
+directories: if an image expires, resolve and review a new available image
+identity before retrying. Do not substitute an unpinned rolling alias. The
+openSUSE 20261013 image expired during preparation; the reviewed replacement is
+20261014 with its own checksum and matching base-package inventory.
 
-Each case requires the selected OS, a real GDM login on seat0, GNOME, the selected
+Each case requires the selected OS, a real GDM or SDDM login on seat0, the selected desktop,
 Wayland/X11 session, the selected PipeWire/PulseAudio server and a virtual PCI
 audio sink. The virtual monitor advertises 1280x1024 so the existing 980x850
 capture viewport fits with normal desktop decorations. Display/session variables
-come from the actual user-owned GNOME shell, with the user manager as a fallback;
+come from the actual user-owned GNOME shell or Plasma shell, with the user manager as a fallback;
 the selected values are recorded before validation. A null sink is refused.
 External IPv4/IPv6 default routes are removed
 after provisioning. GDM settings use Ubuntu's `/etc/gdm3/custom.conf` or Debian's
@@ -71,6 +91,9 @@ Checked on 2026-10-15:
 - [Ubuntu 24.04 image/checksums](https://cloud-images.ubuntu.com/noble/20260926/) and [Ubuntu 26.04](https://cloud-images.ubuntu.com/resolute/20260927/).
 - [Debian 13 dated generic image/checksums](https://cloud.debian.org/images/cloud/trixie/20261001-2618/).
 - [Debian's GNOME Xorg session package](https://packages.debian.org/trixie/gnome-session-xsession).
+- [Fedora 44 official images](https://fedoraproject.org/releases.json) and [GNOME Wayland session package](https://packages.fedoraproject.org/pkgs/gnome-session/gnome-session-wayland-session/fedora-44.html).
+- [openSUSE dated appliances](https://download.opensuse.org/tumbleweed/appliances/), [Plasma session package source](https://api.opensuse.org/public/source/openSUSE:Factory/plasma6-workspace/plasma6-workspace.spec) and [SDDM configuration](https://manpages.opensuse.org/Tumbleweed/sddm/sddm.conf.5.en.html).
+- [Official Arch cloud-image recipe](https://github.com/archlinux/arch-boxes/blob/master/images/cloud-image.sh) and [image mirror](https://geo.mirror.pkgbuild.com/images/latest/).
 - [cloud-init NoCloud](https://docs.cloud-init.io/en/latest/reference/datasources/nocloud.html), [GNOME automatic login](https://help.gnome.org/system-admin-guide/login-automatic.html) and [QEMU invocation](https://www.qemu.org/docs/master/system/invocation.html).
 
 Existing QEMU, cloud-init and OpenSSH commands provide the VM lifecycle; the NOH
