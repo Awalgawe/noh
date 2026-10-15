@@ -34,7 +34,11 @@ SHA-512. No VM disk, cloud seed or private SSH key is uploaded.
 
 Each case requires the selected OS, a real GDM login on seat0, GNOME, the selected
 Wayland/X11 session, the selected PipeWire/PulseAudio server and a virtual PCI
-audio sink. A null sink is refused. External IPv4/IPv6 default routes are removed
+audio sink. The virtual monitor advertises 1280x1024 so the existing 980x850
+capture viewport fits with normal desktop decorations. Display/session variables
+come from the actual user-owned GNOME shell, with the user manager as a fallback;
+the selected values are recorded before validation. A null sink is refused.
+External IPv4/IPv6 default routes are removed
 after provisioning. GDM settings use Ubuntu's `/etc/gdm3/custom.conf` or Debian's
 `/etc/gdm3/daemon.conf`, matching the distribution package. The directly connected
 SSH transport remains available. The shared host probe then checks ALSA before

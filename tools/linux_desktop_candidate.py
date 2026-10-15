@@ -127,6 +127,14 @@ def command(arguments, timeout=30):
     return subprocess.run(arguments, check=True, text=True, capture_output=True, timeout=timeout).stdout
 
 
+def desktop_environment(manager_text, shell_bytes):
+    """Use the actual desktop process when a legacy Xorg session omits manager imports."""
+    names = ('DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_CURRENT_DESKTOP')
+    manager = dict(line.split('=', 1) for line in manager_text.splitlines() if '=' in line)
+    shell = dict(item.decode().split('=', 1) for item in shell_bytes.split(b'\0') if b'=' in item)
+    return {name: shell.get(name, manager.get(name)) for name in names if name in shell or name in manager}
+
+
 def verify_bundle(root, identity):
     expected = identity['bundle_files']
     for name, spec in expected.items():
@@ -162,13 +170,18 @@ def guest(args):
         time.sleep(5)
     if not session:
         raise ValueError('The required real GDM desktop session did not start')
-    command(['pgrep', '-a', '-u', str(os.getuid()), 'gnome-shell'])
+    shell_pid = command(['pgrep', '-x', '-u', str(os.getuid()), 'gnome-shell']).strip()
+    if not re.fullmatch('[1-9][0-9]*', shell_pid):
+        raise ValueError('A unique GNOME shell owned by the desktop user is required')
     os.environ.update(XDG_RUNTIME_DIR=f'/run/user/{os.getuid()}',
                       DBUS_SESSION_BUS_ADDRESS=f'unix:path=/run/user/{os.getuid()}/bus')
-    manager = dict(line.split('=', 1) for line in command(['systemctl', '--user', 'show-environment']).splitlines() if '=' in line)
-    for name in ('DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_CURRENT_DESKTOP'):
-        if name in manager:
-            os.environ[name] = manager[name]
+    # A compositor with elevated scheduling capabilities may restrict procfs reads.
+    shell_environment = subprocess.run(['sudo', 'cat', f'/proc/{shell_pid}/environ'], check=True,
+                                       capture_output=True, timeout=30).stdout
+    observed_environment = desktop_environment(command(['systemctl', '--user', 'show-environment']), shell_environment)
+    write(args.output / 'desktop-environment.json', {'session': session, 'gnome_shell_pid': int(shell_pid),
+                                                    'observed_environment': observed_environment})
+    os.environ.update(observed_environment)
     os.environ['XDG_SESSION_TYPE'] = row['display']
     if 'GNOME' not in os.environ.get('XDG_CURRENT_DESKTOP', '').split(':'):
         raise ValueError('GNOME is absent from the actual desktop manager environment')

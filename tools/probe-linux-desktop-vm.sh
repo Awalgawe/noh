@@ -61,7 +61,7 @@ cloud-localds "$work/seed.img" "$work/user-data" "$work/meta-data"
 qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -smp 3 -m 6144 \
     -drive "file=$work/guest.qcow2,format=qcow2,if=virtio" \
     -drive "file=$work/seed.img,format=raw,if=virtio,readonly=on" \
-    -device virtio-vga -device qemu-xhci -device usb-tablet \
+    -device virtio-vga,xres=1280,yres=1024 -device qemu-xhci -device usb-tablet \
     -device intel-hda -device hda-output,audiodev=sound \
     -audiodev "wav,id=sound,path=$evidence/virtual-audio.wav" \
     -netdev user,id=net,hostfwd=tcp:127.0.0.1:2222-:22 -device virtio-net-pci,netdev=net \

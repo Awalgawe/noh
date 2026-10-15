@@ -15,6 +15,13 @@ from delivery import inventory
 
 
 class DesktopEvidenceTests(unittest.TestCase):
+    def test_xorg_uses_observed_shell_environment_without_inventing_desktop_values(self):
+        observed = desktop.desktop_environment('DISPLAY=:1\nUNRELATED=excluded\n',
+                    b'DISPLAY=:0\0XAUTHORITY=/run/user/1000/gdm/Xauthority\0XDG_CURRENT_DESKTOP=GNOME\0')
+        self.assertEqual(observed, {'DISPLAY': ':0', 'XAUTHORITY': '/run/user/1000/gdm/Xauthority',
+                                    'XDG_CURRENT_DESKTOP': 'GNOME'})
+        self.assertNotIn('XDG_CURRENT_DESKTOP', desktop.desktop_environment('', b'DISPLAY=:0\0'))
+
     def test_configured_images_match_required_cases(self):
         for name in ('ubuntu-24.04', 'ubuntu-26.04', 'debian-13'):
             row, image = desktop.case_inputs(name)
