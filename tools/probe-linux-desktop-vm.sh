@@ -63,7 +63,12 @@ if [[ "${image_spec[4]}" = iso ]]; then
 else
     qemu-img create -f qcow2 -F qcow2 -b "$work/base.img" "$work/guest.qcow2" 16G
 fi
-printf 'instance-id: noh-desktop-probe\nlocal-hostname: noh-desktop-probe\n' > "$work/meta-data"
+printf 'instance-id: noh-desktop-probe\n' > "$work/meta-data"
+# Fedora's early NoCloud hostname update precedes its preserve_hostname user
+# configuration. A hostname is optional and unnecessary for this test case.
+if [[ "$case_id" != fedora-44 ]]; then
+    printf 'local-hostname: noh-desktop-probe\n' >> "$work/meta-data"
+fi
 cloud-localds "$work/seed.img" "$work/user-data" "$work/meta-data"
 seed_args=(-drive "file=$work/seed.img,format=raw,if=virtio,readonly=on")
 
@@ -190,8 +195,10 @@ timeout 12m ssh "${ssh_args[@]}" noh@127.0.0.1 \
 ssh "${ssh_args[@]}" noh@127.0.0.1 'sudo journalctl -b --no-pager -u display-manager.service' \
     > "$evidence/display-manager.log" || guest_status=1
 if [[ "$guest_status" = 0 ]]; then
+    ui_desktop=$(PYTHONPATH="$root/tools" python3 -c \
+        'import sys; from linux_desktop_candidate import case_inputs; print(case_inputs(sys.argv[1])[0]["desktop"])' "$case_id")
     if timeout 90s python3 "$root/tools/probe-linux-desktop-ui.py" --socket "$work/qmp.sock" \
-        --output "$evidence/chooser" --phase chooser &&
+        --output "$evidence/chooser" --phase chooser --desktop "$ui_desktop" &&
        timeout 60s ssh "${ssh_args[@]}" noh@127.0.0.1 \
         'python3 /home/noh/noh-candidate/tools/linux_desktop_candidate.py open-output --output /home/noh/noh-evidence' &&
        timeout 30s python3 "$root/tools/probe-linux-desktop-ui.py" --socket "$work/qmp.sock" \

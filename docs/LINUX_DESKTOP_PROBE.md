@@ -28,6 +28,9 @@ The optional `suite` input selects all seven configured cases, the six cloud-ima
 cases (`cloud`), the original three (`baseline`), Fedora/openSUSE/Arch (`additional`)
 or Mint alone (`mint`) for bounded trials. `cloud` retries those six without
 repeating a separate Mint ISO installation trial.
+For targeted retries, `cases_json` accepts a JSON array of approved case IDs and
+overrides `suite`. Each selected ID is validated before candidate/image downloads.
+This allows retaining unaffected successful observations of the same candidate.
 Selecting a subset does not change the final acceptance matrix.
 The previous candidate from Release run 38757764365 reproduced a Debian ALSA underrun failure in
 [run 38777802421](https://github.com/Awalgawe/noh/actions/runs/38777802421). It can
@@ -61,7 +64,11 @@ request before SSH shuts down. Scheduling failure is fatal, and the runner still
 requires actual QEMU exit within 90 seconds before restarting the same disk.
 Fedora retains the
 image's hostname: a custom hostname is unnecessary for tests and the image reported
-an early hostname-setting failure. The cloud configuration is schema-checked before
+an early hostname-setting failure. Its NoCloud metadata also omits the optional
+`local-hostname`: the initial datasource update can run before the user-data
+`preserve_hostname` setting, and the retained failure names that metadata hostname.
+The instance ID remains present and provisioning failures remain fatal.
+The cloud configuration is schema-checked before
 download and again inside the guest; empty package lists are omitted. Provisioning
 stops on its first failing command, with full cloud-init diagnostics retained.
 Rolling releases retain their actual OS metadata,
@@ -118,7 +125,11 @@ That failed observation remains evidence; mixer setup alone does not qualify aud
 The virtual monitor advertises 1280x1024 so the existing 980x850
 capture viewport fits with normal desktop decorations. Display/session variables
 come from the actual user-owned desktop shell, with the user manager as a fallback;
-the selected values are recorded before validation. A null sink is refused.
+the selected values are recorded before validation. KDE's observed
+`KDE_SESSION_VERSION` and `KDE_FULL_SESSION` are carried through as well:
+omitting them made `xdg-open` select the obsolete `kfmclient` route in the SUSE
+trial even though Plasma 6 and its KIO opener were installed. No desktop version
+is invented. A null sink is refused.
 External IPv4/IPv6 default routes are removed
 after provisioning. GDM settings use Ubuntu's `/etc/gdm3/custom.conf` or Debian's
 `/etc/gdm3/daemon.conf`, matching the distribution package. The directly connected
@@ -130,21 +141,31 @@ retained; it is not described as manual chooser or pointer interaction.
 
 A separate ordinary AppRun startup, without capture injection, receives real
 QEMU input events: focus its window, open the file chooser, cancel, reopen, enter the retained
-synthetic video's pathname and confirm selection. Every stage has a QMP scanout
-and the exact input sequence is retained. The helper requires the application
+synthetic video's pathname and confirm selection. Every stage has a QMP scanout,
+and the exact input sequence is retained.
+Newer GNOME first navigates to the pathname and selects the file; the sequence
+also activates its documented Open mnemonic (Alt+O). NOH has no binding for that
+key when an older chooser already accepted the file.
+KDE uses its Name-field mnemonic (Alt+N) for the full pathname, because its
+location bar only navigates to the containing directory. The desktop choice
+comes from the existing approved case contract. The helper requires the application
 to remain running and the Zenity fallback process to be absent. rfd prefers the
 desktop portal, whose chooser can still be open without a Zenity process. All
 chooser closure, cancellation and import conclusions therefore require independent
 review of the retained screens: visible chooser, clean return after cancellation,
 and imported thumbnail/preview. No Xvfb, input injection into the
-application, OCR or renderer override is used in the native guests.
+application, OCR or NOH renderer override is used in the native guests.
 
 The same synthetic export already decoded and checked for no-overwrite is retained
 and rehashed before `xdg-open`. The test account explicitly selects the installed
 distribution `mpv.desktop` MIME handler; this does not claim a distribution default.
 Its normal player configuration keeps the last video frame visible and disables
-audio, so the external player cannot contaminate NOH's tone evidence. The exact
-player process arguments, video-output log and real scanout are retained. Opening
+audio, so the external player cannot contaminate NOH's tone evidence.
+The external viewer explicitly uses mpv's shared-memory `wlshm` or `x11` output
+for this unaccelerated QEMU display. Ubuntu 26.04's default external-player GPU
+selection aborted with `vo_x11_init` assertion failure in the retained trial;
+this configuration does not repair that host-player defect or alter NOH's rendering.
+The exact player process arguments, video-output log and real scanout are retained. Opening
 the output still requires independent screen review. These additions exercise the
 unchanged candidate, without rebuilding or modifying any delivered file.
 
@@ -179,6 +200,8 @@ Checked on 2026-10-15:
 - [QEMU keyboard/monitor commands](https://www.qemu.org/docs/master/system/monitor.html), [xdg-mime](https://manpages.debian.org/trixie/xdg-utils/xdg-mime.1.en.html) and [mpv configuration/options](https://mpv.io/manual/master/).
 - [openSUSE's SDDM autologin override](https://api.opensuse.org/public/source/openSUSE:Factory/sddm/0001-Read-the-DISPLAYMANAGER_AUTOLOGIN-value-from-sysconf.patch).
 - [Mint's success-hook invocation](https://github.com/linuxmint/ubiquity/blob/master/ubiquity/frontend/base.py) and [standard in-target helper](https://github.com/linuxmint/ubiquity/blob/master/d-i/source/debian-installer-utils/in-target).
+- [GNOME portal Open label](https://github.com/GNOME/nautilus/blob/main/src/nautilus-portal.c) and [chooser mnemonic support](https://github.com/GNOME/nautilus/blob/main/src/resources/ui/nautilus-file-chooser.blp).
+- [KDE file-widget Name field](https://invent.kde.org/frameworks/kio/-/blob/master/src/filewidgets/kfilewidget.cpp).
 
 Existing QEMU, cloud-init and OpenSSH commands provide the VM lifecycle; the NOH
 helpers only bind candidate identity, distribution setup and application evidence.

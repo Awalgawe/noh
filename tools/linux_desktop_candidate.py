@@ -304,7 +304,8 @@ def command(arguments, timeout=30):
 
 def desktop_environment(manager_text, shell_bytes):
     """Use the actual desktop process when a legacy Xorg session omits manager imports."""
-    names = ('DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_CURRENT_DESKTOP')
+    names = ('DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_CURRENT_DESKTOP',
+             'KDE_SESSION_VERSION', 'KDE_FULL_SESSION')
     manager = dict(line.split('=', 1) for line in manager_text.splitlines() if '=' in line)
     shell = dict(item.decode().split('=', 1) for item in shell_bytes.split(b'\0') if b'=' in item)
     return {name: shell.get(name, manager.get(name)) for name in names if name in shell or name in manager}
@@ -403,7 +404,8 @@ def guest(args):
     if ('PipeWire' in audio_info) != (row['audio'] == 'pipewire'):
         raise ValueError('The observed sound server differs from the approved case')
     write(args.output / 'session.json', {'session': session, 'manager': {k: os.environ.get(k) for k in
-          ('DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_CURRENT_DESKTOP', 'XDG_SESSION_TYPE')},
+          ('DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_CURRENT_DESKTOP', 'XDG_SESSION_TYPE',
+           'KDE_SESSION_VERSION', 'KDE_FULL_SESSION')},
           'initial_sinks': initial_sinks, 'sinks': sinks, 'default_sink': sink['name'],
           'audio_info': audio_info, 'os_release': actual_os})
     (args.output / 'hardware.txt').write_text(command(['lspci', '-nnk']) + command(['aplay', '-l']))
@@ -473,7 +475,10 @@ def open_output(args):
     # Disable external-player audio so only NOH can supply the recorded 440 Hz tone.
     config = Path.home() / '.config/mpv'
     config.mkdir(parents=True, exist_ok=True)
-    settings = f'audio=no\nkeep-open=yes\nlog-file={args.output.resolve() / "output-player.log"}\n'
+    # This QEMU GPU has no accelerated rendering. Keep the external viewer on
+    # its documented shared-memory output; NOH's own rendering is unchanged.
+    video_output = 'wlshm' if session['manager']['XDG_SESSION_TYPE'] == 'wayland' else 'x11'
+    settings = f'audio=no\nkeep-open=yes\nvo={video_output}\nlog-file={args.output.resolve() / "output-player.log"}\n'
     with (config / 'mpv.conf').open('x') as file:
         file.write(settings)
     command(['xdg-mime', 'default', 'mpv.desktop', 'video/mp4'])

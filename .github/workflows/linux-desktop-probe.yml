@@ -16,6 +16,10 @@ on:
         type: choice
         options: [all, cloud, baseline, additional, mint]
         default: all
+      cases_json:
+        description: Optional JSON array of approved case IDs; overrides suite for targeted retries
+        type: string
+        default: ''
       source_run:
         description: Successful Linux Release run containing the candidate
         type: string
@@ -45,15 +49,18 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        case: ${{ fromJSON(inputs.suite == 'mint' && '["mint-22.3"]' || inputs.suite == 'additional' && '["fedora-44","opensuse-tumbleweed","arch"]' || inputs.suite == 'baseline' && '["ubuntu-24.04","ubuntu-26.04","debian-13"]' || inputs.suite == 'cloud' && '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch"]' || '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch","mint-22.3"]') }}
+        case: ${{ fromJSON(inputs.cases_json || (inputs.suite == 'mint' && '["mint-22.3"]' || inputs.suite == 'additional' && '["fedora-44","opensuse-tumbleweed","arch"]' || inputs.suite == 'baseline' && '["ubuntu-24.04","ubuntu-26.04","debian-13"]' || inputs.suite == 'cloud' && '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch"]' || '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch","mint-22.3"]')) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Check native evidence guards before downloading images or candidates
+        env:
+          DESKTOP_CASE: ${{ matrix.case }}
         run: |
           bash -n tools/probe-linux-desktop-vm.sh
           python3 tools/test-linux-desktop.py
+          PYTHONPATH=tools python3 -c 'import os; from linux_desktop_candidate import case_inputs; case_inputs(os.environ["DESKTOP_CASE"])'
       - name: Acquire and verify the exact existing candidate without rebuilding
         env:
           GH_TOKEN: ${{ github.token }}

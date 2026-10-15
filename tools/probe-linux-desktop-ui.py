@@ -11,7 +11,7 @@ import socket
 import time
 
 
-def observe(socket_path, output, phase):
+def observe(socket_path, output, phase, desktop='GNOME'):
     output.mkdir(parents=True, exist_ok=False)
     with socket.socket(socket.AF_UNIX) as connection, (output / 'actions.jsonl').open('x') as log:
         connection.settimeout(15)
@@ -61,7 +61,12 @@ def observe(socket_path, output, phase):
             screen('03-cancelled')
             key('ret')
             time.sleep(2)
-            key('ctrl', 'l')
+            # KDE's location bar navigates directories; its Name mnemonic
+            # targets the actual file selection entry, including full paths.
+            if desktop == 'KDE':
+                key('alt', 'n')
+            else:
+                key('ctrl', 'l')
             key('ctrl', 'a')
             # Fixed ASCII fixture path; no clipboard, capture-project injection,
             # or compositor-specific input API is involved.
@@ -71,6 +76,11 @@ def observe(socket_path, output, phase):
             key('ret')
             screen('05-selection')
             key('ret')
+            # Newer GNOME's chooser first navigates to/selects the pathname;
+            # use its Open mnemonic to confirm the remaining selection. This
+            # has no binding in NOH when an older chooser already accepted it.
+            time.sleep(1)
+            key('alt', 'o')
             screen('06-imported', 5)
         else:
             screen('boot' if phase == 'boot' else '07-output-opened', 3)
@@ -81,5 +91,6 @@ if __name__ == '__main__':
     parser.add_argument('--socket', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--phase', choices=('chooser', 'output', 'boot'), required=True)
+    parser.add_argument('--desktop', choices=('GNOME', 'KDE', 'Cinnamon'), default='GNOME')
     args = parser.parse_args()
-    observe(args.socket, args.output, args.phase)
+    observe(args.socket, args.output, args.phase, args.desktop)

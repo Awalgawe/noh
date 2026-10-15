@@ -60,6 +60,10 @@ class DesktopEvidenceTests(unittest.TestCase):
         self.assertEqual(observed, {'DISPLAY': ':0', 'XAUTHORITY': '/run/user/1000/gdm/Xauthority',
                                     'XDG_CURRENT_DESKTOP': 'GNOME'})
         self.assertNotIn('XDG_CURRENT_DESKTOP', desktop.desktop_environment('', b'DISPLAY=:0\0'))
+        kde = desktop.desktop_environment('KDE_SESSION_VERSION=5\n',
+                    b'XDG_CURRENT_DESKTOP=KDE\0KDE_SESSION_VERSION=6\0KDE_FULL_SESSION=true\0')
+        self.assertEqual(kde, {'XDG_CURRENT_DESKTOP': 'KDE', 'KDE_SESSION_VERSION': '6', 'KDE_FULL_SESSION': 'true'})
+        self.assertNotIn('KDE_SESSION_VERSION', desktop.desktop_environment('', b'DISPLAY=:0\0'))
 
     def test_configured_images_match_required_cases(self):
         for name in ('ubuntu-24.04', 'ubuntu-26.04', 'debian-13', 'fedora-44', 'opensuse-tumbleweed', 'arch', 'mint-22.3'):
