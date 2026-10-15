@@ -115,7 +115,9 @@ def debian_provisioning(row, image):
     packages += ['pipewire-audio'] if row['audio'] == 'pipewire' else ['pulseaudio', 'gnome-session-xsession', 'xserver-xorg']
     commands = []
     if image['os_id'] == 'ubuntu':
-        commands.append(['sh', '-c', 'DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends linux-modules-extra-$(uname -r)'])
+        # Let the distro select its complete image/modules; Ubuntu 26.04 no
+        # longer has the older linux-modules-extra package split. Reboot next.
+        packages.append('linux-image-generic')
     files = [{'path': gdm_config, 'content':
               '[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin=noh\n'
               f'WaylandEnable={str(row["display"] == "wayland").lower()}\n'
@@ -351,13 +353,24 @@ def guest(args):
         time.sleep(.25)
     if not sink:
         raise ValueError('No real virtual-PCI audio sink appeared; a null sink cannot qualify this case')
+    initial_sinks = sinks
     command(['pactl', 'set-default-sink', sink['name']])
+    # Disposable virtual hardware can start muted (Debian's fresh HDA profile).
+    # Establish and record a normal audible device setting before app playback.
+    command(['pactl', 'set-sink-mute', sink['name'], '0'])
+    command(['pactl', 'set-sink-volume', sink['name'], '75%'])
+    sinks = json.loads(command(['pactl', '--format=json', 'list', 'sinks']))
+    sink = next(s for s in sinks if s['name'] == sink['name'])
+    if sink.get('mute') is not False or not sink.get('volume') or any(
+            channel.get('value', 0) <= 0 for channel in sink['volume'].values()):
+        raise ValueError('Virtual-PCI output remains muted or has zero volume')
     audio_info = command(['pactl', 'info'])
     if ('PipeWire' in audio_info) != (row['audio'] == 'pipewire'):
         raise ValueError('The observed sound server differs from the approved case')
     write(args.output / 'session.json', {'session': session, 'manager': {k: os.environ.get(k) for k in
           ('DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_CURRENT_DESKTOP', 'XDG_SESSION_TYPE')},
-          'sinks': sinks, 'default_sink': sink['name'], 'audio_info': audio_info, 'os_release': actual_os})
+          'initial_sinks': initial_sinks, 'sinks': sinks, 'default_sink': sink['name'],
+          'audio_info': audio_info, 'os_release': actual_os})
     (args.output / 'hardware.txt').write_text(command(['lspci', '-nnk']) + command(['aplay', '-l']))
     speech = args.output / 'synthetic-speech.wav'
     command(['espeak-ng', '-v', 'en-us', '-s', '140', '-w', str(speech),

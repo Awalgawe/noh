@@ -44,9 +44,13 @@ to leave space for the VM; the verified payload and source provenance remain.
 Caller-supplied local envelopes are preserved.
 Fedora uses RPM Fusion and openSUSE uses Packman Essentials for the same host codec
 providers as the container checks. Arch performs a full package upgrade. Those
-three guests shut down after provisioning and boot their installed kernel before
+three guests, and both Ubuntu guests, shut down after provisioning and boot their installed kernel before
 testing, so graphics/audio modules match the running kernel. First-boot logs and
-audio are retained separately. openSUSE replaces `kernel-default-base` with the
+audio are retained separately. Ubuntu uses its official `linux-image-generic`
+metapackage to select matching kernel/modules. Ubuntu 26.04 no longer provides the
+older `linux-modules-extra-<running-kernel>` package split; a failed request for
+that name correctly stopped the first corrected-candidate trial before NOH.
+openSUSE replaces `kernel-default-base` with the
 complete `kernel-default` in one explicit Zypper transaction. Fedora retains the
 image's hostname: a custom hostname is unnecessary for tests and the image reported
 an early hostname-setting failure. The cloud configuration is schema-checked before
@@ -76,7 +80,12 @@ its first successful execution; configuration alone is not installation proof.
 
 Each case requires the selected OS, a real GDM, SDDM or LightDM login on seat0, the selected desktop,
 Wayland/X11 session, the selected PipeWire/PulseAudio server and a virtual PCI
-audio sink. The virtual monitor advertises 1280x1024 so the existing 980x850
+audio sink. The adapter records its initial mixer state, unmutes this disposable
+virtual device and sets 75% volume, then verifies/records the resulting state.
+Debian's fresh HDA profile was initially muted: the corrected application preview
+reported healthy audio, but the captured device output was silence and failed.
+That failed observation remains evidence; mixer setup alone does not qualify audio.
+The virtual monitor advertises 1280x1024 so the existing 980x850
 capture viewport fits with normal desktop decorations. Display/session variables
 come from the actual user-owned desktop shell, with the user manager as a fallback;
 the selected values are recorded before validation. A null sink is refused.

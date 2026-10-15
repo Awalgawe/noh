@@ -109,6 +109,10 @@ class DesktopEvidenceTests(unittest.TestCase):
                 self.assertNotIn('groups', config)
                 self.assertEqual(config['write_files'][0]['path'], '/etc/gdm3/custom.conf')
                 self.assertIn('WaylandEnable=true', config['write_files'][0]['content'])
+                self.assertIn('linux-image-generic', config['packages'])
+                self.assertTrue(json.loads(output.with_suffix('.image.json').read_text())['reboot_after_provisioning'])
+                self.assertNotIn('uname -r', json.dumps(config))
+                self.assertNotIn(['systemctl', 'restart', 'gdm3'], config['runcmd'])
 
     def test_guest_rejects_changed_or_added_candidate_files(self):
         with tempfile.TemporaryDirectory() as folder:
