@@ -85,12 +85,19 @@ class DesktopEvidenceTests(unittest.TestCase):
                     config = json.loads(output.read_text().split('\n', 1)[1])
                     image = json.loads(output.with_suffix('.image.json').read_text())
                     self.assertTrue(image['reboot_after_provisioning'])
+                    self.assertNotIn('packages', config)  # An empty list violates cloud-init's schema.
+                    self.assertEqual(config['runcmd'][0], 'set -eu')
                     self.assertNotIn('groups', config['users'][0])
                     self.assertEqual(config['write_files'][0]['path'], path)
                     self.assertIn(f'Session={session}', config['write_files'][0]['content'])
                     self.assertIn(['systemctl', 'enable', manager], config['runcmd'])
                     self.assertFalse(any(cmd[:2] == ['systemctl', 'restart'] for cmd in config['runcmd']))
                     self.assertTrue(any(kernel in cmd for cmd in config['runcmd']))
+                    if name == 'opensuse-tumbleweed':
+                        self.assertIn('-kernel-default-base', config['runcmd'][1])
+                    if name == 'fedora-44':
+                        self.assertTrue(config['preserve_hostname'])
+                        self.assertNotIn('hostname', config)
     def test_audio_rejects_silence_and_wrong_frequency(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

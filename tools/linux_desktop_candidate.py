@@ -129,7 +129,7 @@ def rpm_arch_provisioning(row, image):
         return [], commands, files, 'gdm'
     if image['os_id'] == 'opensuse-tumbleweed':
         commands = [
-            ['zypper', '--non-interactive', 'install', '--no-recommends', 'kernel-default',
+            ['zypper', '--non-interactive', 'install', '--no-recommends', '--', 'kernel-default', '-kernel-default-base',
              'python3', 'ffmpeg-8', 'libmpv2', 'plasma6-desktop', 'plasma6-session-x11', 'sddm',
              'xorg-x11-server', 'pipewire', 'pipewire-pulseaudio', 'pipewire-alsa', 'wireplumber',
              'pulseaudio-utils', 'alsa-utils', 'Mesa-dri', 'Mesa-libEGL1', 'libglvnd', 'libxkbcommon-x11-0',
@@ -178,8 +178,15 @@ def cloud_config(args):
     # logind seat grants device ACLs to the same user running the application.
     config = {'hostname': 'noh-desktop-test',
               'users': [user],
-              'ssh_pwauth': False, 'package_update': True, 'packages': packages,
-              'write_files': files, 'runcmd': commands}
+              'ssh_pwauth': False, 'package_update': True,
+              'write_files': files, 'runcmd': ['set -eu', *commands]}
+    if packages:
+        config['packages'] = packages
+    if image['os_id'] == 'fedora':
+        # The cloud image reports a hostname-setting failure during init-local.
+        # No test relies on a custom name: retain the image's hostname instead.
+        del config['hostname']
+        config['preserve_hostname'] = True
     args.output.write_text('#cloud-config\n' + json.dumps(config, indent=2) + '\n')
     write(args.output.with_suffix('.image.json'), image)
 

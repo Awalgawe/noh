@@ -35,12 +35,13 @@ test -c /dev/kvm || { echo 'KVM device is unavailable; no desktop VM was tested.
 # Restrict the device to this disposable runner's user instead of making it world-writable.
 sudo setfacl -m "u:$(id -un):rw" /dev/kvm
 sudo apt-get update -qq
-sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils
+sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils cloud-init
 qemu-system-x86_64 --version > "$evidence/qemu-version.txt"
 
 ssh-keygen -q -t ed25519 -N '' -f "$work/key"
 python3 "$root/tools/linux_desktop_candidate.py" cloud-config --case "$case_id" \
     --public-key "$work/key.pub" --output "$work/user-data"
+cloud-init schema --config-file "$work/user-data" > "$evidence/cloud-config-schema.txt" 2>&1
 cp "$work/user-data.image.json" "$evidence/image-identity.json"
 mapfile -t image_spec < <(python3 - "$work/user-data.image.json" <<'PY'
 import json, sys
@@ -93,7 +94,13 @@ timeout 20m ssh "${ssh_args[@]}" noh@127.0.0.1 'sudo cloud-init status --wait --
     > "$evidence/cloud-init-status.txt" 2>&1 || cloud_status=$?
 ssh "${ssh_args[@]}" noh@127.0.0.1 'sudo cat /var/log/cloud-init-output.log' \
     > "$evidence/cloud-init-output.log"
+ssh "${ssh_args[@]}" noh@127.0.0.1 'sudo cat /var/log/cloud-init.log' \
+    > "$evidence/cloud-init.log"
+schema_status=0
+ssh "${ssh_args[@]}" noh@127.0.0.1 'sudo cloud-init schema --system' \
+    > "$evidence/guest-cloud-config-schema.txt" 2>&1 || schema_status=$?
 test "$cloud_status" = 0 || { cat "$evidence/cloud-init-status.txt"; exit "$cloud_status"; }
+test "$schema_status" = 0 || { cat "$evidence/guest-cloud-config-schema.txt"; exit "$schema_status"; }
 if [[ "${image_spec[3]}" = true ]]; then
     # Boot the installed kernel after provisioning its complete graphics/audio
     # modules. Preserve first-boot diagnostics; never test a mismatched module tree.

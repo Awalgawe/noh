@@ -43,7 +43,13 @@ Fedora uses RPM Fusion and openSUSE uses Packman Essentials for the same host co
 providers as the container checks. Arch performs a full package upgrade. Those
 three guests shut down after provisioning and boot their installed kernel before
 testing, so graphics/audio modules match the running kernel. First-boot logs and
-audio are retained separately. Rolling releases retain their actual OS metadata,
+audio are retained separately. openSUSE replaces `kernel-default-base` with the
+complete `kernel-default` in one explicit Zypper transaction. Fedora retains the
+image's hostname: a custom hostname is unnecessary for tests and the image reported
+an early hostname-setting failure. The cloud configuration is schema-checked before
+download and again inside the guest; empty package lists are omitted. Provisioning
+stops on its first failing command, with full cloud-init diagnostics retained.
+Rolling releases retain their actual OS metadata,
 package versions and kernel in addition to the immutable base-image identity;
 their evolving version string is not compared to a fixed release number. The
 dated Arch and openSUSE filenames are pinned beneath rotating official mirror
