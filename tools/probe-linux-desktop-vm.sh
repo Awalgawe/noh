@@ -37,8 +37,6 @@ uname -a > "$evidence/runner.txt"
 lscpu >> "$evidence/runner.txt"
 df -h "$work" >> "$evidence/runner.txt"
 test -c /dev/kvm || { echo 'KVM device is unavailable; no desktop VM was tested.'; exit 1; }
-# Restrict the device to this disposable runner's user instead of making it world-writable.
-sudo setfacl -m "u:$(id -un):rw" /dev/kvm
 sudo apt-get update -qq
 sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils cloud-init
 qemu-system-x86_64 --version > "$evidence/qemu-version.txt"
@@ -72,6 +70,15 @@ seed_args=(-drive "file=$work/seed.img,format=raw,if=virtio,readonly=on")
 # QEMU, cloud-init and SSH provide the lifecycle; no container or nested compositor.
 # VNC and SSH are loopback-only. The monitor is a private Unix socket.
 start_guest() {
+    test -c /dev/kvm
+    # Establish this runner's access immediately before every launch. Host setup
+    # and a previous successful VM boot do not guarantee the next open succeeds.
+    { date --utc --iso-8601=seconds; id; getfacl --absolute-names /dev/kvm; } \
+        >> "$evidence/kvm-access-before.txt"
+    sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+    getfacl --absolute-names /dev/kvm >> "$evidence/kvm-access-after.txt"
+    test -r /dev/kvm
+    test -w /dev/kvm
     qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -smp 3 -m 6144 \
     -drive "file=$work/guest.qcow2,format=qcow2,if=virtio" \
     "$@" \

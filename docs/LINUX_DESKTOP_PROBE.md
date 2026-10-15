@@ -85,6 +85,11 @@ An ISO boot or Ubuntu with Cinnamon cannot satisfy this case. Installer serial/a
 diagnostics remain separate from application evidence. Both QEMU and the private
 seed server have owned-process cleanup and bounded waits. This adapter still needs
 its first successful execution; configuration alone is not installation proof.
+The first Mint trial reached installer poweroff, but its installed-disk QEMU
+launch failed with host `/dev/kvm` permission denied. The cause of the changed
+host access was not recorded. The runner now records the device ACL before and
+after establishing read/write access for its own user immediately before every
+QEMU launch, and checks that access. It never grants world-wide device access.
 
 Each case requires the selected OS, a real GDM, SDDM or LightDM login on seat0, the selected desktop,
 Wayland/X11 session, the selected PipeWire/PulseAudio server and a virtual PCI
