@@ -5,14 +5,18 @@ import posixpath
 import re
 import struct
 
-# These remain supplied by the supported OS and graphics driver, never bundled.
-# This is a classification policy, not proof of loader/device compatibility.
+# The executable ABI uses the desktop's native runtime. Complete ownership is
+# enforced separately by require_host_runtime: no shared library may be shipped.
+# Keep the historical generic audit available for old candidate verification.
 SYSTEM_LIBRARIES = frozenset({
     "ld-linux-x86-64.so.2", "libc.so.6", "libm.so.6", "libpthread.so.0",
     "libdl.so.2", "librt.so.1", "libresolv.so.2", "libutil.so.1",
     "libGL.so.1", "libGLX.so.0", "libEGL.so.1", "libGLdispatch.so.0",
     "libOpenGL.so.0", "libGLESv1_CM.so.1", "libGLESv2.so.2", "libvulkan.so.1",
 })
+HOST_EXECUTABLE_LIBRARIES = SYSTEM_LIBRARIES | {
+    "libasound.so.2", "libstdc++.so.6", "libgcc_s.so.1",
+}
 INTERPRETER = "/lib64/ld-linux-x86-64.so.2"
 
 
@@ -163,12 +167,13 @@ def library_search(image, value):
     return PurePosixPath(candidate)
 
 
-def audit_images(images, maximum_glibc=(2, 39)):
+def audit_images(images, maximum_glibc=(2, 39), host_runtime=False):
     """Validate direct dependencies against each object's own origin search path.
 
     Requiring each library to resolve its own imports also avoids relying on
     inherited RPATH behavior. Dynamic plugins and devices need native tests.
     """
+    system_libraries = HOST_EXECUTABLE_LIBRARIES if host_runtime else SYSTEM_LIBRARIES
     report = {"schema_version": 1, "architecture": "x86_64", "images": {},
               "maximum_glibc": ".".join(map(str, maximum_glibc)), "unresolved": [],
               "coverage": "ELF direct imports; dynamic plugins, devices and execution require native acceptance"}
@@ -179,7 +184,7 @@ def audit_images(images, maximum_glibc=(2, 39)):
         info = elf_info(data)
         if info["interpreter"] not in (None, INTERPRETER):
             raise ValueError(f"Unexpected ELF interpreter in {name}")
-        if PurePosixPath(name).name in SYSTEM_LIBRARIES:
+        if PurePosixPath(name).name in system_libraries or info["soname"] in system_libraries:
             raise ValueError(f"Host system/driver library must not be bundled: {name}")
         info["sha256"] = hashlib.sha256(data).hexdigest()
         report["images"][name] = info
@@ -197,7 +202,7 @@ def audit_images(images, maximum_glibc=(2, 39)):
                 if report["images"][provider]["soname"] not in (None, dependency):
                     raise ValueError(f"ELF provider SONAME mismatch: {provider}")
                 imports[dependency] = {"kind": "bundled", "path": provider}
-            elif dependency in SYSTEM_LIBRARIES:
+            elif dependency in system_libraries:
                 imports[dependency] = {"kind": "host_system_or_graphics_driver"}
             else:
                 report["unresolved"].append({"image": name, "library": dependency})
@@ -216,7 +221,7 @@ def audit_images(images, maximum_glibc=(2, 39)):
     return report
 
 
-def audit_bundle(root):
+def audit_bundle(root, host_runtime=False):
     def images():
         for path in sorted(Path(root).rglob("*")):
             if path.is_symlink():
@@ -225,4 +230,24 @@ def audit_bundle(root):
                 with path.open("rb") as stream:
                     if stream.read(4) == b"\x7fELF":
                         yield path.relative_to(root).as_posix(), path.read_bytes()
-    return audit_images(images())
+    return audit_images(images(), host_runtime=host_runtime)
+
+
+def require_host_runtime(report):
+    """Fail closed: only NOH workers and the CPU speech executable ship.
+
+    This is an ownership boundary, not an expanding driver exclusion list.
+    A newly introduced ELF must receive an explicit architecture review.
+    """
+    allowed = {'usr/lib/noh/noh-app', 'usr/lib/noh/bin/noh-cli',
+               'usr/lib/noh/bin/noh-mcp', 'usr/lib/noh/bin/speech/whisper-cli'}
+    found = set()
+    for name, info in report['images'].items():
+        canonical = name.removeprefix('NOH.AppDir/')
+        if canonical not in allowed or info['soname'] or info['search_paths']:
+            raise ValueError(f'Linux host-runtime package contains a private ELF/provider: {name}')
+        if any(dep['kind'] == 'bundled' for dep in info['dependencies'].values()):
+            raise ValueError(f'Linux host-runtime package contains a private import: {name}')
+        found.add(canonical)
+    if found != allowed:
+        raise ValueError(f'Linux host-runtime package is missing executables: {sorted(allowed - found)}')

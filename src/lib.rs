@@ -127,7 +127,7 @@ fn system_ffmpeg(path: &std::ffi::OsStr, cwd: &Path) -> Option<PathBuf> {
         .filter(|p| p.is_absolute())
         .find_map(|folder| {
             let folder = folder.canonicalize().ok()?;
-            if folder == cwd || Some(&folder) == cwd_bin.as_ref() {
+            if !ffmpeg_search_folder_allowed(&folder, &cwd, cwd_bin.as_deref()) {
                 return None;
             }
             let candidate = folder.join(if cfg!(windows) {
@@ -149,6 +149,17 @@ fn system_ffmpeg(path: &std::ffi::OsStr, cwd: &Path) -> Option<PathBuf> {
         })
 }
 
+fn ffmpeg_search_folder_allowed(folder: &Path, cwd: &Path, cwd_bin: Option<&Path>) -> bool {
+    // Linux distribution packages install here (including merged-/usr /bin).
+    // An explicit absolute PATH entry remains valid when cwd happens to be /,
+    // /usr or /usr/bin. Relative entries and arbitrary working folders remain
+    // excluded, and Windows keeps its existing discovery policy.
+    if cfg!(target_os = "linux") && matches!(folder.to_str(), Some("/usr/bin" | "/bin")) {
+        return true;
+    }
+    folder != cwd && Some(folder) != cwd_bin
+}
+
 fn bundled_ffmpeg(folder: &Path) -> Option<PathBuf> {
     let name = if cfg!(windows) {
         "ffmpeg.exe"
@@ -162,6 +173,24 @@ fn bundled_ffmpeg(folder: &Path) -> Option<PathBuf> {
 
 #[cfg(test)]
 mod portable_tests {
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn system_discovery_keeps_distribution_bin_when_cwd_overlaps() {
+        use std::path::Path;
+        for cwd in ["/", "/usr", "/usr/bin"] {
+            assert!(super::ffmpeg_search_folder_allowed(
+                Path::new("/usr/bin"),
+                Path::new(cwd),
+                Some(Path::new("/usr/bin")),
+            ));
+        }
+        assert!(!super::ffmpeg_search_folder_allowed(
+            Path::new("/tmp/project/bin"),
+            Path::new("/tmp/project"),
+            Some(Path::new("/tmp/project/bin")),
+        ));
+    }
+
     #[test]
     fn system_discovery_skips_empty_relative_and_working_folders() {
         let root = tempfile::tempdir().unwrap();

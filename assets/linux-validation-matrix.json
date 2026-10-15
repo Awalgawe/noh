@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "architecture": "x86_64",
+  "base_images_resolved_at": "2026-10-15",
+  "scope": "Container software-rendering checks; these do not qualify desktop integration or physical devices.",
+  "containers": [
+    {"id": "ubuntu-24.04", "image": "docker.io/library/ubuntu@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55", "display": "x11", "audio": "pulseaudio"},
+    {"id": "ubuntu-26.04", "image": "docker.io/library/ubuntu@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7", "display": "wayland", "audio": "pipewire"},
+    {"id": "debian-13", "image": "docker.io/library/debian@sha256:913f6706df59a68922d1dd08f78c2476560a8d367897200a6005b00e5f67c2d5", "display": "x11", "audio": "pulseaudio"},
+    {"id": "fedora-44", "image": "registry.fedoraproject.org/fedora@sha256:6fb67bf40d42d33f9805620b7fc04741df3ce328a8804308dfe5d186253f3f81", "display": "wayland", "audio": "pipewire"},
+    {"id": "opensuse-tumbleweed", "image": "registry.opensuse.org/opensuse/tumbleweed@sha256:1b8d006ee5f6e04b78f91b40a5b61bce769b4f5c8ddc2ace3b91804e99769b2a", "display": "x11", "audio": "pipewire"},
+    {"id": "arch", "image": "docker.io/library/archlinux@sha256:3c64b538588416593f69a1aebd2f2ec0f2541b29159f32556fa7def2167147a0", "display": "wayland", "audio": "pipewire"}
+  ],
+  "required_desktops": [
+    {"id": "ubuntu-24.04", "desktop": "GNOME", "display": "wayland", "audio": "pipewire"},
+    {"id": "ubuntu-26.04", "desktop": "GNOME", "display": "wayland", "audio": "pipewire"},
+    {"id": "debian-13", "desktop": "GNOME", "display": "x11", "audio": "pulseaudio"},
+    {"id": "fedora-44", "desktop": "GNOME", "display": "wayland", "audio": "pipewire"},
+    {"id": "opensuse-tumbleweed", "desktop": "KDE", "display": "x11", "audio": "pipewire"},
+    {"id": "arch", "desktop": "KDE", "display": "wayland", "audio": "pipewire"},
+    {"id": "mint-22.3", "desktop": "Cinnamon", "display": "x11", "audio": "pipewire"}
+  ]
+}

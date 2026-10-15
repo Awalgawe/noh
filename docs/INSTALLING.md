@@ -151,6 +151,14 @@ Final package tests
 used Ubuntu 24.04.5 under WSLg with Mesa software rendering and PulseAudio;
 physical Linux graphics hardware and other distributions have not been qualified.
 See the [validation report](LINUX_0_1_3_QUALIFICATION.md) for the exact environment.
+Fedora 44 users have reported that **Linux 0.1.3 fails to open or play audio**
+because bundled desktop libraries conflict with the host's Mesa and PipeWire.
+The [packaging correction](LINUX_REDISTRIBUTION.md#host-owned-media-runtime-unreleased-2026-10-15)
+is not yet in a published release. It moves FFmpeg, libmpv and all shared
+libraries to host dependencies; CPU speech remains included. Its installation
+requirements are in the [next package's README](../assets/linux-README.md).
+Extract the future package into a fresh directory, never over the old AppDir.
+Local loader probes do not constitute final-package Fedora desktop acceptance.
 In WSLg, an ALSA default-device mapping to its PulseAudio server may need to be
 configured; the report records the Ubuntu-provided configuration used in testing.
 WSLg does not support dragging files from Windows Explorer into Linux windows

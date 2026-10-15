@@ -36,7 +36,7 @@ enum Task {
         offline: bool,
         #[arg(long)]
         no_bundle: bool,
-        /// Include media libraries, Whisper and models in a macOS bundle or Linux AppDir.
+        /// Include macOS media libraries, or Linux host requirements; include CPU speech.
         #[arg(long, requires = "gui", conflicts_with = "no_bundle")]
         portable: bool,
         #[arg(long)]

@@ -180,9 +180,14 @@ native behavior must be established by its actual output and installation tests.
 
 ## Linux
 
-A desktop distribution is not yet validated. Native dependencies and a portable
-packaging baseline still need qualification. The [development guide](DEVELOPMENT.md)
-describes source checks; their success is not a ready-to-use Linux release.
+Install the host dependencies listed in [the Linux package README](../assets/linux-README.md).
+`python3 tools/linux_host.py` verifies FFmpeg's required encoders and libmpv's
+client API before packaging. `cargo dev build --gui --mcp --portable --speech
+/path/to/prepared/speech --ffmpeg /usr/bin/ffmpeg` builds an AppDir containing
+NOH and CPU speech; all media/desktop shared libraries remain on the host.
+The [architecture decision](LINUX_REDISTRIBUTION.md) and the
+[development guide](DEVELOPMENT.md) distinguish local probes from final-package
+desktop qualification.
 
 ## Build identity and validation
 

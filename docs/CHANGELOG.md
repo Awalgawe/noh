@@ -5,6 +5,19 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
+## 0.1.4 — candidate, not published
+
+- Linux packages now require host FFmpeg and libmpv, and ship no shared
+  libraries. This keeps the media, graphics and audio stack with the host's
+  drivers/plugins and removes the forced ALSA plugin directory. CPU speech
+  remains included. Install the declared host dependencies and extract into a
+  fresh directory. Final-package desktop qualification remains pending.
+- Find the Linux distribution's FFmpeg when launched from `/`, `/usr` or
+  `/usr/bin`, while continuing to reject implicit working-directory lookup.
+- Verify the installed-dependency contract in final archives and retain the
+  linked Linux installation guide. Test one sealed candidate across the
+  [Linux validation matrix](LINUX_VALIDATION.md), with separate desktop gates.
+
 ## 0.1.3 — 2026-10-14
 
 Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.1.3).

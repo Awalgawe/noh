@@ -41,6 +41,12 @@ def validate_jobs(data, platforms, workflow_path):
     results = {job["name"]: job["conclusion"] for job in jobs}
     if any(results.get(name) != "success" for name in expected):
         raise ValueError("Missing/skipped/failed build, controls or RustSec audit")
+    if 'linux-x64' in platforms:
+        linux = next(job for job in jobs if job['name'] == prefix + 'Candidate linux-x64')
+        checks = [step for step in linux.get('steps', [])
+                  if step['name'] == 'Test the same Linux candidate across the distribution matrix']
+        if len(checks) != 1 or checks[0]['conclusion'] != 'success':
+            raise ValueError('Missing/skipped/failed exact Linux candidate matrix')
     # GitHub may represent an unselected reusable call by its caller job or
     # its skipped child jobs. None of those jobs may have executed in a build run.
     allowed_skips = {"draft", "draft / verify", "draft / draft", "installer", "installer / public-installer"} if wrapped else set()
@@ -49,13 +55,16 @@ def validate_jobs(data, platforms, workflow_path):
         raise ValueError("Unexpected source job or release stage")
 
 
-def validate_artifacts(data, platforms, audit_name=None):
+def validate_artifacts(data, platforms, audit_name=None, linux_matrix_name=None):
     expected = {"delivery-" + p for p in platforms}
     artifacts = data["artifacts"]
     names = [artifact["name"] for artifact in artifacts]
-    allowed = expected | ({audit_name} if audit_name else set())
+    matrix = {linux_matrix_name} if 'linux-x64' in platforms and linux_matrix_name else set()
+    if 'linux-x64' in platforms and not matrix:
+        raise ValueError('Linux candidate requires exact run/attempt matrix evidence')
+    allowed = expected | ({audit_name} if audit_name else set()) | matrix
     if (data["total_count"] != len(artifacts) or len(names) != len(set(names))
-            or not expected.issubset(names) or not set(names).issubset(allowed)
+            or not (expected | matrix).issubset(names) or not set(names).issubset(allowed)
             or any(a["expired"] for a in artifacts)
             or any(not re.fullmatch(r"sha256:[0-9a-f]{64}", a.get("digest") or "") for a in artifacts)):
         raise ValueError("Missing, extra, ambiguous, unhashed or expired source artifact")
@@ -85,7 +94,7 @@ def main():
     validate_jobs(jobs, platforms, run["path"])
     audit_name = f"rust-audit-{args.run}-{args.attempt}"
     artifacts = validate_artifacts(api(repository, f"actions/runs/{args.run}/artifacts?per_page=100"),
-                                   platforms, audit_name)
+                                   platforms, audit_name, f'linux-validation-{args.run}-{args.attempt}')
     scratch = Path(os.environ["RUNNER_TEMP"]) / "noh-release-verification"
     scratch.mkdir(exist_ok=False)
     args.output.mkdir(parents=True, exist_ok=False)

@@ -36,6 +36,11 @@ jobs:
         if: steps.scope.outputs.windows == 'true' || steps.scope.outputs.unix == 'true'
         run: |
           python3 tools/test-delivery.py
+          python3 tools/test-linux-elf.py
+          python3 tools/test-linux-inputs.py
+          python3 tools/test-linux-package.py
+          python3 tools/test-linux-host-runtime.py
+          python3 tools/test-linux-matrix.py
           python3 -m unittest discover -s tools/installer -p 'test_*.py'
           python3 tools/test-runtime-cache.py
           python3 -m unittest discover -s tools -p test_setup_delivery.py

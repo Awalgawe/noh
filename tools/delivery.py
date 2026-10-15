@@ -576,14 +576,15 @@ def macos_inputs(cache, destination):
 
 
 def linux_inputs(cache, destination):
-    from linux_runtime import acquire
+    from linux_host import CONTRACT, check_host
     destination.mkdir(parents=True, exist_ok=False)
-    acquire(ROOT / 'assets/linux-native.lock.json', cache, destination / 'native')
+    host = check_host()
     checked(['python3', ROOT / 'tools/prepare-linux-speech.py', '--cache', cache,
              '--output', destination / 'speech'])
     materials = destination / 'materials'
-    shutil.copytree(destination / 'native/materials', materials)
-    shutil.copy2(destination / 'native/LINUX-INPUTS.json', materials / 'LINUX-INPUTS.json')
+    materials.mkdir()
+    write(materials / 'HOST-RUNTIME.json', host)
+    shutil.copy2(CONTRACT, materials / 'HOST-REQUIREMENTS.json')
     speech = read(destination / 'speech/WHISPER-BUILD.json')
     archive = fetch(speech['source'], cache, f"whisper-{speech['version']}.tar.gz")
     shutil.copy2(archive, materials / archive.name)
@@ -640,7 +641,7 @@ def authorize_redistribution(target):
         'windows-x64': ["assets/delivery-windows.lock.json", "assets/preview-runtime.json",
                         "assets/windows-native.lock.json", "tools/windows_runtime.py"],
         'macos-arm64': ["assets/delivery-macos.lock.json", "tools/prepare-macos-speech.py"],
-        'linux-x64': ["assets/linux-native.lock.json", "tools/linux_runtime.py",
+        'linux-x64': ["assets/linux-host.json", "tools/linux_host.py", "tools/linux_package.py",
                       "tools/prepare-linux-speech.py", "assets/linux-README.md"],
     }[target]
     locks = {name: digest(ROOT / name) for name in paths}
@@ -700,6 +701,14 @@ def reject_microsoft_payloads(files):
             raise ValueError(f"Microsoft runtime payload must not be redistributed: {name}")
 
 
+def require_linux_host_contract(manifest, contents):
+    path = 'NOH.AppDir/usr/lib/noh/HOST-REQUIREMENTS.json'
+    if manifest.get('runtime_dependencies', {}).get('contract') != path:
+        raise ValueError('Linux host requirements contract path is missing or unsupported')
+    if contents is None or json.loads(contents) != read(ROOT / 'assets/linux-host.json'):
+        raise ValueError('Linux package host requirements differ from the declared contract')
+
+
 def seal(bundle, materials, output, target, commit):
     policy = read(ROOT / "assets/delivery-policy.json")
     manifest = verify_bundle(bundle, policy["platforms"][target]["target"], commit)
@@ -708,8 +717,12 @@ def seal(bundle, materials, output, target, commit):
         reject_microsoft_payloads(inventory(bundle))
         reject_microsoft_payloads(inventory(materials))
     if target == 'linux-x64':
-        from linux_elf import audit_bundle
-        audit_bundle(bundle)
+        from linux_elf import audit_bundle, require_host_runtime
+        if manifest.get('runtime_dependencies', {}).get('distribution') != 'linux-host-runtime':
+            raise ValueError('New Linux packages require the host-runtime architecture')
+        contract = bundle / 'NOH.AppDir/usr/lib/noh/HOST-REQUIREMENTS.json'
+        require_linux_host_contract(manifest, contract.read_bytes() if contract.is_file() else None)
+        require_host_runtime(audit_bundle(bundle, host_runtime=True))
     version = manifest["version"]
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", version):
         raise ValueError("Unsafe package version")
@@ -776,7 +789,7 @@ def verify_envelope(folder):
                                          if PurePosixPath(member.filename).suffix.lower() in (".exe", ".dll"))
             require_pe_closure(report)
         if record['platform'] == 'linux-x64' and not name.endswith('-materials.zip'):
-            from linux_elf import audit_images
+            from linux_elf import audit_images, require_host_runtime
             with zipfile.ZipFile(folder / name) as archive:
                 def images():
                     for member in archive.infolist():
@@ -789,7 +802,15 @@ def verify_envelope(folder):
                             elif member.filename.endswith('/AppRun'):
                                 if (member.external_attr >> 16) & 0o111 != 0o111:
                                     raise ValueError('Linux AppRun lost its executable mode')
-                audit_images(images())
+                manifest = json.loads(archive.read('manifest.json'))
+                if (tuple(map(int, version.split('-')[0].split('.'))) >= (0, 1, 4)
+                        and manifest.get('runtime_dependencies', {}).get('distribution') != 'linux-host-runtime'):
+                    raise ValueError('Linux 0.1.4 and later require the host-runtime architecture')
+                report = audit_images(images(), host_runtime=manifest.get('runtime_dependencies', {}).get('distribution') == 'linux-host-runtime')
+                if manifest.get('runtime_dependencies', {}).get('distribution') == 'linux-host-runtime':
+                    contract = 'NOH.AppDir/usr/lib/noh/HOST-REQUIREMENTS.json'
+                    require_linux_host_contract(manifest, archive.read(contract) if contract in archive.namelist() else None)
+                    require_host_runtime(report)
     if any(item["size"] >= LIMIT for item in actual.values()):
         raise ValueError("Oversized delivery metadata")
     expected_sums = "".join(f"{digest(folder / name)}  {name}\n" for name in sorted(actual) if name != "SHA256SUMS")
@@ -815,12 +836,21 @@ def qualify(folder):
                 "download_protection", "audio_gpu", "offline_transcription", "media_export"}
     if record["platform"] == "macos-arm64":
         required |= {"developer_id", "notarization", "stapling"}
+    linux_host = (record['platform'] == 'linux-x64'
+                  and 'NOH.AppDir/usr/lib/noh/HOST-REQUIREMENTS.json' in record['bundle_files'])
+    if linux_host:
+        required |= {'linux_runtime_matrix', 'linux_desktop_matrix'}
     if set(qualification.get("evidence", {})) != required:
         raise ValueError("Incomplete reviewed qualification evidence")
     for spec in qualification["evidence"].values():
         path = ROOT / str(relative(spec["path"]))
         if not path.is_file() or digest(path) != spec["sha256"]:
             raise ValueError("Missing or changed reviewed qualification evidence")
+    if linux_host:
+        from linux_matrix import validate_result
+        for key, desktop in [('linux_runtime_matrix', False), ('linux_desktop_matrix', True)]:
+            validate_result(read(ROOT / qualification['evidence'][key]['path']), record,
+                            digest(folder / 'DELIVERY.json'), desktop=desktop)
     return record
 
 
