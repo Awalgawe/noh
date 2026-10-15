@@ -130,6 +130,16 @@ the verified original image, keyed by case and pinned image configuration, even
 if subsequent desktop testing fails. Restored bytes are always rehashed before
 use. Guest disks, credentials and partial downloads are never cached. This cache
 has no measured warm-run benefit until a subsequent CI run reports a hit.
+Run 38819185859 confirmed DHCP/DNS success and saved the verified ISO cache, but
+still lacked finalization markers. A regression using isolated real Debconf
+databases reproduced the cause: the File backend decodes literal `\n`, and the
+GET protocol used by Ubiquity truncates the command at that newline (1037 bytes
+became 408). The resulting incomplete shell quotation prevents any command from
+running. File writes now avoid that escape; all four hooks must survive actual
+Debconf storage and retrieval byte-for-byte before the CI acquires any image.
+The exact installer source is `ubiquity_24.04.3+mint19.tar.xz`, SHA-256
+`c680a9645a6f9aa11996358d184e2ded491a8e87a95b4e3ff253918e5fa44589`,
+matching its distribution `.dsc`. Its frontend does invoke the configured hook.
 
 Fedora's minimal GNOME session does not install Nautilus automatically. Its
 GNOME file-chooser portal uses Nautilus, so the adapter explicitly installs both

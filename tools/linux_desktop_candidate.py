@@ -229,6 +229,7 @@ def mint_preseed(args):
     public_key = args.public_key.read_text().strip()
     if not re.fullmatch(r'ssh-ed25519 [A-Za-z0-9+/=]+(?: [^\r\n]+)?', public_key):
         raise ValueError('Mint bootstrap requires the generated Ed25519 public key')
+    public_key = ' '.join(public_key.split()[:2])  # The SSH comment is not authentication data.
     # The network used to download the preseed is inherited as an external
     # connection without working DNS. Activate ordinary NetworkManager DHCP
     # once the live desktop is running, before the installer fetches packages.
@@ -246,6 +247,8 @@ def mint_preseed(args):
         'getent ahostsv4 archive.ubuntu.com',
         'echo NOH_INSTALL_NETWORK_COMPLETE',
     ])
+    # Debconf's File database decodes literal backslash-n; Ubiquity's GET then
+    # truncates at that newline. Keep every preseed command free of that escape.
     # Ubiquity ignores the success hook's exit status. Retain its actual status
     # on serial, and make SSH bootstrap independent of first-boot cloud-init so
     # that its failure can be diagnosed through the existing transport.
@@ -257,13 +260,14 @@ def mint_preseed(args):
         'in-target --pass-stdout env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-server cloud-init',
         'rm -f /target/etc/cloud/cloud-init.disabled',
         'install -d -m 700 /target/home/noh/.ssh',
-        "printf '%s\\n' " + shlex.quote(public_key) + ' > /target/home/noh/.ssh/authorized_keys',
+        "printf '%s' " + shlex.quote(public_key) + ' > /target/home/noh/.ssh/authorized_keys',
+        'echo >> /target/home/noh/.ssh/authorized_keys',
         'chmod 600 /target/home/noh/.ssh/authorized_keys',
         'in-target --pass-stdout chown noh:noh /home/noh/.ssh /home/noh/.ssh/authorized_keys',
-        "printf '%s\\n' 'PasswordAuthentication no' > /target/etc/ssh/sshd_config.d/90-noh-test.conf",
+        "echo 'PasswordAuthentication no' > /target/etc/ssh/sshd_config.d/90-noh-test.conf",
         'in-target --pass-stdout systemctl enable ssh',
         'install -d /target/etc/default/grub.d',
-        "printf '%s\\n' 'GRUB_CMDLINE_LINUX=\"console=tty0 console=ttyS0,115200n8\"' > /target/etc/default/grub.d/90-noh-probe.cfg",
+        "echo 'GRUB_CMDLINE_LINUX=\"console=tty0 console=ttyS0,115200n8\"' > /target/etc/default/grub.d/90-noh-probe.cfg",
         'in-target --pass-stdout update-grub',
         'touch /target/var/lib/noh-unattended-install-complete',
         'echo NOH_INSTALL_FINALIZE_COMPLETE',

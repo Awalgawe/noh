@@ -4,8 +4,11 @@ import contextlib
 import io
 import json
 import math
+import os
 from pathlib import Path
+import shutil
 import struct
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -16,6 +19,38 @@ from delivery import inventory
 
 
 class DesktopEvidenceTests(unittest.TestCase):
+    @unittest.skipUnless(all(shutil.which(name) for name in
+        ('debconf-set-selections', 'debconf-communicate', 'openssl', 'sh')),
+        'Requires the Debian installer tools used by the native Linux CI job')
+    def test_mint_commands_survive_real_debconf_storage_and_protocol(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            config = root / 'debconf.conf'
+            config.write_text('Config: configdb\nTemplates: templatedb\n\n' + '\n'.join(
+                f'Name: {name}\nDriver: File\nFilename: {root / name}\nMode: 600\n'
+                for name in ('configdb', 'templatedb')))
+            # Isolate both databases; never modify the runner's debconf state.
+            env = {key: value for key, value in os.environ.items() if not key.startswith('DEBCONF_')}
+            env['DEBCONF_SYSTEMRC'] = str(config)
+            key, seed = root / 'key.pub', root / 'preseed.cfg'
+            key.write_text('ssh-ed25519 Zml4dHVyZQ==')
+            desktop.mint_preseed(argparse.Namespace(public_key=key, output=seed))
+            subprocess.run(['debconf-set-selections', str(seed)], env=env, check=True,
+                           capture_output=True, text=True, timeout=20)
+            for line in seed.read_text().splitlines():
+                if '_command string ' not in line:
+                    continue
+                _, question, _, expected = line.split(' ', 3)
+                result = subprocess.run(['debconf-communicate', '-fnoninteractive', 'ubiquity'],
+                    input=f'GET {question}\n', env=env, check=True,
+                    capture_output=True, text=True, timeout=20)
+                self.assertEqual(result.stdout[:2], '0 ')
+                actual = result.stdout[2:].removesuffix('\n')
+                self.assertTrue(actual == expected,
+                    f'{question}: debconf changed/truncated {len(expected)} bytes to {len(actual)}')
+                subprocess.run(['sh', '-n'], input=actual, check=True,
+                               capture_output=True, text=True, timeout=20)
+
     def test_acquisition_cleanup_preserves_verified_payload_and_local_envelope(self):
         def envelope_at(path):
             path.mkdir()
