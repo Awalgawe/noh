@@ -1,0 +1,67 @@
+{
+  "assets": {
+    "NOH-0.1.4-linux-x64-materials.zip": {
+      "sha256": "d9421fb2a8913b677040d79ef5da90bfe1008f7a7541245546214756a34c3527",
+      "size": 365660280
+    },
+    "NOH-0.1.4-linux-x64.zip": {
+      "sha256": "493a3e4d7258ec282f7271edbf2c0f6b88d7f5ea197a5099719858a8080b2d18",
+      "size": 484732269
+    }
+  },
+  "cargo_tests": {
+    "failed": 0,
+    "ignored": 12,
+    "passed": 477,
+    "suites": 22
+  },
+  "ci": {
+    "artifact_id": 11997139158,
+    "conclusion": "success",
+    "github_transport_digest": "sha256:3a8da05185d8667b98c9059349565ac3be6ef2861d48cdae44cc3072375ae20a",
+    "run_attempt": "1",
+    "run_id": "38784097315",
+    "url": "https://github.com/Awalgawe/noh/actions/runs/38784097315"
+  },
+  "container_matrix": {
+    "contract_sha256": "104b9edcf8635b2ffe4ae744849991603a4f379f07a15731325d4ff418742733",
+    "path": "docs/release-evidence/linux-0.1.4-runtime.json",
+    "scope": "container-software-rendering",
+    "sha256": "392416194558f7e4be7308813f8ea2e727bb6da4e31811c02cafa46d695fc975",
+    "status": "passed"
+  },
+  "delivery_sha256": "13304be35c3f06b803a0c8a93d7041a933e9a9378b8bd1d4ea7688a402c8eff3",
+  "independent_review": {
+    "critic_thread": "01a13f7f-91d2-7981-b382-2e91455c7e9d",
+    "scope": "Exact candidate, source/materials, six container results and authenticated acquisition",
+    "verdict": "OK",
+    "version": "v23"
+  },
+  "integrity": {
+    "bundle_files": 49,
+    "canonical_source_files": 366,
+    "materials_files": 24339,
+    "provenance": "Full file maps equal prior reviewed candidate; all new bytes rehashed",
+    "reused_reviewed_material_files": 24334
+  },
+  "limits": [
+    "gh download does not expose original compressed transport archive for independent local rehash; native consumers authenticate that digest separately.",
+    "Container results do not qualify actual desktops or physical graphics/audio hardware.",
+    "Native evidence covers seven named virtual desktops; physical-device and human-listening qualification remain outside scope."
+  ],
+  "platform": "linux-x64",
+  "qualification_observations": {
+    "audio_gpu": "All six containers passed software graphics and synthetic audio checks. Native cases separately record the observed desktop session, host ALSA then libmpv loading, actual rendered GUI and NOH-only virtual sound-card output. Physical GPU/audio devices and human listening are outside the evidence.",
+    "clean_install": "The exact archive was extracted as an unprivileged user into /home/nohbuilder/NOH Linux CI 0.1.4 38784097315. Each native CI case additionally provisions a fresh disposable distribution and verifies the same 49-file payload before and after execution.",
+    "corresponding_sources": "Critic v23 verified the exact envelope, 24339 material files and 366 canonical source files against source commit 392b3a5799cd4848dd9f18310efe05a99e0e55c2. The 24334 unchanged third-party material entries retain their earlier reviewed provenance.",
+    "download_protection": "Native CI consumers authenticate the GitHub transport SHA-256 before extraction and validate the envelope, application archive and complete file inventory. Their candidate receipts agree with the independently verified local envelope. Acquisition regression tests reject changed or extra package files.",
+    "media_export": "The shared probe imports synthetic media, renders the preview, exports a composition, fully decodes it and verifies refusal to overwrite the existing export. Each native report binds the export and transcript hashes; native file-chooser and external-player screens are separate observations.",
+    "native_import_closure": "The verified host-library package contains no bundled Linux shared libraries. Its host dependency contract and native linkage checks passed in the sealed CI envelope and all six container environments; actual desktop loader outcomes are recorded separately.",
+    "offline_transcription": "The packaged CPU transcription worker and model produced nonempty subtitles from the retained synthetic speech fixture. Native tests remove external default routes before execution and retain runtime-routes.txt; they do not download a model during the test.",
+    "rust_notices": "The reviewed materials include the locked Rust dependency sources, original notices and Rust compiler/standard-library source correspondence. v23 verified the retained material map; no dependency bytes changed in subsequent desktop trials."
+  },
+  "schema_version": 1,
+  "scope": "Exact CI candidate integrity, corresponding materials and container validation; native qualification is separate",
+  "source_commit": "392b3a5799cd4848dd9f18310efe05a99e0e55c2",
+  "version": "0.1.4"
+}

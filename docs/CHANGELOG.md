@@ -11,7 +11,8 @@ builds are not public releases.
   libraries. This keeps the media, graphics and audio stack with the host's
   drivers/plugins and removes the forced ALSA plugin directory. CPU speech
   remains included. Install the declared host dependencies and extract into a
-  fresh directory. Final-package desktop qualification remains pending.
+  fresh directory. The [candidate report](LINUX_0_1_4_CANDIDATE.md) records the
+  seven desktop results, exact files and independent-review boundary.
 - Find the Linux distribution's FFmpeg when launched from `/`, `/usr` or
   `/usr/bin`, while continuing to reject implicit working-directory lookup.
 - Keep Linux preview audio active while ALSA recovers from a temporary buffer
