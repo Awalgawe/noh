@@ -9,6 +9,7 @@ import ctypes as C
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 
@@ -146,6 +147,7 @@ def main():
     parser.add_argument('--appdir', type=Path, required=True)
     parser.add_argument('--graphics', choices=('wayland', 'surfaceless'), required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--retain-media', action='store_true', help='Retain synthetic import/export files for subsequent desktop interaction')
     parser.add_argument('--loader-only', action='store_true', help='Record an explicitly partial graphics/audio check without the FFmpeg export')
     parser.add_argument('--gui', action='store_true', help='Use the existing NOH capture path for actual import and video/audio preview')
     parser.add_argument('--speech-fixture', type=Path, help='Synthetic spoken WAV for actual packaged CPU transcription')
@@ -204,6 +206,12 @@ def main():
                 result['gui'] = gui_preview(args.appdir, clip, soundtrack, tmp, args.output.parent)
             if args.speech_fixture:
                 result['transcription'] = transcribe(home, args.speech_fixture.resolve(), tmp)
+            if args.retain_media:
+                media = args.output.parent / 'media'
+                media.mkdir(exist_ok=False)
+                for source in (clip, output):
+                    shutil.copy2(source, media / source.name)
+                result['retained_media'] = {path.name: digest(path) for path in media.iterdir()}
     write(args.output, result)
     print(json.dumps({'scope': result['scope'], 'graphics': result['graphics'],
                       'silent_frames': result['audio']['silent_frames'], 'output': str(args.output)}, indent=2))

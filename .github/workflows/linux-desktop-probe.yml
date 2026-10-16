@@ -11,10 +11,19 @@ on:
       - assets/linux-desktop-images.json
   workflow_dispatch:
     inputs:
+      suite:
+        description: All configured desktops or a bounded subset
+        type: choice
+        options: [all, cloud, baseline, additional, mint]
+        default: all
+      cases_json:
+        description: Optional JSON array of approved case IDs; overrides suite for targeted retries
+        type: string
+        default: ''
       source_run:
         description: Successful Linux Release run containing the candidate
         type: string
-        default: '38757764365'
+        default: '38784097315'
       source_attempt:
         description: Exact source run attempt
         type: string
@@ -22,7 +31,7 @@ on:
       source_commit:
         description: Exact source commit retained on main
         type: string
-        default: '51c5c29214986d453db5499a8b386ccf6c971743'
+        default: '392b3a5799cd4848dd9f18310efe05a99e0e55c2'
 
 permissions:
   contents: read
@@ -40,31 +49,41 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        case: [ubuntu-24.04, ubuntu-26.04, debian-13]
+        case: ${{ fromJSON(inputs.cases_json || (inputs.suite == 'mint' && '["mint-22.3"]' || inputs.suite == 'additional' && '["fedora-44","opensuse-tumbleweed","arch"]' || inputs.suite == 'baseline' && '["ubuntu-24.04","ubuntu-26.04","debian-13"]' || inputs.suite == 'cloud' && '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch"]' || '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch","mint-22.3"]')) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Check native evidence guards before downloading images or candidates
+        env:
+          DESKTOP_CASE: ${{ matrix.case }}
         run: |
           bash -n tools/probe-linux-desktop-vm.sh
           python3 tools/test-linux-desktop.py
+          PYTHONPATH=tools python3 -c 'import os; from linux_desktop_candidate import case_inputs; case_inputs(os.environ["DESKTOP_CASE"])'
       - name: Acquire and verify the exact existing candidate without rebuilding
         env:
           GH_TOKEN: ${{ github.token }}
-          SOURCE_RUN: ${{ inputs.source_run || '38757764365' }}
+          SOURCE_RUN: ${{ inputs.source_run || '38784097315' }}
           SOURCE_ATTEMPT: ${{ inputs.source_attempt || '1' }}
-          SOURCE_COMMIT: ${{ inputs.source_commit || '51c5c29214986d453db5499a8b386ccf6c971743' }}
+          SOURCE_COMMIT: ${{ inputs.source_commit || '392b3a5799cd4848dd9f18310efe05a99e0e55c2' }}
         run: |
           python3 tools/linux_desktop_candidate.py prepare --repository "$GITHUB_REPOSITORY" \
             --workflow 379053207 --run "$SOURCE_RUN" --attempt "$SOURCE_ATTEMPT" \
             --commit "$SOURCE_COMMIT" --output "$RUNNER_TEMP/noh-native-candidate"
           mkdir -p logs/linux-desktop-probe
           cp "$RUNNER_TEMP/noh-native-candidate/"{CANDIDATE,source-run,source-artifact}.json logs/linux-desktop-probe/
-      - name: Test actual GNOME desktop with virtual graphics and audio
+      - name: Restore pinned distribution image
+        id: desktop-image
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/noh-desktop-image
+          key: linux-desktop-image-v1-${{ matrix.case }}-${{ hashFiles('assets/linux-desktop-images.json') }}
+      - name: Test actual desktop with virtual graphics and audio
         env:
           NOH_DESKTOP_CASE: ${{ matrix.case }}
           NOH_CANDIDATE_PAYLOAD: ${{ runner.temp }}/noh-native-candidate/payload.tar
+          NOH_DESKTOP_IMAGE_CACHE: ${{ runner.temp }}/noh-desktop-image
         run: timeout --signal=TERM --kill-after=30s 35m bash tools/probe-linux-desktop-vm.sh
       - name: Retain native observations separately from the sealed candidate
         if: always()
@@ -74,3 +93,9 @@ jobs:
           path: logs/linux-desktop-probe/
           if-no-files-found: error
           retention-days: 7
+      - name: Save verified distribution image even when desktop testing fails
+        if: always() && steps.desktop-image.outputs.cache-hit != 'true' && hashFiles('logs/linux-desktop-probe/image-verified.txt') != ''
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/noh-desktop-image
+          key: ${{ steps.desktop-image.outputs.cache-primary-key }}

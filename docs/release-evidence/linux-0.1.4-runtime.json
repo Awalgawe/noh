@@ -1,0 +1,196 @@
+{
+  "candidate_sha256": "493a3e4d7258ec282f7271edbf2c0f6b88d7f5ea197a5099719858a8080b2d18",
+  "cases": {
+    "arch": {
+      "checks": {
+        "export": "passed",
+        "import": "passed",
+        "installation": "passed",
+        "startup": "passed",
+        "transcription": "passed",
+        "video_audio_preview": "passed"
+      },
+      "elf_sha256": {
+        "usr/lib/noh/bin/noh-cli": "1c4ddad407a4ecbfce4cec7fba4a6605b650ecb1647fa6bd4c9f98049e0a9dec",
+        "usr/lib/noh/bin/noh-mcp": "8622ffb56614d3f1a59becfd14067bae902ed879c1124922a31f1f5630326c90",
+        "usr/lib/noh/bin/speech/whisper-cli": "2c6984aa42efd1b6615f8138d7fbd1b1f9ae3cb15c6322886a0ac640a34afd2b",
+        "usr/lib/noh/noh-app": "8afa58f967002e473afbe040aa633d3670206aea5b35b6817314f36d6cceea2f"
+      },
+      "environment": {
+        "audio": "pipewire",
+        "display": "wayland",
+        "id": "arch",
+        "image": "docker.io/library/archlinux@sha256:3c64b538588416593f69a1aebd2f2ec0f2541b29159f32556fa7def2167147a0",
+        "package_repositories": "Distribution repositories at image preparation time; exact installed versions are recorded.",
+        "packages_sha256": "82e8be8a72caf3956e8d7fed9d2df8b6cfd6d37f41c36d5c395da3ec5d869944",
+        "prepared_at": "2026-10-15T18:27:14.222102+00:00",
+        "prepared_image_created": "2026-10-15T18:27:10.063075625Z",
+        "prepared_image_id": "sha256:09e861b1588ed58cbd9a017386375c1ab4c1668e76201f34b8553a4ab9a910df",
+        "recipe_sha256": "9e75313b93bbab9a48d118ab9f19ede08dd7e5efe62ef5200f7b25830ae03a68"
+      },
+      "probe_sha256": "2952b577a77ffd330f1866d943735e64bae1de2108d1f00f631c63f50b3e7e23",
+      "status": "passed"
+    },
+    "debian-13": {
+      "checks": {
+        "export": "passed",
+        "import": "passed",
+        "installation": "passed",
+        "startup": "passed",
+        "transcription": "passed",
+        "video_audio_preview": "passed"
+      },
+      "elf_sha256": {
+        "usr/lib/noh/bin/noh-cli": "1c4ddad407a4ecbfce4cec7fba4a6605b650ecb1647fa6bd4c9f98049e0a9dec",
+        "usr/lib/noh/bin/noh-mcp": "8622ffb56614d3f1a59becfd14067bae902ed879c1124922a31f1f5630326c90",
+        "usr/lib/noh/bin/speech/whisper-cli": "2c6984aa42efd1b6615f8138d7fbd1b1f9ae3cb15c6322886a0ac640a34afd2b",
+        "usr/lib/noh/noh-app": "8afa58f967002e473afbe040aa633d3670206aea5b35b6817314f36d6cceea2f"
+      },
+      "environment": {
+        "audio": "pulseaudio",
+        "display": "x11",
+        "id": "debian-13",
+        "image": "docker.io/library/debian@sha256:913f6706df59a68922d1dd08f78c2476560a8d367897200a6005b00e5f67c2d5",
+        "package_repositories": "Distribution repositories at image preparation time; exact installed versions are recorded.",
+        "packages_sha256": "47a588f4626e6d0eb099af6c7b9ccf6c05217e19c5839ab1a3903d0373449a99",
+        "prepared_at": "2026-10-15T18:26:21.892501+00:00",
+        "prepared_image_created": "2026-10-15T18:26:19.277484169Z",
+        "prepared_image_id": "sha256:5c0fad01c6989a0801d00b8eade61aeb2205a128ffe90a37b27b0a250c01bb36",
+        "recipe_sha256": "42cd37a4b115051ad79adf74f2da92e3ef7c39a0594672dd9c1c06bfd39c03cb"
+      },
+      "probe_sha256": "904c7fcabaf0c0772619cbf34339f6d33964f3a28ac896203cf90b537c3bd4cc",
+      "status": "passed"
+    },
+    "fedora-44": {
+      "checks": {
+        "export": "passed",
+        "import": "passed",
+        "installation": "passed",
+        "startup": "passed",
+        "transcription": "passed",
+        "video_audio_preview": "passed"
+      },
+      "elf_sha256": {
+        "usr/lib/noh/bin/noh-cli": "1c4ddad407a4ecbfce4cec7fba4a6605b650ecb1647fa6bd4c9f98049e0a9dec",
+        "usr/lib/noh/bin/noh-mcp": "8622ffb56614d3f1a59becfd14067bae902ed879c1124922a31f1f5630326c90",
+        "usr/lib/noh/bin/speech/whisper-cli": "2c6984aa42efd1b6615f8138d7fbd1b1f9ae3cb15c6322886a0ac640a34afd2b",
+        "usr/lib/noh/noh-app": "8afa58f967002e473afbe040aa633d3670206aea5b35b6817314f36d6cceea2f"
+      },
+      "environment": {
+        "audio": "pipewire",
+        "display": "wayland",
+        "id": "fedora-44",
+        "image": "registry.fedoraproject.org/fedora@sha256:6fb67bf40d42d33f9805620b7fc04741df3ce328a8804308dfe5d186253f3f81",
+        "package_repositories": "Distribution repositories at image preparation time; exact installed versions are recorded.",
+        "packages_sha256": "002e07a9f19406696bd959cd89f675fe3f2644d3ca2cb48e7a9ba4158b5d7831",
+        "prepared_at": "2026-10-15T18:26:46.442891+00:00",
+        "prepared_image_created": "2026-10-15T18:26:41.827129725Z",
+        "prepared_image_id": "sha256:00251e8065c38f23ae24a19d9e513beeb0a5873267ffaa754018f7eb04132c4d",
+        "recipe_sha256": "a1a93d438620496cd9457bf9ac3fbf932410bd0437d0eb07996399f1ffe6fead"
+      },
+      "probe_sha256": "9163035e8781bc645d99a91b7b942e793f3f1805d04b66cb3930c65261db22a5",
+      "status": "passed"
+    },
+    "opensuse-tumbleweed": {
+      "checks": {
+        "export": "passed",
+        "import": "passed",
+        "installation": "passed",
+        "startup": "passed",
+        "transcription": "passed",
+        "video_audio_preview": "passed"
+      },
+      "elf_sha256": {
+        "usr/lib/noh/bin/noh-cli": "1c4ddad407a4ecbfce4cec7fba4a6605b650ecb1647fa6bd4c9f98049e0a9dec",
+        "usr/lib/noh/bin/noh-mcp": "8622ffb56614d3f1a59becfd14067bae902ed879c1124922a31f1f5630326c90",
+        "usr/lib/noh/bin/speech/whisper-cli": "2c6984aa42efd1b6615f8138d7fbd1b1f9ae3cb15c6322886a0ac640a34afd2b",
+        "usr/lib/noh/noh-app": "8afa58f967002e473afbe040aa633d3670206aea5b35b6817314f36d6cceea2f"
+      },
+      "environment": {
+        "audio": "pipewire",
+        "display": "x11",
+        "id": "opensuse-tumbleweed",
+        "image": "registry.opensuse.org/opensuse/tumbleweed@sha256:1b8d006ee5f6e04b78f91b40a5b61bce769b4f5c8ddc2ace3b91804e99769b2a",
+        "package_repositories": "Distribution repositories at image preparation time; exact installed versions are recorded.",
+        "packages_sha256": "963046189c71d987418b33c909df7a25c1b39484f45064ee38c043dc3495b9ef",
+        "prepared_at": "2026-10-15T18:27:27.099747+00:00",
+        "prepared_image_created": "2026-10-15T18:27:24.007009449Z",
+        "prepared_image_id": "sha256:d0b4733bf0f374f133ad190932a164d4d44002f5f0d7cf343fc6a52f56c24981",
+        "recipe_sha256": "deafd086591462a51e824849e55aab40b4a1fbbaca9709249dc5ab53d7719304"
+      },
+      "probe_sha256": "4a0e34f7dc4ac2b3fd786e4d2febda8c0fb30981e20b5ca002a8fa9a5adb52e8",
+      "status": "passed"
+    },
+    "ubuntu-24.04": {
+      "checks": {
+        "export": "passed",
+        "import": "passed",
+        "installation": "passed",
+        "startup": "passed",
+        "transcription": "passed",
+        "video_audio_preview": "passed"
+      },
+      "elf_sha256": {
+        "usr/lib/noh/bin/noh-cli": "1c4ddad407a4ecbfce4cec7fba4a6605b650ecb1647fa6bd4c9f98049e0a9dec",
+        "usr/lib/noh/bin/noh-mcp": "8622ffb56614d3f1a59becfd14067bae902ed879c1124922a31f1f5630326c90",
+        "usr/lib/noh/bin/speech/whisper-cli": "2c6984aa42efd1b6615f8138d7fbd1b1f9ae3cb15c6322886a0ac640a34afd2b",
+        "usr/lib/noh/noh-app": "8afa58f967002e473afbe040aa633d3670206aea5b35b6817314f36d6cceea2f"
+      },
+      "environment": {
+        "audio": "pulseaudio",
+        "display": "x11",
+        "id": "ubuntu-24.04",
+        "image": "docker.io/library/ubuntu@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55",
+        "package_repositories": "Distribution repositories at image preparation time; exact installed versions are recorded.",
+        "packages_sha256": "c24821e4074b2c3f3cd9bed0969cc44c838b23838a17da04d1cbf142504411da",
+        "prepared_at": "2026-10-15T18:25:46.491293+00:00",
+        "prepared_image_created": "2026-10-15T18:25:43.432710369Z",
+        "prepared_image_id": "sha256:10539ecafe8772cc8667c48a6392030d6dee03925daecf237944fb2a1997b708",
+        "recipe_sha256": "1b79272917aaee983f7babf01ab8d33160b9358ebdc969f42a6e09a290d2f61e"
+      },
+      "probe_sha256": "5823bf1d97176e32fd4a99a87cc510faba041a20d90450499a1c4342b1aee3b2",
+      "status": "passed"
+    },
+    "ubuntu-26.04": {
+      "checks": {
+        "export": "passed",
+        "import": "passed",
+        "installation": "passed",
+        "startup": "passed",
+        "transcription": "passed",
+        "video_audio_preview": "passed"
+      },
+      "elf_sha256": {
+        "usr/lib/noh/bin/noh-cli": "1c4ddad407a4ecbfce4cec7fba4a6605b650ecb1647fa6bd4c9f98049e0a9dec",
+        "usr/lib/noh/bin/noh-mcp": "8622ffb56614d3f1a59becfd14067bae902ed879c1124922a31f1f5630326c90",
+        "usr/lib/noh/bin/speech/whisper-cli": "2c6984aa42efd1b6615f8138d7fbd1b1f9ae3cb15c6322886a0ac640a34afd2b",
+        "usr/lib/noh/noh-app": "8afa58f967002e473afbe040aa633d3670206aea5b35b6817314f36d6cceea2f"
+      },
+      "environment": {
+        "audio": "pipewire",
+        "display": "wayland",
+        "id": "ubuntu-26.04",
+        "image": "docker.io/library/ubuntu@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7",
+        "package_repositories": "Distribution repositories at image preparation time; exact installed versions are recorded.",
+        "packages_sha256": "60cd4d44bc756170aed03e4c43b3fbd7477a48c6473807695a063249462fdef0",
+        "prepared_at": "2026-10-15T18:25:48.290161+00:00",
+        "prepared_image_created": "2026-10-15T18:25:45.47138121Z",
+        "prepared_image_id": "sha256:3cf3d97b1fbcb8316ecdf124e2c5501c256baa710d03feb530f37bb350a5e238",
+        "recipe_sha256": "4072d2f0eec8c4ac2cac08a54a0ec9d4196229e5d8d5fec4c4f90388a5e66e64"
+      },
+      "probe_sha256": "af4f1b4a9bc0af67146e84a9fe4851de8f44ba622332f2894e41032cecc1bf03",
+      "status": "passed"
+    }
+  },
+  "delivery_sha256": "13304be35c3f06b803a0c8a93d7041a933e9a9378b8bd1d4ea7688a402c8eff3",
+  "desktop_qualification": false,
+  "matrix_sha256": "104b9edcf8635b2ffe4ae744849991603a4f379f07a15731325d4ff418742733",
+  "physical_hardware_qualification": false,
+  "run_attempt": "1",
+  "run_id": "38784097315",
+  "schema_version": 1,
+  "scope": "container-software-rendering",
+  "source_commit": "392b3a5799cd4848dd9f18310efe05a99e0e55c2",
+  "speech_fixture_sha256": "40c5d770982dbe1245455384f0c465b7cbdfb986c1a039a6256cb52833411307",
+  "status": "passed"
+}
