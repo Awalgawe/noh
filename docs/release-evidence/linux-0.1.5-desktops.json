@@ -1,0 +1,311 @@
+{
+  "cases": {
+    "arch": {
+      "checks": {
+        "export": "passed",
+        "import": "passed",
+        "installation": "passed",
+        "startup": "passed",
+        "transcription": "passed",
+        "video_audio_preview": "passed"
+      },
+      "elf_sha256": {
+        "usr/lib/noh/bin/noh-cli": "ff0e17ab846043031d71df0390c8778dfd113ad660fb7214541d97ee40bcb9ce",
+        "usr/lib/noh/bin/noh-mcp": "2890b42f3e6611988a262b81931a66da9dc8d41e21176755568af249d4418522",
+        "usr/lib/noh/bin/speech/whisper-cli": "2c6984aa42efd1b6615f8138d7fbd1b1f9ae3cb15c6322886a0ac640a34afd2b",
+        "usr/lib/noh/noh-app": "9ef208c55e24211a45867f175b3116d41e739db93b78ccbbd3f8a4ebf7945239"
+      },
+      "environment": {
+        "audio": "pipewire",
+        "audio_device": "alsa_output.pci-0000_00_03.0.analog-stereo",
+        "desktop": "KDE",
+        "display": "wayland",
+        "gpu": "QEMU virtio GPU; see hardware.txt and result.json renderer",
+        "id": "arch",
+        "machine_kind": "virtual-machine",
+        "os_image_identity": {
+          "algorithm": "sha256",
+          "digest": "08754e28d91b1680086c6211ef4df13559e766fff7cdb4006489b14b5d281f08",
+          "os_id": "arch",
+          "reboot_after_provisioning": true,
+          "session": "plasma.desktop",
+          "url": "https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg-20261015.611680.qcow2",
+          "version_id": null
+        },
+        "reviewer": "Actor, Codex thread 01a14698-b70a-75f2-b053-ce89a834e3dd; independent release review recorded separately",
+        "tested_at": "2026-10-17T13:58:34.967143+00:00"
+      },
+      "evidence": [
+        {
+          "path": "docs/release-evidence/linux-0.1.5-desktop-arch.json",
+          "sha256": "65a38775202d37ad942ced5f4b7cab9aef65b411f33b12f05e07dbae407e0a64"
+        }
+      ],
+      "status": "passed"
+    },
+    "debian-13": {
+      "checks": {
+        "export": "passed",
+        "import": "passed",
+        "installation": "passed",
+        "startup": "passed",
+        "transcription": "passed",
+        "video_audio_preview": "passed"
+      },
+      "elf_sha256": {
+        "usr/lib/noh/bin/noh-cli": "ff0e17ab846043031d71df0390c8778dfd113ad660fb7214541d97ee40bcb9ce",
+        "usr/lib/noh/bin/noh-mcp": "2890b42f3e6611988a262b81931a66da9dc8d41e21176755568af249d4418522",
+        "usr/lib/noh/bin/speech/whisper-cli": "2c6984aa42efd1b6615f8138d7fbd1b1f9ae3cb15c6322886a0ac640a34afd2b",
+        "usr/lib/noh/noh-app": "9ef208c55e24211a45867f175b3116d41e739db93b78ccbbd3f8a4ebf7945239"
+      },
+      "environment": {
+        "audio": "pulseaudio",
+        "audio_device": "alsa_output.pci-0000_00_03.0.analog-stereo",
+        "desktop": "GNOME",
+        "display": "x11",
+        "gpu": "QEMU virtio GPU; see hardware.txt and result.json renderer",
+        "id": "debian-13",
+        "machine_kind": "virtual-machine",
+        "os_image_identity": {
+          "algorithm": "sha512",
+          "digest": "6f0f93335bdef4ccf523c4317cc663ea52ca23b862667785f3d6d186ab4674a937385ccff0c55996b4b2e4c19e440cdf211e2a75ffa2f6548037ab43950c841d",
+          "os_id": "debian",
+          "session": "gnome-xorg.desktop",
+          "url": "https://cloud.debian.org/images/cloud/trixie/20261001-2618/debian-13-generic-amd64-20261001-2618.qcow2",
+          "version_id": "13"
+        },
+        "reviewer": "Actor, Codex thread 01a14698-b70a-75f2-b053-ce89a834e3dd; independent release review recorded separately",
+        "tested_at": "2026-10-17T13:48:11.229900+00:00"
+      },
+      "evidence": [
+        {
+          "path": "docs/release-evidence/linux-0.1.5-desktop-debian-13.json",
+          "sha256": "dc697552846bf81933cdf9b15fb718b6d47706aa4b23fc4410433ecf2cabb791"
+        }
+      ],
+      "status": "passed"
+    },
+    "fedora-44": {
+      "checks": {
+        "export": "passed",
+        "import": "passed",
+        "installation": "passed",
+        "startup": "passed",
+        "transcription": "passed",
+        "video_audio_preview": "passed"
+      },
+      "elf_sha256": {
+        "usr/lib/noh/bin/noh-cli": "ff0e17ab846043031d71df0390c8778dfd113ad660fb7214541d97ee40bcb9ce",
+        "usr/lib/noh/bin/noh-mcp": "2890b42f3e6611988a262b81931a66da9dc8d41e21176755568af249d4418522",
+        "usr/lib/noh/bin/speech/whisper-cli": "2c6984aa42efd1b6615f8138d7fbd1b1f9ae3cb15c6322886a0ac640a34afd2b",
+        "usr/lib/noh/noh-app": "9ef208c55e24211a45867f175b3116d41e739db93b78ccbbd3f8a4ebf7945239"
+      },
+      "environment": {
+        "audio": "pipewire",
+        "audio_device": "alsa_output.pci-0000_00_03.0.analog-stereo",
+        "desktop": "GNOME",
+        "display": "wayland",
+        "gpu": "QEMU virtio GPU; see hardware.txt and result.json renderer",
+        "id": "fedora-44",
+        "machine_kind": "virtual-machine",
+        "os_image_identity": {
+          "algorithm": "sha256",
+          "digest": "28680fe5b371a5a82ebf43a31926e086a168e59949d03969c5093e7071f90b7f",
+          "os_id": "fedora",
+          "reboot_after_provisioning": true,
+          "session": "gnome.desktop",
+          "url": "https://download.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-44-1.7.x86_64.qcow2",
+          "version_id": "44"
+        },
+        "reviewer": "Actor, Codex thread 01a14698-b70a-75f2-b053-ce89a834e3dd; independent release review recorded separately",
+        "tested_at": "2026-10-17T13:53:12.157310+00:00"
+      },
+      "evidence": [
+        {
+          "path": "docs/release-evidence/linux-0.1.5-desktop-fedora-44.json",
+          "sha256": "45b1636d2988c4f9cc0b8255b881e84059f76a1d712f95c8f28e268653d4ee92"
+        }
+      ],
+      "status": "passed"
+    },
+    "mint-22.3": {
+      "checks": {
+        "export": "passed",
+        "import": "passed",
+        "installation": "passed",
+        "startup": "passed",
+        "transcription": "passed",
+        "video_audio_preview": "passed"
+      },
+      "elf_sha256": {
+        "usr/lib/noh/bin/noh-cli": "ff0e17ab846043031d71df0390c8778dfd113ad660fb7214541d97ee40bcb9ce",
+        "usr/lib/noh/bin/noh-mcp": "2890b42f3e6611988a262b81931a66da9dc8d41e21176755568af249d4418522",
+        "usr/lib/noh/bin/speech/whisper-cli": "2c6984aa42efd1b6615f8138d7fbd1b1f9ae3cb15c6322886a0ac640a34afd2b",
+        "usr/lib/noh/noh-app": "9ef208c55e24211a45867f175b3116d41e739db93b78ccbbd3f8a4ebf7945239"
+      },
+      "environment": {
+        "audio": "pipewire",
+        "audio_device": "alsa_output.pci-0000_00_03.0.analog-stereo",
+        "desktop": "Cinnamon",
+        "display": "x11",
+        "gpu": "QEMU virtio GPU; see hardware.txt and result.json renderer",
+        "id": "mint-22.3",
+        "machine_kind": "virtual-machine",
+        "os_image_identity": {
+          "algorithm": "sha256",
+          "digest": "a081ab202cfda17f6924128dbd2de8b63518ac0531bcfe3f1a1b88097c459bd4",
+          "format": "iso",
+          "installation_method": "ubiquity-preseed",
+          "os_id": "linuxmint",
+          "session": "cinnamon",
+          "url": "https://mirrors.edge.kernel.org/linuxmint/stable/22.3/linuxmint-22.3-cinnamon-64bit.iso",
+          "version_id": "22.3"
+        },
+        "reviewer": "Actor, Codex thread 01a14698-b70a-75f2-b053-ce89a834e3dd; independent release review recorded separately",
+        "tested_at": "2026-10-17T14:11:12.279057+00:00"
+      },
+      "evidence": [
+        {
+          "path": "docs/release-evidence/linux-0.1.5-desktop-mint-22.3.json",
+          "sha256": "e963166c6c182d680aaac3ba0da84b73898aa87054397dc40cd212c5fc1c0388"
+        }
+      ],
+      "status": "passed"
+    },
+    "opensuse-tumbleweed": {
+      "checks": {
+        "export": "passed",
+        "import": "passed",
+        "installation": "passed",
+        "startup": "passed",
+        "transcription": "passed",
+        "video_audio_preview": "passed"
+      },
+      "elf_sha256": {
+        "usr/lib/noh/bin/noh-cli": "ff0e17ab846043031d71df0390c8778dfd113ad660fb7214541d97ee40bcb9ce",
+        "usr/lib/noh/bin/noh-mcp": "2890b42f3e6611988a262b81931a66da9dc8d41e21176755568af249d4418522",
+        "usr/lib/noh/bin/speech/whisper-cli": "2c6984aa42efd1b6615f8138d7fbd1b1f9ae3cb15c6322886a0ac640a34afd2b",
+        "usr/lib/noh/noh-app": "9ef208c55e24211a45867f175b3116d41e739db93b78ccbbd3f8a4ebf7945239"
+      },
+      "environment": {
+        "audio": "pipewire",
+        "audio_device": "alsa_output.pci-0000_00_03.0.analog-stereo",
+        "desktop": "KDE",
+        "display": "x11",
+        "gpu": "QEMU virtio GPU; see hardware.txt and result.json renderer",
+        "id": "opensuse-tumbleweed",
+        "machine_kind": "virtual-machine",
+        "os_image_identity": {
+          "algorithm": "sha256",
+          "digest": "85a0e94015930f59d4e3332bd7a308a1bcd87111707d1c29ced1ff8a647916f2",
+          "os_id": "opensuse-tumbleweed",
+          "reboot_after_provisioning": true,
+          "session": "plasma6.desktop",
+          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261014.qcow2",
+          "version_id": null
+        },
+        "reviewer": "Actor, Codex thread 01a14698-b70a-75f2-b053-ce89a834e3dd; independent release review recorded separately",
+        "tested_at": "2026-10-17T13:55:00.719506+00:00"
+      },
+      "evidence": [
+        {
+          "path": "docs/release-evidence/linux-0.1.5-desktop-opensuse-tumbleweed.json",
+          "sha256": "690d9f944e9786fbe36a53726fbbfbdf2bd239fede646f2a5227be049ba2cdfc"
+        }
+      ],
+      "status": "passed"
+    },
+    "ubuntu-24.04": {
+      "checks": {
+        "export": "passed",
+        "import": "passed",
+        "installation": "passed",
+        "startup": "passed",
+        "transcription": "passed",
+        "video_audio_preview": "passed"
+      },
+      "elf_sha256": {
+        "usr/lib/noh/bin/noh-cli": "ff0e17ab846043031d71df0390c8778dfd113ad660fb7214541d97ee40bcb9ce",
+        "usr/lib/noh/bin/noh-mcp": "2890b42f3e6611988a262b81931a66da9dc8d41e21176755568af249d4418522",
+        "usr/lib/noh/bin/speech/whisper-cli": "2c6984aa42efd1b6615f8138d7fbd1b1f9ae3cb15c6322886a0ac640a34afd2b",
+        "usr/lib/noh/noh-app": "9ef208c55e24211a45867f175b3116d41e739db93b78ccbbd3f8a4ebf7945239"
+      },
+      "environment": {
+        "audio": "pipewire",
+        "audio_device": "alsa_output.pci-0000_00_03.0.analog-stereo",
+        "desktop": "GNOME",
+        "display": "wayland",
+        "gpu": "QEMU virtio GPU; see hardware.txt and result.json renderer",
+        "id": "ubuntu-24.04",
+        "machine_kind": "virtual-machine",
+        "os_image_identity": {
+          "algorithm": "sha256",
+          "digest": "6a81c37564db9b1ee84e141922625e1d7c5b389b99bb3c572e0243607d5bb4d2",
+          "os_id": "ubuntu",
+          "reboot_after_provisioning": true,
+          "session": "gnome.desktop",
+          "url": "https://cloud-images.ubuntu.com/noble/20260926/noble-server-cloudimg-amd64.img",
+          "version_id": "24.04"
+        },
+        "reviewer": "Actor, Codex thread 01a14698-b70a-75f2-b053-ce89a834e3dd; independent release review recorded separately",
+        "tested_at": "2026-10-17T13:47:28.046169+00:00"
+      },
+      "evidence": [
+        {
+          "path": "docs/release-evidence/linux-0.1.5-desktop-ubuntu-24.04.json",
+          "sha256": "35462481fc0d6cc08a19ab8ac624fe46fe6ef3ac14cab59284323efce591c3d2"
+        }
+      ],
+      "status": "passed"
+    },
+    "ubuntu-26.04": {
+      "checks": {
+        "export": "passed",
+        "import": "passed",
+        "installation": "passed",
+        "startup": "passed",
+        "transcription": "passed",
+        "video_audio_preview": "passed"
+      },
+      "elf_sha256": {
+        "usr/lib/noh/bin/noh-cli": "ff0e17ab846043031d71df0390c8778dfd113ad660fb7214541d97ee40bcb9ce",
+        "usr/lib/noh/bin/noh-mcp": "2890b42f3e6611988a262b81931a66da9dc8d41e21176755568af249d4418522",
+        "usr/lib/noh/bin/speech/whisper-cli": "2c6984aa42efd1b6615f8138d7fbd1b1f9ae3cb15c6322886a0ac640a34afd2b",
+        "usr/lib/noh/noh-app": "9ef208c55e24211a45867f175b3116d41e739db93b78ccbbd3f8a4ebf7945239"
+      },
+      "environment": {
+        "audio": "pipewire",
+        "audio_device": "alsa_output.pci-0000_00_03.0.analog-stereo",
+        "desktop": "GNOME",
+        "display": "wayland",
+        "gpu": "QEMU virtio GPU; see hardware.txt and result.json renderer",
+        "id": "ubuntu-26.04",
+        "machine_kind": "virtual-machine",
+        "os_image_identity": {
+          "algorithm": "sha256",
+          "digest": "8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2",
+          "os_id": "ubuntu",
+          "reboot_after_provisioning": true,
+          "session": "gnome.desktop",
+          "url": "https://cloud-images.ubuntu.com/resolute/20260927/resolute-server-cloudimg-amd64.img",
+          "version_id": "26.04"
+        },
+        "reviewer": "Actor, Codex thread 01a14698-b70a-75f2-b053-ce89a834e3dd; independent release review recorded separately",
+        "tested_at": "2026-10-17T13:51:17.316104+00:00"
+      },
+      "evidence": [
+        {
+          "path": "docs/release-evidence/linux-0.1.5-desktop-ubuntu-26.04.json",
+          "sha256": "f22714c744a1b7820d02662627686b2494cda0f49e65fdd567d819ed7defa821"
+        }
+      ],
+      "status": "passed"
+    }
+  },
+  "delivery_sha256": "ecc86c5b9563cf35230e3e2453de989bd2237e8cf7fe5ef82db3e234cb63fa7f",
+  "matrix_sha256": "44859fd9ccea53b51c56387987ed04a58447ce2996822629f1cb03adf5c1d04a",
+  "missing_cases": [],
+  "schema_version": 1,
+  "scope": "desktop-integration",
+  "status": "passed"
+}
