@@ -576,3 +576,17 @@ environment isolated and record that the proxy actually received the request.
 6. Make a small local reproduction before retrying a costly failed CI stage.
 7. Measure the next required cold/warm runs; keep only demonstrated improvements.
 8. Record residual costs and decide whether a prebuilt image is justified.
+
+## Verify pinned test images before compiling
+
+A digest pins content, not retention. Release run 39032946173 built and tested
+Linux 0.1.5, but its openSUSE container could not start: the distribution registry
+had removed the previously pinned manifest. The other five container cases passed;
+the failed matrix correctly prevented candidate upload and publication.
+
+The openSUSE row now uses the project's [official Docker Hub image](https://hub.docker.com/r/opensuse/tumbleweed),
+resolved to its Linux amd64 manifest on 2026-10-17. This is still an immutable
+digest, not `latest`; it is not a guarantee of permanent registry retention.
+Release preflight checks every pinned container manifest before a new Linux build
+or verification run spends compilation time. Draft publication of an already
+qualified candidate does not depend on those images remaining downloadable.

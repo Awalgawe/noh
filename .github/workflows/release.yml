@@ -58,6 +58,7 @@ jobs:
           python3 - <<'PY'
           import os
           import re
+          import subprocess
           import delivery
           if os.environ['GITHUB_REF'] != 'refs/heads/main':
               raise SystemExit('Release must run from main')
@@ -77,6 +78,12 @@ jobs:
           if stage != 'verify':
               for platform in platforms:
                   delivery.authorize_redistribution(platform)
+          if stage in ('verify', 'build') and 'linux-x64' in platforms:
+              from linux_matrix import cases
+              for case in cases():
+                  print('Checking pinned Linux test image: ' + case['id'], flush=True)
+                  subprocess.run(['docker', 'buildx', 'imagetools', 'inspect', '--raw', case['image']],
+                                 stdout=subprocess.DEVNULL, check=True, timeout=45)
           print('Release preflight passed; verify mode retains no application artifacts')
           PY
 
