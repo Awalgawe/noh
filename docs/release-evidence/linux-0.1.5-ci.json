@@ -1,0 +1,96 @@
+{
+  "assets": {
+    "NOH-0.1.5-linux-x64-materials.zip": {
+      "sha256": "5ac4c23960e66ea68ee236794c9cfaea5c160a48d4bee7c2ce77f07b1140b13b",
+      "size": 365754866
+    },
+    "NOH-0.1.5-linux-x64.zip": {
+      "sha256": "3933b2ac380e8699472525fa9b6d42174514494f43d1941ddc5d823e7fc0fae4",
+      "size": 484763457
+    }
+  },
+  "cargo_tests": {
+    "failed": 0,
+    "ignored": 12,
+    "passed": 477,
+    "suites": 22
+  },
+  "ci": {
+    "artifact_id": 12102976514,
+    "conclusion": "success",
+    "github_transport_digest": "sha256:ff4de48a0e1a64fc3505f58da88a5024364616076cdce3a2950070c8545e0919",
+    "run_attempt": "1",
+    "run_id": "39036065018",
+    "transport_independently_rehashed": true,
+    "url": "https://github.com/Awalgawe/noh/actions/runs/39036065018"
+  },
+  "container_matrix": {
+    "actual_gui_captures_reviewed": [
+      "arch",
+      "debian-13",
+      "fedora-44",
+      "opensuse-tumbleweed",
+      "ubuntu-24.04",
+      "ubuntu-26.04"
+    ],
+    "contract_sha256": "44859fd9ccea53b51c56387987ed04a58447ce2996822629f1cb03adf5c1d04a",
+    "path": "docs/release-evidence/linux-0.1.5-runtime.json",
+    "scope": "container-software-rendering",
+    "sha256": "f102f5bff1f9f20d2c14b2b51496738f934ec66a2e261f43375850f366629549",
+    "status": "passed"
+  },
+  "delivery_sha256": "ecc86c5b9563cf35230e3e2453de989bd2237e8cf7fe5ef82db3e234cb63fa7f",
+  "desktop_matrix": {
+    "path": "docs/release-evidence/linux-0.1.5-desktops.json",
+    "run_attempt": "1",
+    "run_id": "39037706317",
+    "scope": "desktop-integration",
+    "sha256": "f58b2a14e60cd4002f25ab396f22b665611281e4b8c79100e9c36ee47257cdc5",
+    "status": "passed",
+    "test_harness_commit": "1e2bbbd94c578115d45a750ab61493f7a1e48cae",
+    "visually_reviewed_cases": [
+      "ubuntu-24.04",
+      "ubuntu-26.04",
+      "debian-13",
+      "fedora-44",
+      "opensuse-tumbleweed",
+      "arch",
+      "mint-22.3"
+    ]
+  },
+  "independent_review": {
+    "critic_thread": "01a14995-743f-7c03-b385-9b1f3a98f3c8",
+    "requirement": "The exact frozen policy/evidence commit must receive an OK verdict before publication; this receipt does not claim that verdict.",
+    "scope": "Exact candidate, corresponding sources/materials, containers, native desktop evidence and publication notes"
+  },
+  "integrity": {
+    "bundle_files": 49,
+    "canonical_source_files": 381,
+    "materials_files": 24353,
+    "rust_notices_sha256": "310bc2695f60ee3cc60a89d454e9c98621a7d5a0b6ef1dda7fba34f591228693",
+    "unchanged_native_material_files": 7,
+    "unchanged_vendor_files": 24047,
+    "vendor_checked_files": 23850,
+    "vendor_packages": 486
+  },
+  "limits": [
+    "Container results do not qualify native desktops or physical graphics/audio hardware.",
+    "Native results cover the named QEMU desktops only; physical-device and human-listening acceptance remain outside scope.",
+    "Native Wayland-to-Wayland drops are checked on four desktop cases. Cross-protocol XWayland bridges are not universally qualified."
+  ],
+  "platform": "linux-x64",
+  "qualification_observations": {
+    "audio_gpu": "All six container captures visibly render the synthetic video with a ready export state; software graphics and synthetic audio probes pass. Native virtual desktop, rendered GUI and NOH-only recorded audio are documented separately. No physical GPU/audio or human listening claim is made.",
+    "clean_install": "Fresh disposable distribution environments extract and execute the exact CI archive as an ordinary user. Native candidate receipts bind the complete payload before and after execution.",
+    "corresponding_sources": "All 381 archived NOH source files match the canonical Git archive of the compiled source commit. All 24353 materials and 49 bundle files were rehashed. The 486 vendored crate manifests and 23850 source files match their Cargo checksum maps, including exact membership. Seven native material files and 24047 unchanged vendor files match the reviewed 0.1.4 maps; the three changed crates match the independently approved 0.1.5 input snapshot.",
+    "download_protection": "The raw GitHub artifact transport was downloaded through authenticated API access and locally rehashed against the immutable artifact digest before extraction. The envelope, asset hashes and every bundle/material member were then independently checked. Native consumers apply the same authenticated acquisition guard.",
+    "media_export": "The shared runtime probe imports synthetic media, renders video, exports and fully decodes a composition, and refuses to overwrite its existing output. Native chooser, cancellation, import and exported-file opening are separately observed.",
+    "native_import_closure": "The sealed package contains no bundled Linux shared libraries. ELF linkage, executable modes and the host dependency contract passed envelope verification and the six distribution probes. Actual desktop loader observations are retained separately.",
+    "offline_transcription": "The packaged CPU worker and included model produce nonempty subtitle cues from synthetic speech. Native runtime default routes are removed before execution and recorded; no model download occurs during the test.",
+    "rust_notices": "Generated Rust notices contain the original winit, egui-winit and ZIP notices verified against the approved input snapshot. The unchanged dispatch 0.2.0 missing-original-text exception concerns a macOS-only dependency, not a newly omitted Linux notice. Rust compiler/standard-library and retained native material maps are unchanged."
+  },
+  "schema_version": 1,
+  "scope": "Exact CI candidate integrity, corresponding materials and six containers; native desktop evidence is separate",
+  "source_commit": "1e2bbbd94c578115d45a750ab61493f7a1e48cae",
+  "version": "0.1.5"
+}

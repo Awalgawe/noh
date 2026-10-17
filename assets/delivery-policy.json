@@ -321,6 +321,55 @@
       "review_round": "linux-host-libraries-20261015-v30",
       "scope": "Exact Linux 0.1.4 host-runtime package and corresponding materials; six containers and all seven named QEMU desktops. Virtual graphics/audio only; no physical-device or human-listening qualification. Independent review must approve this exact policy/evidence commit before release authorization.",
       "source_commit": "392b3a5799cd4848dd9f18310efe05a99e0e55c2"
+    },
+    {
+      "delivery_sha256": "ecc86c5b9563cf35230e3e2453de989bd2237e8cf7fe5ef82db3e234cb63fa7f",
+      "evidence": {
+        "audio_gpu": {
+          "path": "docs/release-evidence/linux-0.1.5-ci.json",
+          "sha256": "023955c0e10708738109961d4ac148dd5176e7266ee42bb049b7bdb83991208e"
+        },
+        "clean_install": {
+          "path": "docs/release-evidence/linux-0.1.5-ci.json",
+          "sha256": "023955c0e10708738109961d4ac148dd5176e7266ee42bb049b7bdb83991208e"
+        },
+        "corresponding_sources": {
+          "path": "docs/release-evidence/linux-0.1.5-ci.json",
+          "sha256": "023955c0e10708738109961d4ac148dd5176e7266ee42bb049b7bdb83991208e"
+        },
+        "download_protection": {
+          "path": "docs/release-evidence/linux-0.1.5-ci.json",
+          "sha256": "023955c0e10708738109961d4ac148dd5176e7266ee42bb049b7bdb83991208e"
+        },
+        "linux_desktop_matrix": {
+          "path": "docs/release-evidence/linux-0.1.5-desktops.json",
+          "sha256": "f58b2a14e60cd4002f25ab396f22b665611281e4b8c79100e9c36ee47257cdc5"
+        },
+        "linux_runtime_matrix": {
+          "path": "docs/release-evidence/linux-0.1.5-runtime.json",
+          "sha256": "f102f5bff1f9f20d2c14b2b51496738f934ec66a2e261f43375850f366629549"
+        },
+        "media_export": {
+          "path": "docs/release-evidence/linux-0.1.5-ci.json",
+          "sha256": "023955c0e10708738109961d4ac148dd5176e7266ee42bb049b7bdb83991208e"
+        },
+        "native_import_closure": {
+          "path": "docs/release-evidence/linux-0.1.5-ci.json",
+          "sha256": "023955c0e10708738109961d4ac148dd5176e7266ee42bb049b7bdb83991208e"
+        },
+        "offline_transcription": {
+          "path": "docs/release-evidence/linux-0.1.5-ci.json",
+          "sha256": "023955c0e10708738109961d4ac148dd5176e7266ee42bb049b7bdb83991208e"
+        },
+        "rust_notices": {
+          "path": "docs/release-evidence/linux-0.1.5-ci.json",
+          "sha256": "023955c0e10708738109961d4ac148dd5176e7266ee42bb049b7bdb83991208e"
+        }
+      },
+      "platform": "linux-x64",
+      "review_round": "issue-25-v5",
+      "scope": "Exact Linux 0.1.5 package and corresponding materials; six containers and all seven QEMU desktops, including native Wayland PNG/MP4/WAV drops in the four Wayland cases. No physical-device, human-listening or universal XWayland bridge claim. Independent OK on this frozen policy/evidence and release-note commit is required before owner-authorized publication.",
+      "source_commit": "1e2bbbd94c578115d45a750ab61493f7a1e48cae"
     }
   ],
   "redistribution_records": [
