@@ -1,7 +1,8 @@
 # Linux 0.1.4 CI candidate
 
-The Linux candidate is built and verified by GitHub Actions. It is available for
-testing; no public release, draft or tag has been created. All seven named desktops passed the observed CI checks.
+The Linux package is published in [release 0.1.4](https://github.com/Awalgawe/noh/releases/tag/v0.1.4).
+All seven named desktops passed the observed CI checks. These checks did not cover
+external drag-and-drop; see the [native Wayland defect and correction](WAYLAND_FILE_DROPS.md).
 Independent approval applies to an exact policy/evidence commit; these tests do
 not establish physical-hardware qualification.
 
