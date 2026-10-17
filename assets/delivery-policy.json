@@ -588,7 +588,7 @@
     {
       "platform": "linux-x64",
       "inputs": {
-        "Cargo.lock": "b9e53ed2eb08227cbcdc629f76ceaf563acccfcabec04b6ac277e518f2955ed4",
+        "Cargo.lock": "ee492fd62fbea260f235960d22e465d7363c9f78f7bae31189dde23dd68cf509",
         "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
         "assets/linux-README.md": "b072c23869e1bfc3c0d871a05036032a5c21d9a53b310136a99cd94feee34395",
         "assets/linux-host.json": "727a330fa36d3d9e03f8fbb9b4181f062a79dfc6de6dcccef1286f75912cd1e8",
@@ -603,18 +603,18 @@
       "evidence": {
         "native_corresponding_sources": {
           "path": "docs/release-evidence/linux-0.1.5-inputs.json",
-          "sha256": "7d260785c8d47b1deec367fab34439031cc02769a2849d99daaa2d8b36531f7d"
+          "sha256": "c3379f32395812ab918173e668a00d45ad60ad8b6d39d1f9c742573a1d16cf55"
         },
         "native_notices": {
           "path": "docs/release-evidence/linux-0.1.5-inputs.json",
-          "sha256": "7d260785c8d47b1deec367fab34439031cc02769a2849d99daaa2d8b36531f7d"
+          "sha256": "c3379f32395812ab918173e668a00d45ad60ad8b6d39d1f9c742573a1d16cf55"
         },
         "rust_sources_notices": {
           "path": "docs/release-evidence/linux-0.1.5-inputs.json",
-          "sha256": "7d260785c8d47b1deec367fab34439031cc02769a2849d99daaa2d8b36531f7d"
+          "sha256": "c3379f32395812ab918173e668a00d45ad60ad8b6d39d1f9c742573a1d16cf55"
         }
       },
-      "review_basis": "Wayland dependency input-material delta for independent review. The 484 other Cargo records and retained native/speech/compiler material procedures are unchanged. Approval of this exact source/policy commit is required before public candidate build; final CI bytes and desktop qualification remain separate."
+      "review_basis": "Wayland and ZIP security dependency input-material delta for independent review. The 483 other Cargo records and retained native/speech/compiler material procedures are unchanged. Approval of this exact source/policy commit is required before public candidate build; final CI bytes and desktop qualification remain separate."
     }
   ],
   "rust_source": {

@@ -121,7 +121,12 @@ fn extract(package: &mut File, stage: &Path, id: &str, cancelled: &AtomicBool) -
     let mut total = 0u64;
     for i in 0..zip.len() {
         let entry = zip.by_index(i).map_err(|_| Error::Metadata)?;
-        if entry.name().starts_with("lib/app/") && !entry.is_dir() {
+        if entry
+            .name()
+            .map_err(|_| Error::Metadata)?
+            .starts_with("lib/app/")
+            && !entry.is_dir()
+        {
             total = total
                 .checked_add(entry.size())
                 .filter(|value| *value <= MAX_EXPANDED)
@@ -140,7 +145,8 @@ fn extract(package: &mut File, stage: &Path, id: &str, cancelled: &AtomicBool) -
     for i in 0..zip.len() {
         check_cancel(cancelled)?;
         let mut entry = zip.by_index(i).map_err(|_| Error::Metadata)?;
-        let Some(relative) = entry.name().strip_prefix("lib/app/") else {
+        let name = entry.name().map_err(|_| Error::Metadata)?;
+        let Some(relative) = name.strip_prefix("lib/app/") else {
             continue;
         };
         if entry.is_dir() {

@@ -358,8 +358,9 @@ pub(crate) fn protect_installed_package_cancellable(
             return Err(Error::Cancelled);
         }
         let mut entry = archive.by_index(index).map_err(|_| Error::Metadata)?;
-        validate_engine_member_path(entry.name(), package_id)?;
-        let Some(relative) = entry.name().strip_prefix("lib/app/").map(str::to_owned) else {
+        let name = entry.name().map_err(|_| Error::Metadata)?;
+        validate_engine_member_path(&name, package_id)?;
+        let Some(relative) = name.strip_prefix("lib/app/").map(str::to_owned) else {
             continue;
         };
         if entry.is_dir() {
@@ -674,8 +675,11 @@ pub(crate) fn validate_package_manifest(
     file.seek(SeekFrom::Start(0))?;
     let mut archive = zip::ZipArchive::new(file).map_err(|_| Error::Metadata)?;
     let mut seen = std::collections::HashSet::new();
+    let mut manifests = Vec::new();
+    let mut embedded = Vec::new();
     for name in archive.file_names() {
-        validate_engine_member_path(name, package_id)?;
+        let name = name.map_err(|_| Error::Metadata)?;
+        validate_engine_member_path(&name, package_id)?;
         if name.starts_with('/')
             || name.contains(['\\', ':'])
             || name.ends_with(".__symlink")
@@ -685,6 +689,12 @@ pub(crate) fn validate_package_manifest(
             })
         {
             return Err(Error::Metadata);
+        }
+        if name.ends_with(".nuspec") {
+            manifests.push(name.to_string());
+        }
+        if name.starts_with("lib/") && name.ends_with("/sq.version") {
+            embedded.push(name.into_owned());
         }
     }
     for index in 0..archive.len() {
@@ -697,11 +707,6 @@ pub(crate) fn validate_package_manifest(
             return Err(Error::Metadata);
         }
     }
-    let manifests: Vec<_> = archive
-        .file_names()
-        .filter(|name| name.ends_with(".nuspec"))
-        .map(str::to_owned)
-        .collect();
     if manifests.len() != 1 {
         return Err(Error::Metadata);
     }
@@ -719,11 +724,6 @@ pub(crate) fn validate_package_manifest(
     let fields = manifest_fields(&text)?;
     validate_manifest_fields(&fields, package_id, version, channel)?;
     drop(entry);
-    let embedded: Vec<_> = archive
-        .file_names()
-        .filter(|name| name.starts_with("lib/") && name.ends_with("/sq.version"))
-        .map(str::to_owned)
-        .collect();
     for name in embedded {
         let mut file = archive.by_name(&name).map_err(|_| Error::Metadata)?;
         let mut text = String::new();
@@ -1103,6 +1103,49 @@ mod tests {
     #[test]
     fn duplicate_manifest_fields_are_rejected() {
         assert!(manifest_fields("<package><id>NOH</id><id>Other</id></package>").is_err());
+    }
+    #[test]
+    fn package_manifest_checks_all_decoded_member_names() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("fixture.nupkg");
+        package(&path, &manifest("NOH", "2.0.0", "x64"), b"test");
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        let mut writer = zip::ZipWriter::new_append(file).unwrap();
+        let member = "lib/app/é.txt";
+        writer
+            .start_file(member, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(b"fixture").unwrap();
+        writer.finish().unwrap();
+        let validate = || {
+            validate_package_manifest(
+                &mut File::open(&path).unwrap(),
+                "NOH",
+                &Version::new(2, 0, 0),
+                Channel::Stable,
+            )
+        };
+        assert!(validate().is_ok());
+        let mut bytes = std::fs::read(&path).unwrap();
+        // Replace a valid Unicode name with traversal in both directory records,
+        // retaining their lengths and the valid manifest content.
+        let unsafe_member = "lib/app/../bad";
+        assert_eq!(member.len(), unsafe_member.len());
+        let offsets = bytes
+            .windows(member.len())
+            .enumerate()
+            .filter_map(|(offset, name)| (name == member.as_bytes()).then_some(offset))
+            .collect::<Vec<_>>();
+        assert_eq!(offsets.len(), 2);
+        for offset in offsets {
+            bytes[offset..offset + member.len()].copy_from_slice(unsafe_member.as_bytes());
+        }
+        std::fs::write(&path, bytes).unwrap();
+        assert!(matches!(validate(), Err(Error::Metadata)));
     }
     #[test]
     fn process_paths_match_canonical_installation_root_without_prefix_confusion() {
