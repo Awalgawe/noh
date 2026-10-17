@@ -53,3 +53,17 @@ Protocol assertions verify that native transfers occurred; independently inspect
 the cancelled, hover, imported and clipboard screenshots for actual UI behavior.
 These virtual-display observations do not qualify a named KDE/GNOME release or
 physical hardware. The release desktop matrix remains a separate requirement.
+
+The release desktop probe also offers the same GTK file URIs on each of its four
+native Wayland sessions (GNOME on both Ubuntu versions and Fedora, KDE on Arch).
+It starts a separate sender beside the ordinary candidate application and uses
+only QEMU pointer input for the actual drag. The distinctive sender color avoids
+confusing it with magenta pixels in the synthetic video. Retained hover/import
+screens and both protocol logs must be reviewed against the exact candidate;
+the harness never treats source delivery alone as media-import acceptance.
+The three X11 desktop cases retain their existing chooser and output checks.
+
+Clipboard probe coordinates depend on the displayed parent directory name. The
+CI fixture directory `wayland-fixtures` places Change at `405 903`; the example
+directory `fixtures` may require a different position. Inspect the initial import
+screen when changing those paths instead of clicking the selectable output label.

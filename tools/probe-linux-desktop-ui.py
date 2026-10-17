@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Drive a bounded real chooser sequence through the private QEMU keyboard.
+"""Drive real chooser and native file-drop observations through private QEMU input.
 
 Screens are observations requiring independent review, never automatic UI passes.
 Only the disposable guest receives input; no host desktop is controlled.
@@ -42,6 +42,36 @@ def observe(socket_path, output, phase, desktop='GNOME'):
             time.sleep(delay)
             execute('screendump', {'filename': str(output.resolve() / f'{name}.ppm')})
 
+        def move(x, y):
+            execute('input-send-event', {'events': [
+                {'type': 'abs', 'data': {'axis': 'x', 'value': round(x * 32767 / 1279)}},
+                {'type': 'abs', 'data': {'axis': 'y', 'value': round(y * 32767 / 1023)}}]})
+
+        def button(down):
+            execute('input-send-event', {'events': [{'type': 'btn', 'data': {'down': down, 'button': 'left'}}]})
+
+        def drag(start, end):
+            move(*start)
+            time.sleep(.3)
+            button(True)
+            for i in range(1, 21):
+                move(*(round(a + (b - a) * i / 20) for a, b in zip(start, end)))
+                time.sleep(.08)
+
+        def sender_bounds(name):
+            from PIL import Image
+            with Image.open(output / f'{name}.ppm') as shot:
+                if shot.size != (1280, 1024):
+                    raise ValueError('Unexpected guest scanout dimensions')
+                pixels = shot.convert('RGB')
+                mask = Image.new('1', pixels.size)
+                # This deliberately differs from the synthetic video's magenta.
+                mask.putdata([pixel == (236, 23, 219) for pixel in pixels.getdata()])
+                bounds = mask.getbbox()
+                if bounds is None or sum(mask.getdata()) < 2000:
+                    raise ValueError('No visible native GTK source button')
+                return bounds
+
         execute('qmp_capabilities')
         if phase == 'chooser':
             key('esc')
@@ -82,6 +112,24 @@ def observe(socket_path, output, phase, desktop='GNOME'):
             time.sleep(1)
             key('alt', 'o')
             screen('06-imported', 5)
+        elif phase == 'drop':
+            screen('01-source', 3)
+            left, top, right, bottom = sender_bounds('01-source')
+            # Move the real sender by its title bar to expose the NOH target.
+            # Re-observe the colored button before starting the actual file drag.
+            start = ((left + right) // 2, top - 15)
+            drag(start, (start[0] + 980 - left, start[1] + 150 - top))
+            button(False)
+            screen('02-positioned')
+            left, top, right, bottom = sender_bounds('02-positioned')
+            if left < 900:
+                raise ValueError('Source did not move aside; refusing an ambiguous target')
+            drag(((left + right) // 2, (top + bottom) // 2), (500, 400))
+            try:
+                screen('03-hover')
+            finally:
+                button(False)
+            screen('04-imported', 6)
         else:
             screen('boot' if phase == 'boot' else '07-output-opened', 3)
 
@@ -90,7 +138,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--socket', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--phase', choices=('chooser', 'output', 'boot'), required=True)
+    parser.add_argument('--phase', choices=('chooser', 'drop', 'output', 'boot'), required=True)
     parser.add_argument('--desktop', choices=('GNOME', 'KDE', 'Cinnamon'), default='GNOME')
     args = parser.parse_args()
     observe(args.socket, args.output, args.phase, args.desktop)

@@ -91,7 +91,7 @@ jobs:
           timeout --kill-after=5 90 python3 tools/probe-wayland-dnd.py \
             --app target/debug/noh-app --output logs/wayland-dnd \
             --backend wayland --source-backend wayland --destination 800 400 \
-            --cancel-first --change-button 350 903 \
+            --cancel-first --change-button 405 903 \
             'logs/wayland-fixtures/image space é #%.png' \
             logs/wayland-fixtures/video.mp4 logs/wayland-fixtures/sound.wav
       - name: Show bounded capture errors without artifact storage

@@ -38,7 +38,7 @@ lscpu >> "$evidence/runner.txt"
 df -h "$work" >> "$evidence/runner.txt"
 test -c /dev/kvm || { echo 'KVM device is unavailable; no desktop VM was tested.'; exit 1; }
 sudo apt-get update -qq
-sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils cloud-init
+sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils cloud-init python3-pil
 qemu-system-x86_64 --version > "$evidence/qemu-version.txt"
 
 ssh-keygen -q -t ed25519 -N '' -f "$work/key"
@@ -225,9 +225,21 @@ ssh "${ssh_args[@]}" noh@127.0.0.1 'sudo journalctl -b --no-pager -u display-man
 if [[ "$guest_status" = 0 ]]; then
     ui_desktop=$(PYTHONPATH="$root/tools" python3 -c \
         'import sys; from linux_desktop_candidate import case_inputs; print(case_inputs(sys.argv[1])[0]["desktop"])' "$case_id")
-    if timeout 90s python3 "$root/tools/probe-linux-desktop-ui.py" --socket "$work/qmp.sock" \
-        --output "$evidence/chooser" --phase chooser --desktop "$ui_desktop" &&
-       timeout 60s ssh "${ssh_args[@]}" noh@127.0.0.1 \
+    if ! timeout 90s python3 "$root/tools/probe-linux-desktop-ui.py" --socket "$work/qmp.sock" \
+        --output "$evidence/chooser" --phase chooser --desktop "$ui_desktop"; then
+        guest_status=1
+    fi
+    ui_display=$(PYTHONPATH="$root/tools" python3 -c \
+        'import sys; from linux_desktop_candidate import case_inputs; print(case_inputs(sys.argv[1])[0]["display"])' "$case_id")
+    if [[ "$guest_status" = 0 && "$ui_display" = wayland ]]; then
+        if ! timeout 60s ssh "${ssh_args[@]}" noh@127.0.0.1 \
+            'python3 /home/noh/noh-candidate/tools/linux_desktop_candidate.py start-drop --output /home/noh/noh-evidence' ||
+           ! timeout 60s python3 "$root/tools/probe-linux-desktop-ui.py" --socket "$work/qmp.sock" \
+            --output "$evidence/drop" --phase drop --desktop "$ui_desktop"; then
+            guest_status=1
+        fi
+    fi
+    if [[ "$guest_status" = 0 ]] && timeout 60s ssh "${ssh_args[@]}" noh@127.0.0.1 \
         'python3 /home/noh/noh-candidate/tools/linux_desktop_candidate.py open-output --output /home/noh/noh-evidence' &&
        timeout 30s python3 "$root/tools/probe-linux-desktop-ui.py" --socket "$work/qmp.sock" \
         --output "$evidence/output-opening" --phase output; then

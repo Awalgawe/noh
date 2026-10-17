@@ -25,7 +25,7 @@ def source(paths, receiver=False):
     window.set_default_size(980, 850) if receiver else window.set_default_size(280, 150)
     button = Gtk.Button(label='DRAG SYNTHETIC FILES' if not receiver else 'DROP CONTROL')
     css = Gtk.CssProvider()
-    css.load_from_data(b'button {background-image:none;background-color:#0080ff;color:#000000;}' if receiver else b'button {background-image:none;background-color:#ff00ff;color:#000000;}')
+    css.load_from_data(b'button {background-image:none;background-color:#0080ff;color:#000000;}' if receiver else b'button {background-image:none;background-color:#ec17db;color:#000000;}')
     button.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
     targets = [Gtk.TargetEntry.new('text/uri-list', 0, 0)]
     if receiver:
@@ -133,7 +133,7 @@ def run(args):
             return picture
         def source_points(picture):
             pixels = picture.load()
-            points = [(x, y) for y in range(0, picture.height, 4) for x in range(0, picture.width, 4) if pixels[x, y][0] > 230 and pixels[x, y][1] < 30 and pixels[x, y][2] > 230]
+            points = [(x, y) for y in range(0, picture.height, 4) for x in range(0, picture.width, 4) if pixels[x, y][:3] == (236, 23, 219)]
             if not points:
                 raise RuntimeError('GTK drag source not visible')
             return points
