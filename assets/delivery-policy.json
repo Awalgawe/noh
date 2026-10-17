@@ -584,6 +584,37 @@
       "platform": "linux-x64",
       "review_basis": "Actor/Critic linux-host-libraries-20261015 v5: Rustls 0.23.46 exact crate and unchanged original licenses independently verified; 485 other third-party Cargo records and retained host/speech material procedure unchanged. Final CI archives, generated materials and desktop qualification remain separate and unapproved.",
       "substantive_critic_turn": "01a13fe7-a019-7461-8aab-f1b1fb7f2696"
+    },
+    {
+      "platform": "linux-x64",
+      "inputs": {
+        "Cargo.lock": "ee492fd62fbea260f235960d22e465d7363c9f78f7bae31189dde23dd68cf509",
+        "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+        "assets/linux-README.md": "b072c23869e1bfc3c0d871a05036032a5c21d9a53b310136a99cd94feee34395",
+        "assets/linux-host.json": "727a330fa36d3d9e03f8fbb9b4181f062a79dfc6de6dcccef1286f75912cd1e8",
+        "assets/rust-notices.lock.json": "ad3e17dcc9d99c31f6ad91ee736eba762bb777711b2e62ada7aeae9b24f1082f",
+        "assets/speech-bundle.json": "4bef71e92e5f3857e6d06e3a0b95971bc60448e838a6cf822fe9045d344c089f",
+        "rust_standard_library_source": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
+        "tools/linux_host.py": "e7e95c14e6dc97290c369fdb0d176db69c275d1e1eb7f45b21bf413a05a76183",
+        "tools/linux_package.py": "0df6dcf98d10b268f9907d57456f20b0c0c746b067a759c9e6db676e029332be",
+        "tools/prepare-linux-speech.py": "0653a5371832f06d9aa6b80ce8c65617e333fbd2d994e4d1d4d13b6783c08623",
+        "tools/rust_notices.py": "326b00b96d7840e4fb86e9ea496e5c3144e97480dbdd8c9eea2a72d682a8783c"
+      },
+      "evidence": {
+        "native_corresponding_sources": {
+          "path": "docs/release-evidence/linux-0.1.5-inputs.json",
+          "sha256": "c3379f32395812ab918173e668a00d45ad60ad8b6d39d1f9c742573a1d16cf55"
+        },
+        "native_notices": {
+          "path": "docs/release-evidence/linux-0.1.5-inputs.json",
+          "sha256": "c3379f32395812ab918173e668a00d45ad60ad8b6d39d1f9c742573a1d16cf55"
+        },
+        "rust_sources_notices": {
+          "path": "docs/release-evidence/linux-0.1.5-inputs.json",
+          "sha256": "c3379f32395812ab918173e668a00d45ad60ad8b6d39d1f9c742573a1d16cf55"
+        }
+      },
+      "review_basis": "Wayland and ZIP security dependency input-material delta for independent review. The 483 other Cargo records and retained native/speech/compiler material procedures are unchanged. Approval of this exact source/policy commit is required before public candidate build; final CI bytes and desktop qualification remain separate."
     }
   ],
   "rust_source": {

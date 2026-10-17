@@ -1,6 +1,6 @@
 [package]
 name = "noh"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 rust-version = "1.95"
 license = "GPL-3.0-only"
@@ -19,7 +19,7 @@ semver = { version = "1", features = ["serde"], optional = true }
 sha2 = { version = "0.10", optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"], optional = true }
 quick-xml = {version = "0.41", optional = true}
-zip = {version = "8.6", default-features = false, features = ["deflate"], optional = true}
+zip = {version = "=9.0.0", default-features = false, features = ["deflate"], optional = true}
 eframe = { version = "0.36.2", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"], optional = true }
 rfd = { version = "0.17.2", optional = true }
 open = { version = "5.3", optional = true }
@@ -44,6 +44,16 @@ tokio-util = { version = "0.7", features = ["rt"], optional = true }
 [dev-dependencies]
 assert_cmd = "2.2"
 sha2 = "0.10"
+
+# Native Wayland file drops and clipboard must share one data device.
+# Temporary upstream backports: winit#4729 and egui#8657, pinned for delivery.
+[patch.crates-io]
+winit = { git = "https://github.com/crmne/winit", rev = "7a962fd46470a137d9a7a1945bf5b5d0b95a002c" }
+egui-winit = { git = "https://github.com/Awalgawe/egui", rev = "3c7cc5468ca8de52f20ba5ac0110d3f53c29439a" }
+
+# Retain the released DPI dependency instead of the older workspace copy.
+[patch."https://github.com/crmne/winit"]
+dpi = { version = "=0.1.2" }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = {version = "0.61.2", optional = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_IO", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Pipes"]}

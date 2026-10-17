@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "platform": "linux-x64",
+  "version": "0.1.5",
+  "scope": "Dependency input materials only; the final candidate and desktop matrix require separate qualification.",
+  "baseline_source_commit": "4edfbf1c3ea8b2d506516a45e4d70eb6a0dd9c10",
+  "prior_input_review": {
+    "path": "docs/release-evidence/linux-0.1.4-rustls-inputs.json",
+    "sha256": "419709b4b26921cdf1a44556bfba13679261fbe936957d55257b078d71fcb2ae"
+  },
+  "inputs": {
+    "Cargo.lock": "ee492fd62fbea260f235960d22e465d7363c9f78f7bae31189dde23dd68cf509",
+    "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "assets/linux-README.md": "b072c23869e1bfc3c0d871a05036032a5c21d9a53b310136a99cd94feee34395",
+    "assets/linux-host.json": "727a330fa36d3d9e03f8fbb9b4181f062a79dfc6de6dcccef1286f75912cd1e8",
+    "assets/rust-notices.lock.json": "ad3e17dcc9d99c31f6ad91ee736eba762bb777711b2e62ada7aeae9b24f1082f",
+    "assets/speech-bundle.json": "4bef71e92e5f3857e6d06e3a0b95971bc60448e838a6cf822fe9045d344c089f",
+    "rust_standard_library_source": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
+    "tools/linux_host.py": "e7e95c14e6dc97290c369fdb0d176db69c275d1e1eb7f45b21bf413a05a76183",
+    "tools/linux_package.py": "0df6dcf98d10b268f9907d57456f20b0c0c746b067a759c9e6db676e029332be",
+    "tools/prepare-linux-speech.py": "0653a5371832f06d9aa6b80ce8c65617e333fbd2d994e4d1d4d13b6783c08623",
+    "tools/rust_notices.py": "326b00b96d7840e4fb86e9ea496e5c3144e97480dbdd8c9eea2a72d682a8783c"
+  },
+  "third_party_cargo_records_unchanged": 483,
+  "changed_sources": [
+    {
+      "name": "egui-winit",
+      "version": "0.36.2",
+      "license": "MIT OR Apache-2.0",
+      "source": "git+https://github.com/Awalgawe/egui?rev=3c7cc5468ca8de52f20ba5ac0110d3f53c29439a#3c7cc5468ca8de52f20ba5ac0110d3f53c29439a",
+      "license_file": null,
+      "package_sha256": null,
+      "notice_files": [
+        {
+          "path": "LICENSE-APACHE",
+          "sha256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+          "origin": "vendored-crate"
+        },
+        {
+          "path": "LICENSE-MIT",
+          "sha256": "95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c",
+          "origin": "vendored-crate"
+        }
+      ]
+    },
+    {
+      "name": "winit",
+      "version": "0.30.13",
+      "license": "Apache-2.0",
+      "source": "git+https://github.com/crmne/winit?rev=7a962fd46470a137d9a7a1945bf5b5d0b95a002c#7a962fd46470a137d9a7a1945bf5b5d0b95a002c",
+      "license_file": null,
+      "package_sha256": null,
+      "notice_files": [
+        {
+          "path": "LICENSE",
+          "sha256": "6dc0e068dcf3a5bc8e054205b85b7720e1d49265bbc64bf515d2cf79197df69a",
+          "origin": "vendored-crate"
+        }
+      ]
+    },
+    {
+      "name": "zip",
+      "version": "9.0.0",
+      "license": "MIT",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "license_file": null,
+      "package_sha256": "711e8c9646791c49b7eb799a19c4ae70a9b8372ddc6a1fa4778defd1e2aa5d5e",
+      "notice_files": [
+        {
+          "path": "LICENSE",
+          "sha256": "58545fed1565e42d687aecec6897d35c6d37ccb71479a137c0deb2203e125c79",
+          "origin": "vendored-crate"
+        }
+      ]
+    }
+  ],
+  "changes": [
+    "winit 0.30.13 uses the immutable v0.30 Wayland drag-and-drop/clipboard backport from rust-windowing/winit#4729.",
+    "egui-winit 0.36.2 retains its released API and registry egui, with only the shared clipboard adaptation from emilk/egui#8657. Its original MIT and Apache notices are now included directly in the Git crate.",
+    "The obsolete egui-winit registry archive notice supplement is removed. All other notice supplements and native/speech/compiler inputs remain unchanged.",
+    "DPI remains at 0.1.2; 483 third-party Cargo records are unchanged.",
+    "zip 8.6.0 is updated to 9.0.0 for RUSTSEC-2026-0367, RUSTSEC-2026-0368 and RUSTSEC-2026-0369. Its six locked dependencies and original MIT license text are unchanged. NOH reads and validates archive members individually; it does not use the affected high-level extract API."
+  ],
+  "upstream_bases": {
+    "winit": "e9809ef54b18499bb4f2cac945719ecc2a61061b",
+    "egui-winit": "49682f8baa058bf49e011035cfbd6e825f88a5ef"
+  },
+  "verification": {
+    "vendor_packages": 486,
+    "missing_notice_texts": [],
+    "missing_original_notice_texts": [
+      "dispatch-0.2.0"
+    ],
+    "dispatch_scope": "Existing reviewed declaration supplement retained; this macOS-only crate is not a new Linux input.",
+    "standard_library_notice_sha256": "68129500b616d5838629e68f55ff3aed5e096dacf60ce9eb41bbe599a563afa6",
+    "rust_notices_sha256": "310bc2695f60ee3cc60a89d454e9c98621a7d5a0b6ef1dda7fba34f591228693"
+  },
+  "zip": {
+    "version": "9.0.0",
+    "crate_url": "https://static.crates.io/crates/zip/zip-9.0.0.crate",
+    "crate_sha256": "711e8c9646791c49b7eb799a19c4ae70a9b8372ddc6a1fa4778defd1e2aa5d5e",
+    "upstream_revision": "2b1c4244a6f42906c8b3f21a358bf2321d0baaef",
+    "original_license_sha256": "58545fed1565e42d687aecec6897d35c6d37ccb71479a137c0deb2203e125c79",
+    "license_identical_to_8_6_0": true
+  }
+}

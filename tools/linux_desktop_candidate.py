@@ -113,6 +113,8 @@ def prepare(args):
 def debian_provisioning(row, image):
     gdm_config = {'ubuntu': '/etc/gdm3/custom.conf', 'debian': '/etc/gdm3/daemon.conf'}[image['os_id']]
     packages = ['gnome-session', 'gdm3', *APT_RUNTIME_PACKAGES]
+    if row['display'] == 'wayland':
+        packages += ['python3-gi', 'gir1.2-gtk-3.0']
     packages += ['pipewire-audio'] if row['audio'] == 'pipewire' else ['pulseaudio', 'gnome-session-xsession', 'xserver-xorg']
     commands = []
     if image['os_id'] == 'ubuntu':
@@ -133,6 +135,7 @@ def rpm_arch_provisioning(row, image):
             ['dnf', 'install', '-y', 'https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-44.noarch.rpm'],
             ['dnf', 'install', '-y', '--allowerasing', 'ffmpeg', 'mpv-libs', 'mpv', 'python3',
              'gnome-session-wayland-session', 'gdm', 'nautilus', 'xdg-desktop-portal-gnome',
+             'python3-gobject', 'gtk3',
              'kernel', 'kernel-modules', 'kernel-modules-extra',
              'pipewire', 'pipewire-pulseaudio', 'pipewire-alsa', 'wireplumber', 'pulseaudio-utils',
              'alsa-utils', 'mesa-dri-drivers', 'mesa-libEGL', 'mesa-libGL', 'libxkbcommon-x11',
@@ -162,7 +165,7 @@ def rpm_arch_provisioning(row, image):
         ]
     elif image['os_id'] == 'arch':
         commands = [['pacman', '-Syu', '--noconfirm', '--needed', 'linux', 'ffmpeg', 'mpv', 'python',
-                     'plasma-desktop', 'plasma-workspace', 'sddm', 'xorg-xwayland',
+                     'plasma-desktop', 'plasma-workspace', 'sddm', 'xorg-xwayland', 'python-gobject', 'gtk3',
                      'pipewire', 'pipewire-audio', 'pipewire-pulse', 'pipewire-alsa', 'wireplumber',
                      'libpulse', 'alsa-utils', 'mesa', 'libglvnd', 'libxkbcommon-x11',
                      'libxcursor', 'libxrandr', 'libxi', 'libxinerama', 'ttf-dejavu',
@@ -465,6 +468,7 @@ def guest(args):
     # Leave a normal, uninjected application window for independent QMP scanout inspection.
     with (args.output / 'startup.log').open('w') as log:
         app = subprocess.Popen([str(ROOT / 'NOH.AppDir/AppRun')], stdin=subprocess.DEVNULL,
+                               env=os.environ | ({'WAYLAND_DEBUG': '1'} if row['display'] == 'wayland' else {}),
                                stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     time.sleep(5)
     if app.poll() is not None:
@@ -481,6 +485,41 @@ def guest(args):
                      'QMP screen and recorded application audio still require independent inspection.',
                      'No physical-device or human-listening qualification; full seven-case matrix remains required.']})
     print('Native runtime checks passed; screen/audio review and full matrix coverage remain pending.')
+
+
+def start_drop(args):
+    """Offer real GTK file URIs on the candidate's existing native Wayland desktop."""
+    observation = read(args.output / 'case.json')
+    session = read(args.output / 'session.json')
+    if session['manager']['XDG_SESSION_TYPE'] != 'wayland':
+        raise ValueError('This drop observation requires the real native Wayland session')
+    app = Path(f'/proc/{observation["normal_startup_pid"]}/exe')
+    if app.resolve(strict=True) != (ROOT / 'NOH.AppDir/usr/lib/noh/noh-app').resolve():
+        raise ValueError('The ordinary candidate application is no longer running')
+    verify_bundle(ROOT, read(ROOT / 'CANDIDATE.json'))
+    media = args.output / 'drop-media'
+    media.mkdir(exist_ok=False)
+    image, video, audio = media / 'image space é #%.png', media / 'drop video.mp4', media / 'drop sound.wav'
+    shutil.copy2(args.output / 'media/synthetic.mp4', video)
+    command(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=128x72',
+             '-frames:v', '1', '-n', str(image)])
+    command(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000',
+             '-t', '3', '-ac', '2', '-c:a', 'pcm_s16le', '-n', str(audio)])
+    env = os.environ | {k: v for k, v in session['manager'].items() if v is not None}
+    env.update(XDG_RUNTIME_DIR=f'/run/user/{os.getuid()}',
+               DBUS_SESSION_BUS_ADDRESS=f'unix:path=/run/user/{os.getuid()}/bus',
+               GDK_BACKEND='wayland', WAYLAND_DEBUG='1')
+    with (args.output / 'drop-source.log').open('x') as log:
+        sender = subprocess.Popen(['python3', str(ROOT / 'tools/probe-wayland-dnd.py'),
+                                   '--source', str(image), str(video), str(audio)], env=env,
+                                  stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                                  start_new_session=True)
+    time.sleep(3)
+    if sender.poll() is not None:
+        raise ValueError('Native GTK drop source terminated before observation')
+    write(args.output / 'drop-source.json', {'status': 'awaiting-review', 'pid': sender.pid,
+          'backend': 'wayland', 'fixtures': {p.name: digest(p) for p in (image, video, audio)},
+          'limits': ['A native offer alone does not establish successful NOH import; inspect QMP screens and protocol logs.']})
 
 
 def open_output(args):
@@ -602,6 +641,9 @@ def main():
     p = sub.add_parser('open-output')
     p.add_argument('--output', type=Path, required=True)
     p.set_defaults(fn=open_output)
+    p = sub.add_parser('start-drop')
+    p.add_argument('--output', type=Path, required=True)
+    p.set_defaults(fn=start_drop)
     p = sub.add_parser('audio-report')
     p.add_argument('--input', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)

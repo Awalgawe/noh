@@ -879,8 +879,7 @@ dependencies = [
 [[package]]
 name = "egui-winit"
 version = "0.36.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98466000559d66ba4db786a30448b01483946add4188e7f10f522a27b4fb89cc"
+source = "git+https://github.com/Awalgawe/egui?rev=3c7cc5468ca8de52f20ba5ac0110d3f53c29439a#3c7cc5468ca8de52f20ba5ac0110d3f53c29439a"
 dependencies = [
  "arboard",
  "bytemuck",
@@ -2075,7 +2074,7 @@ dependencies = [
 
 [[package]]
 name = "noh"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "assert_cmd",
  "base64 0.22.1",
@@ -4712,8 +4711,7 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 [[package]]
 name = "winit"
 version = "0.30.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6755fa58a9f8350bd1e472d4c3fcc25f824ec358933bba33306d0b63df5978d"
+source = "git+https://github.com/crmne/winit?rev=7a962fd46470a137d9a7a1945bf5b5d0b95a002c#7a962fd46470a137d9a7a1945bf5b5d0b95a002c"
 dependencies = [
  "ahash",
  "android-activity",
@@ -4949,9 +4947,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "8.6.0"
+version = "9.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b"
+checksum = "711e8c9646791c49b7eb799a19c4ae70a9b8372ddc6a1fa4778defd1e2aa5d5e"
 dependencies = [
  "crc32fast",
  "flate2",

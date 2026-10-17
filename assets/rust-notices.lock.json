@@ -239,25 +239,6 @@
       "repository": "https://github.com/emilk/egui",
       "revision": "49682f8baa058bf49e011035cfbd6e825f88a5ef"
     },
-    "egui-winit-0.36.2": {
-      "files": [
-        {
-          "git_blob": "11069edd79019f7dafbe3138841cf289209270dd",
-          "path": "LICENSE-APACHE",
-          "sha256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
-          "url": "https://raw.githubusercontent.com/emilk/egui/49682f8baa058bf49e011035cfbd6e825f88a5ef/LICENSE-APACHE"
-        },
-        {
-          "git_blob": "673ea5f0505d6fa65c6a2b6a753c93b8e19d11b9",
-          "path": "LICENSE-MIT",
-          "sha256": "95ca92f5f8ea5231f1580b3a2a799e8260af3114b900e1def5355a7f44bcf60c",
-          "url": "https://raw.githubusercontent.com/emilk/egui/49682f8baa058bf49e011035cfbd6e825f88a5ef/LICENSE-MIT"
-        }
-      ],
-      "package_sha256": "98466000559d66ba4db786a30448b01483946add4188e7f10f522a27b4fb89cc",
-      "repository": "https://github.com/emilk/egui",
-      "revision": "49682f8baa058bf49e011035cfbd6e825f88a5ef"
-    },
     "egui_glow-0.36.2": {
       "files": [
         {

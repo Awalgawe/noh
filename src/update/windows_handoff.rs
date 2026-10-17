@@ -435,7 +435,12 @@ fn application_size(package: &mut File) -> Result<u64> {
     let mut total = 0u64;
     for index in 0..archive.len() {
         let entry = archive.by_index(index).map_err(|_| Error::Metadata)?;
-        if entry.name().starts_with("lib/app/") && !entry.is_dir() {
+        if entry
+            .name()
+            .map_err(|_| Error::Metadata)?
+            .starts_with("lib/app/")
+            && !entry.is_dir()
+        {
             total = total.checked_add(entry.size()).ok_or(Error::Metadata)?;
         }
         if total > 4 * 1024 * 1024 * 1024 {
