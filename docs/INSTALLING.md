@@ -106,69 +106,66 @@ enabled. Signing and download reputation are separate from the package checksums
 
 ## Linux x86_64
 
-1. Download `NOH-<version>-linux-x64.zip` from the official release.
-2. Check its SHA-256 against **`linux-x64-SHA256SUMS`** in the same release.
-3. Extract the whole archive with a tool that preserves Unix executable permissions.
+1. Install your distribution's FFmpeg and libmpv packages. FFmpeg must provide
+   `libx264`, `aac` and `pcm_s16le`; libmpv must provide `libmpv.so.2`.
+2. Download `NOH-<version>-linux-x64.zip` from the official release and check its
+   SHA-256 against **`SHA256SUMS`** in that release.
+3. Extract the whole archive into a fresh directory with a tool that preserves
+   Unix executable permissions. Do not overlay an older AppDir containing private
+   shared libraries.
 4. Open a terminal in the extracted folder and run `./NOH.AppDir/AppRun`.
 
 Keep the complete `NOH.AppDir` folder together. It can be moved, including to a
 path with spaces. The AppDir itself needs no administrator installation, Rust
-or Python.
-FFmpeg, preview support, CPU Whisper Small and Silero VAD are included; local
-transcription works offline. The separate `-materials.zip` contains the exact
-corresponding sources and notices.
+or Python. CPU Whisper Small and Silero VAD are included for offline
+transcription. Media tools, preview libraries, graphics and audio come from the
+host. The separate `-materials.zip` contains corresponding sources and notices.
 
-The baseline is Ubuntu 24.04 x86_64 with glibc 2.39. Your desktop supplies its
-graphics session, fonts, a working default audio output and a file chooser.
-NOH uses an XDG Desktop Portal file chooser or falls back to `zenity` on `PATH`.
-Minimal installations such as Ubuntu under WSL may provide neither. If **Add
-files** does nothing, install a file chooser in Ubuntu:
+The baseline is Ubuntu 24.04 x86_64 with glibc 2.39. Follow the
+[package README](../assets/linux-README.md) for distribution prerequisites;
+the same instructions are included inside the archive. A compatible glibc
+version alone does not establish desktop compatibility.
+
+Your desktop must provide a working audio output and an XDG Desktop Portal file
+chooser, or `zenity` on `PATH`. Minimal systems may lack both. On Ubuntu:
 
 ```sh
 sudo apt-get update
-sudo apt-get install --no-install-recommends zenity
+sudo apt-get install --no-install-recommends ffmpeg libmpv2 zenity xdg-utils
 ```
 
-Then click **Add files** again; NOH does not need to be rebuilt. Full Linux
-desktops commonly provide an XDG Desktop Portal backend already. These are host
-desktop components, separate from the bundled media and transcription tools.
-
-**Linux 0.1.3:** opening a video, its folder or a lyrics file uses
-`xdg-open`, including under WSL. This requires `xdg-utils` and default Linux
-applications: a video player, a file manager and a text editor associated with
-`.srt` files. Upgrade older packages to obtain this corrected behavior. On
-minimal Ubuntu, install for example:
+Opening an exported video, its folder or a lyrics file uses `xdg-open` and the
+host's default applications. Set a video player, file manager and text editor
+for `.srt` files. For example, a minimal Ubuntu installation can use:
 
 ```sh
-sudo apt-get install --no-install-recommends xdg-utils pcmanfm mpv mousepad
+sudo apt-get install --no-install-recommends pcmanfm mpv mousepad
 ```
 
-Choose the SRT text editor through your Linux file manager's
-**Open With** settings if lyrics open in a video player. Saving a correction in
-that editor lets NOH reload the lyrics for preview and export.
+Choose the SRT editor through the file manager's **Open With** settings if lyrics
+open in a video player. Saving a correction lets NOH reload lyrics for preview
+and export.
 
-Final package tests
-used Ubuntu 24.04.5 under WSLg with Mesa software rendering and PulseAudio;
-physical Linux graphics hardware and other distributions have not been qualified.
-See the [validation report](LINUX_0_1_3_QUALIFICATION.md) for the exact environment.
-Fedora 44 users have reported that **Linux 0.1.3 fails to open or play audio**
-because bundled desktop libraries conflict with the host's Mesa and PipeWire.
-The [packaging correction](LINUX_REDISTRIBUTION.md#host-owned-media-runtime-unreleased-2026-10-15)
-is not yet in a published release. It moves FFmpeg, libmpv and all shared
-libraries to host dependencies; CPU speech remains included. Its installation
-requirements are in the [next package's README](../assets/linux-README.md).
-Extract the future package into a fresh directory, never over the old AppDir.
-Local loader probes do not constitute final-package Fedora desktop acceptance.
-In WSLg, an ALSA default-device mapping to its PulseAudio server may need to be
-configured; the report records the Ubuntu-provided configuration used in testing.
-WSLg does not support dragging files from Windows Explorer into Linux windows
-([Microsoft tracking issue](https://github.com/microsoft/wslg/issues/84)).
-Use **Add files** instead: in the Linux chooser, press **Ctrl+L** and enter
-`/mnt/c/Users/` to browse Windows user folders, or `/mnt/d/` for drive D.
+Version 0.1.5 was tested on Ubuntu 24.04 and 26.04 GNOME, Debian 13 GNOME,
+Fedora 44 GNOME, openSUSE Tumbleweed KDE, Arch Linux KDE and Linux Mint 22.3
+Cinnamon. Tests covered chooser import, playback/audio, export and offline
+transcription. Native Wayland file drops passed on the four Wayland desktops.
+See the [candidate report](LINUX_0_1_5_CANDIDATE.md) for exact package identities
+and environments. These are QEMU virtual graphics/audio results, not physical
+hardware compatibility or human listening tests. General XWayland bridging is
+outside the tested scope.
+
+Linux 0.1.3 bundled libraries could conflict with Fedora's graphics and audio
+stack. Version 0.1.5 uses the host runtime and must be extracted into a fresh
+folder. In WSLg, Windows Explorer-to-Linux drag-and-drop remains unsupported
+([Microsoft tracking issue](https://github.com/microsoft/wslg/issues/84)). Use
+**Add files** instead; press **Ctrl+L** in the Linux chooser and enter
+`/mnt/c/Users/` or `/mnt/d/` to browse Windows drives. WSLg may also require an
+ALSA default-device mapping to its PulseAudio server.
 
 The Linux package is unsigned and automatic updates are disabled. To update,
 extract the new version into a new folder. To remove it, close NOH and delete
-its extracted folder, first keeping any media or exports you saved inside it.
+its extracted folder, first keeping any media or exports saved inside it.
 Files elsewhere and separately stored preferences are retained.
 
 ## First launch

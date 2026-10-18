@@ -1,0 +1,101 @@
+{
+  "assets": {
+    "COMPONENTS.json": {
+      "sha256": "9f1bad20c62f2208a93f7f49a8a8a0b75f7fa661e3e113993000d4f0bff09065",
+      "size": 203438
+    },
+    "INSTALLER-PROVENANCE.json": {
+      "sha256": "5521d56a1be5a7497dea81ac53c79797877c15b8616193b280191ff8261b7f34",
+      "size": 6290
+    },
+    "NOH-0.1.5-linux-x64-materials.zip": {
+      "sha256": "5ac4c23960e66ea68ee236794c9cfaea5c160a48d4bee7c2ce77f07b1140b13b",
+      "size": 365754866
+    },
+    "NOH-0.1.5-linux-x64.zip": {
+      "sha256": "3933b2ac380e8699472525fa9b6d42174514494f43d1941ddc5d823e7fc0fae4",
+      "size": 484763457
+    },
+    "NOH-0.1.5-windows-x64-Complete-Setup.exe": {
+      "sha256": "98f9448d81b7406b6f9921244c1de4a1efd7bbb4b00624afc0f3e1acfb088698",
+      "size": 1220701762
+    },
+    "NOH-0.1.5-windows-x64-Minimal-Setup.exe": {
+      "sha256": "50bfa6553ac84b1fa7c47cabad7aa179dfef5cddf59e38a2e1f137be89866fec",
+      "size": 38939307
+    },
+    "NOH-0.1.5-windows-x64-Standard-Setup.exe": {
+      "sha256": "679393b3f11cf6260cbd940a600a9e89da209d13569b0df5d35f66e1d64debc9",
+      "size": 148132485
+    },
+    "NOH-0.1.5-windows-x64-Web-Setup.exe": {
+      "sha256": "fbd82083ad11efa2e4bd646fe9d6b6ad2c4c51e511bbcd5d93a8e568f176aef4",
+      "size": 38939554
+    },
+    "NOH-0.1.5-windows-x64-complete-installer-sources.zip": {
+      "sha256": "58a7b401766d72fe086edbc0225eff05ad38caf32c1b6895a69ef3533457c581",
+      "size": 10657604
+    },
+    "NOH-0.1.5-windows-x64-maintenance-installer-sources.zip": {
+      "sha256": "9b4823e18335a5a3f8ca1c6a78149caf2c0348a954edad443247b939b40ec4e3",
+      "size": 10657604
+    },
+    "NOH-0.1.5-windows-x64-materials.zip": {
+      "sha256": "7035cbc7d5b473f4d36296fbb6379f45f5ddf802b30ab76553ac81a2f31b8235",
+      "size": 1277685694
+    },
+    "NOH-0.1.5-windows-x64-minimal-installer-sources.zip": {
+      "sha256": "708c709c88160aa53a6b7427b3bad4869fe729b4bf67f7a93c3a0d10b67100b5",
+      "size": 10657604
+    },
+    "NOH-0.1.5-windows-x64-standard-installer-sources.zip": {
+      "sha256": "6faf2e7aae6be75d2035fc10fab2344e4a852bd0fffd0d1aca26714dc28c870c",
+      "size": 10657604
+    },
+    "NOH-0.1.5-windows-x64-web-installer-sources.zip": {
+      "sha256": "84c9783df4ce89fa7a482799933a06c14101b7018440502b112a90a2473e4a67",
+      "size": 10657604
+    },
+    "NOH-0.1.5-windows-x64.zip": {
+      "sha256": "183f3adc0b54f2f1ce46e07efb509f2eaa93c44dd6f38242a310584202a44d4d",
+      "size": 1312790113
+    },
+    "NOH-windows-x64-media-c008ef318adc8ecc.zip": {
+      "sha256": "c155aba21ff18ffdd44092b7910fad5b9a3a08cf246a056c621bbe87c3411b9e",
+      "size": 133471204
+    },
+    "NOH-windows-x64-speech-0e70cd45f33d6db0.zip": {
+      "sha256": "a287f940897b8bcac8c5a8c64c01e50c1dbe830ada18de80a5add0fc97f2eae8",
+      "size": 1146012119
+    },
+    "SHA256SUMS": {
+      "sha256": "019f86faa0bc92f039e57359776b59da7562bfe495a8057a484609ec1ea47fce",
+      "size": 1973
+    },
+    "linux-x64-DELIVERY.json": {
+      "sha256": "ecc86c5b9563cf35230e3e2453de989bd2237e8cf7fe5ef82db3e234cb63fa7f",
+      "size": 4174222
+    },
+    "windows-x64-DELIVERY.json": {
+      "sha256": "7702c908af3b1ae28f91e2fcd62bc43e3ca1080d97e03de47e381284dedab766",
+      "size": 4480429
+    }
+  },
+  "notes": "docs/RELEASE_0_1_5.md",
+  "notes_sha256": "7c6407dd1efed7f59707d4d12a136efee71ad2ce4c4cb2e4b91bd9702a1fd806",
+  "postpublication_checks": "Anonymous asset metadata and HEAD sizes, downloaded Web/checksums, default Standard media acquisition, live speech-transfer cancellation and Complete retry, payload hashes, GUI/CLI/media/CPU speech and uninstall preserving user data.",
+  "preserve_existing_assets": [
+    "NOH-0.1.5-linux-x64.zip",
+    "NOH-0.1.5-linux-x64-materials.zip",
+    "linux-x64-DELIVERY.json"
+  ],
+  "preserved_tag_commit": "1e2bbbd94c578115d45a750ab61493f7a1e48cae",
+  "release_id": 415854483,
+  "replace_existing_assets": [
+    "SHA256SUMS"
+  ],
+  "schema_version": 1,
+  "source_commit": "a7a3e2cc0a4c337ed88699b0573f1689d0a5b1cc",
+  "tag": "v0.1.5",
+  "title": "NOH 0.1.5 - Windows and Linux"
+}

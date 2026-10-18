@@ -1,3 +1,7 @@
+> Historical notes for the initial Linux publication. The current
+> [Windows and Linux release notes](RELEASE_0_1_5.md) supersede the download scope
+> below. Existing Linux archives and the tag remain unchanged.
+
 ## Download NOH 0.1.5 for Linux
 
 **[Linux x64 portable ZIP](https://github.com/Awalgawe/noh/releases/download/v0.1.5/NOH-0.1.5-linux-x64.zip) (484.8 MB)** includes the GUI, CLI, MCP server and offline CPU transcription models.
