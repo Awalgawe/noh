@@ -1,0 +1,158 @@
+{
+  "baseline_source_commit": "6b8c8054b93169fd455d86d16af8aeb92fec1a0e",
+  "changed_input_paths": [
+    "Cargo.lock",
+    "assets/rust-notices.lock.json"
+  ],
+  "changed_packages": [
+    {
+      "dependencies": [
+        "arboard",
+        "bytemuck",
+        "egui",
+        "log",
+        "objc2 0.6.4",
+        "objc2-foundation 0.3.2",
+        "objc2-ui-kit 0.3.2",
+        "profiling",
+        "raw-window-handle",
+        "smithay-clipboard",
+        "web-time",
+        "winit"
+      ],
+      "name": "egui-winit",
+      "source": "git+https://github.com/Awalgawe/egui?rev=3c7cc5468ca8de52f20ba5ac0110d3f53c29439a#3c7cc5468ca8de52f20ba5ac0110d3f53c29439a",
+      "version": "0.36.2"
+    },
+    {
+      "checksum": "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf",
+      "dependencies": [
+        "once_cell",
+        "ring",
+        "rustls-pki-types",
+        "rustls-webpki",
+        "subtle",
+        "zeroize"
+      ],
+      "name": "rustls",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "0.23.46"
+    },
+    {
+      "dependencies": [
+        "ahash",
+        "android-activity",
+        "atomic-waker",
+        "bitflags 2.13.2",
+        "block2 0.5.1",
+        "bytemuck",
+        "calloop 0.13.0",
+        "cfg_aliases",
+        "concurrent-queue",
+        "core-foundation",
+        "core-graphics",
+        "cursor-icon",
+        "dpi",
+        "js-sys",
+        "libc",
+        "memmap2",
+        "ndk",
+        "objc2 0.5.2",
+        "objc2-app-kit 0.2.2",
+        "objc2-foundation 0.2.2",
+        "objc2-ui-kit 0.2.2",
+        "orbclient",
+        "percent-encoding",
+        "pin-project",
+        "raw-window-handle",
+        "redox_syscall 0.4.1",
+        "rustix 0.38.44",
+        "smithay-client-toolkit 0.19.2",
+        "smol_str",
+        "tracing",
+        "unicode-segmentation",
+        "wasm-bindgen",
+        "wasm-bindgen-futures",
+        "wayland-backend",
+        "wayland-client",
+        "wayland-protocols",
+        "wayland-protocols-plasma",
+        "web-sys",
+        "web-time",
+        "windows-sys 0.52.0",
+        "x11-dl",
+        "x11rb",
+        "xkbcommon-dl"
+      ],
+      "name": "winit",
+      "source": "git+https://github.com/crmne/winit?rev=7a962fd46470a137d9a7a1945bf5b5d0b95a002c#7a962fd46470a137d9a7a1945bf5b5d0b95a002c",
+      "version": "0.30.13"
+    },
+    {
+      "checksum": "711e8c9646791c49b7eb799a19c4ae70a9b8372ddc6a1fa4778defd1e2aa5d5e",
+      "dependencies": [
+        "crc32fast",
+        "flate2",
+        "indexmap",
+        "memchr",
+        "typed-path",
+        "zopfli"
+      ],
+      "name": "zip",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "9.0.0"
+    }
+  ],
+  "inputs": {
+    "Cargo.lock": "ee492fd62fbea260f235960d22e465d7363c9f78f7bae31189dde23dd68cf509",
+    "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "assets/delivery-windows.lock.json": "29ef275d01c409cee973d1869c11f36379cfaaef704a3684e44bea6812f5f544",
+    "assets/preview-runtime.json": "72c92e5eb5d128913798f80a06a03294db798519809201458d0b17c29a4112a4",
+    "assets/rust-notices.lock.json": "ad3e17dcc9d99c31f6ad91ee736eba762bb777711b2e62ada7aeae9b24f1082f",
+    "assets/speech-bundle.json": "4bef71e92e5f3857e6d06e3a0b95971bc60448e838a6cf822fe9045d344c089f",
+    "assets/windows-native.lock.json": "de8481277cc2e37a70773f69dcc304eb13be44f2db65c84d6f3324d1e26331ed",
+    "rust_standard_library_source": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
+    "tools/rust_notices.py": "326b00b96d7840e4fb86e9ea496e5c3144e97480dbdd8c9eea2a72d682a8783c",
+    "tools/windows_runtime.py": "090d182a40c72503f982457c1b2e1225586bdcfdb378e27d5b8573e23863c860"
+  },
+  "platform": "windows-x64",
+  "prior_reviews": [
+    {
+      "path": "docs/RELEASE_0_1_3_INPUTS.md",
+      "sha256": "7d3d3c98b1481e11469e274bb1a280f4a885b3d9fe5a050a8f5b5d4345adf298"
+    },
+    {
+      "path": "docs/WINDOWS_REDISTRIBUTION.md",
+      "sha256": "157a1d2506cc876ac64197013cee63b34897c1a85700ca0cf684e973533ded8b"
+    },
+    {
+      "path": "docs/release-evidence/linux-0.1.4-rustls-inputs.json",
+      "sha256": "419709b4b26921cdf1a44556bfba13679261fbe936957d55257b078d71fcb2ae"
+    },
+    {
+      "path": "docs/release-evidence/linux-0.1.5-inputs.json",
+      "sha256": "c3379f32395812ab918173e668a00d45ad60ad8b6d39d1f9c742573a1d16cf55"
+    }
+  ],
+  "schema_version": 1,
+  "scope": "Redistribution inputs only; new Windows candidate and installer final-byte qualification remain required.",
+  "third_party_cargo_records_unchanged": 482,
+  "unchanged_input_paths": [
+    "LICENSE",
+    "assets/delivery-windows.lock.json",
+    "assets/preview-runtime.json",
+    "assets/speech-bundle.json",
+    "assets/windows-native.lock.json",
+    "tools/rust_notices.py",
+    "tools/windows_runtime.py",
+    "rust_standard_library_source"
+  ],
+  "verification": {
+    "all_changed_dependency_lists_unchanged": true,
+    "final_windows_material_correspondence": "Required after the new build; no Linux runtime acceptance is reused.",
+    "native_input_hashes_match_windows_0_1_3": true,
+    "rust_notices_sha256": "310bc2695f60ee3cc60a89d454e9c98621a7d5a0b6ef1dda7fba34f591228693",
+    "vendor_packages": 486
+  },
+  "version": "0.1.5"
+}
