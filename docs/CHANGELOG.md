@@ -5,7 +5,26 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
-## 0.1.4 — candidate, not published
+## 0.1.5 — 2026-10-17, Windows packages added 2026-10-18
+
+Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.1.5).
+The original Linux archives and tag are preserved. The Windows build has its
+own recorded commit, differing only in release documentation and policy;
+each platform's materials archive contains its actual compiled sources.
+
+- Fix native Wayland picture, video and WAV drops, while preserving clipboard
+  integration, cancellation, path validation and imports through the file chooser.
+- Update ZIP to 9.0.0 for its upstream security fixes. Preserve Windows archive
+  member and traversal validation.
+- Include Windows Minimal, Standard, Complete and Web installers, the complete
+  portable archive and corresponding sources for version 0.1.5.
+- Correct the installation guide for the host-owned Linux media runtime and
+  link the seven-desktop qualification results.
+
+## 0.1.4 — Linux package
+
+The [published Linux release](https://github.com/Awalgawe/noh/releases/tag/v0.1.4)
+contains the host-runtime packaging correction below.
 
 - Linux packages now require host FFmpeg and libmpv, and ship no shared
   libraries. This keeps the media, graphics and audio stack with the host's

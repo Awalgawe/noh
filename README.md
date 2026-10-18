@@ -67,11 +67,12 @@ This Windows release was validated on Windows 10 x64 22H2 (build 19045). Read it
 notes for checksums and validation limits.
 
 **Linux x86_64:** download `NOH-<version>-linux-x64.zip`, extract the complete
-archive, then run `./NOH.AppDir/AppRun` from the extracted folder. It includes
-media tools and CPU transcription models. The baseline is Ubuntu 24.04 with
-glibc 2.39; final-byte tests used Ubuntu 24.04.5 under WSLg with software rendering.
+archive, then run `./NOH.AppDir/AppRun` from the extracted folder. Install the
+host's FFmpeg and libmpv packages first; CPU transcription models are included.
+The baseline is Ubuntu 24.04 with glibc 2.39. Version 0.1.5 was checked on seven
+Linux desktops with virtual graphics and audio.
 See the [Linux installation steps](docs/INSTALLING.md#linux-x86_64) and
-[validation limits](docs/LINUX_0_1_3_QUALIFICATION.md).
+[validation limits](docs/LINUX_0_1_5_CANDIDATE.md).
 
 macOS currently requires a [source build](docs/BUILDING.md); distribution signing
 and notarization remain incomplete.

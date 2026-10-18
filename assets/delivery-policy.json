@@ -370,6 +370,47 @@
       "review_round": "issue-25-v5",
       "scope": "Exact Linux 0.1.5 package and corresponding materials; six containers and all seven QEMU desktops, including native Wayland PNG/MP4/WAV drops in the four Wayland cases. No physical-device, human-listening or universal XWayland bridge claim. Independent OK on this frozen policy/evidence and release-note commit is required before owner-authorized publication.",
       "source_commit": "1e2bbbd94c578115d45a750ab61493f7a1e48cae"
+    },
+    {
+      "delivery_sha256": "7702c908af3b1ae28f91e2fcd62bc43e3ca1080d97e03de47e381284dedab766",
+      "evidence": {
+        "audio_gpu": {
+          "path": "docs/release-evidence/windows-0.1.5.json",
+          "sha256": "9eec9d1d03fd0866834ec113cba37d41f15f34f9c7f6644adbb8bf4e81e4bd20"
+        },
+        "clean_install": {
+          "path": "docs/release-evidence/windows-0.1.5.json",
+          "sha256": "9eec9d1d03fd0866834ec113cba37d41f15f34f9c7f6644adbb8bf4e81e4bd20"
+        },
+        "corresponding_sources": {
+          "path": "docs/release-evidence/windows-0.1.5.json",
+          "sha256": "9eec9d1d03fd0866834ec113cba37d41f15f34f9c7f6644adbb8bf4e81e4bd20"
+        },
+        "download_protection": {
+          "path": "docs/release-evidence/windows-0.1.5.json",
+          "sha256": "9eec9d1d03fd0866834ec113cba37d41f15f34f9c7f6644adbb8bf4e81e4bd20"
+        },
+        "media_export": {
+          "path": "docs/release-evidence/windows-0.1.5.json",
+          "sha256": "9eec9d1d03fd0866834ec113cba37d41f15f34f9c7f6644adbb8bf4e81e4bd20"
+        },
+        "native_import_closure": {
+          "path": "docs/release-evidence/windows-0.1.5.json",
+          "sha256": "9eec9d1d03fd0866834ec113cba37d41f15f34f9c7f6644adbb8bf4e81e4bd20"
+        },
+        "offline_transcription": {
+          "path": "docs/release-evidence/windows-0.1.5.json",
+          "sha256": "9eec9d1d03fd0866834ec113cba37d41f15f34f9c7f6644adbb8bf4e81e4bd20"
+        },
+        "rust_notices": {
+          "path": "docs/release-evidence/windows-0.1.5.json",
+          "sha256": "9eec9d1d03fd0866834ec113cba37d41f15f34f9c7f6644adbb8bf4e81e4bd20"
+        }
+      },
+      "platform": "windows-x64",
+      "review_round": "issue-25-v7",
+      "scope": "Ordinary portable and corresponding materials only; installer wrappers and publication excluded",
+      "source_commit": "a7a3e2cc0a4c337ed88699b0573f1689d0a5b1cc"
     }
   ],
   "redistribution_records": [
