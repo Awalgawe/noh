@@ -268,9 +268,20 @@ Seal the application and complete materials together. After the Critic accepts
 the exact DELIVERY.json hash and native evidence, record the qualification against
 that source commit, run the existing envelope/qualification checks, and upload
 those unchanged assets to an ordinary GitHub release. The tag must identify the
-compiled source commit. A subsequent documentation/qualification commit may add
+compiled source commit at initial publication. A subsequent documentation/qualification commit may add
 the release link and evidence without rebuilding or relabelling that binary.
 The hosted draft path keeps its separate run/protected-environment requirements.
+
+When completing a published release with a missing platform, preserve the
+published tag and existing binary/material archives. A later build from main
+may supply the missing platform only if its full diff against the tag contains
+release documentation/evidence and delivery-policy records exclusively. Verify
+the exact diff during final review; any application, dependency, recipe or
+workflow change requires a new release version. Publish each platform's actual
+compiled commit, run/attempt, delivery digest and corresponding sources in the
+release notes and provenance. Never substitute the original tag for a later
+build's real revision. The new platform and its wrappers still require all
+input, CI, native exact-byte and independent publication checks above.
 
 The ordinary Windows installer is a separate wrapper around those exact portable
 bytes. `tools/public_components.py` first derives the two runtime ZIPs and
