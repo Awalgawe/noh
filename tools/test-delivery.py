@@ -651,6 +651,39 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(report['missing_notice_texts'], ['tiny-1.0.0'])
         self.assertIn('MISSING ORIGINAL NOTICE', (missing / 'rust-notices/RUST-NOTICES.txt').read_text())
 
+    def test_rust_notice_supplements_name_one_commit_on_a_known_forge(self):
+        self.assertEqual(rust_notices.raw_prefix('https://github.com/owner/project', COMMIT),
+                         'https://raw.githubusercontent.com/owner/project/' + COMMIT + '/')
+        self.assertEqual(rust_notices.raw_prefix('https://gitlab.com/owner/project', COMMIT),
+                         'https://gitlab.com/owner/project/-/raw/' + COMMIT + '/')
+        for repository in ('https://example.org/owner/project', 'https://gitlab.com/owner/project/extra',
+                           'https://gitlab.com.example.org/owner/project', 'http://gitlab.com/owner/project',
+                           'https://github.com/owner/..', 'https://gitlab.com/./project'):
+            with self.assertRaisesRegex(ValueError, 'supported forge'):
+                rust_notices.raw_prefix(repository, COMMIT)
+        root = self.root / 'gitlab-materials'
+        folder = root / 'vendor/tiny-1.0.0'
+        folder.mkdir(parents=True)
+        original = b'Original upstream license and copyright\n'
+        downloaded = self.root / 'gitlab-upstream.txt'
+        downloaded.write_bytes(original)
+        delivery.write(folder / '.cargo-checksum.json', {'package': 'a' * 64, 'files': {}})
+        delivery.write(folder / '.cargo_vcs_info.json', {'git': {'sha1': COMMIT}})
+        delivery.write(root / 'RUST-INVENTORY.json', [{'name': 'tiny', 'version': '1.0.0', 'license': 'MIT', 'source': 'registry+fixture', 'license_file': None}])
+        item = {'url': 'https://gitlab.com/owner/project/-/raw/' + COMMIT + '/LICENSE',
+                'path': 'LICENSE', 'sha256': delivery.digest(downloaded),
+                'git_blob': delivery.hashlib.sha1(b'blob ' + str(len(original)).encode() + b'\0' + original).hexdigest()}
+        supplement = {'package_sha256': 'a' * 64, 'revision': COMMIT, 'repository': 'https://gitlab.com/owner/project', 'files': [item]}
+        report = rust_notices.generate(root, self.root / 'cache', {'crates': {'tiny-1.0.0': supplement}, 'unresolved': []}, lambda *args: downloaded)
+        self.assertEqual(report['missing_notice_texts'], [])
+        self.assertIn(original, (root / 'rust-notices/RUST-NOTICES.txt').read_bytes())
+        other = self.root / 'gitlab-other-commit'
+        shutil.copytree(root / 'vendor', other / 'vendor')
+        delivery.write(other / 'RUST-INVENTORY.json', delivery.read(root / 'RUST-INVENTORY.json'))
+        moved = supplement | {'files': [item | {'url': 'https://gitlab.com/owner/project/-/raw/main/LICENSE'}]}
+        with self.assertRaisesRegex(ValueError, 'exact upstream revision'):
+            rust_notices.generate(other, self.root / 'cache', {'crates': {'tiny-1.0.0': moved}, 'unresolved': []}, lambda *args: downloaded)
+
     def test_explicit_license_declaration_preserves_origin_and_rejects_changes(self):
         root = self.root / 'declared-materials'
         folder = root / 'vendor/tiny-1.0.0'

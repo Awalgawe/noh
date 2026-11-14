@@ -38,6 +38,16 @@ def inventory_vendor(vendor, lock_file):
     return records
 
 
+def raw_prefix(repository, revision):
+    """Where a public forge serves the files of one exact commit."""
+    name = r"(?!\.{1,2}(?:/|$))[A-Za-z0-9_.\-]+"
+    if re.fullmatch("https://github\\.com/" + name + "/" + name, repository):
+        return repository.replace("https://github.com/", "https://raw.githubusercontent.com/") + "/" + revision + "/"
+    if re.fullmatch("https://gitlab\\.com/" + name + "/" + name, repository):
+        return repository + "/-/raw/" + revision + "/"
+    raise ValueError("Supplement repository is not on a supported forge")
+
+
 def source_correspondence(directory, checksums, supplement, evidence_root, output):
     """Check a complete content match when old crates omit VCS metadata.
 
@@ -168,9 +178,7 @@ def generate(materials, cache, supplements, fetcher, evidence_root=None):
                 if vcs["git"]["sha1"] != supplement["revision"]:
                     raise ValueError("Supplement targets a different upstream revision: " + identity)
             for item in supplement["files"]:
-                expected_url = (supplement["repository"].replace("https://github.com/", "https://raw.githubusercontent.com/")
-                                + "/" + supplement["revision"] + "/")
-                if not item["url"].startswith(expected_url):
+                if not item["url"].startswith(raw_prefix(supplement["repository"], supplement["revision"])):
                     raise ValueError("Supplement URL does not identify its exact upstream revision")
                 path = fetcher(item, cache, "rust-notice-" + item["sha256"] + ".txt")
                 data = path.read_bytes()
