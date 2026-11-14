@@ -80,6 +80,30 @@ jobs:
       - name: Native build, media and MCP tests, GUI captures
         shell: bash
         run: bash tools/verify-unix.sh
+      - name: Draw caption effects with software OpenGL
+        if: runner.os == 'Linux'
+        shell: bash
+        # These tests are ignored by default: they need OpenGL 3.3. Mesa's software
+        # renderer and the virtual display are the packages installed above.
+        run: |
+          names=(
+            gpu_checks
+            a_chosen_effect_burns_and_warns_when_its_installed_font_is_missing
+            a_cue_too_tall_for_libass_is_drawn_by_classique_with_an_overflow_warning
+            a_missing_installed_font_is_drawn_in_the_plugin_face_with_a_warning
+            a_chosen_effect_draws_the_short_and_warns_when_its_installed_font_is_missing
+          )
+          mkdir -p logs/platform
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a cargo test --locked --features gui,mcp,updates --lib --tests -- \
+            --ignored --test-threads=1 "${names[@]}" 2>&1 | tee logs/platform/effect-opengl-tests.log
+          # A filter that matches nothing also exits 0: require each test to have run and passed once.
+          for name in "${names[@]}"; do
+            count="$(grep -c -E "^test ([a-z_0-9]+::)*${name} \.\.\. ok$" logs/platform/effect-opengl-tests.log || true)"
+            if [[ "$count" != 1 ]]; then
+              echo "Expected one passing run of ${name}, found ${count}" >&2
+              exit 1
+            fi
+          done
       - name: Observe native Wayland drops, cancellation and clipboard
         if: runner.os == 'Linux'
         shell: bash
