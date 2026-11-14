@@ -1312,16 +1312,16 @@ mod tests {
     /// The quick suite has no FFmpeg; `cargo dev verify --media` sets
     /// NOH_MEDIA_TESTS so this can never be skipped silently there.
     fn media_worker() -> Option<PathBuf> {
-        let worker = std::env::current_exe()
-            .ok()
-            .and_then(|exe| {
-                Some(
-                    exe.parent()?
-                        .parent()?
-                        .join(format!("noh-app{}", std::env::consts::EXE_SUFFIX)),
-                )
-            })
-            .filter(|path| path.exists());
+        // Cargo keeps a test binary in `<profile>/deps`, or deeper under
+        // `<profile>/build` from 1.100: the worker is in the nearest folder above.
+        let name = format!("noh-app{}", std::env::consts::EXE_SUFFIX);
+        let worker = std::env::current_exe().ok().and_then(|exe| {
+            exe.ancestors()
+                .skip(1)
+                .take(6)
+                .map(|folder| folder.join(&name))
+                .find(|path| path.is_file())
+        });
         let ffmpeg = noh::inspection::resolve_ffmpeg(Path::new(""));
         if worker.is_none() || ffmpeg.is_err() {
             assert!(
