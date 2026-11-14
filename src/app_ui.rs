@@ -488,6 +488,17 @@ impl NohApp {
                         .to_string_lossy()
                         .into_owned()
                 }),
+            // The maintainer's rule 2, from the current exact check only.
+            color_warning: self
+                .diagnosis
+                .as_ref()
+                .filter(|_| self.diagnosis_current())
+                .and_then(|d| {
+                    d.notes
+                        .iter()
+                        .find(|n| n.starts_with("warning.color_matrix|"))
+                })
+                .map(|note| noh::i18n::Message::from(note.as_str())),
             // The engine's own count for that file: the chip may still be reading it.
             lyrics_empty: self.subtitles.artifact.as_ref().is_some_and(|artifact| {
                 self.lyrics_ready.as_ref() == Some(&artifact.path) && artifact.cues == 0
@@ -535,10 +546,7 @@ impl NohApp {
             fraction: self.fraction,
         });
         // Shown lyrics need their track read on the current song clock.
-        if self.project.apply_subtitles
-            && (self.project.track.loaded.is_none() || self.project.track.validating())
-            && operation == Operation::Idle
-        {
+        if self.project.apply_subtitles && !self.lyrics_ready() && operation == Operation::Idle {
             for availability in [
                 Some(&mut view.export),
                 view.montage.as_mut().and_then(|m| m.short.as_mut()),
@@ -547,7 +555,10 @@ impl NohApp {
             .flatten()
             {
                 availability.enabled = false;
-                availability.reason = if self
+                availability.reason = if self.lyrics_question_pending() {
+                    // The difference first: the export reads the answer.
+                    "pair.export_wait"
+                } else if self
                     .project
                     .track
                     .error
@@ -561,7 +572,14 @@ impl NohApp {
                 .into();
             }
         }
-        if operation == Operation::Idle && self.project.range_moved && view.third.is_none() {
+        // A moved range is said first; the colour conversion (the maintainer's rule 2) waits.
+        if operation == Operation::Idle
+            && self.project.range_moved
+            && view
+                .third
+                .as_ref()
+                .is_none_or(|t| t.key == "warning.color_matrix")
+        {
             view.third = Some("range.moved".into());
         }
         view
@@ -633,9 +651,20 @@ impl NohApp {
                 self.pick_lyrics(ctx);
             }
             ContextAction::ReviewLyrics => {
+                // Review in the lane: the first line's bubble opens.
                 self.lyrics_ready = None;
-                if let Some(path) = self.project.track.path.clone() {
-                    self.open(&path, ctx);
+                if let Some(first) = self.lyrics_track().and_then(|t| t.cues.first().cloned()) {
+                    // Bring it into view: the bubble opens above a visible line.
+                    let duration = self.project.duration_ms;
+                    if let Some(range) = noh::timeline::Range::new(
+                        first.start_ms,
+                        first.end_ms.min(duration),
+                        duration,
+                    ) {
+                        self.project.viewport =
+                            app_timeline::focus_range(range, duration).or(self.project.viewport);
+                    }
+                    self.lyrics_edit.selected = Some(0);
                 }
             }
             ContextAction::Suggest => {
@@ -1564,6 +1593,7 @@ impl NohApp {
             return gallery;
         }
         self.receive();
+        self.retry_generation(&ui.ctx().clone());
         #[cfg(feature = "updates")]
         self.poll_updates(&ctx);
         #[cfg(feature = "updates")]
@@ -1599,6 +1629,16 @@ impl NohApp {
         if busy && ctx.input(|i| i.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.close_question = true;
+        } else if self.has_unsaved_lyrics()
+            && !self.close_now
+            && ctx.input(|i| i.viewport().close_requested())
+        {
+            // A pending change is written first; asked only when it cannot be.
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.lyrics_close_request();
+        }
+        if self.close_now {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
         // An empty project is only the drop area, without export bar.
         let empty =
@@ -1724,6 +1764,8 @@ impl NohApp {
             self.dragging = None;
         }
         self.options_modal(&ctx);
+        self.lyrics_pair_dialog(&ctx);
+        self.lyrics_save_dialogs(&ctx);
         if self.close_question {
             egui::Window::new(l.text("close_title"))
                 .id(egui::Id::new("confirm-close"))
@@ -1777,8 +1819,14 @@ impl eframe::App for NohApp {
         if let Some(scrubber) = &mut self.mini_preview.scrubber {
             scrubber.close(gl);
         }
+        // Delete the effect layer's GL objects while egui's context still exists.
+        self.effects.release();
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Measurement only (NOH_FX_TRACE): one row per UI frame, with or without effect.
+        super::app_effects::trace("ui", 0.0, None, None, "");
+        self.ensure_default_effect();
+        self.lyrics_edit_frame(ui.ctx());
         if let Some(scrubber) = &self.mini_preview.scrubber {
             scrubber.service(ui.ctx());
         }

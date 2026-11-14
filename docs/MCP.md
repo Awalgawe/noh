@@ -49,10 +49,11 @@ cargo --offline dev verify --media --mcp --offline
 | `noh_preview` | `request` | Preview job ID; full montage at reduced quality |
 | `noh_export_project` | `request`; optional `short`, `captions`, `preview` | Full montage or selected project interval using the current WAV/media/SRT |
 | `noh_transcribe` | `source`, `output`, `transcriber`, `model`, `vad_model`; optional `language` and `ffmpeg` | Local transcription job ID |
-| `noh_burn_subtitles` | `source`, `subtitles`, `output`; optional `ffmpeg`, `size`, `placement`, `preview` | Caption render job ID; result is an exported MP4 |
+| `noh_burn_subtitles` | `source`, `subtitles`, `output`; optional `ffmpeg`, `size`, `placement`, `effect`, `preview` | Caption render job ID; result is an exported MP4 |
 | `noh_make_short` | `source`, `output`, `start_ms`, `end_ms`; optional `ffmpeg`, `framing`, `captions`, `preview` | Vertical clip job ID; result includes the measured duration and exported MP4 |
 | `noh_job` | `job_id` | Current status, optionally waiting for a change and returning the result |
 | `noh_cancel` | `job_id` | Cancellation request/current status |
+| `noh_list_effects` | none | The caption effects `effect.id` can name, their presets and settings, the folders read and refused |
 
 `noh_transcribe` processes an explicitly selected local audio file or the first
 audio stream in a selected video using local CPU transcription. All paths are
@@ -74,8 +75,54 @@ to false. It shares the controller's validation, cancellation and publication,
 and returns `kind: "export"` through `noh_job`. No montage diagnosis is needed
 for this separate operation. Video is re-encoded; audio treatment, timestamp
 rounding and unknown final-frame duration are reported as stable warning IDs.
-The source and SRT are never modified. SRT input is capped at 1 MiB and source
+The source is never modified. SRT input is capped at 1 MiB and source
 duration at two hours. Unsupported color/rotation cases fail explicitly.
+
+Caption effects (`noh_burn_subtitles`, and `captions` in `noh_make_short` and
+`noh_export_project`): captions are drawn in Classique unless `effect`
+(`{"id": …, "preset": …, "values": {…}}`) names another effect from
+`noh_list_effects`. The id is looked up in the folders NOH reads (the `effects`
+folder beside `noh.exe`, then the user's `noh/effects`), never given as a path.
+The preset and each value are checked against the effect before the job starts;
+a wrong one is refused (`error.effect`) with what was found, nothing is
+corrected. A font setting takes a bundled face or `"system:<installed family>"`.
+`size` and `placement` are Classique's (absent: `medium`, `bottom`); with another
+effect they are refused, and with `noh.classic` a setting given both as a field
+and as a value is refused. An effect other than Classique needs OpenGL (no libass
+fallback: `error.effect_gl_unavailable`, nothing published) and is refused with a
+project `preview` (`error.effect_preview`). An installed family missing on this
+computer is drawn in the effect's own font; the job's warnings then hold
+`{"code": "warning.effect_font_missing", "args": [family]}`.
+Captions wrap between words only (every effect, GPU and libass): a word wider
+than the text area stays whole on its own line, centred, and the job warns with
+`{"code": "warning.effect_word_too_wide", "args": ["m:ss"]}`; the overflow
+warning may come too when the word also leaves the safe area (any effect), and
+the off-frame warning when it leaves the picture (Classique only).
+When libass draws the captions (Classique without OpenGL, or no effects
+engine) in a BT.709 export and the FFmpeg in use blends them in BT.601 (FFmpeg
+older than 7.1, such as Ubuntu 24.04's 6.1), the job warns with
+`warning.caption_colors_old_ffmpeg`: the colours may be slightly off; nothing is
+corrected. NOH measures this by drawing one red box with that FFmpeg.
+
+Subtitles and their lyrics file (`noh_burn_subtitles`, and `captions` in
+`noh_make_short` and `noh_export_project`): `subtitles` is an `.srt` or its NOH
+lyrics file `<name>.noh-lyrics.json` (the lyrics with their word times; the
+`.srt` mirrors it). Before the job starts NOH keeps the two identical: an `.srt`
+given alone gets its lyrics file created beside it (never over an existing file),
+a lyrics file given uses the `.srt` beside it (rebuilt when missing), and a lyrics
+file NOH cannot use leaves the `.srt` in use. When the two differ, `truth` is
+required: `"lyrics"` rewrites the `.srt`, `"srt"` replaces the lyrics (unchanged
+lines keep their word times); the replaced file is first kept beside it under the
+next free `<name>.replaced.srt` or `<name>.noh-lyrics.replaced.json`. Without
+`truth` the start is refused before anything is written, with code
+`error.lyrics_truth_required`; its `technical` is a JSON object with `srt`,
+`lyrics`, `differing_lines`, `srt_usable` and `accepted` (`["lyrics","srt"]`,
+or `["lyrics"]` when the `.srt` cannot be read). The files are unified before the
+media is checked: a job that then fails leaves them unified, with the replaced
+file beside.
+`truth` is ignored when the two do not differ. What NOH did (a file created, an
+`.srt` rewritten, the replaced file kept as …) is listed in the start reply's
+`lyrics` array of `{code, args}`.
 
 `noh_export_project` is the additive project-aware path. Its `request` uses the
 existing render-input object; optional `short` contains `start_ms`, `end_ms`,

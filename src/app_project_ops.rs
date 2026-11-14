@@ -52,6 +52,14 @@ impl NohApp {
         }
         // A new export attempt supersedes an earlier rejected file drop.
         self.drop_error = None;
+        // A pending lyrics change is written first; the report says what the
+        // export reads (lyrics plan 9).
+        // A file changed on disk since it was read: read again, and the export
+        // waits for what that says (a question comes first if they differ).
+        let Ok(lyrics_warnings) = self.prepare_lyrics_export() else {
+            self.notice = Some("lyrics.export_reread".into());
+            return;
+        };
         self.mini_preview.invalidate();
         if !short && !self.project.apply_subtitles {
             self.start(ctx, previewing);
@@ -125,7 +133,7 @@ impl NohApp {
                 None
             };
             let captions = if self.project.apply_subtitles {
-                if self.project.track.loaded.is_none() || self.project.track.validating() {
+                if !self.lyrics_ready() {
                     return Err(EngineError::new(
                         "error.caption_track",
                         "prepare_project",
@@ -134,15 +142,34 @@ impl NohApp {
                     ));
                 }
                 Some(ShortCaptions {
-                    subtitles: self.project.track.path.clone().unwrap(),
+                    subtitles: self.captions_file().map(|c| c.0).ok_or_else(|| {
+                        EngineError::new(
+                            "error.caption_track",
+                            "prepare_project",
+                            None,
+                            "The edited subtitles could not be written.",
+                        )
+                    })?,
                     style: self.project.effective_caption_style(short),
                 })
             } else {
                 None
             };
+            // A preview render carries no captions with an effect (the monitor draws
+            // it), unless the preview could not draw it: then libass shows them.
+            let effect = if previewing {
+                self.preview_effect()
+            } else {
+                self.project
+                    .effect
+                    .as_ref()
+                    .filter(|_| self.project.apply_subtitles)
+                    .map(|c| self.styled(c).request())
+            };
             let request = ProjectRequest {
                 montage,
                 short: selected,
+                effect,
                 captions,
             };
             request.validate()?;
@@ -158,7 +185,8 @@ impl NohApp {
         let reviewed = self
             .project
             .apply_subtitles
-            .then(|| self.project.track.loaded.as_ref().unwrap().snapshot.clone());
+            .then(|| self.captions_file().map(|c| c.1))
+            .flatten();
         let stamp = self.project.stamp(self.revision, short);
         self.project.running = Some(Running {
             preview: previewing,
@@ -167,6 +195,11 @@ impl NohApp {
             preview_file: None,
         });
         self.begin_project_operation(previewing, "short.preparing");
+        for warning in lyrics_warnings {
+            if !self.warnings.contains(&warning) {
+                self.warnings.push(warning);
+            }
+        }
         self.prepare_project_work(ctx, move |cancel| {
             if cancel.load(Ordering::Acquire) {
                 return Err(cancelled());
@@ -268,6 +301,21 @@ impl NohApp {
             return true;
         }
         false
+    }
+
+    /// A large model failed under Automatique (`Workspace::fall_back`):
+    /// generate the same song's lyrics again, with the smaller model, saying so.
+    pub(super) fn retry_generation(&mut self, ctx: &egui::Context) {
+        if self.job.is_some() || self.subtitles.running {
+            return;
+        }
+        let Some(retry) = self.subtitles.retry.take() else {
+            return;
+        };
+        self.project_generate(ctx);
+        if self.subtitles.running && !self.warnings.contains(&retry) {
+            self.warnings.push(retry);
+        }
     }
 
     pub(super) fn project_generate(&mut self, ctx: &egui::Context) {
@@ -544,6 +592,7 @@ impl NohApp {
         {
             self.project
                 .attach(result.output.clone(), self.wav.as_ref());
+            self.trust_lyrics(result.output.clone());
             return true;
         }
         false
@@ -690,8 +739,25 @@ fn free_srt_path(
         }
         name.push(".srt");
         let path = folder.join(name);
+        // The lyrics files beside it (new and old names) must be free too: a
+        // stale one left after its .srt was deleted is never overwritten (the
+        // next name is used).
+        let words_free = [
+            noh::subtitle_words::lyrics_path(&path),
+            noh::subtitle_words::path_for(&path),
+        ]
+        .iter()
+        .all(|p| {
+            matches!(
+                std::fs::symlink_metadata(p),
+                Err(ref e) if e.kind() == std::io::ErrorKind::NotFound
+            )
+        });
         match std::fs::symlink_metadata(&path) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(path),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && words_free => {
+                return Ok(path);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => {
                 return Err(EngineError::new(
                     "error.output_folder",
@@ -728,6 +794,18 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn a_stale_working_file_moves_the_subtitles_to_the_next_name() {
+        let folder = tempfile::tempdir().unwrap();
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        let source = folder.path().join("song.wav");
+        std::fs::write(folder.path().join("song.noh-words.json"), b"{}").unwrap();
+        assert_eq!(
+            free_srt_path(&source, folder.path(), &cancel).unwrap(),
+            folder.path().join("song-2.srt")
+        );
+    }
+
     #[test]
     fn subtitle_names_are_free_bounded_and_cancellable() {
         let folder = tempfile::tempdir().unwrap();

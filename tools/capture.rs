@@ -38,6 +38,12 @@ const STATES: &[&str] = &[
     "lyrics-menu",
     "lyrics-generating",
     "lyrics-track-menu",
+    "lyrics-first-edit",
+    "lyrics-unsaved",
+    "lyrics-srt-stale",
+    "lyrics-save-failed",
+    "lyrics-differ",
+    "lyrics-differ-later",
     "short",
     "exporting",
     "done",
@@ -261,8 +267,35 @@ const LAYOUT: &[LayoutCase] = &[
     ("song-only", "", "fr", "dark", WIDE, ""),
     ("song-only", "", "de", "light", COMPACT, ""),
 ];
+/// Caption plugins whose own settings are captured (state `ready`, fr and de at
+/// both sizes), their choices named in the language.
+const PLUGIN_SETTINGS: &[&str] = &[
+    "noh.karaoke-simple",
+    "noh.drop",
+    "noh.sweep",
+    "noh.breath",
+    "noh.block",
+];
+/// A plugin's font setting: the picker open, and an installed family missing,
+/// with a fixed folder as the installed fonts (NOH_CAPTURE_FONTS).
+const FONT_SETTINGS: &[&str] = &[
+    "effect=noh.drop,style=settings,more=1,font_open=1",
+    "effect=noh.drop,style=settings,more=1,font=system:Police Absente",
+];
 const TWEAK_KEYS: &[&str] = &[
-    "view", "framing", "restart", "open", "scroll", "export", "playhead", "preset",
+    "view",
+    "framing",
+    "restart",
+    "open",
+    "scroll",
+    "export",
+    "playhead",
+    "preset",
+    "effect",
+    "style",
+    "more",
+    "font",
+    "font_open",
 ];
 const DEFAULT_THEMES: &[&str] = &["dark", "light"];
 const DEFAULT_SCALES: &[&str] = &["1", "1.5", "2"];
@@ -332,7 +365,8 @@ fn tweaks(value: &str) -> Result<String> {
 }
 
 fn stem_part(tweaks: &str) -> String {
-    tweaks.replace([',', '='], "_")
+    // File names: a font value holds « : » and spaces (system:<Family>).
+    tweaks.replace([',', '=', ':', ' '], "_")
 }
 
 fn layout_cases(options: &Options) -> Result<Vec<Case>> {
@@ -370,6 +404,36 @@ fn layout_cases(options: &Options) -> Result<Vec<Case>> {
                 reference_name: (!reference_name.is_empty()).then(|| (*reference_name).to_owned()),
                 stem: format!("{label}-{}", scale.replace('.', "p")),
             });
+        }
+    }
+    let ready = filter
+        .as_ref()
+        .is_none_or(|f| f.iter().any(|s| s == "ready"));
+    let extras = PLUGIN_SETTINGS
+        .iter()
+        .map(|id| format!("effect={id},style=settings"))
+        .chain(FONT_SETTINGS.iter().map(|s| s.to_string()));
+    for extra in extras.filter(|_| ready) {
+        for (language, (width, height)) in
+            [("fr", WIDE), ("de", WIDE), ("fr", COMPACT), ("de", COMPACT)]
+        {
+            for scale in &scale {
+                let label = format!(
+                    "ready-{}-{language}-dark-{width}x{height}",
+                    stem_part(&extra)
+                );
+                cases.push(Case {
+                    state: "ready".into(),
+                    language: language.into(),
+                    theme: "dark".into(),
+                    scale: scale.clone(),
+                    width,
+                    height,
+                    tweaks: tweaks(&extra)?,
+                    reference_name: None,
+                    stem: format!("{label}-{}", scale.replace('.', "p")),
+                });
+            }
         }
     }
     if cases.is_empty() {
@@ -596,6 +660,18 @@ fn capture_case(options: &Options, case: &Case) -> Value {
     let mut errors = Vec::new();
 
     let mut command = Command::new(&options.app);
+    // A fixed folder stands for the installed fonts: copies of two bundled files.
+    let fonts = options.output.join("installed-fonts");
+    if !fonts.is_dir() {
+        let _ = std::fs::create_dir_all(&fonts);
+        for file in ["BarlowCondensed-ExtraBold.ttf", "NotoSans-Regular.ttf"] {
+            let from = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("assets")
+                .join(file);
+            let _ = std::fs::copy(from, fonts.join(file));
+        }
+    }
+    command.env("NOH_CAPTURE_FONTS", &fonts);
     match &options.project {
         Some(project) => command.env("NOH_CAPTURE_PROJECT", project),
         None => command.env_remove("NOH_CAPTURE_PROJECT"),
@@ -847,7 +923,10 @@ mod tests {
     #[test]
     fn layout_matrix_names_every_reference_once_with_valid_tweaks() {
         let cases = build_cases(&options(None)).unwrap();
-        assert_eq!(cases.len(), LAYOUT.len());
+        assert_eq!(
+            cases.len(),
+            LAYOUT.len() + 4 * (PLUGIN_SETTINGS.len() + FONT_SETTINGS.len())
+        );
         let boards: BTreeSet<_> = cases
             .iter()
             .filter_map(|c| c.reference_name.clone())

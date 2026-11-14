@@ -8,7 +8,9 @@ publish = false
 
 [features]
 default = []
-gui = ["dep:eframe", "dep:rfd", "dep:open", "dep:rodio", "dep:libloading"]
+gui = ["dep:eframe", "dep:rfd", "dep:open", "dep:rodio", "dep:libloading", "dep:chrono", "effects"]
+# Caption effects engine (OpenGL): layout, plugins, GPU compositor and export mix.
+effects = ["dep:cosmic-text", "dep:fdsm", "dep:fdsm-ttf-parser", "dep:nalgebra", "dep:ttf-parser", "dep:naga", "dep:glow", "dep:glutin", "dep:glutin-winit", "dep:winit", "dep:bytemuck"]
 mcp = ["dep:rmcp", "dep:tokio", "dep:tokio-util"]
 updates = ["dep:ring", "dep:base64", "dep:semver", "dep:sha2", "dep:reqwest", "dep:tokio", "dep:windows-sys", "dep:quick-xml", "dep:zip"]
 
@@ -19,13 +21,15 @@ semver = { version = "1", features = ["serde"], optional = true }
 sha2 = { version = "0.10", optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"], optional = true }
 quick-xml = {version = "0.41", optional = true}
-zip = {version = "=9.0.0", default-features = false, features = ["deflate"], optional = true}
+zip = {version = "=9.5.1", default-features = false, features = ["deflate"], optional = true}
 eframe = { version = "0.36.2", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"], optional = true }
 rfd = { version = "0.17.2", optional = true }
 open = { version = "5.3", optional = true }
 rodio = { version = "=0.22.2", default-features = false, features = ["playback", "wav"], optional = true }
 libloading = { version = "0.8.9", optional = true }
 thiserror = "2"
+# Local time (HH:MM) in the lyrics question; already in the lock through rmcp.
+chrono = { version = "0.4.45", default-features = false, features = ["clock"], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
@@ -36,10 +40,22 @@ process-wrap = { version = "9.1", features = ["std"] }
 clap = { version = "4", features = ["derive"] }
 skrifa = "0.44.0"
 unicode-segmentation = "=1.13.3"
+unicode-linebreak = "=0.1.5"
 ctrlc = "3.5"
-rmcp = { version = "=3.4.1", default-features = false, features = ["server", "macros", "transport-io"], optional = true }
+rmcp = { version = "=3.10.0", default-features = false, features = ["server", "macros", "transport-io"], optional = true }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "io-std", "io-util", "net"], optional = true }
 tokio-util = { version = "0.7", features = ["rt"], optional = true }
+cosmic-text = { version = "=0.19.0", default-features = false, features = ["std", "swash"], optional = true }
+fdsm = { version = "=0.8.0", optional = true }
+fdsm-ttf-parser = { version = "=0.2.0", optional = true }
+nalgebra = { version = "0.34", optional = true }
+ttf-parser = { version = "0.25", optional = true }
+naga = { version = "=30.0.2", features = ["wgsl-in", "glsl-out"], optional = true }
+glow = { version = "=0.17.0", optional = true }
+glutin = { version = "=0.32.3", default-features = false, features = ["egl", "wgl"], optional = true }
+glutin-winit = { version = "=0.5.0", default-features = false, features = ["egl", "wgl"], optional = true }
+winit = { version = "0.30.13", default-features = false, features = ["rwh_06", "x11", "wayland"], optional = true }
+bytemuck = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 assert_cmd = "2.2"

@@ -1,0 +1,46 @@
+{
+  "id": "de",
+  "name": {
+    "fr": "Allemand",
+    "en": "German",
+    "de": "Deutsch",
+    "es": "Alemán",
+    "ja": "ドイツ語",
+    "ko": "독일어",
+    "zh": "德语"
+  },
+  "version": "1.0.0",
+  "syllables": {
+    "vowels": "aeiouäöüy",
+    "vowel_groups": [
+      "ei",
+      "ai",
+      "au",
+      "eu",
+      "äu",
+      "ie",
+      "aa",
+      "ee",
+      "oo"
+    ],
+    "onsets": [
+      "sch",
+      "ch",
+      "pf",
+      "st",
+      "sp",
+      "bl",
+      "br",
+      "dr",
+      "fl",
+      "fr",
+      "gl",
+      "gr",
+      "kl",
+      "kr",
+      "pl",
+      "pr",
+      "tr"
+    ]
+  }
+}

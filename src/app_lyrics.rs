@@ -4,7 +4,6 @@ use super::*;
 use app_icons::Icon;
 use app_style::{self as style, space};
 use egui::{FontId, Rect, Sense, Stroke, pos2, vec2};
-use noh::captions::{CaptionPlacement, CaptionSize};
 
 pub(super) const MENU: &str = "lyrics-menu";
 const CHIP_H: f32 = 40.0;
@@ -25,9 +24,18 @@ pub(super) enum Chip {
 enum Action {
     Generate,
     Import,
-    Review,
+    SaveCopy,
     Remove,
     Settings,
+}
+
+/// A lyrics action that drops unsaved lane edits, asked first.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum PendingLyrics {
+    Generate,
+    /// A .srt chosen or dropped, to attach in place of the edited one.
+    Attach(std::path::PathBuf),
+    Remove,
 }
 
 impl NohApp {
@@ -105,7 +113,15 @@ impl NohApp {
                 },
                 t.text_2,
             ),
-            Chip::Ready { lines } => (l.plural("lyrics.lines", lines), t.text_2),
+            // A failed write's mark replaces the line count until a write succeeds.
+            Chip::Ready { lines } => match self.lyrics_save.mark {
+                // An unanswered difference first: one click reopens the question.
+                _ if self.lyrics_question_pending() => {
+                    (l.text("lyrics.mark_differ").to_owned(), t.warn)
+                }
+                Some(mark) => (l.text(mark.key()).to_owned(), t.warn),
+                None => (l.plural("lyrics.lines", lines), t.text_2),
+            },
             Chip::Unreadable => (l.text("lyrics.unreadable").to_owned(), t.error),
         };
         let name = format!("{} ({status})", l.text("lyrics.menu"));
@@ -262,9 +278,22 @@ impl NohApp {
             }
         } else if recheck {
             chip.on_hover_text(l.text("lyrics.recheck_help"))
+        } else if let Some(model) = self
+            .project
+            .track
+            .loaded
+            .as_ref()
+            .and_then(|l| l.model.clone())
+        {
+            // Which Whisper model generated these lyrics (from their words file).
+            chip.on_hover_text(l.format("lyrics.made_with", &[model]))
         } else {
             chip
         };
+        if interactive && self.lyrics_question_pending() && chip.clicked() {
+            self.reopen_lyrics_question();
+            return;
+        }
         if !interactive {
             if egui::Popup::is_id_open(ctx, menu_id) {
                 egui::Popup::close_id(ctx, menu_id);
@@ -347,24 +376,47 @@ impl NohApp {
         if let Some(action) = action {
             // Any lyrics action answers the "Lyrics ready" row.
             self.lyrics_ready = None;
-            match action {
-                Action::Generate => self.project_generate(ctx),
-                Action::Import => self.pick_lyrics(ctx),
-                Action::Review => {
-                    if let Some(path) = self.project.track.path.clone() {
-                        self.open(&path, ctx);
-                    }
-                }
-                Action::Remove => {
-                    self.project.track.clear();
-                    if self.project.apply_subtitles {
-                        self.project.apply_subtitles = false;
-                        self.invalidated();
-                    }
-                }
-                Action::Settings => self.settings_open = true,
-            }
+            self.lyrics_action(action, ctx);
             chip.request_focus();
+        }
+    }
+
+    /// A Paroles menu action. One that would drop unsaved lane edits asks first.
+    fn lyrics_action(&mut self, action: Action, ctx: &egui::Context) {
+        // Import asks once the file is chosen (drop_files): cancelling the
+        // file dialog then loses nothing.
+        let drop = match action {
+            Action::Generate => Some(PendingLyrics::Generate),
+            Action::Remove => Some(PendingLyrics::Remove),
+            _ => None,
+        };
+        match (action, drop) {
+            // Pending edits are written first; asked only if that fails.
+            (_, Some(pending)) if self.has_unsaved_lyrics() && !self.flush_lyrics() => {
+                self.lyrics_save.pending = Some(pending)
+            }
+            (_, Some(pending)) => self.run_pending_lyrics(pending, ctx),
+            (Action::Import, _) => self.pick_lyrics(ctx),
+            (Action::SaveCopy, _) => self.save_lyrics_copy(),
+            (Action::Settings, _) => self.settings_open = true,
+            _ => {}
+        }
+    }
+
+    pub(super) fn run_pending_lyrics(&mut self, pending: PendingLyrics, ctx: &egui::Context) {
+        match pending {
+            PendingLyrics::Generate => self.project_generate(ctx),
+            PendingLyrics::Attach(path) => {
+                self.project.attach(path, self.wav.as_ref());
+                self.invalidated();
+            }
+            PendingLyrics::Remove => {
+                self.project.track.clear();
+                if self.project.apply_subtitles {
+                    self.project.apply_subtitles = false;
+                    self.invalidated();
+                }
+            }
         }
     }
 
@@ -388,10 +440,22 @@ impl NohApp {
                 }
             }
         };
-        let generate_sub = if configured {
-            l.text("lyrics.generate_help")
-        } else {
-            l.text("lyrics.not_set_up")
+        // Which Whisper model transcribes: the most accurate one installed.
+        let model = super::app_subtitles::model_name(&self.subtitles.model);
+        let generate_sub = match (configured, &model) {
+            (true, Some(name)) if self.subtitles.slow_here() => format!(
+                "{} {}",
+                l.format("lyrics.generate_with", std::slice::from_ref(name)),
+                // Off Windows the bundled transcriber never uses the GPU.
+                l.text(if cfg!(windows) {
+                    "lyrics.slow_here"
+                } else {
+                    "lyrics.slow_cpu"
+                })
+            ),
+            (true, Some(name)) => l.format("lyrics.generate_with", std::slice::from_ref(name)),
+            (true, None) => l.text("lyrics.generate_help").to_string(),
+            (false, _) => l.text("lyrics.not_set_up").to_string(),
         };
         match state {
             Chip::None => {
@@ -399,7 +463,7 @@ impl NohApp {
                     ui,
                     Icon::Generate,
                     l.text("lyrics.generate"),
-                    generate_sub,
+                    &generate_sub,
                     can_generate,
                 );
                 focus_first(&generate);
@@ -418,33 +482,26 @@ impl NohApp {
                 }
             }
             Chip::Ready { .. } => {
-                let review = style::menu_item(
-                    ui,
-                    Icon::Eye,
-                    l.text("lyrics.review"),
-                    Some(l.text("lyrics.review_help")),
-                    true,
-                );
-                focus_first(&review);
-                if review.clicked() {
-                    action = Some(Action::Review);
+                // Edits are written as they are made (lyrics plan 3, maintainer, 11
+                // November): no « Enregistrer »; a copy can be made at any time.
+                let copy =
+                    style::menu_item(ui, Icon::File, l.text("save.copy"), None, self.has_lyrics());
+                focus_first(&copy);
+                if copy.clicked() {
+                    action = Some(Action::SaveCopy);
                 }
-                style::menu_switch(
-                    ui,
-                    Icon::Captions,
-                    l.text("lyrics.show"),
-                    &mut self.project.apply_subtitles,
-                    true,
-                );
-                if self.project.apply_subtitles {
-                    self.caption_rows(ui);
-                }
+                // The switch and the style moved to the panel beside the monitor.
                 separator(ui, t.border);
                 let regenerate = style::menu_item(
                     ui,
                     Icon::Regenerate,
                     l.text("lyrics.regenerate"),
-                    (!configured).then(|| l.text("lyrics.not_set_up")),
+                    if configured {
+                        model.as_ref().map(|name| format!("Whisper {name}"))
+                    } else {
+                        Some(l.text("lyrics.not_set_up").to_string())
+                    }
+                    .as_deref(),
                     can_generate,
                 );
                 if regenerate.clicked() {
@@ -536,88 +593,12 @@ impl NohApp {
 
     /// Caption size and position under "Show on the video". Each
     /// label sits beside its control, or above it when the row would not fit.
-    fn caption_rows(&mut self, ui: &mut egui::Ui) {
-        let l = self.locale.language;
-        let t = style::tokens(ui);
-        let sizes = [CaptionSize::Small, CaptionSize::Medium, CaptionSize::Large];
-        let places = [CaptionPlacement::Bottom, CaptionPlacement::Top];
-        let size_options = [
-            l.text("ui.caption_small"),
-            l.text("ui.caption_medium"),
-            l.text("ui.caption_large"),
-        ];
-        let place_options = [l.text("ui.caption_bottom"), l.text("ui.caption_top")];
-        let width = |ui: &egui::Ui, text: &str, font: FontId| {
-            ui.painter()
-                .layout_no_wrap(text.into(), font, t.text)
-                .size()
-                .x
-        };
-        for (label, id) in [
-            ("ui.caption_size", "lyrics-size"),
-            ("ui.caption_placement", "lyrics-place"),
-        ] {
-            let options: &[&str] = if id == "lyrics-size" {
-                &size_options
-            } else {
-                &place_options
-            };
-            // Segments: text + 12 padding each side + 1 px stroke, 2 apart, 2 inset.
-            let control = options
-                .iter()
-                .map(|o| width(ui, o, style::semibold(style::text::BODY)) + 26.0)
-                .sum::<f32>()
-                + 2.0 * (options.len() - 1) as f32
-                + 4.0;
-            let label_w = width(ui, l.text(label), FontId::proportional(style::text::SMALL));
-            let inline = 40.0 + label_w + space::S + control <= ui.available_width();
-            let row = |ui: &mut egui::Ui, this: &mut Self| {
-                let selected = if id == "lyrics-size" {
-                    sizes
-                        .iter()
-                        .position(|s| *s == this.project.caption_style.size)
-                        .unwrap_or(1)
-                } else {
-                    places
-                        .iter()
-                        .position(|p| *p == this.project.caption_style.placement)
-                        .unwrap_or(0)
-                };
-                if let Some(index) = style::segmented(ui, id, options, selected) {
-                    if id == "lyrics-size" {
-                        this.project.caption_style.size = sizes[index];
-                    } else {
-                        this.project.caption_style.placement = places[index];
-                    }
-                }
-            };
-            let caption = egui::RichText::new(l.text(label))
-                .size(style::text::SMALL)
-                .color(t.text_2);
-            if inline {
-                ui.horizontal(|ui| {
-                    ui.add_space(40.0);
-                    ui.label(caption);
-                    row(ui, self);
-                });
-            } else {
-                ui.horizontal(|ui| {
-                    ui.add_space(40.0);
-                    ui.add(egui::Label::new(caption).wrap());
-                });
-                ui.horizontal(|ui| {
-                    ui.add_space(40.0);
-                    row(ui, self);
-                });
-            }
-        }
-    }
-
     pub(super) fn pick_lyrics(&mut self, ctx: &egui::Context) {
         let l = self.locale.language;
         if let Some(path) = rfd::FileDialog::new()
             .set_title(l.text("lyrics.pick_title"))
-            .add_filter("SRT", &["srt"])
+            // An .srt, or a NOH lyrics file (its .srt beside it is attached).
+            .add_filter("SRT / NOH", &["srt", "json"])
             .pick_file()
         {
             self.drop_files(vec![path], ctx);
@@ -805,6 +786,11 @@ mod tests {
             snapshot: noh::inspection::Snapshot(vec![
                 noh::inspection::FileStamp::read(&path).unwrap(),
             ]),
+            model: None,
+            lyrics_unwritten: None,
+            srt_stamp: noh::inspection::FileStamp::read(&path).ok(),
+            lyrics_stamp: None,
+            pairing: Default::default(),
         });
     }
 
@@ -833,6 +819,16 @@ mod tests {
         frame(&ctx, &mut app, 980.0, vec![]);
         assert!(open(&ctx));
         let texts = frame(&ctx, &mut app, 980.0, vec![]);
+        // The menu names the Whisper model that will transcribe.
+        find(
+            &texts,
+            "On this computer, with Whisper small. Review the text afterwards.",
+        );
+        assert_eq!(
+            super::super::app_subtitles::model_name("C:/x/bin/speech/ggml-large-v3.bin").as_deref(),
+            Some("large-v3")
+        );
+        assert_eq!(super::super::app_subtitles::model_name("").as_deref(), None);
         click(
             &ctx,
             &mut app,
@@ -904,44 +900,56 @@ mod tests {
         assert!(!app.project.generating && !app.subtitles.running);
     }
 
+    /// The chip's hover says which Whisper model generated the lyrics.
+    #[test]
+    fn the_lyrics_chip_names_the_model_that_generated_them_on_hover() {
+        let folder = tempfile::tempdir().unwrap();
+        let (ctx, mut app) = app(Language::En);
+        ctx.all_styles_mut(|style| style.interaction.tooltip_delay = 0.0);
+        app.wav = Some(folder.path().join("song.wav"));
+        attach_track(&mut app, folder.path());
+        app.project.track.loaded.as_mut().unwrap().model = Some("large-v3".into());
+        let texts = frame(&ctx, &mut app, 980.0, vec![]);
+        let at = find(&texts, "39 lines").center();
+        let mut shown = false;
+        for _ in 0..4 {
+            let texts = frame(&ctx, &mut app, 980.0, vec![Event::PointerMoved(at)]);
+            shown |= texts
+                .iter()
+                .any(|(t, _)| t == "Generated with Whisper large-v3");
+        }
+        assert!(shown, "the hover names the model");
+    }
+
     /// Remove and "Show on the video" keep the track semantics: showing or
     /// restyling shown lyrics invalidates; removing clears the burn setting.
     #[test]
-    fn track_menu_toggles_show_restyles_and_removes() {
+    fn track_menu_has_no_style_and_removes() {
         let folder = tempfile::tempdir().unwrap();
         let (ctx, mut app) = app(Language::En);
         app.wav = Some(folder.path().join("song.wav"));
         attach_track(&mut app, folder.path());
         let texts = frame(&ctx, &mut app, 980.0, vec![]);
         find(&texts, "39 lines");
-        let open_menu = |app: &mut NohApp| {
-            let texts = frame(&ctx, app, 980.0, vec![]);
-            click(&ctx, app, 980.0, find(&texts, "Lyrics").center());
-            frame(&ctx, app, 980.0, vec![]);
-            assert!(open(&ctx));
-            frame(&ctx, app, 980.0, vec![])
-        };
-        let texts = open_menu(&mut app);
-        assert!(
-            !texts.iter().any(|(t, _)| t == "Size"),
-            "size rows only when shown"
-        );
-        let revision = app.revision;
-        click(
-            &ctx,
-            &mut app,
-            980.0,
-            find(&texts, "Show on the video").center(),
-        );
-        assert!(app.project.apply_subtitles);
-        assert_ne!(app.revision, revision, "showing the lyrics invalidates");
-        assert!(open(&ctx), "the toggle keeps the menu open");
         let texts = frame(&ctx, &mut app, 980.0, vec![]);
-        let revision = app.revision;
-        click(&ctx, &mut app, 980.0, find(&texts, "Large").center());
-        assert_eq!(app.project.caption_style.size, CaptionSize::Large);
-        assert_ne!(app.revision, revision, "restyling shown lyrics invalidates");
+        click(&ctx, &mut app, 980.0, find(&texts, "Lyrics").center());
+        frame(&ctx, &mut app, 980.0, vec![]);
+        assert!(open(&ctx));
         let texts = frame(&ctx, &mut app, 980.0, vec![]);
+        // The switch, the effect and its settings live in the style panel now:
+        // nothing in this menu can close it on a style pick.
+        for gone in [
+            "Show on the video",
+            "Captions on the video",
+            "Effect",
+            "Size",
+            "Position",
+        ] {
+            assert!(
+                !texts.iter().any(|(t, _)| t == gone),
+                "{gone} left the menu"
+            );
+        }
         click(&ctx, &mut app, 980.0, find(&texts, "Remove").center());
         assert!(app.project.track.path.is_none() && !app.project.apply_subtitles);
         frame(&ctx, &mut app, 980.0, vec![]);
@@ -985,12 +993,7 @@ mod tests {
             let initial = compact_frame(&ctx, &mut app, vec![]);
             let remove = language.text("lyrics.remove");
             let language_label = language.text("lyrics.language");
-            assert!(
-                !(initial.iter().any(|(text, _)| text == remove)
-                    && initial.iter().any(|(text, _)| text == language_label)),
-                "{} compact menu should require scrolling to its bottom rows",
-                language.code()
-            );
+            // Without the style rows the menu may fit; scrolling stays available.
             let area = ctx
                 .memory(|memory| memory.area_rect(egui::Id::new(MENU)))
                 .expect("lyrics menu popup area");
@@ -1032,6 +1035,57 @@ mod tests {
         }
     }
 
+    /// Retirer (like Générer à nouveau and Remplacer) asks before dropping unsaved
+    /// lane edits; « Continuer » runs it, « Annuler » keeps everything.
+    #[test]
+    fn remove_asks_before_dropping_unsaved_edits() {
+        let folder = tempfile::tempdir().unwrap();
+        let (ctx, mut app) = app(Language::En);
+        attach_track(&mut app, folder.path());
+        app.edit_track(|t| noh::subtitle_edit::delete(t, 0).is_some());
+        app.lyrics_action(Action::Remove, &ctx);
+        assert_eq!(app.lyrics_save.pending, Some(PendingLyrics::Remove));
+        assert!(
+            app.project.track.path.is_some() && app.has_unsaved_lyrics(),
+            "nothing dropped yet"
+        );
+        app.lyrics_save.pending = None;
+        app.project.edit = None;
+        app.run_pending_lyrics(PendingLyrics::Remove, &ctx);
+        assert!(app.project.track.path.is_none());
+        // A dropped (or chosen) .srt asks too, and keeps the edits until « Continuer ».
+        attach_track(&mut app, folder.path());
+        app.edit_track(|t| noh::subtitle_edit::delete(t, 0).is_some());
+        app.wav = Some(folder.path().join("song.wav"));
+        let other = folder.path().join("other.srt");
+        std::fs::write(
+            &other,
+            "1
+00:00:01,000 --> 00:00:02,000
+x
+
+",
+        )
+        .unwrap();
+        app.drop_files(vec![other.clone()], &ctx);
+        assert_eq!(
+            app.lyrics_save.pending,
+            Some(PendingLyrics::Attach(other.clone()))
+        );
+        assert_ne!(
+            app.project.track.path.as_ref(),
+            Some(&other),
+            "not attached before the answer"
+        );
+        assert!(app.has_unsaved_lyrics());
+        app.lyrics_save.pending = None;
+        app.project.edit = None;
+        // Without edits, Retirer runs at once.
+        attach_track(&mut app, folder.path());
+        app.lyrics_action(Action::Remove, &ctx);
+        assert!(app.lyrics_save.pending.is_none() && app.project.track.path.is_none());
+    }
+
     /// Enter opens the menu with the focus on the first item; Tab moves on;
     /// Escape closes it and gives the focus back to the chip.
     #[test]
@@ -1065,28 +1119,29 @@ mod tests {
         assert!(reached, "Tab reaches the lyrics chip");
         step(&mut app, vec![key(egui::Key::Enter, Modifiers::NONE)]);
         assert!(open(&ctx));
-        // Focus given in code emits no FocusGained event: look for the ring.
+        // Focus given in code emits no FocusGained event. « Save » is disabled
+        // without edits, so the first enabled item, « Save a copy… », has it.
         assert!(
-            ringed(&ctx, &mut app, "Review the lyrics"),
-            "the first item has the focus"
+            ringed(&ctx, &mut app, "Save a copy…"),
+            "the first enabled item has the focus"
         );
         let names = step(&mut app, vec![key(egui::Key::Tab, Modifiers::NONE)]);
         assert_eq!(
             names.last().map(String::as_str),
-            Some("Show on the video"),
+            Some("Replace…"),
             "{names:?}"
         );
         // ↑/↓ move between items too (egui's arrow-key focus navigation).
         let names = step(&mut app, vec![key(egui::Key::ArrowUp, Modifiers::NONE)]);
         assert_eq!(
             names.last().map(String::as_str),
-            Some("Review the lyrics"),
+            Some("Save a copy…"),
             "{names:?}"
         );
         let names = step(&mut app, vec![key(egui::Key::ArrowDown, Modifiers::NONE)]);
         assert_eq!(
             names.last().map(String::as_str),
-            Some("Show on the video"),
+            Some("Replace…"),
             "{names:?}"
         );
         step(&mut app, vec![key(egui::Key::Escape, Modifiers::NONE)]);

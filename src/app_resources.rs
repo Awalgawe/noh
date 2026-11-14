@@ -265,6 +265,8 @@ impl NohApp {
                 && let Some(folder) = exe.parent()
             {
                 self.subtitles.load_bundled(folder);
+                self.subtitles.resolve_choice();
+                self.subtitles.start_probe();
             }
             self.resources.invalidate();
             self.resources.retry_media = true;

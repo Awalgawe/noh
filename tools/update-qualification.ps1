@@ -47,7 +47,10 @@ function Test-Prerequisites {
         }
     }
     foreach ($command in @('git','cargo','rustc','pwsh')) { [void](Get-Command $command -CommandType Application -ErrorAction Stop) }
-    $required = @("$($inputs.runtime)/bin/ffmpeg.exe", "$($inputs.runtime)/bin/libmpv-2.dll",
+    # The runtime portable must carry the language packs (Task 44: a portable built
+    # from this source tree, with tools/build_syllable_dicts.py and NOH_LANGUAGES).
+    $required = @("$($inputs.runtime)/bin/ffmpeg.exe", "$($inputs.runtime)/bin/preview/libmpv-2.dll",
+        "$($inputs.runtime)/languages/en/dictionary.txt", "$($inputs.runtime)/languages/fr/dictionary.txt",
         "$($inputs.compiler)/clang.exe", "$($inputs.compiler)/llvm-ar.exe", $inputs.dotnet,
         "$($inputs.packager)/tools/net8.0/any/vpk.dll", "$($inputs.packager)/vendor/update_x64.exe",
         "$($inputs.packager)/vpk.nuspec")
@@ -65,7 +68,7 @@ function Test-Prerequisites {
     if ($nuspec.package.metadata.version -ne '1.2.161') { throw 'This runner requires Velopack 1.2.161' }
     if ((Get-FileHash "$($inputs.packager)/vendor/update_x64.exe").Hash -ne $helperSha256) { throw 'Pinned Velopack helper hash mismatch' }
     $preview = Get-Content "$workspace/assets/preview-runtime.json" -Raw | ConvertFrom-Json
-    if ((Get-FileHash "$($inputs.runtime)/bin/libmpv-2.dll").Hash -ne $preview.sha256) { throw 'Preview runtime hash mismatch' }
+    if ((Get-FileHash "$($inputs.runtime)/bin/preview/libmpv-2.dll").Hash -ne $preview.sha256) { throw 'Preview runtime hash mismatch' }
     $speech = Get-Content "$workspace/assets/speech-bundle.json" -Raw | ConvertFrom-Json
     foreach ($item in $speech.sha256.PSObject.Properties) {
         if ([IO.Path]::GetFileName($item.Name) -ne $item.Name) { throw 'Invalid speech manifest filename' }

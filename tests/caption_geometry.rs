@@ -15,6 +15,7 @@ use support::Fixture;
 
 fn request(f: &Fixture, source: &Path, subtitles: &Path, output: &Path) -> CaptionRequest {
     CaptionRequest {
+        effect: None,
         source: source.to_path_buf(),
         subtitles: subtitles.to_path_buf(),
         output: output.to_path_buf(),
@@ -462,8 +463,10 @@ fn common_positive_container_origin_matches_playback_zero_caption_times() {
     let frames = decoded_gray(&f, &output, 320, 180);
     for index in 1..6 {
         let frame = &frames[index * 320 * 180..(index + 1) * 320 * 180];
+        // Classique draws about 10 px letters at 320 x 180, unhinted: their
+        // brightest pixel is about 170 (libass's hinted ones reach 211), on black.
         assert!(
-            frame[120 * 320..].iter().any(|pixel| *pixel > 180),
+            frame[120 * 320..].iter().any(|pixel| *pixel > 120),
             "time-zero SRT did not appear at playback t={:.1}",
             index as f64 / 10.0
         );

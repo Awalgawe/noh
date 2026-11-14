@@ -124,6 +124,8 @@ pub(crate) struct Decision {
     pub decode_delay: i64,
     pub normalize: bool,
     pub heterogeneous: bool,
+    /// One colour matrix for the export, with the tags of re-encoded pictures.
+    pub color: crate::color::Plan,
 }
 
 pub(crate) fn target(info: &crate::media::MediaInfo, preview: bool) -> Target {
@@ -157,6 +159,19 @@ pub(crate) fn target(info: &crate::media::MediaInfo, preview: bool) -> Target {
     }
 }
 
+/// The canvas a composed project export renders at (its normalized target):
+/// the first video item's display size, rounded up to even. None without items.
+pub fn export_canvas(
+    items: &[crate::engine::MediaItem],
+    info: &[crate::media::MediaInfo],
+) -> Option<(u32, u32)> {
+    if items.is_empty() || items.len() != info.len() {
+        return None;
+    }
+    let t = item_target(items, info, false);
+    Some((t.width, t.height))
+}
+
 pub(crate) fn item_target(
     items: &[crate::engine::MediaItem],
     info: &[crate::media::MediaInfo],
@@ -164,6 +179,18 @@ pub(crate) fn item_target(
 ) -> Target {
     let first = items.iter().position(|item| !item.is_image()).unwrap_or(0);
     target(&info[first], preview)
+}
+
+/// Clips in different colour matrices must be normalized even when their
+/// signatures match (a tag carried only by the container leaves the SPS alike).
+pub(crate) fn mixed_matrices(
+    items: &[crate::engine::MediaItem],
+    info: &[crate::media::MediaInfo],
+) -> bool {
+    let target = item_target(items, info, false);
+    crate::color::Plan::for_items(items, info, (target.width, target.height))
+        .warning()
+        .is_some()
 }
 
 pub(crate) fn decide(
@@ -179,8 +206,11 @@ pub(crate) fn decide(
         .iter()
         .skip(1)
         .any(|i| i.signature != info[0].signature);
-    let normalize =
-        encode || heterogeneous || for_fades || items.iter().any(|item| item.is_image());
+    let normalize = encode
+        || heterogeneous
+        || for_fades
+        || items.iter().any(|item| item.is_image())
+        || mixed_matrices(items, info);
     if !normalize {
         target.codec = info[0].codec.clone();
         target.pixel_format = "preserved".into();
@@ -188,10 +218,23 @@ pub(crate) fn decide(
         target.height = info[0].height;
     }
     let fps = target.rate_num as f64 / target.rate_den as f64;
+    let inputs: Vec<crate::color::Input> = items
+        .iter()
+        .zip(info)
+        .map(|(item, meta)| {
+            if item.is_image() {
+                crate::color::Input::Image
+            } else {
+                crate::color::Input::video(meta)
+            }
+        })
+        .collect();
+    let canvas = (target.width, target.height);
+    let matrix = crate::color::Plan::new(&inputs, canvas, None);
     let (mut profile, mut level) = (None, None);
     let (mut parameter_sets, mut decode_delay) = (0, 0);
     let mut clips = Vec::with_capacity(items.len());
-    for ((item, meta), support) in items.iter().zip(info).zip(support) {
+    for (((item, meta), support), input) in items.iter().zip(info).zip(support).zip(&inputs) {
         let mut reasons = Vec::new();
         if item.is_image() {
             reasons.push("image".into());
@@ -220,6 +263,10 @@ pub(crate) fn decide(
             }
             if (meta.fps - fps).abs() > 1e-6 {
                 reasons.push("frame_rate".into());
+            }
+            // Another matrix, or full range: the maintainer's single-matrix rule converts it.
+            if !matrix.copyable(input) {
+                reasons.push("color".into());
             }
             match support {
                 Some(crate::h264::Support::Convert(reason)) => reasons.push(reason.into()),
@@ -269,6 +316,13 @@ pub(crate) fn decide(
         level = None;
     }
     let encoded_sps = free_id.unwrap_or(0);
+    let first_copied = clips.iter().position(|c| c.treatment == Treatment::Copy);
+    let color = if normalize {
+        crate::color::Plan::new(&inputs, canvas, first_copied)
+    } else {
+        // Nothing is re-encoded: every packet is copied as it is (rule 4).
+        crate::color::Plan::new(&inputs, canvas, Some(0))
+    };
     if clips.iter().any(|c| c.treatment == Treatment::Convert) {
         parameter_sets |= 1 << encoded_sps;
     }
@@ -287,6 +341,7 @@ pub(crate) fn decide(
         decode_delay,
         normalize,
         heterogeneous,
+        color,
     }
 }
 
@@ -362,6 +417,68 @@ mod tests {
         assert_eq!(d.public.clips[1].treatment, Treatment::Convert);
         assert_eq!(d.public.clips[1].reasons, ["profile", "level"]);
         assert!(d.public.clips[0].timestamp_normalization);
+    }
+    #[test]
+    fn another_matrix_or_full_range_is_converted_and_copies_set_the_tags() {
+        // facts() is 96x64: untagged reads as BT.601, the copied clip.
+        let mut bt709 = facts();
+        bt709.description = "Video: h264, yuv420p(tv, bt709, progressive), 96x64".into();
+        let mut full = facts();
+        full.description = "Video: h264, yuvj420p(pc, progressive), 96x64".into();
+        let d = decide(
+            &["first".into(), "second".into(), "third".into()],
+            &[facts(), bt709, full],
+            vec![
+                support("main", "3.0", 1),
+                support("main", "3.0", 2),
+                support("main", "3.0", 4),
+            ],
+            false,
+            false,
+            true,
+        );
+        let treatments: Vec<_> = d.public.clips.iter().map(|c| c.treatment).collect();
+        assert_eq!(
+            treatments,
+            [Treatment::Convert, Treatment::Copy, Treatment::Convert]
+        );
+        assert_eq!(d.public.clips[0].reasons, ["color"]);
+        assert_eq!(d.public.clips[2].reasons, ["color"]);
+        // BT.709 wins (most recent); re-encoded pieces follow the copied clip's tags.
+        assert_eq!(d.color.matrix, crate::color::Matrix::Bt709);
+        assert_eq!(
+            d.color.tags.setparams().as_deref(),
+            Some("setparams=colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv")
+        );
+        // Both untagged 96x64 clips read as BT.601: two are converted to BT.709.
+        assert_eq!(
+            d.color.warning().as_deref(),
+            Some("warning.color_matrix|BT.709|2|BT.601")
+        );
+    }
+    #[test]
+    fn matching_signatures_in_different_matrices_are_still_normalized() {
+        // Same SPS (signature), tags only in the container: no copy of mixed matrices.
+        let mut bt709 = facts();
+        bt709.description = "Video: h264, yuv420p(tv, bt709, progressive), 96x64".into();
+        let mut bt601 = facts();
+        bt601.description = "Video: h264, yuv420p(tv, smpte170m, progressive), 96x64".into();
+        let d = decide(
+            &["first".into(), "second".into()],
+            &[bt709, bt601],
+            vec![support("main", "3.0", 1), support("main", "3.0", 1)],
+            false,
+            false,
+            false,
+        );
+        assert!(d.normalize);
+        assert_eq!(d.public.clips[1].treatment, Treatment::Convert);
+        assert_eq!(d.public.clips[1].reasons, ["color"]);
+        // One clip alone is never normalized for colour (rule 4).
+        let mut full = facts();
+        full.description = "Video: h264, yuvj420p(pc, bt709, progressive), 96x64".into();
+        let d = decide(&["only".into()], &[full], vec![None], false, false, false);
+        assert!(!d.normalize);
     }
     #[test]
     fn exhausted_ids_cannot_be_reused_by_converted_clips_or_fades() {

@@ -9,6 +9,8 @@ pub struct ScrubQa {
     samples: Vec<serde_json::Value>,
     handoff_step: usize,
     handoff: Vec<serde_json::Value>,
+    /// The simulated primary button is held on the ruler.
+    pressed: bool,
 }
 impl NohApp {
     pub(super) fn scrub_capture_input(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
@@ -28,38 +30,65 @@ impl NohApp {
             return;
         };
         let t = start.elapsed().as_secs_f64();
+        // NOH_CAPTURE_SCRUB_TARGET=lanes hovers the pictures lane without pressing
+        // (hover must not scrub); the default presses and drags the time ruler.
+        let lanes = std::env::var("NOH_CAPTURE_SCRUB_TARGET").as_deref() == Ok("lanes");
+        // The sweep's own clock and button: the first 12.5 s, or the handoff drag.
+        let mut sweep = Some((t, t < 12.5 && !lanes));
         if std::env::var("NOH_CAPTURE_SCRUB_HANDOFF").as_deref() == Ok("1") && t >= 13.0 {
+            // Play, pause, then drag the ruler while paused (the scrubber must take
+            // the picture), release, play again from the cursor, pause.
             let steps = [
                 (13.0, "play"),
                 (15.0, "pause"),
-                (16.0, "seek"),
-                (18.0, "play"),
-                (20.0, "pause"),
-                (21.0, "settled"),
+                (16.0, "drag"),
+                (18.5, "release"),
+                (19.5, "play"),
+                (21.5, "pause"),
+                (22.5, "settled"),
             ];
             if let Some(&(at, action)) = steps.get(self.scrub_qa.handoff_step)
                 && t >= at
             {
-                self.scrub_qa.handoff.push(serde_json::json!({"seconds":t,"before":action,"state":self.mini_capture_report()}));
-                match action {
-                    "play" | "pause" => self.mini_play(ctx),
-                    "seek" => self.mini_seek(
-                        self.mini_bounds().0 + (self.mini_bounds().1 - self.mini_bounds().0) / 2,
-                        false,
-                    ),
-                    _ => (),
+                let scrub = self.mini_preview.scrubber.as_ref().map(|s| {
+                    let snap = s.snapshot();
+                    serde_json::json!({"time_ms":snap.time_ms,"frame":snap.frame,"error":snap.error})
+                });
+                self.scrub_qa.handoff.push(serde_json::json!({"seconds":t,"before":action,"state":self.mini_capture_report(),"scrub":scrub,"scrub_active":self.mini_preview.scrub_active,"player_open":self.mini_preview.player_stamp.is_some()}));
+                if matches!(action, "play" | "pause") {
+                    self.mini_play(ctx);
                 }
                 self.scrub_qa.handoff_step += 1;
             }
-            input.events.push(egui::Event::PointerGone);
-            ctx.request_repaint_after(Duration::from_millis(16));
-            return;
+            let dragging = self.scrub_qa.handoff_step >= 3 && self.scrub_qa.handoff_step < 4;
+            sweep = dragging.then(|| ((t - 16.0) * 4.0 / 2.5, true));
+            if sweep.is_none() {
+                if self.scrub_qa.pressed {
+                    self.scrub_qa.pressed = false;
+                    if let Some(rect) = self.project_ui.timeline.ruler_rect() {
+                        input.events.push(egui::Event::PointerButton {
+                            pos: rect.center(),
+                            button: egui::PointerButton::Primary,
+                            pressed: false,
+                            modifiers: egui::Modifiers::default(),
+                        });
+                    }
+                }
+                input.events.push(egui::Event::PointerGone);
+                ctx.request_repaint_after(Duration::from_millis(16));
+                return;
+            }
         }
         if snapshot.frame != self.scrub_qa.last_frame && self.scrub_qa.samples.len() < 2000 {
             self.scrub_qa.last_frame = snapshot.frame;
-            self.scrub_qa.samples.push(serde_json::json!({"seconds":t,"time_ms":snapshot.time_ms,"frame":snapshot.frame,"request_to_ready_ms":snapshot.latency_ms,"error":snapshot.error,"decoded_frame":snapshot.decoded_frame,"source_seconds":snapshot.source_seconds}));
+            self.scrub_qa.samples.push(serde_json::json!({"seconds":t,"time_ms":snapshot.time_ms,"frame":snapshot.frame,"request_to_ready_ms":snapshot.latency_ms,"error":snapshot.error,"decoded_frame":snapshot.decoded_frame,"source_seconds":snapshot.source_seconds,"cursor_ms":self.mini_preview.cursor_ms}));
         }
-        let Some(rect) = self.project_ui.timeline.pictures_rect() else {
+        let rect = if lanes {
+            self.project_ui.timeline.pictures_rect()
+        } else {
+            self.project_ui.timeline.ruler_rect()
+        };
+        let (Some(rect), Some((t, hold))) = (rect, sweep) else {
             return;
         };
         if self
@@ -89,9 +118,18 @@ impl NohApp {
             let x = rect.left()
                 + rect.width()
                     * ((ms - view.start_ms as f64) / (view.end_ms - view.start_ms) as f64) as f32;
-            input
-                .events
-                .push(egui::Event::PointerMoved(egui::pos2(x, rect.center().y)));
+            let at = egui::pos2(x, rect.center().y);
+            input.events.push(egui::Event::PointerMoved(at));
+            // Press on the ruler, drag across it, release after the sweep.
+            if hold != self.scrub_qa.pressed {
+                input.events.push(egui::Event::PointerButton {
+                    pos: at,
+                    button: egui::PointerButton::Primary,
+                    pressed: hold,
+                    modifiers: egui::Modifiers::default(),
+                });
+                self.scrub_qa.pressed = hold;
+            }
             self.scrub_qa.last_input = Some(Instant::now());
         }
         ctx.request_repaint_after(Duration::from_millis(8));
@@ -134,6 +172,16 @@ pub struct Tweaks {
     pub short_export: bool,
     /// `start`, `end` (inside the last frame) or project milliseconds.
     pub playhead: Option<String>,
+    /// `effect=<id>`: that caption effect applied (its first preset).
+    pub effect: Option<String>,
+    /// `style=settings`: the style panel shows the applied effect's settings.
+    pub style_settings: bool,
+    /// `more=1`: the settings show their second level.
+    pub more: bool,
+    /// `font=<value>`: the applied effect's font setting (`system:<Family>`…).
+    pub font: Option<String>,
+    /// `font_open=1`: the font picker's list open.
+    pub font_open: bool,
 }
 pub fn parse_tweaks(value: &str) -> Result<Tweaks, String> {
     let mut tweaks = Tweaks::default();
@@ -158,6 +206,11 @@ pub fn parse_tweaks(value: &str) -> Result<Tweaks, String> {
                 tweaks.open = Some(item.into())
             }
             ("playhead", "start" | "end") => tweaks.playhead = Some(item.into()),
+            ("effect", _) if !item.is_empty() => tweaks.effect = Some(item.into()),
+            ("style", "settings") => tweaks.style_settings = true,
+            ("more", "1") => tweaks.more = true,
+            ("font", _) if !item.is_empty() => tweaks.font = Some(item.into()),
+            ("font_open", "1") => tweaks.font_open = true,
             ("playhead", _) if item.parse::<u64>().is_ok() => tweaks.playhead = Some(item.into()),
             ("scroll", _) => {
                 tweaks.scroll = item
@@ -192,6 +245,17 @@ const OVERLAY_STATES: &[&str] = &[
     "lyrics-menu",
     "lyrics-generating",
     "lyrics-track-menu",
+    "lyrics-bubble",
+    "lyrics-words",
+    "lyrics-tap",
+    "lyrics-syllables",
+    "lyrics-propose",
+    "lyrics-first-edit",
+    "lyrics-unsaved",
+    "lyrics-srt-stale",
+    "lyrics-save-failed",
+    "lyrics-differ",
+    "lyrics-differ-later",
     "short",
     "exporting",
     "done",
@@ -205,6 +269,17 @@ const OVERLAY_STATES: &[&str] = &[
 const LYRICS_STATES: &[&str] = &[
     "unreadable",
     "lyrics-track-menu",
+    "lyrics-bubble",
+    "lyrics-words",
+    "lyrics-tap",
+    "lyrics-syllables",
+    "lyrics-propose",
+    "lyrics-first-edit",
+    "lyrics-unsaved",
+    "lyrics-srt-stale",
+    "lyrics-save-failed",
+    "lyrics-differ",
+    "lyrics-differ-later",
     "short",
     "exporting",
     "done",
@@ -393,6 +468,101 @@ impl NohApp {
                 if state == "options" {
                     self.settings_open = true;
                 }
+                // Writing as you edit (lyrics plan 3): the first-edit question
+                // after a real edit, and the marks a failed write leaves.
+                if state == "lyrics-first-edit" {
+                    self.edit_track(|t| {
+                        t.cues.first_mut().map(|c| c.text.push_str(" !")).is_some()
+                    });
+                }
+                if state == "lyrics-unsaved" || state == "lyrics-save-failed" {
+                    self.lyrics_save.mark = Some(super::app_lyrics_save::Mark::Unsaved);
+                }
+                if state == "lyrics-srt-stale" {
+                    self.lyrics_save.mark = Some(super::app_lyrics_save::Mark::SrtStale);
+                }
+                if matches!(state, "lyrics-differ" | "lyrics-differ-later")
+                    && let (Some(path), Some(track)) =
+                        (self.project.track.path.clone(), self.lyrics_track())
+                {
+                    // The source-of-truth question, staged over the real lyrics:
+                    // 3 lines differ, 2 lose word times set by hand.
+                    self.lyrics_pair.question = Some(super::app_lyrics_pair::Question {
+                        path,
+                        kind: super::app_lyrics_pair::Kind::Differ {
+                            srt: track,
+                            lines: 3,
+                            lose: 2,
+                            hand: true,
+                            srt_time: Some("14:32".into()),
+                            lyrics_time: Some("14:05".into()),
+                        },
+                        at_load: true,
+                        open: state == "lyrics-differ",
+                        quitting: false,
+                    });
+                }
+                if state == "lyrics-save-failed" {
+                    self.lyrics_save.failed = Some("Access is denied. (os error 5)".to_owned());
+                }
+                if matches!(
+                    state,
+                    "lyrics-bubble"
+                        | "lyrics-words"
+                        | "lyrics-tap"
+                        | "lyrics-syllables"
+                        | "lyrics-propose"
+                ) && let Some(i) = self
+                    .lyrics_track()
+                    .and_then(|t| t.cues.iter().position(|c| c.start_ms >= 1_000))
+                {
+                    // The editor bubble on a cue; word mode with its details; tapping
+                    // with two taps made (staged, nothing plays).
+                    self.lyrics_edit.selected = Some(i);
+                    if state != "lyrics-bubble" {
+                        self.start_words(i);
+                    }
+                    if state == "lyrics-syllables" {
+                        // The first word cut in two, by hand.
+                        let word = self
+                            .lyrics_track()
+                            .and_then(|t| {
+                                t.cues[i].text.split_whitespace().next().map(str::to_string)
+                            })
+                            .unwrap_or_default();
+                        let cut = word
+                            .char_indices()
+                            .nth(word.chars().count() / 2)
+                            .map_or(word.clone(), |(b, _)| {
+                                format!("{}-{}", &word[..b], &word[b..])
+                            });
+                        self.apply_syllables(i, 0, &cut);
+                    }
+                    if state == "lyrics-propose" {
+                        // « Couper en syllabes » on the first word, sung in English.
+                        self.subtitles.language = "en".into();
+                        self.propose_syllables(i, 0);
+                    }
+                    let starts: Vec<u64> = self
+                        .lyrics_track()
+                        .map(|t| super::app_lyrics_edit::unit_starts(&t.cues[i]))
+                        .unwrap_or_default();
+                    if let Some(w) = &mut self.lyrics_edit.words {
+                        w.details = matches!(
+                            state,
+                            "lyrics-words" | "lyrics-syllables" | "lyrics-propose"
+                        );
+                        w.word = if matches!(state, "lyrics-syllables" | "lyrics-propose") {
+                            0
+                        } else {
+                            1.min(starts.len().saturating_sub(1))
+                        };
+                        if state == "lyrics-tap" {
+                            w.taps = Some(starts.iter().take(2).copied().collect());
+                            w.tap_clock = starts.get(1).copied();
+                        }
+                    }
+                }
                 if state == "details" {
                     self.open_sheet(false, None);
                     self.sheet.details = true;
@@ -405,10 +575,24 @@ impl NohApp {
             _ => {
                 (!self.sheet.open || self.sheet_checked())
                     && (!self.settings_open || self.options_shown_for(ctx) > 0.4)
+                    // A lyrics question: after its fade-in too.
+                    && (!matches!(
+                        state,
+                        "lyrics-first-edit" | "lyrics-save-failed" | "lyrics-differ"
+                    )
+                        || modal_settled(ctx))
             }
         }
     }
 }
+/// A modal staged for a capture has finished fading in (half a second after
+/// the capture first waited for it).
+fn modal_settled(ctx: &egui::Context) -> bool {
+    let id = egui::Id::new("capture-modal-since");
+    let since = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(id, Instant::now));
+    since.elapsed() > Duration::from_millis(500)
+}
+
 pub fn number(key: &str, default: f32, min: f32, max: f32) -> f32 {
     if std::env::var_os("NOH_CAPTURE_UI").is_none() {
         return default;
@@ -1000,6 +1184,7 @@ impl NohApp {
             return;
         };
         let project_action = std::env::var("NOH_CAPTURE_PROJECT_ACTION").ok();
+        self.capture_effect_switch();
         if let Some(action) = project_action.as_deref()
             && !self.capture_project_started
             && self.ready()
@@ -1039,6 +1224,33 @@ impl NohApp {
         {
             egui::Popup::open_id(ctx, egui::Id::new(popup));
         }
+        // `effect=` applies a caption effect once, as a click on its card would;
+        // `style=settings` then shows its settings (compact: in the sheet).
+        if self.capture_overlay_step >= 1
+            && let Ok(tweaks) = parse_tweaks(&tweaks_text())
+        {
+            if let Some(id) = tweaks.effect.as_deref()
+                && self.project.effect.as_ref().is_none_or(|c| c.id != id)
+            {
+                let lang = self.locale.language.code().to_string();
+                let options = self.effects.options(&lang);
+                let card = app_style_panel::cards(&options, None, None)
+                    .into_iter()
+                    .find(|c| c.id == id)
+                    .unwrap_or_else(|| panic!("NOH_CAPTURE_TWEAKS: no effect {id:?}"));
+                self.choose_effect(Some(card));
+            }
+            if tweaks.style_settings && !self.style_panel.settings {
+                self.style_panel.settings = true;
+                self.style_panel.sheet = true;
+                self.style_panel.more = tweaks.more;
+                self.style_panel.font_open = tweaks.font_open;
+                self.style_panel.font_reveal = tweaks.font_open || tweaks.font.is_some();
+                if let (Some(font), Some(choice)) = (&tweaks.font, self.project.effect.as_mut()) {
+                    choice.values.insert("font".into(), serde_json::json!(font));
+                }
+            }
+        }
         // Capture the lyrics chip's menu open.
         if self.capture_overlay_step >= 1
             && matches!(
@@ -1060,7 +1272,21 @@ impl NohApp {
         {
             self.mini_capture_terminal()
         } else if project_action.is_some() {
-            if self.capture_project_started
+            // A preview render can also be played back to a set time (measurement).
+            let play_render = std::env::var_os("NOH_CAPTURE_PLAYBACK_UNTIL_MS").is_some()
+                && matches!(project_action.as_deref(), Some("preview" | "short-preview"));
+            if play_render
+                && self.capture_project_started
+                && self.job.is_none()
+                && !self.project.busy()
+            {
+                if self.mini_preview.capture_started.is_none()
+                    && self.mini_preview.player_stamp.is_some()
+                {
+                    self.mini_preview.capture_started = Some(Instant::now());
+                }
+                self.mini_capture_terminal()
+            } else if self.capture_project_started
                 && self.job.is_none()
                 && !self.project.busy()
                 && !self.cancelling
@@ -1396,6 +1622,9 @@ impl NohApp {
                         self.project.running = None;
                         self.project.generating = false;
                         self.subtitles.running = false;
+                        // A staged edit (the first-edit question) is not written
+                        // to the fixture and must not ask before closing.
+                        self.project.edit = None;
                     }
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }

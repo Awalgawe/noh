@@ -891,6 +891,19 @@ fn run_with_command(
                 snapshot.verify()?;
             }
             commit(&staged, output, cancel)?;
+            // The lyrics file beside it (every cue, word times, model), created
+            // new like the .srt: an existing file, usable or not, is never
+            // replaced. The subtitles are published either way.
+            let model = subtitles.and_then(|s| crate::subtitle_words::model_name(&s.model));
+            if let Err(e) = crate::subtitle_words::create_lyrics(
+                &crate::subtitle_words::lyrics_path(output),
+                &result.track,
+                model.as_deref(),
+            ) {
+                emit(Event::Diagnostic(format!(
+                    "The lyrics file was not written beside the subtitles: {e}"
+                )));
+            }
             emit(Event::Progress {
                 percent: 100,
                 phase: Message::parse("status.done"),
@@ -952,6 +965,15 @@ fn run_with_command(
             ..result
         }))
     })();
+    // A transcription whose model is on another volume worked in a folder beside
+    // the model; a cancel or a deadline kills the worker before it removes it.
+    if let Some(error) = subtitles
+        .and_then(|request| crate::subtitles::remove_beside_model(&request.model, workspace.path()))
+    {
+        emit(Event::Diagnostic(format!(
+            "Speech folder beside the model: {error}"
+        )));
+    }
     // Process termination is asynchronous on Windows. Retry only our own folder
     // before sending the terminal event; never scan output siblings by PID.
     let deadline = Instant::now() + Duration::from_secs(3);

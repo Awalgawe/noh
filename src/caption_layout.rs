@@ -46,23 +46,49 @@ pub fn layout_text(
     max_width: f32,
     max_height: f32,
 ) -> Result<Vec<String>, LayoutError> {
+    wrap_lines(text, font_size, max_width, max_height).map(|w| w.lines)
+}
+
+/// The lines of a cue, and whether one holds a word wider than the width.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Wrapped {
+    pub lines: Vec<String>,
+    /// A word had no break opportunity inside the width: it is kept whole on a
+    /// line wider than the width (never cut between letters), as the effects
+    /// engine does; the caller says so (warning.effect_word_too_wide).
+    pub too_wide: bool,
+}
+
+/// `layout_text`, saying whether a word was wider than the width.
+pub fn wrap_lines(
+    text: &str,
+    font_size: f32,
+    max_width: f32,
+    max_height: f32,
+) -> Result<Wrapped, LayoutError> {
     positive(max_width, "width")?;
     positive(max_height, "height")?;
     let metrics = FontMetrics::new(font_size)?;
     metrics.validate_text(text, true)?;
     if text.is_empty() {
-        return Ok(Vec::new());
+        return Ok(Wrapped {
+            lines: Vec::new(),
+            too_wide: false,
+        });
     }
     let normalized = text.replace("\r\n", "\n").replace('\t', "    ");
     let mut lines = Vec::new();
+    let mut too_wide = false;
     for paragraph in normalized.split('\n') {
         if paragraph.is_empty() {
             lines.push(String::new());
             continue;
         }
-        let word_ends: Vec<_> = paragraph
-            .split_word_bound_indices()
-            .map(|(index, word)| index + word.len())
+        // Where a line may end: the Unicode line breaking rules (UAX #14), as the
+        // effects engine wraps (cosmic-text), so the libass fallback breaks where
+        // Classique does (a small kana or a closing mark never starts a line).
+        let breaks: Vec<usize> = unicode_linebreak::linebreaks(paragraph)
+            .map(|(index, _)| index)
             .collect();
         let graphemes: Vec<_> = paragraph
             .grapheme_indices(true)
@@ -78,19 +104,19 @@ pub fn layout_text(
         while start < graphemes.len() {
             let mut end = start;
             let mut width = 0.0;
-            let (mut whitespace_break, mut word_break) = (None, None);
+            let mut line_break = None;
             while end < graphemes.len() {
                 let next_width = width + graphemes[end].1;
-                if next_width.ceil() > f64::from(max_width) {
+                // Whitespace at the end of a line hangs past the width, as in the
+                // effects engine (cosmic-text) and libass's own alignment: a word
+                // that fits stays on its line even if the space after it does not.
+                if next_width.ceil() > f64::from(max_width) && !graphemes[end].2 {
                     break;
                 }
                 width = next_width;
                 end += 1;
-                if graphemes[end - 1].2 {
-                    whitespace_break = Some(end);
-                }
-                if word_ends.binary_search(&graphemes[end - 1].0).is_ok() {
-                    word_break = Some(end);
+                if breaks.binary_search(&graphemes[end - 1].0).is_ok() {
+                    line_break = Some(end);
                 }
             }
             if end == start {
@@ -100,7 +126,19 @@ pub fn layout_text(
                 });
             }
             if end < graphemes.len() {
-                end = whitespace_break.or(word_break).unwrap_or(end);
+                match line_break {
+                    Some(at) => end = at,
+                    // No break opportunity inside the width: the word runs on to
+                    // the next one, whole (the effects engine wraps at words too).
+                    None => {
+                        too_wide = true;
+                        while end < graphemes.len()
+                            && breaks.binary_search(&graphemes[end - 1].0).is_err()
+                        {
+                            end += 1;
+                        }
+                    }
+                }
             }
             let byte_start = if start == 0 {
                 0
@@ -119,7 +157,13 @@ pub fn layout_text(
             max_height,
         });
     }
-    Ok(lines)
+    Ok(Wrapped { lines, too_wide })
+}
+
+/// Whether the bundled font can draw `text` (no control or unsupported character,
+/// within the size limit), whatever renderer draws it (Task 43).
+pub fn check_characters(text: &str) -> Result<(), LayoutError> {
+    FontMetrics::new(16.0)?.validate_text(text, true)
 }
 
 /// Conservative whole-pixel baseline spacing from ascent, descent and leading.
@@ -245,25 +289,39 @@ mod tests {
         }
     }
 
+    /// The maintainer's choice B (2026-11-12): a word wider than the width is never cut
+    /// between letters; it stays whole on its own line, wider than the width, and
+    /// the caller is told (`too_wide`). Its neighbours still wrap at words.
     #[test]
-    fn long_latin_tokens_wrap_only_between_complete_graphemes() {
+    fn a_word_wider_than_the_width_stays_whole_and_is_said() {
         let text = "e\u{301}".repeat(50);
-        let lines = layout_text(&text, 32.0, 100.0, 2000.0).unwrap();
-        assert!(lines.len() > 1);
-        assert_eq!(lines.concat(), text);
-        for line in lines {
-            assert!(!line.starts_with('\u{301}'));
-            assert!(line.ends_with('\u{301}'));
-            assert!(measure_line(&line, 32.0).unwrap() <= 100.0);
-        }
+        let wrapped = wrap_lines(&text, 32.0, 100.0, 2000.0).unwrap();
+        assert_eq!(wrapped.lines, [text.clone()]);
+        assert!(wrapped.too_wide);
         let token = "Supercalifragilisticexpialidocious";
-        let lines = layout_text(token, 32.0, 90.0, 2000.0).unwrap();
-        assert_eq!(lines.concat(), token);
+        let wrapped = wrap_lines(&format!("On a {token} ici"), 32.0, 90.0, 2000.0).unwrap();
+        assert!(wrapped.too_wide);
         assert!(
-            lines
-                .iter()
-                .all(|line| measure_line(line, 32.0).unwrap() <= 90.0)
+            wrapped.lines.iter().any(|l| l.trim_end() == token),
+            "{:?}",
+            wrapped.lines
         );
+        assert_eq!(wrapped.lines.concat(), format!("On a {token} ici"));
+        for line in wrapped.lines.iter().filter(|l| l.trim_end() != token) {
+            assert!(
+                measure_line(line.trim_end(), 32.0).unwrap() <= 90.0,
+                "{line:?}"
+            );
+        }
+        // Words that fit are not flagged.
+        assert!(
+            !wrap_lines("On a la lumière", 32.0, 200.0, 2000.0)
+                .unwrap()
+                .too_wide
+        );
+        // CJK still breaks between ideographs: no word is too wide.
+        let cjk = wrap_lines("中文字幕应该完整并且易于阅读。", 32.0, 100.0, 2000.0).unwrap();
+        assert!(!cjk.too_wide && cjk.lines.len() > 1);
     }
 
     #[test]

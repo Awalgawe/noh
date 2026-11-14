@@ -286,9 +286,56 @@ fn proxy(
     let directory = tempfile::Builder::new().prefix("noh-scrub-").tempdir()?;
     let path = directory.path().join("preview.mp4");
     let stderr = std::fs::File::create(directory.path().join("encoder.log"))?;
-    let mut child=crate::command(&plan.ffmpeg).args(["-hide_banner","-nostdin","-v","error","-n","-threads","2","-ss",&format!("{:.9}",plan.origin),"-i"])
-        .arg(&plan.source.resolved).args(["-map","0:v:0","-an","-sn","-dn","-vf","setpts=PTS-STARTPTS,scale=w='max(2,trunc(min(640,640*dar)/2)*2)':h='max(2,trunc(min(640,640/dar)/2)*2)',setsar=1","-fps_mode","passthrough","-c:v","libx264","-threads","2","-preset","fast","-crf","18","-g","1","-pix_fmt","yuv420p","-fs",&PROXY_BYTES.to_string()])
-        .arg(&path).stdout(Stdio::null()).stderr(stderr).spawn()?;
+    // A 640-wide proxy would be read as BT.601 by mpv: tag the source's matrix.
+    let color = crate::color::proxy_tail(&plan.ffmpeg, &plan.source.resolved)
+        .map(|tail| format!(",{tail}"))
+        .unwrap_or_default();
+    let filter = format!(
+        "setpts=PTS-STARTPTS,scale=w='max(2,trunc(min(640,640*dar)/2)*2)':h='max(2,trunc(min(640,640/dar)/2)*2)',setsar=1{color}"
+    );
+    let mut child = crate::command(&plan.ffmpeg)
+        .args([
+            "-hide_banner",
+            "-nostdin",
+            "-v",
+            "error",
+            "-n",
+            "-threads",
+            "2",
+            "-ss",
+            &format!("{:.9}", plan.origin),
+            "-i",
+        ])
+        .arg(&plan.source.resolved)
+        .args([
+            "-map",
+            "0:v:0",
+            "-an",
+            "-sn",
+            "-dn",
+            "-vf",
+            &filter,
+            "-fps_mode",
+            "passthrough",
+            "-c:v",
+            "libx264",
+            "-threads",
+            "2",
+            "-preset",
+            "fast",
+            "-crf",
+            "18",
+            "-g",
+            "1",
+            "-pix_fmt",
+            "yuv420p",
+            "-fs",
+            &PROXY_BYTES.to_string(),
+        ])
+        .arg(&path)
+        .stdout(Stdio::null())
+        .stderr(stderr)
+        .spawn()?;
     let began = Instant::now();
     let status = loop {
         if shared.quit.load(Ordering::Relaxed)
@@ -1085,6 +1132,7 @@ mod tests {
                     force_encode: false,
                 },
                 short: None,
+                effect: None,
                 captions: None,
             },
         }

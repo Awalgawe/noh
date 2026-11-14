@@ -55,6 +55,12 @@ try {
         $bundle = Join-Path $root 'dist/NOH-macos-arm64'
     }
     $env:NOH_FFMPEG = $ffmpeg
+    if ($Platform -ne 'macos-arm64') {
+        # Task 44: the syllable dictionaries, from the pinned public datasets (never committed).
+        & $python tools/delivery.py acquire-datasets --cache (Join-Path $env:RUNNER_TEMP 'noh-downloads') --output (Join-Path $inputs 'datasets')
+        & $python -I tools/build_syllable_dicts.py --inputs (Join-Path $inputs 'datasets') --out (Join-Path $inputs 'languages')
+        $env:NOH_LANGUAGES = Join-Path $inputs 'languages'
+    }
     cargo fetch --locked
     # Prepare original notices before packaging/signatures/manifests are created.
     & $python tools/delivery.py sources --cache (Join-Path $env:RUNNER_TEMP 'noh-downloads') --output (Join-Path $logRoot 'materials')

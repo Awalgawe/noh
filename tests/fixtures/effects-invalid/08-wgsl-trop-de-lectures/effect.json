@@ -1,0 +1,167 @@
+{
+ "engine": 1,
+ "id": "noh.karaoke",
+ "name": {
+  "fr": "Karaoké",
+  "en": "Karaoke"
+ },
+ "version": "0.1.0",
+ "license": "GPL-3.0-only",
+ "target": "text",
+ "params": [
+  {
+   "id": "sung",
+   "type": "color",
+   "default": "#FFD400",
+   "level": 1,
+   "label": {
+    "fr": "Couleur chantée"
+   }
+  },
+  {
+   "id": "rest",
+   "type": "color",
+   "default": "#FFFFFF",
+   "level": 1,
+   "label": {
+    "fr": "Couleur du texte"
+   }
+  },
+  {
+   "id": "size",
+   "type": "number",
+   "default": {
+    "landscape": 64,
+    "portrait": 76
+   },
+   "min": 24,
+   "max": 160,
+   "unit": "px",
+   "level": 1,
+   "label": {
+    "fr": "Taille"
+   }
+  },
+  {
+   "id": "shadow",
+   "type": "number",
+   "default": 0.55,
+   "min": 0,
+   "max": 1,
+   "level": 2,
+   "label": {
+    "fr": "Ombre"
+   }
+  }
+ ],
+ "presets": [
+  {
+   "id": "jaune",
+   "name": {
+    "fr": "Jaune"
+   },
+   "values": {}
+  },
+  {
+   "id": "rose",
+   "name": {
+    "fr": "Rose"
+   },
+   "values": {
+    "sung": "#FF4F8B"
+   }
+  }
+ ],
+ "layout": {
+  "mode": "line",
+  "font": "sans_semibold",
+  "size": "$size",
+  "line_height": 1.18,
+  "box": {
+   "x": 0.5,
+   "y": {
+    "landscape": 0.88,
+    "portrait": 0.62
+   },
+   "width": 0.86,
+   "anchor": {
+    "landscape": "bottom",
+    "portrait": "center"
+   }
+  },
+  "visible": "line",
+  "anchor": "unit"
+ },
+ "animate": [
+  {
+   "unit": "line",
+   "slot": "enter",
+   "property": "opacity",
+   "duration": 0.15,
+   "keys": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     1
+    ]
+   ]
+  },
+  {
+   "unit": "line",
+   "slot": "exit",
+   "property": "opacity",
+   "duration": 0.12,
+   "keys": [
+    [
+     0,
+     1
+    ],
+    [
+     1,
+     0
+    ]
+   ]
+  },
+  {
+   "unit": "word",
+   "slot": "active",
+   "property": "wipe",
+   "keys": [
+    [
+     0,
+     0
+    ],
+    [
+     1,
+     1
+    ]
+   ]
+  },
+  {
+   "unit": "word",
+   "slot": "past",
+   "property": "wipe",
+   "value": 1
+  }
+ ],
+ "render": {
+  "passes": [
+   {
+    "kind": "shadow",
+    "color": "#000000",
+    "alpha": "$shadow",
+    "offset_y": 0.05,
+    "blur": 3
+   },
+   {
+    "kind": "fill",
+    "color": "$rest",
+    "color2": "$sung"
+   }
+  ]
+ },
+ "shader": "shaders/s.wgsl"
+}

@@ -107,7 +107,9 @@ impl EngineError {
             | "error.caption_layout"
             | "error.caption_backend"
             | "error.caption_limit"
-            | "error.caption_result" => &self.code,
+            | "error.caption_result"
+            | "error.lyrics_truth_required"
+            | "error.lyrics_truth_workspace" => &self.code,
             "error.short_input"
             | "error.short_config"
             | "error.short_range"

@@ -1,0 +1,41 @@
+{
+  "engine": 1,
+  "id": "noh.block",
+  "name": {"fr": "Bloc typographique", "en": "Type block", "de": "Typoblock", "es": "Bloque tipográfico", "ja": "タイポブロック", "ko": "타이포 블록", "zh": "文字块"},
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "target": "text",
+  "params": [
+    {"id": "accent", "type": "color", "default": "#FFD34D", "level": 1, "label": {"fr": "Couleur d'accent", "en": "Accent colour", "de": "Akzentfarbe", "es": "Color de acento", "ja": "アクセントカラー", "ko": "강조 색", "zh": "强调色"}},
+    {"id": "size", "type": "choice", "default": "medium", "choices": ["small", "medium", "large"], "choice_labels": {"small": {"fr": "Petite", "en": "Small", "de": "Klein", "es": "Pequeño", "ja": "小", "ko": "작게", "zh": "小"}, "medium": {"fr": "Moyenne", "en": "Medium", "de": "Mittel", "es": "Mediano", "ja": "中", "ko": "보통", "zh": "中"}, "large": {"fr": "Grande", "en": "Large", "de": "Groß", "es": "Grande", "ja": "大", "ko": "크게", "zh": "大"}}, "level": 1, "label": {"fr": "Taille", "en": "Size", "de": "Größe", "es": "Tamaño", "ja": "サイズ", "ko": "크기", "zh": "大小"}},
+    {"id": "font", "type": "font", "default": "condensed_extrabold", "level": 2, "label": {"fr": "Police", "en": "Font", "de": "Schrift", "es": "Fuente", "ja": "フォント", "ko": "글꼴", "zh": "字体"}}
+  ],
+  "presets": [
+    {"id": "gold", "name": {"fr": "Doré", "en": "Gold", "de": "Gold", "es": "Dorado", "ja": "ゴールド", "ko": "골드", "zh": "金色"}, "values": {}}
+  ],
+  "layout": {
+    "mode": "line",
+    "font": "$font",
+    "case": "upper",
+    "size": {"mul": [{"min": ["@short", {"mul": ["@w", 0.56296]}]}, {"choose": ["$size", {"small": 0.205, "medium": 0.25, "large": 0.3}]}]},
+    "line_height": 0.95,
+    "box": {"x": 0.5, "y": 0.5, "width": 0.88, "anchor": "center"},
+    "visible": "line",
+    "anchor": "unit",
+    "chunk": {"max": 3, "rows": "word"},
+    "preroll": 0.06,
+    "hold": 3,
+    "word_size": {"add": [1, {"mul": ["@word_longest", 0.15]}]}
+  },
+  "animate": [
+    {"unit": "line", "slot": "loop", "property": "tracking", "value": 0.01},
+    {"unit": "line", "slot": "enter", "property": "reveal_y", "duration": 0.22, "curve": "ease_out_cubic", "keys": [[0, 0], [1, 1]]},
+    {"unit": "line", "slot": "enter", "property": "offset_y", "duration": 0.22, "curve": "ease_out_cubic", "keys": [[0, 0.2368], [1, 0]]},
+    {"unit": "word", "slot": "loop", "property": "color", "value": {"mix": ["#FFFFFF", "$accent", "@word_longest"]}}
+  ],
+  "render": {
+    "passes": [
+      {"kind": "fill", "color": "#FFFFFF"}
+    ]
+  }
+}

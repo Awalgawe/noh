@@ -222,6 +222,7 @@ mod tests {
 impl NohApp {
     pub(super) fn project_timeline(&mut self, ui: &mut egui::Ui, locked: bool) {
         let visuals = self.project_visuals();
+        let lyrics = self.lyrics_track();
         let output = app_timeline::show(
             ui,
             &self.locale,
@@ -232,7 +233,7 @@ impl NohApp {
                 range: self.project.range,
                 viewport: self.project.viewport,
                 waveform: self.project.waveform.as_deref(),
-                track: self.project.track.loaded.as_ref().map(|l| l.track.as_ref()),
+                track: lyrics.as_deref(),
                 visuals: &visuals,
                 waveform_loading: self.project.waveform_loading,
                 waveform_error: self.project.waveform_error.as_deref(),
@@ -240,20 +241,40 @@ impl NohApp {
                 fade_in_seconds: if self.in_enabled { self.fade_in } else { 0.0 },
                 fade_out_seconds: if self.out_enabled { self.fade_out } else { 0.0 },
                 restart: self.project.restart_loops,
+                selected_cue: self.lyrics_edit.selected,
+                words: self
+                    .lyrics_edit
+                    .words
+                    .as_ref()
+                    .map(|w| app_timeline::WordLane {
+                        cue: w.cue,
+                        word: w.word,
+                        taps: w.taps.as_deref(),
+                    }),
             },
         );
         if self.mini_preview.short && self.project.range != output.range {
             self.mini_preview.invalidate();
         }
         self.project.range = output.range;
+        // Before the lane's events: entering or leaving word mode sets the view.
         self.project.viewport = output.viewport;
-        if let Some(ms) = output.seek_ms {
-            self.mini_hover(None, ui.ctx());
-            self.mini_seek(ms, true);
-        } else if self.capture_overlay.is_none() {
-            // Capture states keep their configured cursor position.
-            self.mini_hover(output.hover_ms, ui.ctx());
+        let locked = locked || self.lyrics_frozen();
+        if let Some(event) = output.cue
+            && !locked
+        {
+            self.lane_event(event);
         }
+        let cue_rect = self
+            .lyrics_edit
+            .selected
+            .and_then(|i| self.project_ui.timeline.cue_rect(i));
+        let lane = self.project_ui.timeline.cues_lane();
+        if !locked {
+            self.lyrics_bubble(ui, cue_rect, lane);
+        }
+        // Hover only draws the guide line; the ruler alone moves the playhead.
+        self.apply_timeline(&output, ui.ctx());
         if output.commit_changed {
             self.project.short_revision = self.project.short_revision.wrapping_add(1);
             self.project.range_moved = false;

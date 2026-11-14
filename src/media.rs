@@ -152,11 +152,63 @@ pub(crate) fn quick_info(ffmpeg: &Path, path: &Path, isolate: bool) -> Result<Me
     if !status.success() || !text.contains("Video:") {
         return Err("This file contains no readable video".into());
     }
-    Ok(MediaInfo {
+    let mut info = MediaInfo {
         seconds: duration,
         audio: text.contains("Audio:"),
         ..Default::default()
+    };
+    // The picture size, as the full inspection computes it: the GUI lays caption
+    // effects out on the export canvas before any analysis.
+    if let Some((width, height, pixel_aspect)) = log_geometry(&text) {
+        info.width = width;
+        info.height = height;
+        info.display_width = f64::from(width) * pixel_aspect;
+        info.display_height = f64::from(height);
+        info.square_pixels = (pixel_aspect - 1.0).abs() < 1e-9;
+        info.rotation = display_rotation(&text);
+        if (info.rotation.rem_euclid(180.0) - 90.0).abs() < 0.01 {
+            std::mem::swap(&mut info.display_width, &mut info.display_height);
+        }
+    }
+    Ok(info)
+}
+
+/// The first video stream's coded size and pixel aspect from FFmpeg's input log
+/// (`Video: h264 ..., yuv420p(...), 720x576 [SAR 16:15 DAR 4:3], ...`). An
+/// unspecified SAR (absent or 0:1) is square, as FFmpeg treats it.
+fn log_geometry(log: &str) -> Option<(u32, u32, f64)> {
+    let line = log.lines().find(|l| l.contains("Video:"))?;
+    let after = &line[line.find("Video:")? + "Video:".len()..];
+    after.split(',').find_map(|field| {
+        let mut words = field.split_whitespace();
+        let (w, h) = words.next()?.split_once('x')?;
+        let (w, h) = (w.parse::<u32>().ok()?, h.parse::<u32>().ok()?);
+        if w == 0 || h == 0 {
+            return None;
+        }
+        let sar = field
+            .split_once("[SAR ")
+            .and_then(|(_, rest)| rest.split_whitespace().next())
+            .and_then(|s| s.split_once(':'))
+            .and_then(|(a, b)| Some((a.parse::<u32>().ok()?, b.parse::<u32>().ok()?)))
+            .filter(|(a, b)| *a > 0 && *b > 0)
+            .map_or(1.0, |(a, b)| f64::from(a) / f64::from(b));
+        Some((w, h, sar))
     })
+}
+
+/// The display matrix rotation FFmpeg reports (and autorotates by), in degrees.
+fn display_rotation(log: &str) -> f64 {
+    log.lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix("displaymatrix: rotation of ")?
+                .split_whitespace()
+                .next()?
+                .parse::<f64>()
+                .ok()
+        })
+        .unwrap_or(0.0)
 }
 
 fn parse_time(text: &str) -> Option<f64> {
@@ -456,17 +508,7 @@ fn inspect_streams_inner(
     info.display_width = f64::from(info.width) * pixel_aspect;
     info.display_height = f64::from(info.height);
     info.square_pixels = (pixel_aspect - 1.0).abs() < 1e-9;
-    let rotation = log
-        .lines()
-        .find_map(|line| {
-            line.trim()
-                .strip_prefix("displaymatrix: rotation of ")?
-                .split_whitespace()
-                .next()?
-                .parse::<f64>()
-                .ok()
-        })
-        .unwrap_or(0.0);
+    let rotation = display_rotation(&log);
     // FFmpeg autorotates decoded frames. Match the canvas to portrait sources.
     if (rotation.rem_euclid(180.0) - 90.0).abs() < 0.01 {
         std::mem::swap(&mut info.display_width, &mut info.display_height);
@@ -587,6 +629,31 @@ mod tests {
         ] {
             assert_eq!(parse_time(text), None, "{text}");
         }
+    }
+
+    #[test]
+    fn the_quick_log_gives_the_first_video_size_and_pixel_aspect() {
+        let log = "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'a.mp4':\n  Duration: 00:00:02.00, start: 0.000000, bitrate: 3214 kb/s\n  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], 3200 kb/s, 25 fps, 25 tbr, 12800 tbn (default)\n  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 320 kb/s (default)\n";
+        assert_eq!(log_geometry(log), Some((1920, 1080, 1.0)));
+        let pal = "  Stream #0:0: Video: mpeg2video (Main), yuv420p(tv, top first), 720x576 [SAR 16:15 DAR 4:3], 25 fps\n";
+        assert_eq!(log_geometry(pal), Some((720, 576, 16.0 / 15.0)));
+        // No SAR, or an unspecified one: square pixels.
+        assert_eq!(
+            log_geometry("  Stream #0:0: Video: vp9, yuv420p(tv), 640x360, 30 fps\n"),
+            Some((640, 360, 1.0))
+        );
+        assert_eq!(
+            log_geometry(
+                "  Stream #0:0: Video: rawvideo, rgb24, 64x36 [SAR 0:1 DAR 0:1], 25 fps\n"
+            ),
+            Some((64, 36, 1.0))
+        );
+        assert_eq!(log_geometry("  Stream #0:0: Audio: aac, 48000 Hz\n"), None);
+        assert_eq!(
+            display_rotation("    displaymatrix: rotation of -90.00 degrees\n"),
+            -90.0
+        );
+        assert_eq!(display_rotation(log), 0.0);
     }
 
     #[test]

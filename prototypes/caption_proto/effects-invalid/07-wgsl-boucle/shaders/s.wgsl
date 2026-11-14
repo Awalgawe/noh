@@ -1,0 +1,1 @@
+fn shade(i: GlyphIn) -> vec4<f32> { var c = i.color; for (var k = 0; k < 4; k = k + 1) { c = c * 0.9; } return c * i.coverage; }
