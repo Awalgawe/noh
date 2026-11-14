@@ -151,7 +151,10 @@ function Set-QualificationEnvironment($Plan) {
     $env:CC = Join-Path $Plan.inputs.compiler 'clang.exe'
     $env:AR = Join-Path $Plan.inputs.compiler 'llvm-ar.exe'
     $env:CARGO_TARGET_DIR = Join-Path $workspace 'target'
-    $env:NOH_LIBMPV = Join-Path $Plan.inputs.runtime 'bin/libmpv-2.dll'
+    $env:NOH_LIBMPV = Join-Path $Plan.inputs.runtime 'bin/preview/libmpv-2.dll'
+    # Task 44: the language packs (with their dictionaries) of the runtime portable,
+    # built and checked when it was packaged; the packager compares their manifests.
+    $env:NOH_LANGUAGES = Join-Path $Plan.inputs.runtime 'languages'
     $env:NOH_UPDATE_QUALIFICATION_ROOT = $Plan.case
     $env:NOH_UPDATE_PACKAGE_ID = $Plan.package_id
     $env:NOH_UPDATE_CHANNEL = 'stable'

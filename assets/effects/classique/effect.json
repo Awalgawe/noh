@@ -1,0 +1,39 @@
+{
+  "engine": 1,
+  "id": "noh.classic",
+  "name": {"fr": "Classique", "en": "Classic", "de": "Klassisch", "es": "Clásico", "ja": "クラシック", "ko": "클래식", "zh": "经典"},
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "target": "text",
+  "params": [
+    {"id": "size", "type": "choice", "default": "medium", "choices": ["small", "medium", "large"], "level": 1, "label": {"fr": "Taille", "en": "Size", "de": "Größe", "es": "Tamaño", "ja": "サイズ", "ko": "크기", "zh": "大小"}},
+    {"id": "placement", "type": "choice", "default": "bottom", "choices": ["bottom", "top"], "level": 1, "label": {"fr": "Position", "en": "Position", "de": "Position", "es": "Posición", "ja": "位置", "ko": "위치", "zh": "位置"}},
+    {"id": "width", "type": "number", "default": 69.06077348066299, "min": 40, "max": 100, "unit": "%", "level": 2, "label": {"fr": "Largeur des lignes (% de la zone utile)", "en": "Line width (% of the usable area)", "de": "Zeilenbreite (% des nutzbaren Bereichs)", "es": "Ancho de las líneas (% de la zona útil)", "ja": "行の幅(使用可能領域の %)", "ko": "줄 너비(사용 가능 영역의 %)", "zh": "行宽（可用区域的 %）"}}
+  ],
+  "presets": [
+    {"id": "classique", "name": {"fr": "Classique", "en": "Classic", "de": "Klassisch", "es": "Clásico", "ja": "クラシック", "ko": "클래식", "zh": "经典"}, "values": {}}
+  ],
+  "layout": {
+    "mode": "line",
+    "font": "cjk",
+    "size": {"mul": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 0.6906077348066298]},
+    "line_height": 1.448,
+    "box": {
+      "space": "canvas",
+      "x": {"div": [{"div": [{"add": [{"choose": ["@safe", {"1": {"add": ["@inset_l", {"ceil": [{"add": [{"max": [{"ceil": [{"div": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 16]}]}, 1]}, {"ceil": [{"mul": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 0.1]}]}, 2]}]}]}, "0": {"max": [{"ceil": [{"mul": ["@short", 0.05]}]}, 4]}}]}, {"sub": ["@w", {"choose": ["@safe", {"1": {"add": ["@inset_r", {"ceil": [{"add": [{"max": [{"ceil": [{"div": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 16]}]}, 1]}, {"ceil": [{"mul": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 0.1]}]}, 2]}]}]}, "0": {"max": [{"ceil": [{"mul": ["@short", 0.05]}]}, 4]}}]}]}]}, 2]}, "@w"]},
+      "width": {"mul": [{"div": [{"sub": ["@w", {"choose": ["@safe", {"1": {"add": ["@inset_l", {"ceil": [{"add": [{"max": [{"ceil": [{"div": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 16]}]}, 1]}, {"ceil": [{"mul": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 0.1]}]}, 2]}]}]}, "0": {"max": [{"ceil": [{"mul": ["@short", 0.05]}]}, 4]}}]}, {"choose": ["@safe", {"1": {"add": ["@inset_r", {"ceil": [{"add": [{"max": [{"ceil": [{"div": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 16]}]}, 1]}, {"ceil": [{"mul": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 0.1]}]}, 2]}]}]}, "0": {"max": [{"ceil": [{"mul": ["@short", 0.05]}]}, 4]}}]}, {"mul": [{"add": [{"max": [{"ceil": [{"div": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 16]}]}, 1]}, {"ceil": [{"mul": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 0.1]}]}, 2]}, 2]}]}, "@w"]}, {"div": ["$width", 100]}]},
+      "y": {"choose": ["$placement", {"bottom": {"div": [{"sub": ["@h", {"choose": ["@safe", {"1": {"add": ["@inset_b", {"ceil": [{"add": [{"max": [{"ceil": [{"div": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 16]}]}, 1]}, {"ceil": [{"mul": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 0.1]}]}, 2]}]}]}, "0": {"max": [{"ceil": [{"mul": ["@short", 0.05]}]}, 4]}}]}]}, "@h"]}, "top": {"div": [{"choose": ["@safe", {"1": {"add": ["@inset_t", {"ceil": [{"add": [{"max": [{"ceil": [{"div": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 16]}]}, 1]}, {"ceil": [{"mul": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 0.1]}]}, 2]}]}]}, "0": {"max": [{"ceil": [{"mul": ["@short", 0.05]}]}, 4]}}]}, "@h"]}}]},
+      "anchor": {"choose": ["$placement", {"bottom": "bottom", "top": "top"}]}
+    },
+    "visible": "line",
+    "anchor": "unit",
+    "line_breaks": "keep"
+  },
+  "animate": [],
+  "render": {
+    "passes": [
+      {"kind": "outline_only", "color": "#000000", "outline": {"div": [{"max": [{"ceil": [{"div": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 16]}]}, 1]}, {"mul": [{"max": [{"round": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04, "medium": 0.055, "large": 0.07}]}]}]}, 8]}, 0.6906077348066298]}]}},
+      {"kind": "fill", "color": "#FFFFFF"}
+    ]
+  }
+}

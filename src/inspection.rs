@@ -330,8 +330,18 @@ pub fn inspect(
                 ));
             }
             let mut quick_media = Vec::new();
+            // The maintainer's rule 2: a matrix conflict is shown at clip analysis too.
+            let mut color_note = None;
             let plan = if *level == Level::Exact {
-                Some(crate::engine::inspect_and_plan(request, emit)?)
+                let mut capture = |event: Event| {
+                    if let Event::Warning(message) = &event
+                        && message.code == "warning.color_matrix"
+                    {
+                        color_note = Some(message.to_wire());
+                    }
+                    emit(event);
+                };
+                Some(crate::engine::inspect_and_plan(request, &mut capture)?)
             } else {
                 let mut sources = SourceInspections::new_items(&ffmpeg, &request.items)?;
                 for (index, item) in request.items.iter().enumerate() {
@@ -357,6 +367,7 @@ pub fn inspect(
             };
             snapshot.verify()?;
             let mut notes = vec!["diagnosis.color_limit".into()];
+            notes.extend(color_note);
             if partial {
                 notes.push("diagnosis.partial".into());
             }

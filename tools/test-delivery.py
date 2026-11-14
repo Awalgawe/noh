@@ -1137,6 +1137,55 @@ class DeliveryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "reviewed redistribution"):
                 delivery.authorize_redistribution("windows-x64")
 
+    def test_syllable_datasets_need_their_own_reviewed_inputs_and_evidence(self):
+        # Task 44: the dictionaries' dataset lock and builder are locked inputs, and
+        # their licences are required evidence, on Windows and Linux (not macOS).
+        original = delivery.read
+        policy = copy.deepcopy(original(delivery.ROOT / "assets/delivery-policy.json"))
+        locked = ["Cargo.lock", "LICENSE", "assets/speech-bundle.json", "assets/rust-notices.lock.json",
+                  "tools/rust_notices.py", "assets/delivery-windows.lock.json", "assets/preview-runtime.json",
+                  "assets/windows-native.lock.json", "tools/windows_runtime.py",
+                  "assets/syllable-sources.lock.json", "tools/build_syllable_dicts.py"]
+        inputs = {name: delivery.digest(delivery.ROOT / name) for name in locked}
+        inputs["rust_standard_library_source"] = policy["rust_source"]["sha256"]
+        evidence = {"path": "docs/THIRD-PARTY.md", "sha256": delivery.digest(delivery.ROOT / "docs/THIRD-PARTY.md")}
+        keys = ["native_corresponding_sources", "native_notices", "rust_sources_notices", "cuda_terms"]
+        with patch.object(delivery, "read", side_effect=lambda p: policy if Path(p).name == "delivery-policy.json" else original(p)):
+            policy["platforms"]["windows-x64"]["redistribution_unresolved"] = []
+            policy["redistribution_records"] = [{"platform": "windows-x64", "inputs": inputs, "evidence": {k: evidence for k in keys}}]
+            with self.assertRaisesRegex(ValueError, "Incomplete redistribution evidence"):
+                delivery.authorize_redistribution("windows-x64")
+            policy["redistribution_records"][0]["evidence"]["dataset_licences"] = evidence
+            delivery.authorize_redistribution("windows-x64")
+            # A record made before the datasets (without their lock) no longer matches.
+            stale = {k: v for k, v in inputs.items() if "syllable" not in k}
+            policy["redistribution_records"][0]["inputs"] = stale
+            with self.assertRaisesRegex(ValueError, "reviewed redistribution"):
+                delivery.authorize_redistribution("windows-x64")
+
+    def test_syllable_datasets_are_acquired_by_the_pinned_fetch(self):
+        lock = delivery.read(delivery.ROOT / "assets/syllable-sources.lock.json")
+        cache, output = self.root / "cache", self.root / "datasets"
+        cache.mkdir()
+        payloads = {}
+        for spec in lock["datasets"].values():
+            payloads[spec["file"]] = data = spec["file"].encode() * 3
+            (cache / ("datasets-" + spec["file"])).write_bytes(data)
+        fake = copy.deepcopy(lock)
+        for spec in fake["datasets"].values():
+            spec["sha256"] = hashlib.sha256(payloads[spec["file"]]).hexdigest()
+        original = delivery.read
+        with patch.object(delivery, "read", side_effect=lambda p: fake if Path(p).name == "syllable-sources.lock.json" else original(p)), \
+                patch.object(delivery, "checked", side_effect=AssertionError("no download when the cache matches")):
+            delivery.acquire_datasets(cache, output)
+        for name, data in payloads.items():
+            self.assertEqual((output / name).read_bytes(), data)
+        # A cached file whose hash differs is refused, never downloaded over.
+        (cache / ("datasets-" + lock["datasets"]["moby"]["file"])).write_bytes(b"changed")
+        with patch.object(delivery, "read", side_effect=lambda p: fake if Path(p).name == "syllable-sources.lock.json" else original(p)):
+            with self.assertRaisesRegex(ValueError, "Corrupt cached download"):
+                delivery.acquire_datasets(cache, self.root / "again")
+
     def test_json_metadata_hashes_survive_git_lf_checkout(self):
         output = self.root / 'locked.json'
         delivery.write(output, {'fixture': ['first', 'second']})

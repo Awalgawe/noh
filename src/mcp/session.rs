@@ -208,20 +208,57 @@ impl Session {
 
     pub fn captions(&self, input: CaptionsInput) -> Result<StartReply, SessionError> {
         check_request_size(&input)?;
-        let request = input.into_request(&self.0.default_ffmpeg)?;
+        let truth = input.truth;
+        let mut request = input.into_request(&self.0.default_ffmpeg)?;
+        self.ready_to_start()?;
+        let lyrics = resolve_lyrics(&mut request.subtitles, truth)?;
         self.start(Operation::Captions(request))
+            .map(|reply| StartReply { lyrics, ..reply })
     }
 
     pub fn short(&self, input: ShortInput) -> Result<StartReply, SessionError> {
         check_request_size(&input)?;
-        let request = input.into_request(&self.0.default_ffmpeg)?;
+        let truth = input.captions.as_ref().and_then(|c| c.truth);
+        let mut request = input.into_request(&self.0.default_ffmpeg)?;
+        self.ready_to_start()?;
+        let lyrics = match &mut request.captions {
+            Some(captions) => resolve_lyrics(&mut captions.subtitles, truth)?,
+            None => Vec::new(),
+        };
         self.start(Operation::Short(request))
+            .map(|reply| StartReply { lyrics, ..reply })
     }
 
     pub fn project(&self, input: ProjectInput) -> Result<StartReply, SessionError> {
         check_request_size(&input)?;
-        let request = input.into_request(&self.0.default_ffmpeg)?;
+        let truth = input.captions.as_ref().and_then(|c| c.truth);
+        let mut request = input.into_request(&self.0.default_ffmpeg)?;
+        self.ready_to_start()?;
+        let lyrics = match &mut request.captions {
+            Some(captions) => resolve_lyrics(&mut captions.subtitles, truth)?,
+            None => Vec::new(),
+        };
         self.start(Operation::Project(request))
+            .map(|reply| StartReply { lyrics, ..reply })
+    }
+
+    /// The start's own refusals (closed, busy), checked before the subtitles
+    /// and their lyrics file are touched: a refused start writes nothing.
+    fn ready_to_start(&self) -> Result<(), SessionError> {
+        let state = self.0.shared.state.lock().unwrap();
+        if state.closed {
+            return Err(SessionError::new(
+                "mcp.closed",
+                "The client session is shutting down.",
+            ));
+        }
+        if state.active.is_some() {
+            return Err(SessionError::new(
+                "mcp.busy",
+                "One job is already active. Wait for it or cancel it before starting another.",
+            ));
+        }
+        Ok(())
     }
 
     fn start(&self, operation: Operation) -> Result<StartReply, SessionError> {
@@ -328,6 +365,7 @@ impl Session {
             job_id: id,
             state: JobState::Running,
             revision: 1,
+            lyrics: Vec::new(),
         })
     }
 
@@ -819,9 +857,108 @@ fn serialized_len<T: Serialize>(value: &T, limit: usize) -> Result<usize, serde_
     Ok(counter.bytes)
 }
 
+/// The subtitles kept in step with their lyrics file before a job starts
+/// (lyrics plan 10). No terminal here: a difference needs `truth`, otherwise
+/// the start is refused with `error.lyrics_truth_required` (paths, differing
+/// lines and the accepted values in `technical`) before anything is written.
+fn resolve_lyrics(
+    subtitles: &mut PathBuf,
+    truth: Option<TruthInput>,
+) -> Result<Vec<Phase>, SessionError> {
+    let resolved = crate::lyrics_input::resolve(subtitles, truth.map(Into::into), |_| None)?;
+    *subtitles = resolved.srt;
+    Ok(resolved
+        .notes
+        .into_iter()
+        .map(|note| Phase {
+            code: note.code.into(),
+            args: note.args,
+        })
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A job's warning keeps the missing installed family as its argument, so
+    /// the MCP result names it (`Reporter::warning` parses it, `bounded_phase` keeps it).
+    #[test]
+    fn a_missing_installed_font_reaches_the_job_warnings_with_its_family() {
+        let phase = bounded_phase(Message::parse(
+            "warning.effect_font_missing|NOH Absent Family",
+        ));
+        assert_eq!(phase.code, "warning.effect_font_missing");
+        assert_eq!(phase.args, vec!["NOH Absent Family".to_string()]);
+        let phase = bounded_phase(Message::parse(&crate::captions::word_too_wide_warning(
+            75.0,
+        )));
+        assert_eq!(phase.code, "warning.effect_word_too_wide");
+        assert_eq!(phase.args, vec!["1:15".to_string()]);
+    }
+
+    #[test]
+    fn a_busy_session_refuses_before_the_subtitles_are_touched() {
+        let folder = tempfile::tempdir().unwrap();
+        let srt = folder.path().join("song.srt");
+        std::fs::write(&srt, "1\n00:00:01,000 --> 00:00:02,000\nlo\n\n").unwrap();
+        crate::subtitle_words::write_lyrics(
+            &crate::subtitle_words::lyrics_path(&srt),
+            &crate::subtitle_words::parse_srt_unbound("1\n00:00:01,000 --> 00:00:02,000\nla\n\n")
+                .unwrap(),
+            None,
+        )
+        .unwrap();
+        let session = session();
+        reserve(&session);
+        let input: CaptionsInput = serde_json::from_value(serde_json::json!({
+            "source": folder.path().join("a.mp4"), "subtitles": srt,
+            "output": folder.path().join("o.mp4"), "truth": "lyrics"
+        }))
+        .unwrap();
+        let refused = session.captions(input).unwrap_err();
+        assert_eq!(refused.code, "mcp.busy");
+        assert!(
+            !folder.path().join("song.replaced.srt").exists(),
+            "nothing written"
+        );
+        assert!(std::fs::read_to_string(&srt).unwrap().contains("lo"));
+    }
+
+    #[test]
+    fn a_difference_without_truth_is_refused_with_its_paths_and_with_truth_is_unified() {
+        let folder = tempfile::tempdir().unwrap();
+        let srt = folder.path().join("song.srt");
+        let a = "1\n00:00:01,000 --> 00:00:02,000\nla\n\n";
+        let b = "1\n00:00:01,000 --> 00:00:02,000\nlo\n\n";
+        std::fs::write(&srt, b).unwrap();
+        crate::subtitle_words::write_lyrics(
+            &crate::subtitle_words::lyrics_path(&srt),
+            &crate::subtitle_words::parse_srt_unbound(a).unwrap(),
+            None,
+        )
+        .unwrap();
+        let mut subtitles = srt.clone();
+        let refused = resolve_lyrics(&mut subtitles, None).unwrap_err();
+        assert_eq!(refused.code, "error.lyrics_truth_required");
+        let technical: serde_json::Value = serde_json::from_str(&refused.technical).unwrap();
+        assert_eq!(technical["accepted"], serde_json::json!(["lyrics", "srt"]));
+        assert_eq!(std::fs::read_to_string(&srt).unwrap(), b, "nothing written");
+        let notes = resolve_lyrics(&mut subtitles, Some(TruthInput::Lyrics)).unwrap();
+        assert_eq!(subtitles, srt);
+        assert_eq!(notes[0].code, "lyrics_input.replaced");
+        assert!(std::fs::read_to_string(&srt).unwrap().contains("la"));
+        // A lyrics file given resolves to its .srt for the job.
+        let mut subtitles = crate::subtitle_words::lyrics_path(&srt);
+        assert!(resolve_lyrics(&mut subtitles, None).unwrap().is_empty());
+        assert_eq!(subtitles, srt);
+        // The schema offers truth as lyrics or srt.
+        let input: CaptionsInput = serde_json::from_value(serde_json::json!({
+            "source": "C:/a.mp4", "subtitles": "C:/a.srt", "output": "C:/o.mp4", "truth": "srt"
+        }))
+        .unwrap();
+        assert_eq!(input.truth, Some(TruthInput::Srt));
+    }
 
     fn session() -> Session {
         Session::with_prefix(PathBuf::from("missing-ffmpeg"), "test-session-".into())
@@ -903,6 +1040,7 @@ mod tests {
                     language: "auto".into(),
                 }),
                 4 => Operation::Captions(crate::captions::CaptionRequest {
+                    effect: None,
                     source: folder.path().join("missing.mp4"),
                     subtitles: folder.path().join("missing.srt"),
                     output: output.clone(),
@@ -911,6 +1049,7 @@ mod tests {
                     preview: false,
                 }),
                 _ => Operation::Short(crate::shorts::ShortRequest {
+                    effect: None,
                     source: folder.path().join("missing.mp4"),
                     output: output.clone(),
                     ffmpeg: folder.path().join("missing-ffmpeg"),

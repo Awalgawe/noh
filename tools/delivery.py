@@ -250,6 +250,17 @@ def fetch(spec, cache, name):
     return path
 
 
+def acquire_datasets(cache, output):
+    """Task 44: the public datasets of the syllable dictionaries, downloaded by the
+    pinned `fetch` (https, sha256, cache) into `output` under their locked names.
+    tools/build_syllable_dicts.py --inputs then builds and checks the dictionaries."""
+    lock = read(ROOT / "assets/syllable-sources.lock.json")
+    output.mkdir(parents=True, exist_ok=True)
+    for spec in lock["datasets"].values():
+        cached = fetch(spec, cache, "datasets-" + spec["file"])
+        shutil.copy2(cached, output / str(relative(spec["file"])))
+
+
 def zip_members(archive):
     seen = set()
     for member in archive.infolist():
@@ -637,6 +648,9 @@ def authorize_redistribution(target):
         raise ValueError("Public artifact upload blocked: " + " | ".join(gaps))
     paths = ["Cargo.lock", "LICENSE", "assets/speech-bundle.json"]
     paths += ["assets/rust-notices.lock.json", "tools/rust_notices.py"]
+    # Task 44: the syllable dictionaries' public datasets (macOS does not ship them yet).
+    if target != 'macos-arm64':
+        paths += ["assets/syllable-sources.lock.json", "tools/build_syllable_dicts.py"]
     paths += {
         'windows-x64': ["assets/delivery-windows.lock.json", "assets/preview-runtime.json",
                         "assets/windows-native.lock.json", "tools/windows_runtime.py"],
@@ -652,6 +666,8 @@ def authorize_redistribution(target):
     required = {"native_corresponding_sources", "native_notices", "rust_sources_notices"}
     if target == "windows-x64":
         required.add("cuda_terms")
+    if target != 'macos-arm64':
+        required.add("dataset_licences")
     evidence = records[0].get("evidence", {})
     if set(evidence) != required:
         raise ValueError("Incomplete redistribution evidence")
@@ -861,6 +877,9 @@ def main():
     acquire.add_argument("--platform", choices=PLATFORMS, required=True)
     acquire.add_argument("--cache", type=Path, required=True)
     acquire.add_argument("--output", type=Path, required=True)
+    datasets = tasks.add_parser("acquire-datasets")
+    datasets.add_argument("--cache", type=Path, required=True)
+    datasets.add_argument("--output", type=Path, required=True)
     source = tasks.add_parser("sources")
     source.add_argument("--output", type=Path, required=True)
     source.add_argument("--cache", type=Path)
@@ -885,6 +904,8 @@ def main():
     if args.command == "acquire":
         {'windows-x64': windows_inputs, 'macos-arm64': macos_inputs,
          'linux-x64': linux_inputs}[args.platform](args.cache.resolve(), args.output.resolve())
+    elif args.command == "acquire-datasets":
+        acquire_datasets(args.cache.resolve(), args.output.resolve())
     elif args.command == "sources":
         sources(args.output.resolve(), args.cache.resolve() if args.cache else None)
     elif args.command == "macos-sources":

@@ -19,3 +19,6 @@ __pycache__/
 *.pem
 *.p12
 *.pfx
+
+# Syllable dictionaries are built from public datasets (tools/build_syllable_dicts.py), never committed.
+assets/languages/*/dictionary.txt

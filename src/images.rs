@@ -133,7 +133,7 @@ pub(crate) fn input_args(path: &Path, rate_num: i64, rate_den: i64) -> Result<Ve
     ]);
     Ok(args)
 }
-pub(crate) fn filter(target: &Target, orientation: u8) -> String {
+pub(crate) fn filter(target: &Target, orientation: u8, color: &crate::color::Plan) -> String {
     let (w, h, n, d) = (
         target.width,
         target.height,
@@ -141,11 +141,12 @@ pub(crate) fn filter(target: &Target, orientation: u8) -> String {
         target.rate_den,
     );
     // JPEG's full-range YUV metadata must not survive the RGB composition.
-    // Images share a reserved SPS ID, so every encoded image uses the same
-    // limited-range BT.601 conversion and matching VUI, regardless of decoder.
+    // Encoded pictures share a reserved SPS ID, so every image uses the export's
+    // matrix and the same tags as the other re-encoded pieces, regardless of decoder.
     format!(
-        "color=c=black:s={w}x{h}:r={n}/{d},format=rgba[bg];[0:v]{}setpts=PTS-STARTPTS,sidedata=mode=delete:type=DISPLAYMATRIX,scale=w='max(2,trunc(min({w},{h}*dar)/2)*2)':h='max(2,trunc(min({h},{w}/dar)/2)*2)',setsar=1,format=rgba[image];[bg][image]overlay=x=(W-w)/2:y=(H-h)/2:format=rgb:alpha=straight,scale=out_range=tv:out_color_matrix=bt601,format=yuv420p,setparams=range=limited:colorspace=bt470bg[v]",
-        orientation_filter(orientation)
+        "color=c=black:s={w}x{h}:r={n}/{d},format=rgba[bg];[0:v]{}setpts=PTS-STARTPTS,sidedata=mode=delete:type=DISPLAYMATRIX,scale=w='max(2,trunc(min({w},{h}*dar)/2)*2)':h='max(2,trunc(min({h},{w}/dar)/2)*2)',setsar=1,format=rgba[image];[bg][image]overlay=x=(W-w)/2:y=(H-h)/2:format=rgb:alpha=straight,{}[v]",
+        orientation_filter(orientation),
+        color.still_tail()
     )
 }
 

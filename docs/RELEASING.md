@@ -91,7 +91,9 @@ approval; see [MACOS_SIGNING.md](MACOS_SIGNING.md) for exact inputs and native
 checks. Unsigned jobs receive no signing credentials. No real signing/notarization
 or environment setup has run in this preparation.
 
-`portable` uses `cargo dev build --gui --mcp`. Both modes reject existing `dist/`
+`portable` uses `cargo dev build --gui --mcp`, after `delivery.py acquire-datasets`
+and `build_syllable_dicts.py --inputs` have built the language packs it reads from
+`NOH_LANGUAGES` (Windows and Linux). Both modes reject existing `dist/`
 or maintainer inputs. Portable mode passes
 speech/libmpv/FFmpeg paths explicitly, then runs `cargo dev verify --media --mcp`
 against the packaged release workers. Python and Rust are build tools only.

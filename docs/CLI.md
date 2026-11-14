@@ -74,6 +74,70 @@ re-encoded; audio handling and timing warnings remain explicit.
 Use `--caption-safe-area youtube_shorts|tiktok|reels|universal|none` to apply the
 [short caption guides](SHORT_PRESETS.md).
 
+### Caption effects
+
+Captions (burn, short, project) are drawn in Classique unless `--effect` names
+another caption effect:
+
+```sh
+noh --list-effects
+noh --burn-subtitles video.mp4 --srt reviewed.srt --effect noh.drop --effect-value font=system:Arial --output captioned.mp4
+```
+
+`--list-effects` (`--list-effects=json` for JSON) shows the folders read (the
+`effects` folder beside `noh.exe`, then the user's `noh/effects`), each effect
+with its presets and settings, and the folders refused with their reason. The CLI
+takes an id only, never a folder. `--effect-preset NAME` picks a preset;
+`--effect-value KEY=VALUE` (repeatable) sets one setting, read by its declared
+type: a number (one decimal comma accepted), `true`/`false`, a palette as
+comma-separated colors, a font as a bundled face or `system:<installed family>`,
+a landscape/portrait pair as JSON. The id, the preset and every value are checked
+before the job starts; a wrong one stops the command with what was found
+(`error.effect`), nothing is corrected.
+
+`--caption-size` and `--caption-placement` are Classique's: with another effect
+they are refused. `--effect noh.classic` with values sets the same style (a
+setting given both ways is refused). An effect other than Classique needs OpenGL:
+without it the job fails (`error.effect_gl_unavailable`) and nothing is
+published; it cannot be drawn by a project `--preview` (`error.effect_preview`;
+burn and short previews draw it). An installed family missing on this computer
+is drawn in the effect's own font, with the warning
+`warning.effect_font_missing` naming the family.
+
+Captions wrap between words only, with Classique and every effect, on the GPU and
+with libass: a word wider than the text area is never cut between letters. It
+stays whole on its own line, centred and wider than the area, and the command
+says so with `warning.effect_word_too_wide` and the time it first shows. When the
+word also leaves the safe area (any effect) or the picture (Classique only), that
+warning comes as well.
+
+### The lyrics file beside the subtitles
+
+`--srt` (burn, short and project) accepts an `.srt` or its NOH lyrics file
+`<name>.noh-lyrics.json`, which holds the lyrics with their word times; the `.srt`
+mirrors it. Before the job starts the two are kept identical, as in the app:
+
+- an `.srt` given alone gets its lyrics file created beside it (never over an
+  existing file; a folder that cannot be written goes on from the `.srt`, said on
+  stderr);
+- a lyrics file given uses the `.srt` beside it, rebuilt from it when missing;
+- when the two differ, the answer is required and unifies them:
+  `--truth lyrics` rewrites the `.srt`, `--truth srt` replaces the lyrics (lines
+  the `.srt` keeps unchanged keep their word times). The replaced file is first
+  kept beside it (`<name>.replaced.srt` or `<name>.noh-lyrics.replaced.json`, the
+  next free name), and stderr names it. In a terminal (stdin and stderr) NOH asks;
+  otherwise, or with `--json`, a missing `--truth` stops the command before
+  anything is written, with `error.lyrics_truth_required` (with `--json`: one
+  `{"version":1,"error":{…}}` line whose `technical` gives both paths, the number
+  of differing lines and the accepted values);
+- a lyrics file NOH cannot use (damaged, from a newer NOH, locked) leaves the
+  `.srt` in use, said on stderr.
+
+The files are unified before the media is checked: a job that then fails (for
+example subtitles longer than the video) leaves them unified, with the replaced
+file beside. When the `.srt` cannot be read as SRT, only `--truth lyrics` is
+accepted.
+
 ## Local transcription
 
 ```powershell

@@ -646,6 +646,15 @@ impl NohApp {
                 ),
             };
             ui.add(egui::Label::new(small(counts).color(t.text)).wrap());
+            // The maintainer's rule 2: clips in different colour matrices, and what is converted.
+            for note in diagnosis
+                .notes
+                .iter()
+                .filter(|n| n.starts_with("warning.color_matrix|"))
+            {
+                let text = noh::i18n::Message::from(note.as_str()).render(l);
+                style::message(ui, Severity::Warning, &text, false);
+            }
             if converted > 0 && !self.project.apply_subtitles {
                 style::message(
                     ui,
@@ -703,8 +712,14 @@ impl NohApp {
                             egui::Label::new(small(l.text("diagnosis.timestamps").into())).wrap(),
                         );
                     }
-                    for note in &diagnosis.notes {
-                        ui.add(egui::Label::new(small(l.text(note).into())).wrap());
+                    // The matrix warning is already shown above, with the counts.
+                    for note in diagnosis
+                        .notes
+                        .iter()
+                        .filter(|n| !n.starts_with("warning.color_matrix|"))
+                    {
+                        let text = noh::i18n::Message::from(note.as_str()).render(l);
+                        ui.add(egui::Label::new(small(text)).wrap());
                     }
                 });
             style::focus(ui, &detail.header_response);
@@ -721,26 +736,39 @@ impl NohApp {
     /// that applies at once and needs a new check. Shared by Details and Options.
     pub(super) fn mode_control(&mut self, ui: &mut egui::Ui, id: &str) {
         let l = self.locale.language;
-        let t = style::tokens(ui);
-        let small = |text: String| egui::RichText::new(text).size(style::text::SMALL);
         ui.horizontal(|ui| {
             ui.label(l.text("ui.mode"));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let options = [l.text("ui.automatic"), l.text("ui.convert_all")];
-                let selected = usize::from(!self.partial);
-                // Right to left: lay the segments out in reading order anyway.
-                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                    if let Some(index) = style::segmented(ui, id, &options, selected) {
-                        let partial = index == 0;
-                        if partial != self.partial {
-                            // A project setting: it applies now and needs a new check.
-                            self.partial = partial;
-                            self.invalidated();
-                        }
-                    }
-                });
+                self.mode_segments(ui, id);
             });
         });
+        self.mode_help(ui);
+    }
+    /// Automatic | Convert all, in reading order even in a right-to-left row.
+    pub(super) fn mode_segments(&mut self, ui: &mut egui::Ui, id: &str) {
+        let l = self.locale.language;
+        let options = [l.text("ui.automatic"), l.text("ui.convert_all")];
+        let selected = usize::from(!self.partial);
+        // Right to left: lay the segments out in reading order anyway, in their
+        // own width so a label can follow them (Options).
+        let width = style::segmented_width(ui, &options);
+        let row = egui::vec2(width, style::CONTROL_H);
+        ui.allocate_ui_with_layout(row, Layout::left_to_right(Align::Center), |ui| {
+            if let Some(index) = style::segmented(ui, id, &options, selected) {
+                let partial = index == 0;
+                if partial != self.partial {
+                    // A project setting: it applies now and needs a new check.
+                    self.partial = partial;
+                    self.invalidated();
+                }
+            }
+        });
+    }
+    /// What the chosen mode does, under it.
+    pub(super) fn mode_help(&self, ui: &mut egui::Ui) {
+        let l = self.locale.language;
+        let t = style::tokens(ui);
+        let small = |text: String| egui::RichText::new(text).size(style::text::SMALL);
         ui.add(
             egui::Label::new(
                 small(
@@ -1284,16 +1312,16 @@ mod tests {
     /// The quick suite has no FFmpeg; `cargo dev verify --media` sets
     /// NOH_MEDIA_TESTS so this can never be skipped silently there.
     fn media_worker() -> Option<PathBuf> {
-        let worker = std::env::current_exe()
-            .ok()
-            .and_then(|exe| {
-                Some(
-                    exe.parent()?
-                        .parent()?
-                        .join(format!("noh-app{}", std::env::consts::EXE_SUFFIX)),
-                )
-            })
-            .filter(|path| path.exists());
+        // Cargo keeps a test binary in `<profile>/deps`, or deeper under
+        // `<profile>/build` from 1.100: the worker is in the nearest folder above.
+        let name = format!("noh-app{}", std::env::consts::EXE_SUFFIX);
+        let worker = std::env::current_exe().ok().and_then(|exe| {
+            exe.ancestors()
+                .skip(1)
+                .take(6)
+                .map(|folder| folder.join(&name))
+                .find(|path| path.is_file())
+        });
         let ffmpeg = noh::inspection::resolve_ffmpeg(Path::new(""));
         if worker.is_none() || ffmpeg.is_err() {
             assert!(

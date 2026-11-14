@@ -42,6 +42,8 @@ pub(super) fn bundle(root: &Path, release: &Path, ffmpeg: &Path, speech: &Path) 
         same_build(&build, &query_build(&home.join(destination))?, destination)?;
     }
     super::copy_docs(root, &home, true)?;
+    // The app (noh-app) is in usr/lib/noh: its effects and languages too.
+    super::copy_payload(root, &home)?;
     fs::copy(root.join("assets/noh-icon.png"), appdir.join("noh.png"))?;
     fs::copy(root.join("assets/linux-AppRun"), appdir.join("AppRun"))?;
     fs::set_permissions(appdir.join("AppRun"), fs::Permissions::from_mode(0o755))?;

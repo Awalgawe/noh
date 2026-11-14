@@ -1,4 +1,4 @@
-//! Language preferences and fonts are loaded once, outside the render loop.
+//! Language and theme preferences and fonts are loaded once, outside the render loop.
 use super::*;
 use app_style as style;
 use noh::i18n::{self, Choice};
@@ -6,6 +6,8 @@ use noh::i18n::{self, Choice};
 pub struct Locale {
     pub choice: Choice,
     pub language: Language,
+    /// The interface theme (maintainer, 2026-11-12), saved beside the language.
+    pub theme: Theme,
     system: Vec<String>,
     pub(super) path: Option<PathBuf>,
 }
@@ -20,11 +22,80 @@ impl Locale {
         {
             choice = Choice::parse(&code);
         }
+        // Captures draw the theme they ask for (dark unless light), and Options
+        // says that one, whatever the user's file or the system says.
+        let theme = if std::env::var_os("NOH_CAPTURE_UI").is_some() {
+            match std::env::var("NOH_CAPTURE_THEME").as_deref() {
+                Ok("light") => Theme::Light,
+                _ => Theme::Dark,
+            }
+        } else {
+            path.as_deref()
+                .map(|p| Theme::read(&Theme::path(p)))
+                .unwrap_or_default()
+        };
         Self {
             language: choice.resolve(&system),
             choice,
+            theme,
             system,
             path,
+        }
+    }
+}
+
+/// The interface theme: follow the operating system (the default, as NOH always
+/// did), or keep dark or light whatever the system says.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Theme {
+    #[default]
+    System,
+    Dark,
+    Light,
+}
+impl Theme {
+    /// The theme file, beside the language file (`<config>/noh/theme`).
+    pub fn path(language: &std::path::Path) -> PathBuf {
+        language.with_file_name("theme")
+    }
+    fn code(self) -> &'static str {
+        match self {
+            Theme::System => "system",
+            Theme::Dark => "dark",
+            Theme::Light => "light",
+        }
+    }
+    fn key(self) -> &'static str {
+        match self {
+            Theme::System => "theme.system",
+            Theme::Dark => "theme.dark",
+            Theme::Light => "theme.light",
+        }
+    }
+    /// An unknown or missing value follows the system.
+    pub fn parse(value: &str) -> Self {
+        match value.trim() {
+            "dark" => Theme::Dark,
+            "light" => Theme::Light,
+            _ => Theme::System,
+        }
+    }
+    pub fn read(path: &std::path::Path) -> Self {
+        std::fs::read_to_string(path)
+            .map(|s| Self::parse(&s))
+            .unwrap_or_default()
+    }
+    pub fn save(self, path: &std::path::Path) -> std::io::Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, self.code())
+    }
+    pub fn preference(self) -> egui::ThemePreference {
+        match self {
+            Theme::System => egui::ThemePreference::System,
+            Theme::Dark => egui::ThemePreference::Dark,
+            Theme::Light => egui::ThemePreference::Light,
         }
     }
 }
@@ -72,6 +143,58 @@ impl NohApp {
                 .and_then(|path| self.locale.choice.save(path));
             if let Err(error) = saved {
                 self.notice = Some(Message::new("error.preferences", &[error.to_string()]));
+            }
+            ctx.request_repaint();
+        }
+    }
+
+    /// The theme: System (closed, it says what the system gives), Dark, Light.
+    /// Applied at once and saved beside the language.
+    pub fn theme_selector(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        let l = self.locale.language;
+        let before = self.locale.theme;
+        let label = match (self.locale.theme, ctx.system_theme()) {
+            (Theme::System, Some(system)) => {
+                let shown = match system {
+                    egui::Theme::Dark => Theme::Dark,
+                    egui::Theme::Light => Theme::Light,
+                };
+                format!("{} · {}", l.text("theme.system"), l.text(shown.key()))
+            }
+            (theme, _) => l.text(theme.key()).into(),
+        };
+        style::framed_select(ui, |ui| {
+            egui::ComboBox::from_id_salt("theme-choice")
+                .icon(style::select_chevron)
+                .selected_text(label)
+                .width(120.0)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(
+                        &mut self.locale.theme,
+                        Theme::System,
+                        l.text("theme.system"),
+                    );
+                    ui.separator();
+                    for theme in [Theme::Dark, Theme::Light] {
+                        ui.selectable_value(&mut self.locale.theme, theme, l.text(theme.key()));
+                    }
+                })
+                .response
+                .on_hover_text(l.text("theme"))
+        });
+        if self.locale.theme != before {
+            ctx.set_theme(self.locale.theme.preference());
+            let saved = self
+                .locale
+                .path
+                .as_deref()
+                .ok_or_else(|| std::io::Error::other("No user configuration directory"))
+                .and_then(|path| self.locale.theme.save(&Theme::path(path)));
+            if let Err(error) = saved {
+                self.notice = Some(Message::new(
+                    "error.theme_preferences",
+                    &[error.to_string()],
+                ));
             }
             ctx.request_repaint();
         }

@@ -1,0 +1,43 @@
+{
+  "engine": 1,
+  "id": "noh.breath",
+  "name": {"fr": "Respiration", "en": "Breath", "de": "Atem", "es": "Respiración", "ja": "ブレス", "ko": "숨결", "zh": "呼吸"},
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "target": "text",
+  "params": [
+    {"id": "size", "type": "choice", "default": "medium", "choices": ["small", "medium", "large"], "choice_labels": {"small": {"fr": "Petite", "en": "Small", "de": "Klein", "es": "Pequeño", "ja": "小", "ko": "작게", "zh": "小"}, "medium": {"fr": "Moyenne", "en": "Medium", "de": "Mittel", "es": "Mediano", "ja": "中", "ko": "보통", "zh": "中"}, "large": {"fr": "Grande", "en": "Large", "de": "Groß", "es": "Grande", "ja": "大", "ko": "크게", "zh": "大"}}, "level": 1, "label": {"fr": "Taille", "en": "Size", "de": "Größe", "es": "Tamaño", "ja": "サイズ", "ko": "크기", "zh": "大小"}},
+    {"id": "placement", "type": "choice", "default": "bottom", "choices": ["bottom", "top"], "choice_labels": {"bottom": {"fr": "En bas", "en": "Bottom", "de": "Unten", "es": "Abajo", "ja": "下", "ko": "아래", "zh": "底部"}, "top": {"fr": "En haut", "en": "Top", "de": "Oben", "es": "Arriba", "ja": "上", "ko": "위", "zh": "顶部"}}, "level": 1, "label": {"fr": "Position", "en": "Position", "de": "Position", "es": "Posición", "ja": "位置", "ko": "위치", "zh": "位置"}},
+    {"id": "font", "type": "font", "default": "jost_medium", "level": 2, "label": {"fr": "Police", "en": "Font", "de": "Schrift", "es": "Fuente", "ja": "フォント", "ko": "글꼴", "zh": "字体"}}
+  ],
+  "presets": [
+    {"id": "white", "name": {"fr": "Blanc", "en": "White", "de": "Weiß", "es": "Blanco", "ja": "ホワイト", "ko": "화이트", "zh": "白色"}, "values": {}}
+  ],
+  "layout": {
+    "mode": "line",
+    "font": "$font",
+    "size": {"mul": ["@short", {"choose": ["$size", {"small": 0.08632, "medium": 0.10526, "large": 0.12632}]}]},
+    "line_height": 1.2,
+    "box": {
+      "x": 0.5,
+      "width": 0.88,
+      "y": {"choose": ["$placement", {"bottom": 0.84, "top": 0.16}]},
+      "anchor": {"choose": ["$placement", {"bottom": "bottom", "top": "top"}]}
+    },
+    "visible": "line",
+    "anchor": "unit",
+    "preroll": 0.2
+  },
+  "animate": [
+    {"unit": "line", "slot": "enter", "property": "opacity", "duration": 0.5, "curve": "ease_out_cubic", "keys": [[0, 0], [1, 1]]},
+    {"unit": "line", "slot": "enter", "property": "blur", "duration": 0.5, "curve": "ease_out_cubic", "keys": [[0, {"mul": ["@short", {"choose": ["$size", {"small": 0.02158, "medium": 0.02632, "large": 0.03158}]}]}], [1, 0]]},
+    {"unit": "line", "slot": "enter", "property": "tracking", "duration": 0.5, "curve": "ease_out_cubic", "keys": [[0, 0.08], [1, 0]]},
+    {"unit": "line", "slot": "exit", "property": "opacity", "duration": 0.3, "curve": "ease_in_cubic", "keys": [[0, 1], [1, 0]]}
+  ],
+  "render": {
+    "passes": [
+      {"kind": "shadow", "color": "#000000", "alpha": 0.5, "offset_y": 0.0625, "blur": {"mul": ["@short", {"choose": ["$size", {"small": 0.01888, "medium": 0.02303, "large": 0.02763}]}]}},
+      {"kind": "fill", "color": "#FFFFFF"}
+    ]
+  }
+}

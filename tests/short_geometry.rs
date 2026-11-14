@@ -16,6 +16,7 @@ use support::Fixture;
 
 fn request(f: &Fixture, source: &Path, output: &Path, framing: Framing) -> ShortRequest {
     ShortRequest {
+        effect: None,
         source: source.to_path_buf(),
         output: output.to_path_buf(),
         ffmpeg: f.ffmpeg.clone(),

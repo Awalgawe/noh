@@ -1,0 +1,40 @@
+NOH syllable dictionaries: notice
+
+NOH's « Couper en syllabes » (subtitle editor) proposes a split from a
+dictionary per language, then from the language's vowel rule. Two of these
+dictionaries are built from public datasets when a release is built; the
+datasets themselves are not part of NOH's source repository.
+
+languages/en/dictionary.txt
+  Source: Moby Hyphenation List by Grady Ward (Moby Project), file
+  mhyph.txt.
+  Licence: public domain. Placed in the public domain by grant from the
+  author (January 2001).
+  Changes made by NOH: the Mac Roman text is decoded; entries containing a
+  space are dropped; words are lower-cased; the syllable mark (•) becomes a
+  hyphen and a hyphen of the word itself is written doubled; entries with a
+  part that has no vowel are dropped; written as "word<TAB>split" lines,
+  sorted.
+
+languages/fr/dictionary.txt
+  Source: Lexique 3.83, http://www.lexique.org, by Boris New, Christophe
+  Pallier and contributors (Lexique383.zip, member Lexique383.tsv, column
+  orthosyll).
+  Licence: Creative Commons Attribution-ShareAlike 4.0 International
+  (CC BY-SA 4.0), https://creativecommons.org/licenses/by-sa/4.0/legalcode
+  Please cite: New, B., Pallier, C., Brysbaert, M., Ferrand, L. (2004).
+  Lexique 2: A New French Lexical Database. Behavior Research Methods,
+  Instruments, & Computers, 36(3), 516-524.
+  Changes made by NOH: only the orthosyll column is kept, as
+  "word<TAB>split" lines, lower case, sorted; entries whose word contains a
+  space or a hyphen, or whose split does not spell the word, are dropped;
+  a part without a vowel is joined to the part before it (for example
+  "in-vo-lu-tif-s" becomes "in-vo-lu-tifs"); entries still holding a part
+  without a vowel are dropped.
+  The built file languages/fr/dictionary.txt is an adaptation of Lexique
+  3.83 and is shared under the same licence, CC BY-SA 4.0. No additional
+  restrictions apply to it.
+
+The sources, their SHA-256 and the expected built files are pinned in
+assets/syllable-sources.lock.json; tools/build_syllable_dicts.py performs the
+changes listed above.

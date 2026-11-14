@@ -1,0 +1,146 @@
+{
+  "id": "en",
+  "name": {
+    "fr": "Anglais",
+    "en": "English",
+    "de": "Englisch",
+    "es": "Inglés",
+    "ja": "英語",
+    "ko": "영어",
+    "zh": "英语"
+  },
+  "version": "1.0.0",
+  "syllables": {
+    "vowels": "aeiouy",
+    "onsets": [
+      "bl",
+      "br",
+      "ch",
+      "cl",
+      "cr",
+      "dr",
+      "fl",
+      "fr",
+      "gl",
+      "gr",
+      "ph",
+      "pl",
+      "pr",
+      "sh",
+      "th",
+      "tr",
+      "wh",
+      "wr"
+    ],
+    "glides": [
+      {
+        "letter": "u",
+        "after": "qg"
+      }
+    ],
+    "silent_final": {
+      "endings": [
+        "e",
+        "es"
+      ],
+      "sung_after": [
+        "s",
+        "z",
+        "x",
+        "ch",
+        "sh",
+        "c",
+        "g"
+      ],
+      "syllabic_le": true
+    },
+    "compound_silent_e": true,
+    "clitics": [
+      {
+        "text": "n't",
+        "syllable": "own"
+      },
+      {
+        "text": "'s",
+        "syllable": "join"
+      },
+      {
+        "text": "'re",
+        "syllable": "join"
+      },
+      {
+        "text": "'ll",
+        "syllable": "join"
+      },
+      {
+        "text": "'m",
+        "syllable": "join"
+      },
+      {
+        "text": "'d",
+        "syllable": "join"
+      },
+      {
+        "text": "'ve",
+        "syllable": "join"
+      }
+    ],
+    "suffixes": [
+      {
+        "text": "ing",
+        "syllable": "own",
+        "bases": [
+          "plain",
+          "undouble",
+          "add_e"
+        ]
+      },
+      {
+        "text": "ed",
+        "syllable": "own",
+        "own_after": [
+          "t",
+          "d"
+        ],
+        "bases": [
+          "plain",
+          "undouble",
+          "add_e",
+          "i_to_y"
+        ]
+      },
+      {
+        "text": "es",
+        "syllable": "own",
+        "own_after": [
+          "s",
+          "x",
+          "z",
+          "ch",
+          "sh",
+          "c",
+          "g"
+        ],
+        "bases": [
+          "plain",
+          "add_e",
+          "i_to_y"
+        ]
+      },
+      {
+        "text": "s",
+        "syllable": "join",
+        "bases": [
+          "plain"
+        ]
+      }
+    ]
+  },
+  "dictionary": {
+    "file": "dictionary.txt",
+    "name": "Moby Hyphenation List",
+    "source": "Grady Ward, Moby Project",
+    "licence": "Public domain",
+    "attribution": "Moby Hyphenation List by Grady Ward, placed in the public domain."
+  }
+}

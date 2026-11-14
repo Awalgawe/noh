@@ -59,7 +59,8 @@ The app can capture its own real rendering and exit. Set `NOH_CAPTURE_UI` to a
 new `.ppm` path, `NOH_CAPTURE_PROJECT` to a project request JSON, and optionally
 `NOH_LANGUAGE`, `NOH_CAPTURE_WIDTH`, `NOH_CAPTURE_HEIGHT`, `NOH_CAPTURE_SCALE` and
 `NOH_CAPTURE_THEME`. These overrides are capture-only and do not change saved
-language preferences. Inspect the adjacent report: `ready`, `capture_ready`,
+language or theme preferences; the saved theme is not read in capture mode
+(Options shows the captured theme). Inspect the adjacent report: `ready`, `capture_ready`,
 `timed_out` and diagnosis/error fields determine whether real media loaded.
 
 `NOH_CAPTURE_STATE` can stage display-only states. Such screenshots are layout

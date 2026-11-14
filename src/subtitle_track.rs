@@ -28,6 +28,102 @@ pub struct SubtitleCue {
     pub start_ms: u64,
     pub end_ms: u64,
     pub text: String,
+    /// When each word starts, in order (None: effects split the cue by letters).
+    /// The words' texts are the cue text split on whitespace; see `words_fit`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub words: Option<Vec<WordTime>>,
+}
+
+/// Where a word or syllable time comes from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WordSource {
+    /// Rebuilt from the recognizer's per-token times.
+    Whisper,
+    /// Placed by hand.
+    Hand,
+    /// Spread by letter count between known neighbours.
+    Estimated,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WordTime {
+    pub text: String,
+    pub start_ms: u64,
+    pub source: WordSource,
+    /// A word cut into syllables (two or more), each with its own start.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub syllables: Option<Vec<SyllableTime>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SyllableTime {
+    pub text: String,
+    pub start_ms: u64,
+    pub source: WordSource,
+}
+
+/// The smallest gap between two word (or syllable) starts.
+pub const MIN_WORD_GAP_MS: u64 = 50;
+
+impl SubtitleCue {
+    /// A cue without word times.
+    pub fn new(start_ms: u64, end_ms: u64, text: impl Into<String>) -> Self {
+        Self {
+            start_ms,
+            end_ms,
+            text: text.into(),
+            words: None,
+        }
+    }
+
+    /// Whether `words` belong to this cue: the same texts as the cue's
+    /// whitespace split, starts inside [start, end - 50 ms] and at least 50 ms
+    /// apart; syllables (two or more) spell their word, start with it and stay
+    /// before the next word, 50 ms apart.
+    pub fn words_fit(&self, words: &[WordTime]) -> bool {
+        let split: Vec<&str> = self.text.split_whitespace().collect();
+        if words.is_empty()
+            || words.len() != split.len()
+            || words.iter().zip(&split).any(|(w, s)| w.text != *s)
+        {
+            return false;
+        }
+        let last_allowed = self.end_ms.saturating_sub(MIN_WORD_GAP_MS);
+        let mut previous: Option<u64> = None;
+        for (i, w) in words.iter().enumerate() {
+            if w.start_ms < self.start_ms
+                || w.start_ms > last_allowed
+                || previous.is_some_and(|p| w.start_ms < p + MIN_WORD_GAP_MS)
+            {
+                return false;
+            }
+            previous = Some(w.start_ms);
+            if let Some(syllables) = &w.syllables {
+                let next = words.get(i + 1).map_or(self.end_ms, |n| n.start_ms);
+                if syllables.len() < 2
+                    || syllables[0].start_ms != w.start_ms
+                    || syllables
+                        .iter()
+                        .map(|s| s.text.as_str())
+                        .collect::<String>()
+                        != w.text
+                    || syllables
+                        .windows(2)
+                        .any(|p| p[1].start_ms < p[0].start_ms + MIN_WORD_GAP_MS)
+                    || syllables
+                        .last()
+                        .is_some_and(|s| s.start_ms + MIN_WORD_GAP_MS > next)
+                {
+                    return false;
+                }
+                previous = syllables.last().map(|s| s.start_ms);
+            }
+        }
+        true
+    }
 }
 
 /// Cue indices in validation errors are one-based, matching SRT numbering.
@@ -54,6 +150,8 @@ pub enum ValidationError {
     EmptyLine { cue: usize },
     #[error("Cue {cue} contains a disallowed control character or lone carriage return")]
     ControlCharacter { cue: usize },
+    #[error("Cue {cue} has word times that do not match its text or timing")]
+    Words { cue: usize },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -86,10 +184,26 @@ impl SubtitleTrack {
             .filter_map(|cue| {
                 let start = cue.start_ms.max(start_ms);
                 let end = cue.end_ms.min(end_ms);
-                (start < end).then(|| SubtitleCue {
-                    start_ms: start - start_ms,
-                    end_ms: end - start_ms,
-                    text: cue.text.clone(),
+                (start < end).then(|| {
+                    let mut out =
+                        SubtitleCue::new(start - start_ms, end - start_ms, cue.text.clone());
+                    out.words = cue.words.as_ref().and_then(|words| {
+                        let shifted: Option<Vec<WordTime>> = words
+                            .iter()
+                            .map(|w| {
+                                let mut w = w.clone();
+                                w.start_ms = w.start_ms.checked_sub(start_ms)?;
+                                if let Some(syllables) = &mut w.syllables {
+                                    for s in syllables.iter_mut() {
+                                        s.start_ms = s.start_ms.checked_sub(start_ms)?;
+                                    }
+                                }
+                                Some(w)
+                            })
+                            .collect();
+                        shifted.filter(|w| out.words_fit(w))
+                    });
+                    out
                 })
             })
             .collect();
@@ -145,6 +259,13 @@ impl SubtitleTrack {
             if cue.text.split('\n').any(|line| line.trim().is_empty()) {
                 return Err(ValidationError::EmptyLine { cue: number });
             }
+            if cue
+                .words
+                .as_ref()
+                .is_some_and(|words| !cue.words_fit(words))
+            {
+                return Err(ValidationError::Words { cue: number });
+            }
         }
         Ok(text_bytes)
     }
@@ -187,6 +308,85 @@ fn timestamp(output: &mut String, milliseconds: u64) {
 mod tests {
     use super::*;
 
+    fn worded(start: u64, end: u64, text: &str, starts: &[u64]) -> SubtitleCue {
+        let mut cue = SubtitleCue::new(start, end, text);
+        cue.words = Some(
+            text.split_whitespace()
+                .zip(starts)
+                .map(|(w, t)| WordTime {
+                    text: w.into(),
+                    start_ms: *t,
+                    source: WordSource::Whisper,
+                    syllables: None,
+                })
+                .collect(),
+        );
+        cue
+    }
+
+    #[test]
+    fn word_times_must_spell_the_cue_and_stay_inside_it_50_ms_apart() {
+        let ok = worded(1000, 2000, "la la", &[1000, 1500]);
+        assert!(ok.words_fit(ok.words.as_ref().unwrap()));
+        for bad in [
+            worded(1000, 2000, "la la", &[1000, 1040]),
+            worded(1000, 2000, "la la", &[900, 1500]),
+            worded(1000, 2000, "la la", &[1000, 1960]),
+            worded(1000, 2000, "la la", &[1000]),
+        ] {
+            assert!(!bad.words_fit(bad.words.as_ref().unwrap()), "{bad:?}");
+            let track = SubtitleTrack {
+                language: None,
+                duration_ms: 5000,
+                cues: vec![bad],
+            };
+            assert_eq!(track.validate(), Err(ValidationError::Words { cue: 1 }));
+        }
+        let mut syl = worded(1000, 3000, "something had", &[1000, 2000]);
+        syl.words.as_mut().unwrap()[0].syllables = Some(vec![
+            SyllableTime {
+                text: "some".into(),
+                start_ms: 1000,
+                source: WordSource::Hand,
+            },
+            SyllableTime {
+                text: "thing".into(),
+                start_ms: 1500,
+                source: WordSource::Hand,
+            },
+        ]);
+        assert!(syl.words_fit(syl.words.as_ref().unwrap()));
+        syl.words.as_mut().unwrap()[0].syllables.as_mut().unwrap()[1].text = "thin".into();
+        assert!(!syl.words_fit(syl.words.as_ref().unwrap()));
+    }
+
+    #[test]
+    fn trimming_shifts_word_times_and_drops_those_a_cut_leaves_outside() {
+        let track = SubtitleTrack {
+            language: None,
+            duration_ms: 10_000,
+            cues: vec![
+                worded(1000, 3000, "a b", &[1000, 2000]),
+                worded(4000, 6000, "c d", &[4000, 5000]),
+            ],
+        };
+        let short = track.trim(500, 4500).unwrap();
+        assert_eq!(
+            short.cues[0]
+                .words
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(|w| w.start_ms)
+                .collect::<Vec<_>>(),
+            [500, 1500]
+        );
+        assert!(short.cues[1].words.is_none(), "the cut leaves 'd' outside");
+        // Without words, the JSON is unchanged (the field is skipped).
+        let bare = SubtitleCue::new(0, 10, "x");
+        assert!(!serde_json::to_string(&bare).unwrap().contains("words"));
+    }
+
     fn track(cues: impl IntoIterator<Item = (u64, u64, String)>) -> SubtitleTrack {
         SubtitleTrack {
             language: None,
@@ -197,6 +397,7 @@ mod tests {
                     start_ms,
                     end_ms,
                     text,
+                    words: None,
                 })
                 .collect(),
         }
@@ -250,21 +451,25 @@ mod tests {
                     start_ms: 0,
                     end_ms: 100,
                     text: "左端を越える".into(),
+                    words: None,
                 },
                 SubtitleCue {
                     start_ms: 100,
                     end_ms: 200,
                     text: "相接する一".into(),
+                    words: None,
                 },
                 SubtitleCue {
                     start_ms: 200,
                     end_ms: 500,
                     text: "Café 👋".into(),
+                    words: None,
                 },
                 SubtitleCue {
                     start_ms: 500,
                     end_ms: 600,
                     text: "右端を越える".into(),
+                    words: None,
                 },
             ]
         );
@@ -450,6 +655,7 @@ mod tests {
             start_ms: MAX_CUES as u64,
             end_ms: MAX_CUES as u64 + 1,
             text: "x".into(),
+            words: None,
         });
         assert_eq!(excess.to_srt().unwrap_err(), ValidationError::CueCount);
 
@@ -471,6 +677,7 @@ mod tests {
             start_ms: 64,
             end_ms: 65,
             text: "x".into(),
+            words: None,
         });
         assert_eq!(
             excess.to_srt().unwrap_err(),

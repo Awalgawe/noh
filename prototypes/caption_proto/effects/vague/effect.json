@@ -1,0 +1,39 @@
+{
+  "engine": 1,
+  "id": "noh.wave",
+  "name": {"fr": "Vague", "en": "Wave"},
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "target": "text",
+  "params": [
+    {"id": "color", "type": "color", "default": "#FFFFFF", "level": 1, "label": {"fr": "Couleur"}},
+    {"id": "size", "type": "number", "default": {"landscape": 64, "portrait": 72}, "min": 24, "max": 160, "unit": "px", "level": 1, "label": {"fr": "Taille"}},
+    {"id": "height", "type": "number", "default": 0.14, "min": 0, "max": 0.6, "unit": "em", "level": 1, "label": {"fr": "Hauteur de la vague"}},
+    {"id": "tilt", "type": "number", "default": 5.729578, "min": 0, "max": 30, "unit": "deg", "level": 2, "label": {"fr": "Bascule"}}
+  ],
+  "presets": [
+    {"id": "douce", "name": {"fr": "Douce"}, "values": {}},
+    {"id": "forte", "name": {"fr": "Forte"}, "values": {"height": 0.3, "tilt": 12}}
+  ],
+  "layout": {
+    "mode": "line",
+    "font": "cjk",
+    "size": "$size",
+    "line_height": 1.18,
+    "box": {"x": 0.5, "y": {"landscape": 0.88, "portrait": 0.62}, "width": 0.86, "anchor": {"landscape": "bottom", "portrait": "center"}},
+    "visible": "line",
+    "anchor": "unit"
+  },
+  "animate": [
+    {"unit": "line", "slot": "enter", "property": "opacity", "duration": 0.15, "keys": [[0, 0], [1, 1]]},
+    {"unit": "line", "slot": "exit", "property": "opacity", "duration": 0.12, "keys": [[0, 1], [1, 0]]},
+    {"unit": "letter", "slot": "loop", "property": "offset_y", "wave": {"amplitude": "$height", "frequency": 0.9, "phase_per_unit": 0.45, "phase": 0}},
+    {"unit": "letter", "slot": "loop", "property": "rotation", "wave": {"amplitude": "$tilt", "frequency": 0.9, "phase_per_unit": 0.45, "phase": 0.8}}
+  ],
+  "render": {
+    "passes": [
+      {"kind": "shadow", "color": "#000000", "alpha": 0.55, "offset_y": 0.05, "blur": 3},
+      {"kind": "fill", "color": "$color"}
+    ]
+  }
+}

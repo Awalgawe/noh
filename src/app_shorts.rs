@@ -115,6 +115,7 @@ impl Workspace {
     }
     pub fn request(&self, ffmpeg: Option<&PathBuf>, preview: bool) -> ShortRequest {
         ShortRequest {
+            effect: None,
             source: self.source.clone().into(),
             output: if preview {
                 "preview.mp4".into()
@@ -131,6 +132,7 @@ impl Workspace {
                     size: self.size,
                     placement: self.placement,
                     safe_area: self.safe_area,
+                    line_width: None,
                 },
             }),
             preview,

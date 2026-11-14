@@ -256,10 +256,14 @@ pub(crate) fn execute(
             e,
         )
     })?;
-    let input = workspace.join("input.wav");
-    let json = workspace.join("transcription.json");
     let staged = workspace.join("subtitle.srt");
-    for path in [&input, &json, &staged] {
+    ensure_fresh(&staged)?;
+    // The transcriber's working folder holds model.bin, input.wav and its JSON.
+    // `_beside_model` keeps a folder on the model's volume alive until the end.
+    let (speech, _beside_model) = place_model(model, &workspace, MAX_MODEL_BYTES)?;
+    let input = speech.join("input.wav");
+    let json = speech.join("transcription.json");
+    for path in [&input, &json] {
         ensure_fresh(path)?;
     }
     phase(emit, "subtitle.preparing");
@@ -305,10 +309,9 @@ pub(crate) fn execute(
         )
     })?;
     let duration_ms = audio_duration_ms(seconds, source)?;
-    alias_model(model, &workspace.join("model.bin"), MAX_MODEL_BYTES)?;
     snapshot.verify()?;
     phase(emit, "subtitle.transcribing");
-    let mut transcribe = transcription_command(transcriber, &workspace, &request.language);
+    let mut transcribe = transcription_command(transcriber, &speech, &request.language);
     if let Some(preset) = alignment_preset(model) {
         // DTW requires ordinary attention. The pinned CLI otherwise silently
         // disables alignment when flash attention is enabled.
@@ -331,10 +334,11 @@ pub(crate) fn execute(
         failure.technical = crate::engine::bounded(&log, 8192).into();
         failure
     })?;
-    let mut track = parse_track(&bytes, duration_ms).map_err(|mut failure| {
-        failure.technical = crate::engine::bounded(&log, 8192).into();
-        failure
-    })?;
+    let mut track =
+        parse_track(&bytes, duration_ms, end_of_text(model)).map_err(|mut failure| {
+            failure.technical = crate::engine::bounded(&log, 8192).into();
+            failure
+        })?;
     audio::trim_silence(&input, &mut track).map_err(|e| {
         error(
             "error.subtitle_result",
@@ -600,6 +604,92 @@ fn audio_duration_ms(seconds: f64, source: &Path) -> Result<u64, EngineError> {
     Ok(milliseconds)
 }
 
+/// The job's folder beside the model: `.noh-speech-<id>` for the job workspace
+/// `.noh-<id>`, so the controller can remove it after a cancel or a deadline
+/// kills the worker. None inside a macOS bundle (its seal forbids new files) or
+/// for a workspace NOH did not name.
+pub(crate) fn beside_model(model: &Path, workspace: &Path) -> Option<PathBuf> {
+    if model
+        .ancestors()
+        .any(|folder| folder.extension().is_some_and(|e| e == "app"))
+    {
+        return None;
+    }
+    let id = workspace.file_name()?.to_str()?.strip_prefix(".noh-")?;
+    Some(model.parent()?.join(format!(".noh-speech-{id}")))
+}
+/// Removes the folder beside the model when the worker could not (cancelled,
+/// killed at a deadline). Waits, like the job's own folder, for the process to
+/// release its files.
+pub(crate) fn remove_beside_model(model: &Path, workspace: &Path) -> Option<io::Error> {
+    // The worker works from the snapshot's canonical model path: a model reached
+    // through a junction or a link has its folder beside the real file.
+    let model = fs::canonicalize(model).unwrap_or_else(|_| model.to_path_buf());
+    let folder = beside_model(&model, workspace)?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    loop {
+        match fs::remove_dir_all(&folder) {
+            Ok(()) => return None,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return None,
+            Err(_) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(20))
+            }
+            Err(e) => return Some(e),
+        }
+    }
+}
+/// Removes the folder beside the model at the end of the worker's run.
+struct BesideModel(PathBuf);
+impl Drop for BesideModel {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+/// The transcriber's working folder, holding the ASCII alias `model.bin`. A
+/// hard link is free, but it cannot cross volumes: when the job's folder (beside
+/// the output) is on another volume than the model, the working folder moves to
+/// the job's folder beside the model (`beside_model`) instead of copying
+/// gigabytes for each job. Only when that folder cannot be made (a read-only
+/// model folder, a macOS bundle) is the model copied into the job's folder.
+fn place_model(
+    model: &Path,
+    workspace: &Path,
+    limit: u64,
+) -> Result<(PathBuf, Option<BesideModel>), EngineError> {
+    place_model_with(model, workspace, limit, |source, alias| {
+        fs::hard_link(source, alias)
+    })
+}
+fn place_model_with(
+    model: &Path,
+    workspace: &Path,
+    limit: u64,
+    link: impl Fn(&Path, &Path) -> io::Result<()>,
+) -> Result<(PathBuf, Option<BesideModel>), EngineError> {
+    let bytes = fs::metadata(model)
+        .map_err(|e| error("error.subtitle_config", "alias_model", Some(model), e))?
+        .len();
+    check_model_size(bytes, limit, model)?;
+    let alias = workspace.join("model.bin");
+    ensure_fresh(&alias)?;
+    if link(model, &alias).is_ok() {
+        return Ok((workspace.to_path_buf(), None));
+    }
+    if let Some(folder) = beside_model(model, workspace)
+        && fs::create_dir(&folder).is_ok()
+    {
+        let beside = BesideModel(folder);
+        if link(model, &beside.0.join("model.bin")).is_ok() {
+            return Ok((beside.0.clone(), Some(beside)));
+        }
+    }
+    alias_model_with(model, &alias, limit, |_, _| {
+        Err(io::Error::new(io::ErrorKind::Unsupported, "no link"))
+    })?;
+    Ok((workspace.to_path_buf(), None))
+}
+#[cfg(test)]
 fn alias_model(source: &Path, alias: &Path, limit: u64) -> Result<(), EngineError> {
     alias_model_with(source, alias, limit, |source, alias| {
         fs::hard_link(source, alias)
@@ -700,6 +790,95 @@ struct BackendCue {
 struct BackendToken {
     id: u32,
     t_dtw: f64,
+    /// Raw bytes: whisper.cpp writes each token's bytes as they are, and a
+    /// multi-byte character can be split across two tokens (invalid UTF-8 alone).
+    #[serde(default, deserialize_with = "token_bytes")]
+    text: Vec<u8>,
+}
+
+fn token_bytes<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
+    struct Bytes;
+    impl<'de> serde::de::Visitor<'de> for Bytes {
+        type Value = Vec<u8>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("token text")
+        }
+        fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> Result<Vec<u8>, E> {
+            Ok(v.to_vec())
+        }
+        fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Vec<u8>, E> {
+            Ok(v.as_bytes().to_vec())
+        }
+    }
+    d.deserialize_bytes(Bytes)
+}
+
+/// The words of one recognized segment, from its text tokens: a token opens a
+/// word if and only if its bytes start with whitespace; each word's bytes are
+/// decoded once joined; start = its first token's DTW time (ms). None when a
+/// word does not decode, has no time, or the words do not spell the segment's
+/// whitespace split. Tokens from `eot` up are the vocabulary's special tokens.
+fn segment_words(cue: &BackendCue, eot: u32) -> Option<Vec<(String, u64)>> {
+    let mut words: Vec<(Vec<u8>, Option<f64>)> = Vec::new();
+    for token in cue.tokens.iter().filter(|t| t.id < eot) {
+        let time = (token.t_dtw >= 0.0 && token.t_dtw.is_finite()).then_some(token.t_dtw);
+        match words.last_mut() {
+            Some(word) if !token.text.first().is_some_and(u8::is_ascii_whitespace) => {
+                word.0.extend_from_slice(&token.text)
+            }
+            _ => words.push((token.text.clone(), time)),
+        }
+    }
+    let mut out = Vec::new();
+    for (bytes, time) in words {
+        let text = String::from_utf8(bytes).ok()?;
+        let text = text.trim();
+        if text.is_empty() {
+            continue;
+        }
+        out.push((text.to_string(), (time? * 10.0).round() as u64));
+    }
+    let split: Vec<&str> = cue.text.split_whitespace().collect();
+    (out.len() == split.len() && out.iter().zip(&split).all(|((w, _), s)| w == s)).then_some(out)
+}
+
+/// Word times inside a cue's final bounds: a forward pass keeps each start at
+/// least at the cue start and 50 ms after the previous one (a moved start is
+/// Estimated); a cue that cannot hold its words that way gets none.
+fn repaired_words(
+    cue: &SubtitleCue,
+    words: Vec<(String, u64)>,
+) -> Option<Vec<crate::subtitle_track::WordTime>> {
+    use crate::subtitle_track::{MIN_WORD_GAP_MS, WordSource, WordTime};
+    let mut out: Vec<WordTime> = Vec::with_capacity(words.len());
+    for (text, time) in words {
+        let low = out
+            .last()
+            .map_or(cue.start_ms, |w| w.start_ms + MIN_WORD_GAP_MS);
+        let (start_ms, source) = if time < low {
+            (low, WordSource::Estimated)
+        } else {
+            (time, WordSource::Whisper)
+        };
+        out.push(WordTime {
+            text,
+            start_ms,
+            source,
+            syllables: None,
+        });
+    }
+    cue.words_fit(&out).then_some(out)
+}
+
+/// The end-of-text token: 50256 in English-only vocabularies (51864 tokens),
+/// 50257 in multilingual ones; everything from it up is a special token.
+fn end_of_text(model: &Path) -> u32 {
+    let mut header = [0u8; 8];
+    let vocab = File::open(model)
+        .and_then(|mut f| f.read_exact(&mut header))
+        .ok()
+        .map(|_| u32::from_le_bytes(header[4..8].try_into().unwrap()));
+    if vocab == Some(51864) { 50256 } else { 50257 }
 }
 #[derive(Deserialize)]
 struct BackendOffsets {
@@ -720,7 +899,7 @@ fn track_error(failure: ValidationError) -> EngineError {
     };
     error(code, "validate_transcription", None, failure)
 }
-fn parse_track(bytes: &[u8], duration_ms: u64) -> Result<SubtitleTrack, EngineError> {
+fn parse_track(bytes: &[u8], duration_ms: u64, eot: u32) -> Result<SubtitleTrack, EngineError> {
     if bytes.len() as u64 > MAX_JSON_BYTES {
         return Err(error(
             "error.subtitle_limit",
@@ -756,6 +935,11 @@ fn parse_track(bytes: &[u8], duration_ms: u64) -> Result<SubtitleTrack, EngineEr
             }
         })
         .collect();
+    let words: Vec<_> = document
+        .transcription
+        .iter()
+        .map(|cue| segment_words(cue, eot))
+        .collect();
     let language = if document.transcription.is_empty() {
         None
     } else if document.result.language != "auto" && language_code(&document.result.language) {
@@ -778,16 +962,28 @@ fn parse_track(bytes: &[u8], duration_ms: u64) -> Result<SubtitleTrack, EngineEr
                 start_ms: cue.offsets.from,
                 end_ms: cue.offsets.to,
                 text: cue.text.trim().to_owned(),
+                words: None,
             })
             .collect(),
     };
-    // Whisper can round its final segment beyond the available samples (e.g.
-    // 12.00 s for 11.59 s of speech). Allow only that bounded final overhang;
-    // reversed, overlapping, wholly out-of-source and larger errors still fail.
+    // Whisper decodes 30 s windows padded with silence: its final segment can end
+    // up to a whole window past the source (264.08 s for 234.8 s of song, after
+    // a closing « Thank you. »). Final segments starting at or after the source
+    // end describe no audio and are dropped; the last one is clipped to the
+    // source end. Earlier, reversed and overlapping cues still fail.
+    while track
+        .cues
+        .last()
+        .is_some_and(|cue| cue.start_ms >= duration_ms)
+    {
+        track.cues.pop();
+    }
+    if track.cues.is_empty() {
+        // As for an empty transcription: no cue, no language.
+        track.language = None;
+    }
     if let Some(last) = track.cues.last_mut()
-        && last.start_ms < duration_ms
         && last.end_ms > duration_ms
-        && last.end_ms - duration_ms <= 1000
     {
         last.end_ms = duration_ms;
     }
@@ -816,6 +1012,10 @@ fn parse_track(bytes: &[u8], duration_ms: u64) -> Result<SubtitleTrack, EngineEr
         if track.cues[index - 1].end_ms > track.cues[index].start_ms {
             track.cues[index - 1].end_ms = track.cues[index].start_ms;
         }
+    }
+    // Word times inside the final cue bounds (the working file keeps them).
+    for (cue, words) in track.cues.iter_mut().zip(words) {
+        cue.words = words.and_then(|w| repaired_words(cue, w));
     }
     track.validate().map_err(track_error)?;
     Ok(track)
@@ -938,6 +1138,178 @@ mod tests {
         assert_eq!(alignment_header(&[0; 48]), None);
     }
 
+    /// The -ojf JSON with raw token bytes, as whisper.cpp writes them.
+    fn raw(segments: &[(u64, u64, &str, &[(u32, &[u8], f64)])]) -> Vec<u8> {
+        let mut out = b"{\"result\":{\"language\":\"fr\"},\"transcription\":[".to_vec();
+        for (i, (from, to, text, tokens)) in segments.iter().enumerate() {
+            if i > 0 {
+                out.push(b',');
+            }
+            out.extend(
+                format!(
+                    "{{\"offsets\":{{\"from\":{from},\"to\":{to}}},\"text\":{},\"tokens\":[",
+                    serde_json::to_string(text).unwrap()
+                )
+                .bytes(),
+            );
+            for (j, (id, bytes, t)) in tokens.iter().enumerate() {
+                if j > 0 {
+                    out.push(b',');
+                }
+                out.extend(format!("{{\"id\":{id},\"t_dtw\":{t},\"text\":\"").bytes());
+                out.extend_from_slice(bytes);
+                out.extend(b"\"}");
+            }
+            out.extend(b"]}");
+        }
+        out.extend(b"]}");
+        out
+    }
+
+    #[test]
+    fn words_come_from_raw_token_bytes_even_when_a_character_is_split() {
+        // « été » with « é » split across two tokens; « l'amour » is one word;
+        // 「夜」 (E5 A4 9C) split across two tokens; 50257 is end-of-text.
+        let bytes = raw(&[
+            (
+                0,
+                4000,
+                " l'amour été",
+                &[
+                    (50364, b"", -1.0),
+                    (100, b" l", 110.0),
+                    (101, b"'amour", 130.0),
+                    (102, b" \xC3", 200.0),
+                    (103, b"\xA9t\xC3\xA9", 210.0),
+                    (50257, b"", 300.0),
+                ],
+            ),
+            (
+                4000,
+                7000,
+                "夜",
+                &[(104, b"\xE5\xA4", 450.0), (105, b"\x9C", 460.0)],
+            ),
+        ]);
+        let track = parse_track(&bytes, 10_000, 50257).unwrap();
+        let w = track.cues[0].words.as_ref().unwrap();
+        assert_eq!(
+            w.iter()
+                .map(|w| (w.text.as_str(), w.start_ms))
+                .collect::<Vec<_>>(),
+            [("l'amour", 1100), ("été", 2000)]
+        );
+        assert_eq!(track.cues[1].words.as_ref().unwrap()[0].text, "夜");
+        assert!(track.validate().is_ok());
+    }
+
+    #[test]
+    fn english_punctuation_joins_the_previous_word() {
+        let bytes = raw(&[(
+            0,
+            3000,
+            " Hello, world!",
+            &[
+                (1, b" Hello", 100.0),
+                (2, b",", 120.0),
+                (3, b" world", 150.0),
+                (4, b"!", 180.0),
+            ],
+        )]);
+        let track = parse_track(&bytes, 10_000, 50257).unwrap();
+        let w = track.cues[0].words.as_ref().unwrap();
+        assert_eq!(
+            w.iter()
+                .map(|w| (w.text.as_str(), w.start_ms))
+                .collect::<Vec<_>>(),
+            [("Hello,", 1000), ("world!", 1500)]
+        );
+    }
+
+    /// Word counts with NOH's own parse and silence trim on saved whisper.cpp
+    /// -ojf outputs (run with --ignored): NOH_TRIAL_OJF lists the JSON files
+    /// (separated by ';'), NOH_TRIAL_WAV is the prepared 16 kHz mono WAV.
+    #[test]
+    #[ignore]
+    fn word_counts_from_saved_transcriptions() {
+        let (Some(files), Some(wav)) = (
+            std::env::var_os("NOH_TRIAL_OJF"),
+            std::env::var_os("NOH_TRIAL_WAV"),
+        ) else {
+            println!("skipped: set NOH_TRIAL_OJF and NOH_TRIAL_WAV");
+            return;
+        };
+        let wav = std::path::PathBuf::from(wav);
+        let duration_ms = (std::fs::metadata(&wav).unwrap().len() - 44) / 32;
+        for file in files.to_string_lossy().split(';') {
+            let mut track = parse_track(&std::fs::read(file).unwrap(), duration_ms, 50257).unwrap();
+            let count = |t: &SubtitleTrack| {
+                let cues = t.cues.iter().filter(|c| c.words.is_some()).count();
+                let timed: usize = t
+                    .cues
+                    .iter()
+                    .filter_map(|c| c.words.as_ref())
+                    .map(Vec::len)
+                    .sum();
+                let words: usize = t
+                    .cues
+                    .iter()
+                    .map(|c| c.text.split_whitespace().count())
+                    .sum();
+                (cues, t.cues.len(), timed, words)
+            };
+            let parsed = count(&track);
+            audio::trim_silence(&wav, &mut track).unwrap();
+            println!(
+                "{file}: after parse {parsed:?}, after trim_silence {:?} (cues with words, cues, words timed, words)",
+                count(&track)
+            );
+        }
+    }
+
+    #[test]
+    fn word_times_are_repaired_forward_and_a_cue_that_cannot_hold_them_gets_none() {
+        // Equal DTW times: pushed 50 ms apart and marked estimated.
+        let bytes = raw(&[(
+            0,
+            3000,
+            "a b c",
+            &[(1, b" a", 100.0), (2, b" b", 100.0), (3, b" c", 100.0)],
+        )]);
+        let track = parse_track(&bytes, 10_000, 50257).unwrap();
+        let w = track.cues[0].words.as_ref().unwrap();
+        assert_eq!(
+            w.iter().map(|w| w.start_ms).collect::<Vec<_>>(),
+            [1000, 1050, 1100]
+        );
+        assert_eq!(w[0].source, crate::subtitle_track::WordSource::Whisper);
+        assert_eq!(w[1].source, crate::subtitle_track::WordSource::Estimated);
+        // Too many words for the cue at 50 ms apart: letters split it, as before.
+        let many: Vec<(u32, &[u8], f64)> = (0..40).map(|i| (i, &b" x"[..], 100.0)).collect();
+        let text = vec!["x"; 40].join(" ");
+        let bytes = raw(&[(0, 1500, text.as_str(), many.as_slice())]);
+        let track = parse_track(&bytes, 10_000, 50257).unwrap();
+        assert!(track.cues[0].words.is_none());
+        // A word that does not decode drops that cue's words only.
+        let bytes = raw(&[
+            (0, 3000, "ok", &[(1, b" ok", 100.0)]),
+            (3000, 6000, "\u{FFFD}", &[(2, b" \xC3", 400.0)]),
+        ]);
+        let track = parse_track(&bytes, 10_000, 50257).unwrap();
+        assert!(track.cues[0].words.is_some() && track.cues[1].words.is_none());
+    }
+
+    #[test]
+    fn the_end_of_text_token_follows_the_vocabulary() {
+        let folder = tempfile::tempdir().unwrap();
+        let model = folder.path().join("model.bin");
+        let header = |vocab: u32| [0x6767_6d6cu32.to_le_bytes(), vocab.to_le_bytes()].concat();
+        std::fs::write(&model, header(51864)).unwrap();
+        assert_eq!(end_of_text(&model), 50256);
+        std::fs::write(&model, header(51865)).unwrap();
+        assert_eq!(end_of_text(&model), 50257);
+    }
+
     #[test]
     fn token_alignment_restores_late_onsets_and_removes_instrumental_caption_tails() {
         let bytes = json(serde_json::json!([
@@ -947,7 +1319,7 @@ mod tests {
             {"offsets":{"from":39940,"to":55660},"text":"late phrase",
              "tokens":[{"id":123,"t_dtw":4552},{"id":456,"t_dtw":5582}]}
         ]));
-        let track = parse_track(&bytes, 58000).unwrap();
+        let track = parse_track(&bytes, 58000, 50257).unwrap();
         assert_eq!(
             (track.cues[0].start_ms, track.cues[0].end_ms),
             (3340, 15180)
@@ -1034,7 +1406,7 @@ mod tests {
         let bytes = json(
             serde_json::json!([{"offsets":{"from":123,"to":999},"timestamps":{"from":"ignored"},"text":"  Café 👋\r\n字幕  "},{"offsets":{"from":999,"to":1000},"text":" fin "}]),
         );
-        let track = parse_track(&bytes, 1000).unwrap();
+        let track = parse_track(&bytes, 1000, 50257).unwrap();
         assert_eq!(track.language.as_deref(), Some("fr"));
         assert_eq!((track.cues[0].start_ms, track.cues[0].end_ms), (123, 999));
         assert_eq!(track.cues[0].text, "Café 👋\r\n字幕");
@@ -1044,7 +1416,7 @@ mod tests {
                 .unwrap()
                 .contains("00:00:00,123 --> 00:00:00,999\nCafé 👋\n字幕")
         );
-        let silent = parse_track(&json(serde_json::json!([])), 1000).unwrap();
+        let silent = parse_track(&json(serde_json::json!([])), 1000, 50257).unwrap();
         assert_eq!(silent.language, None);
         assert_eq!(silent.to_srt().unwrap(), "");
     }
@@ -1052,7 +1424,6 @@ mod tests {
     fn parser_rejects_bad_boundaries_controls_and_missing_machine_results() {
         for cues in [
             serde_json::json!([{"offsets":{"from":-1,"to":1},"text":"x"}]),
-            serde_json::json!([{"offsets":{"from":0,"to":2001},"text":"x"}]),
             serde_json::json!([{"offsets":{"from":1,"to":1},"text":"x"}]),
             serde_json::json!([{"offsets":{"from":2,"to":3},"text":"x"},{"offsets":{"from":0,"to":1},"text":"x"}]),
             serde_json::json!([{"offsets":{"from":0,"to":2},"text":"x"},{"offsets":{"from":1,"to":3},"text":"x"}]),
@@ -1062,7 +1433,7 @@ mod tests {
             serde_json::json!([{"text":"x","timestamps":{"from":"00:00:00,000","to":"00:00:00,001"}}]),
         ] {
             assert_eq!(
-                parse_track(&json(cues), 1000).unwrap_err().code,
+                parse_track(&json(cues), 1000, 50257).unwrap_err().code,
                 "error.subtitle_result"
             );
         }
@@ -1071,7 +1442,7 @@ mod tests {
             b"garbage",
             br#"{"result":{"language":"en"}}"#,
         ] {
-            assert!(parse_track(bytes, 1000).is_err());
+            assert!(parse_track(bytes, 1000, 50257).is_err());
         }
     }
     #[test]
@@ -1079,11 +1450,11 @@ mod tests {
         let bytes =
             json(serde_json::json!([{"offsets":{"from":0,"to":1},"text":"x".repeat(4097)}]));
         assert_eq!(
-            parse_track(&bytes, 1000).unwrap_err().code,
+            parse_track(&bytes, 1000, 50257).unwrap_err().code,
             "error.subtitle_limit"
         );
         assert_eq!(
-            parse_track(&vec![b' '; MAX_JSON_BYTES as usize + 1], 1000)
+            parse_track(&vec![b' '; MAX_JSON_BYTES as usize + 1], 1000, 50257)
                 .unwrap_err()
                 .code,
             "error.subtitle_limit"
@@ -1103,21 +1474,67 @@ mod tests {
         }
     }
     #[test]
-    fn backend_final_rounding_is_clipped_without_stretching_or_hiding_invalid_cues() {
+    fn backend_final_window_is_clipped_without_stretching_or_hiding_invalid_cues() {
         let bytes = json(serde_json::json!([
             {"offsets":{"from":3000,"to":12000},"text":"late speech"}
         ]));
-        let track = parse_track(&bytes, 11598).unwrap();
+        let track = parse_track(&bytes, 11598, 50257).unwrap();
         assert_eq!(track.cues[0].start_ms, 3000);
         assert_eq!(track.cues[0].end_ms, 11598);
-        assert_eq!(parse_track(&bytes, 15000).unwrap().cues[0].end_ms, 12000);
+        assert_eq!(
+            parse_track(&bytes, 15000, 50257).unwrap().cues[0].end_ms,
+            12000
+        );
+        // Any final overhang is clipped, not only the rounding of the last second.
+        let long = json(serde_json::json!([{"offsets":{"from":0,"to":2001},"text":"x"}]));
+        assert_eq!(
+            parse_track(&long, 1000, 50257).unwrap().cues[0].end_ms,
+            1000
+        );
+        // A whole padded window past the song (whisper.cpp large-v3, a 234.8 s
+        // song): the good lines are kept, the last one ends with the song.
+        let song = json(serde_json::json!([
+            {"offsets":{"from":200000,"to":203000},"text":"Not all of you"},
+            {"offsets":{"from":204100,"to":219520},"text":"I only fix the whining"},
+            {"offsets":{"from":234100,"to":264080},"text":"Thank you."}
+        ]));
+        let track = parse_track(&song, 234800, 50257).unwrap();
+        assert_eq!(track.cues.len(), 3);
+        assert_eq!(
+            (track.cues[2].start_ms, track.cues[2].end_ms),
+            (234100, 234800)
+        );
+        // Final segments starting at or after the source end are dropped.
+        let after = json(serde_json::json!([
+            {"offsets":{"from":0,"to":5000},"text":"sung"},
+            {"offsets":{"from":11598,"to":12000},"text":"outside"},
+            {"offsets":{"from":12000,"to":20000},"text":"further"}
+        ]));
+        let track = parse_track(&after, 11598, 50257).unwrap();
+        assert_eq!(
+            track
+                .cues
+                .iter()
+                .map(|c| c.text.as_str())
+                .collect::<Vec<_>>(),
+            ["sung"]
+        );
+        // Nothing left: an empty track without a language, as for silence.
+        let outside = json(serde_json::json!([
+            {"offsets":{"from":11598,"to":12000},"text":"outside"},
+            {"offsets":{"from":12000,"to":20000},"text":"further"}
+        ]));
+        let track = parse_track(&outside, 11598, 50257).unwrap();
+        assert!(track.cues.is_empty());
+        assert_eq!(track.language, None);
+        // Overlapping or reversed cues still fail.
         for cues in [
-            serde_json::json!([{"offsets":{"from":11598,"to":12000},"text":"outside"}]),
-            serde_json::json!([{"offsets":{"from":0,"to":13000},"text":"too far"}]),
             serde_json::json!([{"offsets":{"from":0,"to":12000},"text":"overlap"},
                               {"offsets":{"from":11000,"to":12000},"text":"last"}]),
+            serde_json::json!([{"offsets":{"from":5000,"to":4000},"text":"reversed"},
+                              {"offsets":{"from":6000,"to":7000},"text":"last"}]),
         ] {
-            assert!(parse_track(&json(cues), 11598).is_err());
+            assert!(parse_track(&json(cues), 11598, 50257).is_err());
         }
     }
     #[test]
@@ -1206,6 +1623,108 @@ mod tests {
         assert_eq!(fs::read(&copied).unwrap(), b"model contents");
     }
     #[test]
+    fn a_model_on_another_volume_is_linked_beside_itself_not_copied() {
+        let models = tempfile::tempdir().unwrap();
+        let model = models.path().join("ggml-large-v3.bin");
+        fs::write(&model, b"model contents").unwrap();
+        let job = || tempfile::Builder::new().prefix(".noh-").tempdir().unwrap();
+        // Same volume: linked into the job's folder.
+        let same = job();
+        let (speech, beside) = place_model(&model, same.path(), MAX_MODEL_BYTES).unwrap();
+        assert_eq!(speech, same.path());
+        assert!(beside.is_none());
+        assert_eq!(
+            fs::read(same.path().join("model.bin")).unwrap(),
+            b"model contents"
+        );
+        // Another volume: a link into the job's folder fails, one beside the model works.
+        let other = job();
+        let cross = |source: &Path, alias: &Path| {
+            if alias.starts_with(other.path()) {
+                Err(io::Error::new(
+                    io::ErrorKind::CrossesDevices,
+                    "cross-volume",
+                ))
+            } else {
+                fs::hard_link(source, alias)
+            }
+        };
+        let (speech, beside) =
+            place_model_with(&model, other.path(), MAX_MODEL_BYTES, cross).unwrap();
+        assert_eq!(Some(speech.clone()), beside_model(&model, other.path()));
+        assert_eq!(speech.parent(), Some(models.path()));
+        assert_eq!(
+            fs::read(speech.join("model.bin")).unwrap(),
+            b"model contents"
+        );
+        assert!(!other.path().join("model.bin").exists());
+        drop(beside);
+        assert!(!speech.exists());
+        assert_eq!(fs::read(&model).unwrap(), b"model contents");
+        // No link anywhere: copied into the job's folder, as before.
+        let copy = job();
+        let (speech, beside) = place_model_with(&model, copy.path(), MAX_MODEL_BYTES, |_, _| {
+            Err(io::Error::new(io::ErrorKind::Unsupported, "no links"))
+        })
+        .unwrap();
+        assert_eq!(speech, copy.path());
+        assert!(beside.is_none());
+        assert_eq!(
+            fs::read(copy.path().join("model.bin")).unwrap(),
+            b"model contents"
+        );
+        assert_eq!(
+            fs::read_dir(models.path()).unwrap().count(),
+            1,
+            "no folder is left beside the model"
+        );
+    }
+    #[test]
+    fn a_killed_worker_s_folder_beside_the_model_is_removed_by_the_controller() {
+        let models = tempfile::tempdir().unwrap();
+        let model = models.path().join("ggml-large-v3.bin");
+        fs::write(&model, b"model contents").unwrap();
+        let job = tempfile::Builder::new().prefix(".noh-").tempdir().unwrap();
+        // What a cancelled worker leaves: the link and the song's audio.
+        let left = beside_model(&model, job.path()).unwrap();
+        fs::create_dir(&left).unwrap();
+        fs::hard_link(&model, left.join("model.bin")).unwrap();
+        fs::write(left.join("input.wav"), b"song").unwrap();
+        assert!(remove_beside_model(&model, job.path()).is_none());
+        assert!(!left.exists());
+        assert_eq!(fs::read(&model).unwrap(), b"model contents");
+        // Nothing to remove is not an error.
+        assert!(remove_beside_model(&model, job.path()).is_none());
+        // A model reached through a linked folder: the worker made its folder
+        // beside the real file, and that is the one removed.
+        let linked = tempfile::tempdir().unwrap();
+        let link = linked.path().join("speech");
+        // A junction needs no privilege on Windows (symbolic links may).
+        #[cfg(windows)]
+        let made = std::os::windows::fs::symlink_dir(models.path(), &link).is_ok()
+            || std::process::Command::new("cmd")
+                .arg("/C")
+                .arg("mklink")
+                .arg("/J")
+                .arg(&link)
+                .arg(models.path())
+                .output()
+                .is_ok_and(|o| o.status.success());
+        #[cfg(unix)]
+        let made = std::os::unix::fs::symlink(models.path(), &link).is_ok();
+        assert!(made || !cfg!(windows), "a junction can always be made");
+        if made {
+            let real = beside_model(&fs::canonicalize(&model).unwrap(), job.path()).unwrap();
+            fs::create_dir(&real).unwrap();
+            assert!(remove_beside_model(&link.join("ggml-large-v3.bin"), job.path()).is_none());
+            assert!(!real.exists());
+        }
+        // Never inside a macOS bundle, nor for a folder NOH did not name.
+        let bundled = Path::new("/Applications/NOH.app/Contents/Resources/speech/ggml-small.bin");
+        assert_eq!(beside_model(bundled, job.path()), None);
+        assert_eq!(beside_model(&model, models.path()), None);
+    }
+    #[test]
     fn fallback_copy_bounds_a_model_that_grows_after_its_size_check() {
         let folder = tempfile::tempdir().unwrap();
         let source = folder.path().join("source.bin");
@@ -1228,7 +1747,7 @@ mod tests {
         fs::write(&path, json(serde_json::json!([]))).unwrap();
         assert!(ensure_fresh(&path).is_err());
         assert!(
-            parse_track(&read_json(&path).unwrap(), 1000)
+            parse_track(&read_json(&path).unwrap(), 1000, 50257)
                 .unwrap()
                 .cues
                 .is_empty()

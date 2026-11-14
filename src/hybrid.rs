@@ -252,6 +252,17 @@ pub(crate) fn render(
         "-video_track_timescale",
         &video.timescale.to_string(),
     ]);
+    // Rule E: the re-encoded seams take the copied loop's exact tag state (its
+    // tags and range, or none), so the whole file reads one way.
+    let follow = crate::color::Plan::new(
+        &[crate::color::Input::video(&info)],
+        (info.width, info.height),
+        Some(0),
+    )
+    .tags
+    .setparams()
+    .map(|tags| format!(",{tags}"))
+    .unwrap_or_default();
     let mut entries: Vec<(PathBuf, f64, usize)> = Vec::with_capacity(3);
     if head_loops > 0 {
         let mut args = words(&["-stream_loop", "-1"]);
@@ -260,7 +271,7 @@ pub(crate) fn render(
             "-map",
             "0:v:0",
             "-vf",
-            &format!("fade=t=in:st=0:d={fade_in:.9}"),
+            &format!("fade=t=in:st=0:d={fade_in:.9}{follow}"),
             "-frames:v",
             &(head_loops * video.frames).to_string(),
         ]));
@@ -285,10 +296,12 @@ pub(crate) fn render(
             args.extend(words(&[
                 "-vf",
                 &format!(
-                    "fade=t=out:st={:.9}:d={fade_out:.9}",
+                    "fade=t=out:st={:.9}:d={fade_out:.9}{follow}",
                     (tail_duration - fade_out).max(0.0)
                 ),
             ]));
+        } else if let Some(tags) = follow.strip_prefix(',') {
+            args.extend(words(&["-vf", tags]));
         }
         args.extend(words(&[
             "-frames:v",

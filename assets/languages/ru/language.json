@@ -1,0 +1,18 @@
+{
+  "id": "ru",
+  "name": {
+    "fr": "Russe",
+    "en": "Russian",
+    "de": "Russisch",
+    "es": "Ruso",
+    "ja": "ロシア語",
+    "ko": "러시아어",
+    "zh": "俄语"
+  },
+  "version": "1.0.0",
+  "syllables": {
+    "vowels": "аеёиоуыэюя",
+    "open_syllables": true,
+    "keep_with_previous": "йьъ"
+  }
+}
