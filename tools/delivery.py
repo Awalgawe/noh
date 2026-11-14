@@ -682,7 +682,7 @@ def verify_bundle(bundle, target, commit):
     build = manifest["build"]
     if (manifest["schema_version"] != 2 or build["target"] != target or build["profile"] != "release"
             or build["git_revision"] != commit or build["git_dirty"] is not False
-            or set(build["features"]) - {"default"} != {"gui", "mcp"}):
+            or set(build["features"]) - {"default"} != {"gui", "mcp", "effects"}):
         raise ValueError("Wrong source, profile, target or features in packaged build identity")
     files = inventory(bundle)
     expected = manifest["sha256"]
