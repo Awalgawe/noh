@@ -100,7 +100,7 @@ foreach ($name in $inputs.order) {
         $info = $json | ConvertFrom-Json
         if ($common -and $common -ne $json) { throw 'Worker identities disagree' }
         $common=$json
-        if ($info.profile -ne 'release' -or $info.target -ne 'x86_64-pc-windows-gnu' -or (Compare-Object @('default','gui','mcp','updates') @($info.features))) { throw 'Unexpected worker compiler contract' }
+        if ($info.profile -ne 'release' -or $info.target -ne 'x86_64-pc-windows-gnu' -or (Compare-Object @('default','effects','gui','mcp','updates') @($info.features))) { throw 'Unexpected worker compiler contract' }
         $files[$binary.target.name]=@{path=$path;sha256=(Get-FileHash $path).Hash.ToLowerInvariant();size=(Get-Item $path).Length}
     }
     $arms[$name]=@{process=(Get-Content "$evidence/$name.process.json" -Raw | ConvertFrom-Json);identity=($common | ConvertFrom-Json);files=$files;dependencies=$dependencyKeys}
