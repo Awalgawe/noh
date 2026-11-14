@@ -1,0 +1,65 @@
+{
+  "engine": 1,
+  "id": "noh.composition",
+  "name": {"fr": "Composition typographique", "en": "Typographic composition"},
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "target": "text",
+  "params": [
+    {"id": "block", "type": "color", "default": "#FF4F8B", "level": 1, "label": {"fr": "Couleur de l'aplat"}},
+    {"id": "accent", "type": "color", "default": "#FFE14D", "level": 1, "label": {"fr": "Couleur du mot en contour"}},
+    {"id": "giant", "type": "number", "default": 1.3142857, "min": 0.2, "max": 2, "unit": "frame", "level": 1, "label": {"fr": "Taille du mot porteur"}}
+  ],
+  "presets": [
+    {"id": "rose", "name": {"fr": "Rose"}, "values": {}},
+    {"id": "nuit", "name": {"fr": "Nuit"}, "values": {"block": "#1B1F3B", "accent": "#7FDBFF"}}
+  ],
+  "layout": {
+    "mode": "compose",
+    "raster": 1.0,
+    "visible": "from_start",
+    "anchor": "pivot",
+    "compose": {
+      "rank": ["content_word", "duration", "length"],
+      "stopwords": ["the", "a", "an", "and", "or", "of", "to", "in", "on", "at", "for", "from", "is", "are", "was", "be", "i", "you", "he", "she", "it", "we", "they", "me", "my", "your", "not", "but", "as", "that", "what", "how", "with", "by", "no", "so", "like", "too", "all", "us", "can", "would", "there", "this", "its", "it's", "still", "who", "him", "her", "them"],
+      "roles": {
+        "carrier": {"font": "jost_extrabold", "size": "$giant", "case": "upper", "rotation": -5.729578, "color": "#FFFFFF", "alpha": 0.93, "align": "center", "pivot": {"landscape": [0.48, 0.50], "portrait": [0.40, 0.47]}},
+        "second": {"font": "sans_semibold", "size": {"landscape": 0.22, "portrait": 0.15}, "rotation": 4.010705, "color": "$accent", "alpha": 1.0, "outline": 0.035, "align": "center", "require": "content_word", "pivot": [0.58, 0.20]},
+        "others": {"font": "sans", "size": 0.05, "color": "#FFFFFF", "align": "left"}
+      },
+      "slots": {
+        "landscape": [
+          {"x": 0.05, "y": 0.78, "style": {"font": "serif_italic", "size": 0.075, "color": "#111111", "rotation": -2.291831, "align": "left"}},
+          {"x": 0.40, "y": 0.84, "style": {"font": "sans", "size": 0.05, "color": "#FFFFFF", "rotation": 2.864789, "align": "left"}},
+          {"x": 0.66, "y": 0.78, "style": {"font": "serif_italic", "size": 0.075, "color": "#111111", "rotation": -2.291831, "align": "left"}},
+          {"x": 0.10, "y": 0.92, "style": {"font": "sans", "size": 0.05, "color": "#FFFFFF", "rotation": 2.864789, "align": "left"}},
+          {"x": 0.48, "y": 0.94, "style": {"font": "serif_italic", "size": 0.075, "color": "#111111", "rotation": -2.291831, "align": "left"}},
+          {"x": 0.75, "y": 0.90, "style": {"font": "sans", "size": 0.05, "color": "#FFFFFF", "rotation": 2.864789, "align": "left"}}
+        ],
+        "portrait": [
+          {"x": 0.08, "y": 0.70, "style": {"font": "serif_italic", "size": 0.075, "color": "#111111", "rotation": -2.291831, "align": "left"}},
+          {"x": 0.52, "y": 0.76, "style": {"font": "sans", "size": 0.05, "color": "#FFFFFF", "rotation": 2.864789, "align": "left"}},
+          {"x": 0.10, "y": 0.83, "style": {"font": "serif_italic", "size": 0.075, "color": "#111111", "rotation": -2.291831, "align": "left"}},
+          {"x": 0.48, "y": 0.90, "style": {"font": "sans", "size": 0.05, "color": "#FFFFFF", "rotation": 2.864789, "align": "left"}},
+          {"x": 0.12, "y": 0.96, "style": {"font": "serif_italic", "size": 0.075, "color": "#111111", "rotation": -2.291831, "align": "left"}},
+          {"x": 0.56, "y": 0.68, "style": {"font": "sans", "size": 0.05, "color": "#FFFFFF", "rotation": 2.864789, "align": "left"}}
+        ]
+      },
+      "shapes": [
+        {"x0": 0, "y0": {"landscape": 0.70, "portrait": 0.64}, "x1": 1, "y1": 1, "color": "$block", "alpha": 0.88}
+      ],
+      "order": ["shapes", "carrier", "second", "others"]
+    }
+  },
+  "animate": [
+    {"unit": "line", "slot": "enter", "property": "opacity", "duration": 0.15, "keys": [[0, 0], [1, 1]]},
+    {"unit": "line", "slot": "exit", "property": "opacity", "duration": 0.12, "keys": [[0, 1], [1, 0]]},
+    {"unit": "word", "slot": "enter", "property": "scale", "duration": 0.14, "curve": "back", "keys": [[0, 0.86], [1, 1]]},
+    {"unit": "word", "slot": "enter", "property": "opacity", "duration": 0.08, "keys": [[0, 0], [1, 1]]}
+  ],
+  "render": {
+    "passes": [
+      {"kind": "fill", "color": "#FFFFFF"}
+    ]
+  }
+}

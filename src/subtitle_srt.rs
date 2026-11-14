@@ -125,6 +125,7 @@ pub fn parse(text: &str, duration_ms: u64) -> Result<SubtitleTrack, SrtError> {
             start_ms,
             end_ms,
             text: cue_text,
+            words: None,
         });
         block += 1;
     }
@@ -237,6 +238,7 @@ mod tests {
                     start_ms,
                     end_ms,
                     text,
+                    words: None,
                 })
                 .collect(),
         }

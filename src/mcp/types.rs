@@ -302,6 +302,24 @@ pub enum CaptionSafeArea {
     Reels,
     Universal,
 }
+/// When the .srt and its NOH lyrics file differ: which one is the source of
+/// truth. lyrics rewrites the .srt from the lyrics file; srt replaces the
+/// lyrics file with the .srt's lines. The replaced file is kept beside as
+/// `<name>.replaced…`. Ignored when they do not differ.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TruthInput {
+    Lyrics,
+    Srt,
+}
+impl From<TruthInput> for crate::lyrics_input::Truth {
+    fn from(value: TruthInput) -> Self {
+        match value {
+            TruthInput::Lyrics => Self::Lyrics,
+            TruthInput::Srt => Self::Srt,
+        }
+    }
+}
 impl From<CaptionSafeArea> for crate::safe_area::SafeArea {
     fn from(value: CaptionSafeArea) -> Self {
         match value {
@@ -322,32 +340,122 @@ pub struct CaptionsInput {
     /// Absolute path to a local video, at most two hours long.
     #[schemars(length(min = 1))]
     pub source: String,
-    /// Absolute path to reviewed UTF-8 plain-text SRT.
+    /// Absolute path to reviewed UTF-8 plain-text SRT, or to its NOH lyrics file
+    /// (`.noh-lyrics.json`). The lyrics file is created beside an .srt given
+    /// alone; when the two differ, `truth` is required.
     #[schemars(length(min = 1))]
     pub subtitles: String,
+    /// Required when the .srt and its lyrics file differ (see TruthInput).
+    #[serde(default)]
+    pub truth: Option<TruthInput>,
     /// Absolute free MP4 destination. The source is never replaced.
     #[schemars(length(min = 1))]
     pub output: String,
     #[serde(default)]
     #[schemars(length(min = 1))]
     pub ffmpeg: Option<String>,
+    /// Classique's size; absent means medium. Refused with another effect.
     #[serde(default)]
-    pub size: CaptionSize,
+    pub size: Option<CaptionSize>,
+    /// Classique's placement; absent means bottom. Refused with another effect.
     #[serde(default)]
-    pub placement: CaptionPlacement,
+    pub placement: Option<CaptionPlacement>,
+    /// A caption effect instead of Classique (see noh_list_effects).
+    #[serde(default)]
+    pub effect: Option<EffectInput>,
     /// Render the same complete composition, then reduce resolution and quality.
     #[serde(default)]
     pub preview: bool,
 }
+/// A caption effect chosen by id; its folder comes from the effect folders NOH
+/// reads, never from the request.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct EffectInput {
+    /// An effect id from noh_list_effects (noh.classic is Classique).
+    #[schemars(length(min = 1))]
+    pub id: String,
+    /// One of the effect's presets.
+    #[serde(default)]
+    pub preset: Option<String>,
+    /// The effect's settings by id, each checked against its declared type before
+    /// the job starts. A font setting takes a bundled face or
+    /// "system:<installed family>"; a family missing on this computer is drawn in
+    /// the effect's own font with warning.effect_font_missing.
+    #[serde(default)]
+    pub values: std::collections::BTreeMap<String, serde_json::Value>,
+}
+
+/// The caption style and the effect plugin (None: Classique, its values folded
+/// into the style), resolved before any job starts. `project_preview`: a project
+/// preview, which draws no effect outside the app.
+fn caption_choice(
+    safe_area: CaptionSafeArea,
+    size: Option<CaptionSize>,
+    placement: Option<CaptionPlacement>,
+    effect: Option<EffectInput>,
+    project_preview: bool,
+) -> Result<
+    (
+        crate::captions::CaptionStyle,
+        Option<crate::project::EffectChoice>,
+    ),
+    SessionError,
+> {
+    use crate::captions::{CaptionPlacement as Placement, CaptionSize as Size, CaptionStyle};
+    use crate::effect_choice::{Chosen, Flags, Given, Wanted};
+    let style = CaptionStyle {
+        line_width: None,
+        safe_area: safe_area.into(),
+        size: match size.unwrap_or_default() {
+            CaptionSize::Small => Size::Small,
+            CaptionSize::Medium => Size::Medium,
+            CaptionSize::Large => Size::Large,
+        },
+        placement: match placement.unwrap_or_default() {
+            CaptionPlacement::Top => Placement::Top,
+            CaptionPlacement::Bottom => Placement::Bottom,
+        },
+    };
+    let Some(effect) = effect else {
+        return Ok((style, None));
+    };
+    let wanted = Wanted {
+        id: effect.id,
+        preset: effect.preset,
+        values: effect
+            .values
+            .into_iter()
+            .map(|(k, v)| (k, Given::Json(v)))
+            .collect(),
+    };
+    let flags = Flags {
+        size: size.is_some(),
+        placement: placement.is_some(),
+    };
+    match crate::effect_choice::resolve(&wanted, style, flags, project_preview)
+        .map_err(SessionError::from)?
+    {
+        Chosen::Classic(style) => Ok((style, None)),
+        Chosen::Plugin(choice) => Ok((style, Some(choice))),
+    }
+}
+
 impl CaptionsInput {
     pub(crate) fn into_request(
         self,
         default_ffmpeg: &Path,
     ) -> Result<crate::captions::CaptionRequest, SessionError> {
-        use crate::captions::{
-            CaptionPlacement as Placement, CaptionRequest, CaptionSize as Size, CaptionStyle,
-        };
+        use crate::captions::CaptionRequest;
+        let (style, effect) = caption_choice(
+            self.safe_area,
+            self.size,
+            self.placement,
+            self.effect,
+            false,
+        )?;
         let request = CaptionRequest {
+            effect,
             source: absolute(&self.source)?,
             subtitles: absolute(&self.subtitles)?,
             output: absolute(&self.output)?,
@@ -357,18 +465,7 @@ impl CaptionsInput {
                 .map(absolute)
                 .transpose()?
                 .unwrap_or_else(|| default_ffmpeg.to_owned()),
-            style: CaptionStyle {
-                safe_area: self.safe_area.into(),
-                size: match self.size {
-                    CaptionSize::Small => Size::Small,
-                    CaptionSize::Medium => Size::Medium,
-                    CaptionSize::Large => Size::Large,
-                },
-                placement: match self.placement {
-                    CaptionPlacement::Top => Placement::Top,
-                    CaptionPlacement::Bottom => Placement::Bottom,
-                },
-            },
+            style,
             preview: self.preview,
         };
         request.validate().map_err(SessionError::from)?;
@@ -389,13 +486,24 @@ pub struct ShortCaptionInput {
     /// Platform UI guide: none, youtube_shorts, tiktok, reels or universal.
     #[serde(default)]
     pub safe_area: CaptionSafeArea,
-    /// Absolute reviewed UTF-8 SRT path; times refer to the original source.
+    /// Absolute reviewed UTF-8 SRT path, or its NOH lyrics file
+    /// (`.noh-lyrics.json`); times refer to the original source. The lyrics file
+    /// is created beside an .srt given alone; when the two differ, `truth` is
+    /// required.
     #[schemars(length(min = 1))]
     pub subtitles: String,
+    /// Required when the .srt and its lyrics file differ (see TruthInput).
     #[serde(default)]
-    pub size: CaptionSize,
+    pub truth: Option<TruthInput>,
+    /// Classique's size; absent means medium. Refused with another effect.
     #[serde(default)]
-    pub placement: CaptionPlacement,
+    pub size: Option<CaptionSize>,
+    /// Classique's placement; absent means bottom. Refused with another effect.
+    #[serde(default)]
+    pub placement: Option<CaptionPlacement>,
+    /// A caption effect instead of Classique (see noh_list_effects).
+    #[serde(default)]
+    pub effect: Option<EffectInput>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
@@ -452,23 +560,26 @@ pub struct ProjectInput {
 }
 
 impl ShortCaptionInput {
-    fn into_request(self) -> Result<crate::shorts::ShortCaptions, SessionError> {
-        use crate::captions::{CaptionPlacement as Placement, CaptionSize as Size, CaptionStyle};
-        Ok(crate::shorts::ShortCaptions {
-            subtitles: absolute(&self.subtitles)?,
-            style: CaptionStyle {
-                safe_area: self.safe_area.into(),
-                size: match self.size {
-                    CaptionSize::Small => Size::Small,
-                    CaptionSize::Medium => Size::Medium,
-                    CaptionSize::Large => Size::Large,
-                },
-                placement: match self.placement {
-                    CaptionPlacement::Top => Placement::Top,
-                    CaptionPlacement::Bottom => Placement::Bottom,
-                },
-            },
-        })
+    /// The captions and the effect plugin chosen for them (None: Classique).
+    fn into_request(
+        self,
+        project_preview: bool,
+    ) -> Result<
+        (
+            crate::shorts::ShortCaptions,
+            Option<crate::project::EffectChoice>,
+        ),
+        SessionError,
+    > {
+        let subtitles = absolute(&self.subtitles)?;
+        let (style, effect) = caption_choice(
+            self.safe_area,
+            self.size,
+            self.placement,
+            self.effect,
+            project_preview,
+        )?;
+        Ok((crate::shorts::ShortCaptions { subtitles, style }, effect))
     }
 }
 
@@ -477,8 +588,16 @@ impl ProjectInput {
         self,
         default_ffmpeg: &Path,
     ) -> Result<crate::project::ProjectRequest, SessionError> {
+        let preview = self.preview;
+        let (captions, effect) = match self.captions {
+            Some(input) => {
+                let (captions, effect) = input.into_request(preview)?;
+                (Some(captions), effect)
+            }
+            None => (None, None),
+        };
         let request = crate::project::ProjectRequest {
-            montage: self.request.into_engine(default_ffmpeg, self.preview)?,
+            montage: self.request.into_engine(default_ffmpeg, preview)?,
             short: self.short.map(|s| crate::project::ProjectShort {
                 start_ms: s.start_ms,
                 end_ms: s.end_ms,
@@ -488,10 +607,8 @@ impl ProjectInput {
                     ShortFraming::Crop => crate::shorts::Framing::Crop,
                 },
             }),
-            captions: self
-                .captions
-                .map(ShortCaptionInput::into_request)
-                .transpose()?,
+            effect,
+            captions,
         };
         request.validate().map_err(SessionError::from)?;
         Ok(request)
@@ -503,28 +620,15 @@ impl ShortInput {
         self,
         default_ffmpeg: &Path,
     ) -> Result<crate::shorts::ShortRequest, SessionError> {
-        use crate::captions::{CaptionPlacement as Placement, CaptionSize as Size, CaptionStyle};
-        let captions = self
-            .captions
-            .map(|input| {
-                Ok::<_, SessionError>(crate::shorts::ShortCaptions {
-                    subtitles: absolute(&input.subtitles)?,
-                    style: CaptionStyle {
-                        safe_area: input.safe_area.into(),
-                        size: match input.size {
-                            CaptionSize::Small => Size::Small,
-                            CaptionSize::Medium => Size::Medium,
-                            CaptionSize::Large => Size::Large,
-                        },
-                        placement: match input.placement {
-                            CaptionPlacement::Top => Placement::Top,
-                            CaptionPlacement::Bottom => Placement::Bottom,
-                        },
-                    },
-                })
-            })
-            .transpose()?;
+        let (captions, effect) = match self.captions {
+            Some(input) => {
+                let (captions, effect) = input.into_request(false)?;
+                (Some(captions), effect)
+            }
+            None => (None, None),
+        };
         let request = crate::shorts::ShortRequest {
+            effect,
             source: absolute(&self.source)?,
             output: absolute(&self.output)?,
             ffmpeg: self
@@ -612,12 +716,114 @@ impl JobState {
         matches!(self, Self::Succeeded | Self::Failed | Self::Cancelled)
     }
 }
+/// noh_list_effects takes nothing.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ListEffectsInput {}
+
+/// The caption effects a request can name (`effect.id`), from the folders NOH
+/// reads, bundled first.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct EffectsReply {
+    pub version: u32,
+    /// The folders read and whether each exists.
+    pub folders: Vec<EffectFolder>,
+    pub effects: Vec<EffectListed>,
+    /// Folders that are not valid effects, and why.
+    pub refused: Vec<EffectRefused>,
+}
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct EffectFolder {
+    pub path: String,
+    pub exists: bool,
+}
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct EffectListed {
+    pub id: String,
+    /// English name, or the id.
+    pub name: String,
+    /// Absent: built into NOH.
+    pub folder: Option<String>,
+    pub presets: Vec<String>,
+    pub settings: Vec<EffectSetting>,
+}
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct EffectSetting {
+    pub id: String,
+    /// color, number, bool, palette, choice, font or text.
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub default: serde_json::Value,
+    /// A choice's texts; a font's bundled faces (a font also takes
+    /// "system:<installed family>").
+    pub choices: Vec<String>,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    /// 1: first settings in the app; 2: under "more settings".
+    pub level: u8,
+}
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct EffectRefused {
+    pub folder: String,
+    pub reason: String,
+}
+impl From<crate::effect_choice::Listing> for EffectsReply {
+    fn from(l: crate::effect_choice::Listing) -> Self {
+        let text = |p: &Path| p.display().to_string();
+        Self {
+            version: 1,
+            folders: l
+                .folders
+                .iter()
+                .map(|f| EffectFolder {
+                    path: text(&f.path),
+                    exists: f.exists,
+                })
+                .collect(),
+            effects: l
+                .effects
+                .into_iter()
+                .map(|e| EffectListed {
+                    folder: e.folder.as_deref().map(text),
+                    id: e.id,
+                    name: e.name,
+                    presets: e.presets,
+                    settings: e
+                        .settings
+                        .into_iter()
+                        .map(|s| EffectSetting {
+                            id: s.id,
+                            kind: s.kind,
+                            default: s.default,
+                            choices: s.choices,
+                            min: s.min,
+                            max: s.max,
+                            level: s.level,
+                        })
+                        .collect(),
+                })
+                .collect(),
+            refused: l
+                .refused
+                .iter()
+                .map(|r| EffectRefused {
+                    folder: text(&r.folder),
+                    reason: r.reason.clone(),
+                })
+                .collect(),
+        }
+    }
+}
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct StartReply {
     pub version: u32,
     pub job_id: String,
     pub state: JobState,
     pub revision: u64,
+    /// What NOH did to the subtitles and their lyrics file before starting:
+    /// a lyrics file created, an .srt rewritten, the replaced file kept as….
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lyrics: Vec<Phase>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct Phase {
@@ -954,5 +1160,77 @@ mod tests {
         assert_eq!(schema["additionalProperties"], false);
         assert_eq!(schema["properties"]["start_ms"]["maximum"], 7200000);
         assert_eq!(schema["properties"]["end_ms"]["minimum"], 1);
+    }
+    /// Step 7 B: an effect by id. Absent size and placement stay medium and
+    /// bottom; Classique's values fold into the style; Classique's options with
+    /// another effect, and a project preview with one, are refused at start.
+    #[cfg(feature = "effects")]
+    #[test]
+    fn caption_effects_are_chosen_by_id_and_checked_at_start() {
+        use crate::captions::{CaptionPlacement, CaptionSize};
+        let folder = tempfile::tempdir().unwrap();
+        let path = |name: &str| folder.path().join(name);
+        let burn = serde_json::json!({
+            "source": path("in.mp4"), "subtitles": path("x.srt"), "output": path("out.mp4")
+        });
+        let plain = serde_json::from_value::<CaptionsInput>(burn.clone())
+            .unwrap()
+            .into_request(Path::new("ffmpeg"))
+            .unwrap();
+        assert_eq!(plain.style.size, CaptionSize::Medium);
+        assert_eq!(plain.style.placement, CaptionPlacement::Bottom);
+        assert!(plain.effect.is_none());
+        let mut classic = burn.clone();
+        classic["effect"] =
+            serde_json::json!({"id": "noh.classic", "values": {"size": "large", "width": 75.5}});
+        let request = serde_json::from_value::<CaptionsInput>(classic.clone())
+            .unwrap()
+            .into_request(Path::new("ffmpeg"))
+            .unwrap();
+        assert_eq!(request.style.size, CaptionSize::Large);
+        assert_eq!(request.style.line_width, Some(7_550));
+        assert!(request.effect.is_none());
+        classic["size"] = "small".into();
+        let error = serde_json::from_value::<CaptionsInput>(classic)
+            .unwrap()
+            .into_request(Path::new("ffmpeg"))
+            .unwrap_err();
+        assert_eq!(error.code, "error.effect");
+        assert!(error.detail.contains("given twice"), "{}", error.detail);
+        let mut sized = burn;
+        sized["placement"] = "top".into();
+        sized["effect"] = serde_json::json!({"id": "noh.drop"});
+        let error = serde_json::from_value::<CaptionsInput>(sized)
+            .unwrap()
+            .into_request(Path::new("ffmpeg"))
+            .unwrap_err();
+        assert!(
+            error.detail.contains("Classique's options"),
+            "{}",
+            error.detail
+        );
+        let project = serde_json::json!({
+            "request": {"videos": [path("v.mp4")], "wav": path("s.wav"), "output": path("o.mp4")},
+            "captions": {"subtitles": path("x.srt"), "effect": {"id": "noh.drop"}},
+            "preview": true
+        });
+        let error = serde_json::from_value::<ProjectInput>(project)
+            .unwrap()
+            .into_request(Path::new("ffmpeg"))
+            .unwrap_err();
+        assert_eq!(error.code, "error.effect_preview");
+        for schema in [
+            serde_json::to_value(schemars::schema_for!(CaptionsInput)).unwrap(),
+            serde_json::to_value(schemars::schema_for!(ShortCaptionInput)).unwrap(),
+        ] {
+            assert!(schema["properties"]["effect"].is_object(), "{schema}");
+            let required = schema["required"].as_array().cloned().unwrap_or_default();
+            for optional in ["size", "placement", "effect"] {
+                assert!(!required.contains(&optional.into()), "{optional}: {schema}");
+            }
+        }
+        let effect = serde_json::to_value(schemars::schema_for!(EffectInput)).unwrap();
+        assert_eq!(effect["additionalProperties"], false);
+        assert_eq!(effect["required"], serde_json::json!(["id"]));
     }
 }

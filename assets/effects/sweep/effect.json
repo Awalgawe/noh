@@ -1,0 +1,52 @@
+{
+  "engine": 1,
+  "id": "noh.sweep",
+  "name": {"fr": "Balayage chanté", "en": "Sung sweep", "de": "Gesungener Farbverlauf", "es": "Barrido cantado", "ja": "歌うワイプ", "ko": "노래 스윕", "zh": "随唱填色"},
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "target": "text",
+  "params": [
+    {"id": "sung", "type": "color", "default": "#FFD34D", "level": 1, "label": {"fr": "Couleur chantée", "en": "Sung colour", "de": "Gesungene Farbe", "es": "Color cantado", "ja": "歌った部分の色", "ko": "부른 부분 색", "zh": "已唱颜色"}},
+    {"id": "size", "type": "choice", "default": "medium", "choices": ["small", "medium", "large"], "choice_labels": {"small": {"fr": "Petite", "en": "Small", "de": "Klein", "es": "Pequeño", "ja": "小", "ko": "작게", "zh": "小"}, "medium": {"fr": "Moyenne", "en": "Medium", "de": "Mittel", "es": "Mediano", "ja": "中", "ko": "보통", "zh": "中"}, "large": {"fr": "Grande", "en": "Large", "de": "Groß", "es": "Grande", "ja": "大", "ko": "크게", "zh": "大"}}, "level": 1, "label": {"fr": "Taille", "en": "Size", "de": "Größe", "es": "Tamaño", "ja": "サイズ", "ko": "크기", "zh": "大小"}},
+    {"id": "placement", "type": "choice", "default": "bottom", "choices": ["bottom", "top"], "choice_labels": {"bottom": {"fr": "En bas", "en": "Bottom", "de": "Unten", "es": "Abajo", "ja": "下", "ko": "아래", "zh": "底部"}, "top": {"fr": "En haut", "en": "Top", "de": "Oben", "es": "Arriba", "ja": "上", "ko": "위", "zh": "顶部"}}, "level": 1, "label": {"fr": "Position", "en": "Position", "de": "Position", "es": "Posición", "ja": "位置", "ko": "위치", "zh": "位置"}},
+    {"id": "font", "type": "font", "default": "jost_extrabold", "level": 2, "label": {"fr": "Police", "en": "Font", "de": "Schrift", "es": "Fuente", "ja": "フォント", "ko": "글꼴", "zh": "字体"}}
+  ],
+  "presets": [
+    {"id": "gold", "name": {"fr": "Doré", "en": "Gold", "de": "Gold", "es": "Dorado", "ja": "ゴールド", "ko": "골드", "zh": "金色"}, "values": {}}
+  ],
+  "layout": {
+    "mode": "line",
+    "font": {"by_offset": ["$font", "jost_medium"]},
+    "size": {"by_offset": [{"mul": ["@short", {"choose": ["$size", {"small": 0.09171, "medium": 0.11184, "large": 0.13421}]}]}, {"mul": ["@short", {"choose": ["$size", {"small": 0.05125, "medium": 0.0625, "large": 0.075}]}]}]},
+    "line_height": {"by_offset": [1.15, 1.2]},
+    "box": {
+      "x": 0.5,
+      "width": 0.88,
+      "y": {"choose": ["$placement", {"bottom": {"sub": [0.84, {"div": [{"mul": ["@short", {"choose": ["$size", {"small": 0.07944, "medium": 0.09688, "large": 0.11625}]}]}, "@h"]}]}, "top": 0.16}]},
+      "anchor": {"choose": ["$placement", {"bottom": "bottom", "top": "top"}]}
+    },
+    "visible": "line",
+    "anchor": "unit",
+    "window": {"after": 1, "lead": 10, "gap": 0.1956},
+    "word_lead": 0.08,
+    "preroll": 0.3
+  },
+  "animate": [
+    {"unit": "line", "slot": "loop", "property": "tracking", "value": -0.005},
+    {"unit": "line", "slot": "enter", "property": "opacity", "duration": 0.4, "curve": "ease_out_cubic", "keys": [[0, 0], [1, 1]]},
+    {"unit": "line", "slot": "enter", "property": "offset_y", "duration": 0.4, "curve": "ease_out_cubic", "keys": [[0, 0.3529], [1, 0]]},
+    {"unit": "line", "slot": "exit", "property": "opacity", "duration": 0.25, "curve": "ease_in_cubic", "keys": [[0, 1], [1, 0]]},
+    {"unit": "line", "slot": "exit", "property": "offset_y", "duration": 0.25, "curve": "ease_in_cubic", "keys": [[0, 0], [1, -0.3529]]},
+    {"unit": "word", "slot": "active", "property": "wipe", "keys": [[0, 0], [1, 1]]},
+    {"unit": "word", "slot": "past", "property": "wipe", "value": 1},
+    {"unit": "word", "slot": "active", "property": "glow", "keys": [[0, 0], [0.25, 0.7071], [0.5, 1], [0.75, 0.7071], [1, 0]]},
+    {"unit": "word", "slot": "past", "property": "glow", "value": 0},
+    {"unit": "word", "slot": "future", "property": "glow", "value": 0}
+  ],
+  "render": {
+    "passes": [
+      {"kind": "glow", "color": "$sung", "alpha": 0.273, "alpha2": 0.65, "gain": 1.1},
+      {"kind": "fill", "color": "#FFFFFF", "color2": "$sung", "alpha": {"by_offset": [0.42, 0.38]}, "alpha2": 1}
+    ]
+  }
+}

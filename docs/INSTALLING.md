@@ -181,6 +181,31 @@ See the [desktop guide](APP.md#make-your-first-video) for arranging media,
 captions and vertical shorts. Keep the original media in place while working.
 The editing session is not automatically restored after closing the app.
 
+### A more accurate speech model
+
+NOH ships Whisper Small. To transcribe lyrics with another whisper.cpp model, put
+its `ggml-<size>.bin` file (for example `ggml-large-v3.bin` or
+`ggml-medium.bin`) in the speech folder:
+
+- Windows: `bin\speech` in the NOH folder, installed or portable;
+- Linux: `NOH.AppDir/usr/lib/noh/bin/speech`.
+
+Choose the model in **Settings**, with the Whisper menu on the **Lyrics** row:
+**Automatic**, one of the models in the speech folder, or **Other file…**. The choice is kept
+between sessions. The lyrics menu names the model it uses.
+
+**Automatic** takes the most accurate model that runs at a usable speed on this
+computer, in this order: large-v3, large-v3-turbo, large-v2, large-v1, large,
+medium, small, base, tiny (an `.en` model after its multilingual one, a
+quantized file such as `ggml-large-v3-q5_0.bin` after its full-size one). A
+large model is taken only on Windows with an NVIDIA GPU whose memory holds the
+model plus 2 GiB, or when no other model is installed. If a large model fails
+there (for example, out of GPU memory because another program uses it), NOH
+says so and transcribes again once with the next model.
+
+A large model chosen by hand also works without such a GPU, but much more
+slowly: the menu says so. On Linux transcription always runs on the CPU.
+
 ## Update or remove NOH
 
 Automatic update installation is disabled in ordinary builds. To update a

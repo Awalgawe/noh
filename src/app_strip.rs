@@ -861,6 +861,8 @@ impl NohApp {
                 l.text("drop.filter_all"),
                 &[
                     "mp4", "mov", "mkv", "webm", "avi", "m4v", "png", "jpg", "jpeg", "wav", "srt",
+                    // NOH lyrics files (any other .json is refused, as a drop).
+                    "json",
                 ],
             )
             .pick_files()

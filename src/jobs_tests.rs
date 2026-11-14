@@ -54,6 +54,7 @@ fn main() {
             let output = folder.path().join(format!("{short}-{scenario}.mp4"));
             let operation = if short {
                 Operation::Short(ShortRequest {
+                    effect: None,
                     source: source.clone(),
                     output: output.clone(),
                     ffmpeg: worker.clone(),
@@ -68,6 +69,7 @@ fn main() {
                 })
             } else {
                 Operation::Captions(CaptionRequest {
+                    effect: None,
                     source: source.clone(),
                     subtitles: srt.clone(),
                     output: output.clone(),
@@ -151,6 +153,7 @@ fn short_wire_is_optional_for_v1_and_roundtrips_without_changing_other_operation
     .unwrap();
     assert!(wire.shorts.is_none());
     let request = ShortRequest {
+        effect: None,
         source: "source.mp4".into(),
         output: "out.mp4".into(),
         ffmpeg: "ffmpeg".into(),
@@ -182,6 +185,7 @@ fn pre_cancelled_short_never_validates_or_launches_a_worker() {
     let folder = tempfile::tempdir().unwrap();
     let job = Job::short_with_cancel(
         ShortRequest {
+            effect: None,
             source: folder.path().join("missing-source.mp4"),
             output: folder.path().join("out.mp4"),
             ffmpeg: folder.path().join("missing-ffmpeg"),
@@ -347,6 +351,7 @@ if (!$ready.WaitOne(10000)) { throw 'Child handshake timed out' }
             })
         } else if phase.starts_with("short.") {
             Operation::Short(ShortRequest {
+                effect: None,
                 source: source.clone(),
                 output: output.clone(),
                 ffmpeg: ffmpeg.clone(),
@@ -358,6 +363,7 @@ if (!$ready.WaitOne(10000)) { throw 'Child handshake timed out' }
             })
         } else if phase.starts_with("caption.") {
             Operation::Captions(CaptionRequest {
+                effect: None,
                 source: source.clone(),
                 subtitles: source.clone(),
                 output: output.clone(),

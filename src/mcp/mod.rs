@@ -5,14 +5,14 @@ pub mod types;
 
 use rmcp::{
     ServerHandler, ServiceExt,
-    handler::server::{common::schema_for_output, wrapper::Parameters},
-    model::{CallToolResult, Implementation, ServerCapabilities, ServerConfig},
+    handler::server::{common::schema_for_output, tool::ToolRouter, wrapper::Parameters},
+    model::{CallToolResult, Implementation, JsonObject, ServerCapabilities, ServerConfig},
     schemars::{self, JsonSchema},
     tool, tool_handler, tool_router,
 };
 use serde::Serialize;
 use session::Session;
-use std::{io, path::PathBuf};
+use std::{io, path::PathBuf, sync::Arc};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::sync::CancellationToken;
 use types::*;
@@ -113,22 +113,31 @@ impl Server {
         blocking(move || session.transcribe(input), |_| false).await
     }
 
-    #[tool(name = "noh_burn_subtitles", description = "Render reviewed plain UTF-8 SRT onto one local video (maximum two hours) and publish a new MP4 without overwriting. Re-encodes video; copies first AAC audio or converts first audio to AAC. Uses bundled fonts and rejects unsupported or oversized text. ASS timing rounds endpoints to 10 ms. Optional preview renders the same composition before reducing quality; no player is launched. Returns a job ID; poll noh_job for warnings and the exported path.", output_schema = schema_for_output::<Reply<StartReply>>())]
+    #[tool(name = "noh_burn_subtitles", description = "Render reviewed plain UTF-8 SRT (or its NOH lyrics file .noh-lyrics.json) onto one local video (maximum two hours) and publish a new MP4 without overwriting. Before starting, NOH keeps the .srt and its lyrics file identical: it creates the lyrics file beside an .srt given alone; when they differ, `truth` (lyrics or srt) is required and rewrites the other file, keeping the replaced one beside as <name>.replaced…; without it the start is refused (error.lyrics_truth_required) and nothing is written. The start reply lists what was done in `lyrics`. Re-encodes video; copies first AAC audio or converts first audio to AAC. Captions are drawn frame-accurately by NOH's OpenGL engine, as in the app: in the Classique style by default, or in the caption effect named by `effect` (id, preset, values; see noh_list_effects), checked before the job starts. Unsupported characters are rejected, and text leaving the safe area is drawn with a warning. Without an OpenGL context libass draws Classique instead (same line breaks, a warning; its timing rounds endpoints to 10 ms and it rejects oversized text); a chosen effect has no fallback: the job fails and nothing is published. An installed font (a font value system:<family>) missing on this computer is drawn in the effect's own font with warning.effect_font_missing. Lines break between words only: a word wider than the text area stays whole and centred, with warning.effect_word_too_wide. Optional preview renders the same composition before reducing quality; no player is launched. Returns a job ID; poll noh_job for warnings and the exported path.", output_schema = schema_for_output::<Reply<StartReply>>())]
     async fn captions(&self, Parameters(input): Parameters<CaptionsInput>) -> CallToolResult {
         let session = self.session.clone();
         blocking(move || session.captions(input), |_| false).await
     }
 
-    #[tool(name = "noh_make_short", description = "Extract an explicit start_ms inclusive/end_ms exclusive interval from one local video into a vertical MP4, without overwriting. Pad preserves the full picture on black; crop fills the canvas by centered crop. Always re-encodes video and the first audio stream, preserving its source timing. Optional reviewed SRT captions use original source times and are clipped and shifted to the interval. Preview uses the same composition at reduced resolution. Returns a session job ID; poll noh_job for warnings, measured duration and exported path. No montage diagnosis is required.", output_schema = schema_for_output::<Reply<StartReply>>())]
+    #[tool(name = "noh_make_short", description = "Extract an explicit start_ms inclusive/end_ms exclusive interval from one local video into a vertical MP4, without overwriting. Pad preserves the full picture on black; crop fills the canvas by centered crop. Always re-encodes video and the first audio stream, preserving its source timing. Optional reviewed SRT captions (or their NOH lyrics file; the .srt and lyrics file are kept identical before starting, `truth` required when they differ, as in noh_burn_subtitles) use original source times and are clipped and shifted to the interval; they are drawn by the OpenGL engine in Classique, or in the caption effect named by captions.effect (see noh_list_effects, as in noh_burn_subtitles); libass is Classique's fallback only. Preview uses the same composition at reduced resolution. Returns a session job ID; poll noh_job for warnings, measured duration and exported path. No montage diagnosis is required.", output_schema = schema_for_output::<Reply<StartReply>>())]
     async fn short(&self, Parameters(input): Parameters<ShortInput>) -> CallToolResult {
         let session = self.session.clone();
         blocking(move || session.short(input), |_| false).await
     }
 
-    #[tool(name = "noh_export_project", description = "Compose original ordered media and WAV directly into a full montage or selected vertical short, with optional reviewed WAV-timed SRT burned after framing. Short start_ms/end_ms select the WAV; restart_loops defaults false and changes visual phase only, including synchronized original clip audio. Fades retain their full-project WAV clock. Selected pieces are prepared privately and losslessly; final composed video is encoded once. Composed output requires MP4 and WAV duration at most two hours. Without short or captions, existing montage behavior is preserved. No diagnosis or full-project intermediate is required. Existing files are never overwritten. Returns a job ID; poll noh_job.", output_schema = schema_for_output::<Reply<StartReply>>())]
+    #[tool(name = "noh_export_project", description = "Compose original ordered media and WAV directly into a full montage or selected vertical short, with optional reviewed WAV-timed SRT burned after framing (or its NOH lyrics file; the .srt and lyrics file are kept identical before starting, `truth` required when they differ, as in noh_burn_subtitles). Short start_ms/end_ms select the WAV; restart_loops defaults false and changes visual phase only, including synchronized original clip audio. Fades retain their full-project WAV clock. Selected pieces are prepared privately and losslessly; final composed video is encoded once. Composed output requires MP4 and WAV duration at most two hours. Captions are drawn frame-accurately in NOH's Classique style by its OpenGL engine, as in the app; without an OpenGL context they fall back to libass with the same line breaks and a warning, and a preview render uses libass. captions.effect names another caption effect (see noh_list_effects, as in noh_burn_subtitles): it has no libass fallback and is refused with preview. Without short or captions, existing montage behavior is preserved. No diagnosis or full-project intermediate is required. Existing files are never overwritten. Returns a job ID; poll noh_job.", output_schema = schema_for_output::<Reply<StartReply>>())]
     async fn project(&self, Parameters(input): Parameters<ProjectInput>) -> CallToolResult {
         let session = self.session.clone();
         blocking(move || session.project(input), |_| false).await
+    }
+
+    #[tool(name = "noh_list_effects", description = "List the caption effects that `effect.id` can name in noh_burn_subtitles, noh_make_short and noh_export_project: each effect's presets and settings (type, choices, range, default), the folders NOH reads (bundled beside noh.exe, then the user's) and the folders it refused with their reason. Reads files only; starts no job.", output_schema = schema_for_output::<Reply<EffectsReply>>())]
+    async fn list_effects(&self, Parameters(_): Parameters<ListEffectsInput>) -> CallToolResult {
+        blocking(
+            || Ok(EffectsReply::from(crate::effect_choice::list())),
+            |_| false,
+        )
+        .await
     }
 
     #[tool(name = "noh_job", description = "Read a session job. Optionally wait up to 30000 ms for a revision change. Request include_result for terminal metadata, diagnosis, export, subtitle track or structured failure; results contain no media bytes.", output_schema = schema_for_output::<Reply<JobReply>>())]
@@ -149,7 +158,51 @@ impl Server {
     }
 }
 
-#[tool_handler]
+impl Server {
+    /// The tools as served. schemars marks unsigned integers with
+    /// `"format": "uint8" | "uint32" | "uint64"`, which JSON Schema does not
+    /// define: Claude Code 2.1.323 printed « unknown format "uint32" ignored »
+    /// for each such field. The `minimum` (and any `maximum`) beside it keeps
+    /// the bound, so the format is dropped from every input and output schema.
+    fn router() -> ToolRouter<Self> {
+        let mut router = Self::tool_router();
+        for route in router.map.values_mut() {
+            let tool = &mut route.attr;
+            tool.input_schema = Arc::new(without_unsigned_formats(&tool.input_schema));
+            if let Some(schema) = &tool.output_schema {
+                tool.output_schema = Some(Arc::new(without_unsigned_formats(schema)));
+            }
+        }
+        router
+    }
+}
+
+fn without_unsigned_formats(schema: &JsonObject) -> JsonObject {
+    fn strip(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(map) => {
+                if map
+                    .get("format")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|format| format.starts_with("uint"))
+                {
+                    map.remove("format");
+                }
+                map.values_mut().for_each(strip);
+            }
+            serde_json::Value::Array(items) => items.iter_mut().for_each(strip),
+            _ => {}
+        }
+    }
+    let mut value = serde_json::Value::Object(schema.clone());
+    strip(&mut value);
+    match value {
+        serde_json::Value::Object(map) => map,
+        _ => unreachable!("an object stays an object"),
+    }
+}
+
+#[tool_handler(router = Self::router())]
 impl ServerHandler for Server {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
@@ -200,9 +253,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ten_tools_have_strict_inputs_and_explicit_output_schemas() {
-        let tools = Server::tool_router().list_all();
-        assert_eq!(tools.len(), 10);
+    fn eleven_tools_have_strict_inputs_and_explicit_output_schemas() {
+        let tools = Server::router().list_all();
+        assert_eq!(tools.len(), 11);
         let transcribe = tools
             .iter()
             .find(|tool| tool.name == "noh_transcribe")
@@ -243,6 +296,51 @@ mod tests {
                     .is_some_and(|schema| schema.contains_key("anyOf"))
             );
         }
+    }
+
+    #[test]
+    fn served_schemas_name_no_unsigned_format_and_keep_their_bounds() {
+        fn formats(value: &serde_json::Value, found: &mut Vec<String>) {
+            match value {
+                serde_json::Value::Object(map) => {
+                    if let Some(format) = map.get("format").and_then(|f| f.as_str()) {
+                        found.push(format.to_owned());
+                    }
+                    map.values().for_each(|v| formats(v, found));
+                }
+                serde_json::Value::Array(items) => items.iter().for_each(|v| formats(v, found)),
+                _ => {}
+            }
+        }
+        let raw = Server::tool_router().list_all();
+        let served = Server::router().list_all();
+        let (mut before, mut after) = (Vec::new(), Vec::new());
+        for tool in &raw {
+            formats(&serde_json::to_value(tool).unwrap(), &mut before);
+        }
+        for tool in &served {
+            formats(&serde_json::to_value(tool).unwrap(), &mut after);
+        }
+        // The control: schemars does emit them, so the strip has work to do.
+        assert!(before.iter().any(|f| f.starts_with("uint")), "{before:?}");
+        assert!(!after.iter().any(|f| f.starts_with("uint")), "{after:?}");
+        // Other formats are left alone.
+        assert!(after.iter().any(|f| f == "double"), "{after:?}");
+        let tool = |name: &str| served.iter().find(|t| t.name == name).unwrap();
+        let job = serde_json::to_value(tool("noh_job")).unwrap();
+        let wait = &job["inputSchema"]["properties"]["wait_ms"];
+        assert_eq!(
+            (&wait["minimum"], &wait["maximum"]),
+            (&0.into(), &30000.into())
+        );
+        let revision = &job["inputSchema"]["properties"]["after_revision"];
+        assert_eq!(revision["minimum"], 0);
+        let effects = serde_json::to_value(tool("noh_list_effects")).unwrap();
+        let level = &effects["outputSchema"]["$defs"]["EffectSetting"]["properties"]["level"];
+        assert_eq!(
+            (&level["minimum"], &level["maximum"]),
+            (&0.into(), &255.into())
+        );
     }
 
     #[tokio::test]

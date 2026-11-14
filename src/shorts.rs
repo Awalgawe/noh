@@ -52,6 +52,10 @@ pub struct ShortRequest {
     pub framing: Framing,
     pub captions: Option<ShortCaptions>,
     pub preview: bool,
+    /// The effect plugin chosen instead of Classique for its captions (command
+    /// line, MCP), drawn by the GPU engine with no libass fallback.
+    #[serde(default)]
+    pub effect: Option<crate::project::EffectChoice>,
 }
 
 fn error(code: &str, path: Option<&Path>, detail: impl ToString) -> EngineError {
@@ -101,6 +105,16 @@ impl ShortRequest {
                 Some(&captions.subtitles),
                 "A nonempty reviewed SRT path without NUL characters is required.",
             ));
+        }
+        if let Some(effect) = &self.effect {
+            if self.captions.is_none() {
+                return Err(error(
+                    "error.short_config",
+                    None,
+                    "A caption effect needs captions to draw.",
+                ));
+            }
+            effect.check("validate_short")?;
         }
         Ok(())
     }
@@ -184,11 +198,22 @@ pub(crate) fn execute(
         request.framing,
     )?;
     let mut has_captions = false;
+    // Classique draws the cues (Task 43); libass only without an OpenGL context.
+    let mut classic: Option<(
+        crate::subtitle_track::SubtitleTrack,
+        crate::captions::Canvas,
+        CaptionStyle,
+    )> = None;
     if let Some(captions) = &request.captions {
         let path = &snapshot.0[1].resolved;
         let text = crate::captions::read_srt(path)?;
-        let track = crate::subtitle_srt::parse(&text, source_ms)
+        let mut track = crate::subtitle_srt::parse(&text, source_ms)
             .map_err(|e| error("error.caption_track", Some(path), e))?;
+        // A chosen effect draws with the word times kept beside the subtitles.
+        if request.effect.is_some() {
+            let words = crate::subtitle_words::read_beside(path, &mut track);
+            report.diagnostic(crate::captions::word_times_diagnostic(words));
+        }
         let track = track
             .trim(request.start_ms, request.end_ms)
             .map_err(|e| error("error.caption_track", Some(path), e))?;
@@ -200,10 +225,19 @@ pub(crate) fn execute(
                 f64::from(OUTPUT_HEIGHT),
                 captions.style,
             )?;
-            if crate::captions::stage(&track, &canvas, 0.0, span, &workspace)? {
-                report.warning("caption.quantization");
+            if cfg!(feature = "effects") {
+                // Checked whatever draws them; libass's own limits only if it does.
+                crate::captions::check_timeline(&track, 0.0, span)?;
+                classic = Some((track, canvas, captions.style));
+            } else {
+                if crate::captions::stage(&track, &canvas, 0.0, span, &workspace)? {
+                    report.warning("caption.quantization");
+                }
+                if let Some(at) = crate::captions::first_too_wide(&track, &canvas) {
+                    report.warning(&crate::captions::word_too_wide_warning(at));
+                }
+                has_captions = true;
             }
-            has_captions = true;
         }
     }
     snapshot.verify()?;
@@ -234,7 +268,6 @@ pub(crate) fn execute(
         media.video_start, media.video_end, media.audio_start, media.audio_end,
     ));
     report.progress(1, "short.rendering");
-    let command = render_command(request, ffmpeg, source, &workspace, &geometry, has_captions);
     let timeout = Duration::from_secs(TOTAL_TIMEOUT_SECS)
         .checked_sub(started.elapsed())
         .filter(|d| !d.is_zero())
@@ -245,7 +278,7 @@ pub(crate) fn execute(
                 "Short preparation exceeded its deadline.",
             )
         })?;
-    let (status, log) = crate::process::stream(command, Some(timeout), false, |line| {
+    let rendering = |report: &mut Reporter<'_>, line: &str| {
         if let Some(us) = line
             .strip_prefix("out_time_us=")
             .and_then(|s| s.parse::<f64>().ok())
@@ -256,18 +289,112 @@ pub(crate) fn execute(
                 "short.rendering",
             );
         }
-        Ok(())
-    })
-    .map_err(|e| media_error("error.short_backend", "render_short", source, &*e))?;
-    if !status.success() || has_captions && crate::captions::unsupported_renderer(&log) {
-        let mut failure = EngineError::new(
+    };
+    // Without the engine (no effects feature) the cues are staged for libass above.
+    #[cfg(not(feature = "effects"))]
+    let _ = classic;
+    #[cfg_attr(not(feature = "effects"), allow(unused_mut))]
+    let mut drawn = false;
+    #[cfg(feature = "effects")]
+    if let Some((track, canvas, style)) = classic.take() {
+        let style_safe = style.safe_area.insets(OUTPUT_WIDTH, OUTPUT_HEIGHT);
+        let (head, tags, matrix) = crate::color::Plan::single_source_split(&media.video);
+        let finish: Vec<String> = tags
+            .into_iter()
+            .chain(request.preview.then(|| "scale=360:640".to_string()))
+            .collect();
+        let start_text = format!("{start:.3}");
+        let span_text = format!("{span:.3}");
+        let job = crate::caption_gpu::Job {
+            ffmpeg: ffmpeg.to_path_buf(),
+            source: source.to_path_buf(),
+            workspace: workspace.clone(),
+            input: vec!["-ss".into(), start_text],
+            limit: vec!["-t".into(), span_text.clone()],
+            filter: format!("{head},{}", geometry.filter(false, false)),
+            finish: (!finish.is_empty()).then(|| finish.join(",")),
+            size: (OUTPUT_WIDTH, OUTPUT_HEIGHT),
+            matrix,
+            track: track.clone(),
+            style,
+            effect: request.effect.clone(),
+            encode: encode_args(request.preview, &span_text),
+            deadline: timeout,
+            // The seek puts the source's playback time `start` at zero.
+            end: Some((media.video_end - start).min(span)),
+        };
+        let failed = (
             "error.short_backend",
             "render_short",
-            Some(source),
             "FFmpeg could not render the selected interval. Inspect the technical log for decoder or caption renderer details.",
         );
-        failure.technical = crate::engine::bounded(&log, 8192).into();
-        return Err(failure);
+        match crate::caption_gpu::run(job, failed, |line| rendering(&mut report, line)) {
+            Ok(done) => {
+                if let Some(at) = done.overflow_at {
+                    let safe = style_safe.is_some();
+                    report.warning(&crate::caption_gpu::overflow_warning(at, safe));
+                }
+                if let Some(at) = done.too_wide_at {
+                    report.warning(&crate::captions::word_too_wide_warning(at));
+                }
+                if let Some(family) = &done.font_missing {
+                    report.warning(&crate::caption_gpu::font_missing_warning(family));
+                }
+                report.diagnostic(done.diagnostic);
+                drawn = true;
+            }
+            Err(crate::caption_gpu::Failure::Gl(message)) => {
+                report.warning("warning.effect_fallback");
+                report.diagnostic(format!(
+                    "No OpenGL context ({message}): libass draws the captions."
+                ));
+                if crate::captions::stage(&track, &canvas, 0.0, span, &workspace)? {
+                    report.warning("caption.quantization");
+                }
+                if let Some(at) = crate::captions::first_too_wide(&track, &canvas) {
+                    report.warning(&crate::captions::word_too_wide_warning(at));
+                }
+                has_captions = true;
+            }
+            Err(crate::caption_gpu::Failure::Engine(mut e)) => {
+                e.path = Some(source.clone());
+                return Err(e);
+            }
+        }
+    }
+    if !drawn {
+        // libass draws these captions: an FFmpeg older than 7.1 blends them in
+        // BT.601 whatever the export matrix.
+        if has_captions {
+            let (_, _, matrix) = crate::color::Plan::single_source_split(&media.video);
+            if let Some(w) = crate::color::libass_colour_warning(ffmpeg, matrix) {
+                report.warning(w);
+            }
+        }
+        let command = render_command(
+            request,
+            ffmpeg,
+            source,
+            &workspace,
+            &geometry,
+            has_captions,
+            &crate::color::Plan::single_source(&media.video),
+        );
+        let (status, log) = crate::process::stream(command, Some(timeout), false, |line| {
+            rendering(&mut report, line);
+            Ok(())
+        })
+        .map_err(|e| media_error("error.short_backend", "render_short", source, &*e))?;
+        if !status.success() || has_captions && crate::captions::unsupported_renderer(&log) {
+            let mut failure = EngineError::new(
+                "error.short_backend",
+                "render_short",
+                Some(source),
+                "FFmpeg could not render the selected interval. Inspect the technical log for decoder or caption renderer details.",
+            );
+            failure.technical = crate::engine::bounded(&log, 8192).into();
+            return Err(failure);
+        }
     }
     report.progress(97, "short.verifying");
     let metadata =
@@ -281,6 +408,15 @@ pub(crate) fn execute(
     }
     let output = crate::media::inspect_timed_raw(ffmpeg, &staged)
         .map_err(|e| media_error("error.short_result", "inspect_short_output", &staged, &*e))?;
+    report.diagnostic(format!(
+        "Rendered container timeline: video {:.6}..{:.6} s, audio {:?}..{:?} s; {} video packets{}.",
+        output.video_start,
+        output.video_end,
+        output.audio_start,
+        output.audio_end,
+        output.video.frames,
+        if output.unknown_final_duration { ", unknown final duration" } else { "" },
+    ));
     verify_output(&output, request.preview, span)?;
     snapshot.verify()?;
     if output.video_start.abs() > 0.001 || (output.video_end - span).abs() > 0.001 {
@@ -297,14 +433,6 @@ pub(crate) fn execute(
             (audio_end - span) * 1000.0
         ));
     }
-    report.diagnostic(format!(
-        "Rendered container timeline: video {:.6}..{:.6} s, audio {:?}..{:?} s; {} video packets.",
-        output.video_start,
-        output.video_end,
-        output.audio_start,
-        output.audio_end,
-        output.video.frames,
-    ));
     report.progress(99, "short.verifying");
     Ok(ExportResult {
         output: request.output.clone(),
@@ -451,6 +579,38 @@ impl Geometry {
     }
 }
 
+/// The encoder, audio and bitstream arguments of a Short, the same with libass
+/// (render_command) and with Classique (FFmpeg #2).
+fn encode_args(preview: bool, span: &str) -> Vec<String> {
+    [
+        "-c:v",
+        "libx264",
+        "-bf",
+        "0",
+        "-pix_fmt",
+        "yuv420p",
+        "-crf",
+        if preview { "24" } else { "16" },
+        "-preset",
+        "medium",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "320k",
+        "-bsf:v",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    // Qualify the downstream MP4 duration, not just the BSF expression:
+    // using PTS alone subtracts the initial cut residual twice in this path.
+    .chain([
+        format!("setts=duration='min(DURATION,{span}/TB-(PTS-STARTPTS))'"),
+        "-movflags".into(),
+        "+faststart".into(),
+    ])
+    .collect()
+}
+
 fn render_command(
     request: &ShortRequest,
     ffmpeg: &Path,
@@ -458,7 +618,9 @@ fn render_command(
     workspace: &Path,
     geometry: &Geometry,
     captions: bool,
+    color: &str,
 ) -> Command {
+    let filter = format!("{color},{}", geometry.filter(captions, request.preview));
     let start = format!("{:.3}", request.start_ms as f64 / 1000.0);
     let span = format!("{:.3}", (request.end_ms - request.start_ms) as f64 / 1000.0);
     let mut cmd = crate::command(ffmpeg);
@@ -484,39 +646,14 @@ fn render_command(
             "-map",
             "0:a:0?",
             "-vf",
-            &geometry.filter(captions, request.preview),
+            &filter,
             "-fps_mode",
             "passthrough",
             "-enc_time_base:v",
             "filter",
-            "-c:v",
-            "libx264",
-            "-bf",
-            "0",
-            "-pix_fmt",
-            "yuv420p",
-            "-crf",
-            if request.preview { "24" } else { "16" },
-            "-preset",
-            "medium",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "320k",
-            "-bsf:v",
         ])
-        // Qualify the downstream MP4 duration, not just the BSF expression:
-        // using PTS alone subtracts the initial cut residual twice in this path.
-        .arg(format!(
-            "setts=duration='min(DURATION,{span}/TB-(PTS-STARTPTS))'"
-        ))
-        .args([
-            "-movflags",
-            "+faststart",
-            "-progress",
-            "pipe:1",
-            "export.mp4",
-        ]);
+        .args(encode_args(request.preview, &span))
+        .args(["-progress", "pipe:1", "export.mp4"]);
     cmd
 }
 
@@ -526,6 +663,7 @@ mod tests {
 
     fn request() -> ShortRequest {
         ShortRequest {
+            effect: None,
             source: "source.mp4".into(),
             output: "short.mp4".into(),
             ffmpeg: "".into(),

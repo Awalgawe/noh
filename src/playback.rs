@@ -817,6 +817,13 @@ impl Video {
                 Some(segment.workspace),
             );
         }
+        // Read an untagged video the way players do before the RGB (PPM) conversion.
+        let filter = format!(
+            "{}scale=640:640:force_original_aspect_ratio=decrease,setsar=1,fps=24",
+            crate::color::decode_tags(&input.ffmpeg, &input.path)
+                .map(|tags| format!("{tags},"))
+                .unwrap_or_default()
+        );
         let mut command = crate::command(&input.ffmpeg);
         command
             .args([
@@ -838,7 +845,7 @@ impl Video {
                 "-sn",
                 "-dn",
                 "-vf",
-                "scale=640:640:force_original_aspect_ratio=decrease,setsar=1,fps=24",
+                &filter,
                 "-threads",
                 "2",
                 "-c:v",
@@ -1580,6 +1587,7 @@ mod tests {
                 restart_loops: restart,
                 framing: crate::shorts::Framing::Pad,
             }),
+            effect: None,
             captions: None,
         }
     }

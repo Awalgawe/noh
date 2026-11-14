@@ -52,11 +52,18 @@ For a complete GUI portable, first prepare these local inputs:
 $env:NOH_LIBMPV = 'C:\tools\native\preview\libmpv-2.dll'
 $env:NOH_NATIVE_NOTICES = 'C:\tools\materials\native-notices'
 $env:NOH_RUST_NOTICES = 'C:\tools\materials\rust-notices'
+py -I tools\build_syllable_dicts.py --data D:\data --out C:\tools\languages
+$env:NOH_LANGUAGES = 'C:\tools\languages'
 cargo dev build --gui --mcp --ffmpeg C:\tools\native\export\ffmpeg.exe --speech C:\tools\noh-speech
 .\dist\noh\noh.exe
 ```
 
 The packaging command verifies the pinned resources; it does not download them.
+`NOH_LANGUAGES` names the language packs with their syllable dictionaries, built
+from local dataset copies (`--data`) or from the archives a release build
+acquires (`py tools/delivery.py acquire-datasets`, then `--inputs`); see
+[THIRD-PARTY.md](THIRD-PARTY.md#syllable-dictionaries). Packaging fails without
+them, or when a pack differs from `assets/languages`.
 A prepared flat speech folder contains the manifest's filenames. An organized
 portable keeps runtime/models in `bin/speech` and notices in `licenses`.
 After the first complete build, packaging can reuse the resources in `dist/noh`.
@@ -182,9 +189,11 @@ native behavior must be established by its actual output and installation tests.
 
 Install the host dependencies listed in [the Linux package README](../assets/linux-README.md).
 `python3 tools/linux_host.py` verifies FFmpeg's required encoders and libmpv's
-client API before packaging. `cargo dev build --gui --mcp --portable --speech
+client API before packaging. With `NOH_LANGUAGES` naming the built language
+packs (as on Windows), `cargo dev build --gui --mcp --portable --speech
 /path/to/prepared/speech --ffmpeg /usr/bin/ffmpeg` builds an AppDir containing
-NOH and CPU speech; all media/desktop shared libraries remain on the host.
+NOH, its effects and language packs, and CPU speech; all media/desktop shared
+libraries remain on the host.
 The [architecture decision](LINUX_REDISTRIBUTION.md) and the
 [development guide](DEVELOPMENT.md) distinguish local probes from final-package
 desktop qualification.

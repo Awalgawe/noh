@@ -144,6 +144,8 @@ fn bundle_windows(
         fs::create_dir(ready.join(folder))?;
     }
     if gui {
+        // The app (noh.exe) is at the bundle root: its effects and languages too.
+        copy_payload(root, &ready)?;
         fs::copy(root.join("assets/noh-icon.ico"), ready.join("noh.ico"))?;
         copy_speech(speech.unwrap_or(&dist.join("noh")), &ready)?;
         let runtime = std::env::var_os("NOH_LIBMPV")
@@ -235,6 +237,123 @@ fn bundle_windows(
     Ok(())
 }
 
+/// Task 44: the effects and the language packs beside the app executable, as the
+/// app reads them (`current_exe()/../effects|languages`), and their notice.
+/// - effects: each `assets/effects/<id>/` copied verbatim, then every file
+///   compared by SHA-256 with its source (the suite loads each effect).
+/// - languages: the manifests and dictionaries built by
+///   `tools/build_syllable_dicts.py` (`NOH_LANGUAGES`); each manifest must be the
+///   committed one, and a manifest naming a dictionary must have it.
+fn copy_payload(root: &Path, app_dir: &Path) -> Result<()> {
+    let built = std::env::var_os("NOH_LANGUAGES").map(PathBuf::from).ok_or(
+        "NOH_LANGUAGES must name the language packs built by `py -I tools/build_syllable_dicts.py --inputs <acquired datasets> --out <folder>` (or --data D:\\data locally).",
+    )?;
+    copy_payload_from(root, app_dir, &built)
+}
+
+fn copy_payload_from(root: &Path, app_dir: &Path, built: &Path) -> Result<()> {
+    let effects = root.join("assets/effects");
+    copy_tree(&effects, &app_dir.join("effects"))?;
+    let (source, copied) = (
+        tree_hashes(&effects)?,
+        tree_hashes(&app_dir.join("effects"))?,
+    );
+    if source != copied || source.is_empty() {
+        return Err("The packaged effects differ from assets/effects.".into());
+    }
+    let languages = app_dir.join("languages");
+    let mut manifests: Vec<PathBuf> = fs::read_dir(root.join("assets/languages"))?
+        .map(|e| e.map(|e| e.path()))
+        .collect::<std::io::Result<_>>()?;
+    manifests.retain(|p| p.join("language.json").is_file());
+    manifests.sort();
+    if manifests.is_empty() {
+        return Err("No language pack in assets/languages.".into());
+    }
+    for pack in manifests {
+        let id = pack.file_name().ok_or("language pack without a name")?;
+        let manifest = fs::read(pack.join("language.json"))?;
+        let from = built.join(id);
+        if fs::read(from.join("language.json")).ok().as_deref() != Some(&manifest[..]) {
+            return Err(format!(
+                "{}: the built language.json is not the committed one; rebuild the packs.",
+                from.display()
+            )
+            .into());
+        }
+        let to = languages.join(id);
+        fs::create_dir_all(&to)?;
+        fs::write(to.join("language.json"), &manifest)?;
+        let value: serde_json::Value = serde_json::from_slice(&manifest)?;
+        if let Some(file) = value["dictionary"]["file"].as_str() {
+            if file.contains(['/', '\\']) || file.starts_with('.') {
+                return Err(format!(
+                    "{}: dictionary file {file:?} is not a plain name",
+                    pack.display()
+                )
+                .into());
+            }
+            let dictionary = from.join(file);
+            if !dictionary.is_file() || fs::metadata(&dictionary)?.len() == 0 {
+                return Err(format!(
+                    "{}: missing; build the dictionaries before packaging.",
+                    dictionary.display()
+                )
+                .into());
+            }
+            fs::copy(&dictionary, to.join(file))?;
+        }
+    }
+    fs::copy(
+        root.join("assets/languages/README.md"),
+        languages.join("README.md"),
+    )?;
+    fs::create_dir_all(app_dir.join("licenses"))?;
+    fs::copy(
+        root.join("assets/syllable-dictionaries-NOTICE.txt"),
+        app_dir.join("licenses/syllable-dictionaries.txt"),
+    )?;
+    Ok(())
+}
+
+/// Copy a folder tree of regular files (no links).
+fn copy_tree(from: &Path, to: &Path) -> Result<()> {
+    fs::create_dir_all(to)?;
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        if kind.is_dir() {
+            copy_tree(&entry.path(), &to.join(entry.file_name()))?;
+        } else if kind.is_file() {
+            fs::copy(entry.path(), to.join(entry.file_name()))?;
+        } else {
+            return Err(format!("{}: not a regular file", entry.path().display()).into());
+        }
+    }
+    Ok(())
+}
+
+/// Relative path -> SHA-256 of every file under `folder`.
+fn tree_hashes(folder: &Path) -> Result<std::collections::BTreeMap<String, String>> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut stack = vec![folder.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                let name = path
+                    .strip_prefix(folder)?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                out.insert(name, format!("{:x}", Sha256::digest(fs::read(&path)?)));
+            }
+        }
+    }
+    Ok(out)
+}
+
 fn copy_docs(root: &Path, ready: &Path, _mcp: bool) -> Result<()> {
     fs::create_dir_all(ready.join("docs"))?;
     fs::create_dir_all(ready.join("licenses"))?;
@@ -277,6 +396,18 @@ fn copy_docs(root: &Path, ready: &Path, _mcp: bool) -> Result<()> {
     fs::copy(
         root.join("assets/Jost-OFL.txt"),
         ready.join("licenses/FONT-JOST-LICENSE.txt"),
+    )?;
+    fs::copy(
+        root.join("assets/NotoSerif-OFL.txt"),
+        ready.join("licenses/FONT-NOTO-SERIF-LICENSE.txt"),
+    )?;
+    fs::copy(
+        root.join("assets/Inter-OFL.txt"),
+        ready.join("licenses/FONT-INTER-LICENSE.txt"),
+    )?;
+    fs::copy(
+        root.join("assets/BarlowCondensed-OFL.txt"),
+        ready.join("licenses/FONT-BARLOW-CONDENSED-LICENSE.txt"),
     )?;
     fs::copy(
         root.join("assets/NOTICE.md"),
@@ -681,6 +812,97 @@ mod tests {
         fs::remove_file(source.path().join("extra")).unwrap();
         fs::write(source.path().join("LICENSE"), b"altered terms").unwrap();
         assert!(verify_native_notices(source.path(), "locked").is_err());
+    }
+    /// Task 44: the effects verbatim, the packs with their dictionaries and the
+    /// notice; a missing dictionary or a changed manifest fails the packaging.
+    #[test]
+    fn payload_ships_effects_languages_and_their_notice() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let built = tempfile::tempdir().unwrap();
+        for pack in fs::read_dir(root.join("assets/languages")).unwrap() {
+            let pack = pack.unwrap().path();
+            if pack.join("language.json").is_file() {
+                let to = built.path().join(pack.file_name().unwrap());
+                fs::create_dir_all(&to).unwrap();
+                fs::copy(pack.join("language.json"), to.join("language.json")).unwrap();
+            }
+        }
+        for id in ["en", "fr"] {
+            fs::write(built.path().join(id).join("dictionary.txt"), "word\tword\n").unwrap();
+        }
+        let app = tempfile::tempdir().unwrap();
+        copy_payload_from(root, app.path(), built.path()).unwrap();
+        assert_eq!(
+            tree_hashes(&root.join("assets/effects")).unwrap(),
+            tree_hashes(&app.path().join("effects")).unwrap()
+        );
+        for id in ["classique"] {
+            assert!(
+                app.path()
+                    .join("effects")
+                    .join(id)
+                    .join("effect.json")
+                    .is_file(),
+                "{id}"
+            );
+        }
+        for id in ["de", "en", "es", "fr", "ru"] {
+            assert!(
+                app.path()
+                    .join("languages")
+                    .join(id)
+                    .join("language.json")
+                    .is_file(),
+                "{id}"
+            );
+        }
+        for id in ["en", "fr"] {
+            assert!(
+                app.path()
+                    .join("languages")
+                    .join(id)
+                    .join("dictionary.txt")
+                    .is_file(),
+                "{id}"
+            );
+        }
+        assert!(app.path().join("languages/README.md").is_file());
+        let notice =
+            fs::read_to_string(app.path().join("licenses/syllable-dictionaries.txt")).unwrap();
+        assert!(
+            notice.contains("creativecommons.org/licenses/by-sa/4.0/legalcode")
+                && notice.contains("Changes made by NOH")
+        );
+        // The Moby list is used as a public-domain derived work: the site it is
+        // fetched from allows that only once all references to it are removed.
+        let mut shipped = vec![
+            notice,
+            fs::read_to_string(app.path().join("languages/README.md")).unwrap(),
+        ];
+        for id in ["de", "en", "es", "fr", "ru"] {
+            shipped.push(
+                fs::read_to_string(app.path().join("languages").join(id).join("language.json"))
+                    .unwrap(),
+            );
+        }
+        shipped.push(fs::read_to_string(root.join("docs/THIRD-PARTY.md")).unwrap());
+        for text in &shipped {
+            assert!(
+                !text.to_lowercase().contains("gutenberg"),
+                "a shipped text names the fetch site"
+            );
+        }
+        // A dictionary the manifest names, missing: refused.
+        fs::remove_file(built.path().join("fr/dictionary.txt")).unwrap();
+        let err =
+            copy_payload_from(root, tempfile::tempdir().unwrap().path(), built.path()).unwrap_err();
+        assert!(err.to_string().contains("dictionary.txt"), "{err}");
+        // A manifest changed after the build: refused.
+        fs::write(built.path().join("fr/dictionary.txt"), "word\tword\n").unwrap();
+        fs::write(built.path().join("de/language.json"), "{}").unwrap();
+        let err =
+            copy_payload_from(root, tempfile::tempdir().unwrap().path(), built.path()).unwrap_err();
+        assert!(err.to_string().contains("committed"), "{err}");
     }
     #[test]
     fn packaged_docs_include_only_public_guides() {

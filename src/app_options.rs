@@ -128,8 +128,17 @@ impl NohApp {
                 // The area reuses last frame's size as its limit: give the body
                 // its full height so it can grow when a section opens.
                 ui.allocate_ui(vec2(width, height - 40.0), |ui| {
-                    egui::ScrollArea::vertical()
-                        .id_salt("options-body")
+                    // Captures scroll Options by their `scroll=` offset too.
+                    let capture_scroll = std::env::var_os("NOH_CAPTURE_UI")
+                        .and_then(|_| app_capture::parse_tweaks(&app_capture::tweaks_text()).ok())
+                        .map(|tweaks| tweaks.scroll)
+                        .filter(|scroll| *scroll > 0.0);
+                    let area = egui::ScrollArea::vertical();
+                    let area = match capture_scroll {
+                        Some(offset) => area.vertical_scroll_offset(offset),
+                        None => area,
+                    };
+                    area.id_salt("options-body")
                         .max_height(height - 40.0)
                         .auto_shrink([false, true])
                         .show(ui, |ui| {
@@ -152,26 +161,79 @@ impl NohApp {
             ui.add_space(space::XS);
             ui.label(style::strong(l.text(key), style::text::BODY));
         };
-        // 1. Language, usable at any time.
-        ui.horizontal(|ui| {
-            ui.label(l.text("language"));
-            let row = vec2(ui.available_width(), style::CONTROL_H);
-            ui.allocate_ui_with_layout(row, Layout::right_to_left(Align::Center), |ui| {
-                self.language_selector(ui, ctx);
-                #[cfg(test)]
-                self.options.rects.push(("language", ui.min_rect(), true));
+        // 1. Language and theme, usable at any time: each its own row, the label
+        // left of its list (each list grows with its label).
+        for theme in [false, true] {
+            ui.horizontal(|ui| {
+                #[cfg_attr(not(test), allow(unused_variables))]
+                let label = ui.label(l.text(if theme { "theme" } else { "language" }));
+                let row = vec2(ui.available_width(), style::CONTROL_H);
+                ui.allocate_ui_with_layout(row, Layout::right_to_left(Align::Center), |ui| {
+                    if theme {
+                        self.theme_selector(ui, ctx);
+                    } else {
+                        self.language_selector(ui, ctx);
+                    }
+                    #[cfg(test)]
+                    {
+                        let (name, label_name) = if theme {
+                            ("theme", "theme-label")
+                        } else {
+                            ("language", "language-label")
+                        };
+                        self.options.rects.push((name, ui.min_rect(), true));
+                        self.options.rects.push((label_name, label.rect, true));
+                    }
+                });
             });
-        });
+        }
         egui::CollapsingHeader::new(l.text("resources.title"))
             .id_salt("options-resources")
             .default_open(self.resources.unavailable())
             .show(ui, |ui| self.resource_settings(ui));
-        // 2. Export: Mode (locked while exporting) and the processing log.
-        heading(ui, "options.export");
-        ui.add_enabled_ui(!locked, |ui| self.mode_control(ui, "options-mode"));
+        // 2. Export: Mode on the heading's row (locked while exporting; with the
+        // theme row, Options still fits 420 x 540 without scrolling), its help
+        // below, then the processing log.
+        ui.add_space(space::XS);
+        ui.horizontal(|ui| {
+            #[cfg_attr(not(test), allow(unused_variables))]
+            let title = ui.label(style::strong(l.text("options.export"), style::text::BODY));
+            let row = vec2(ui.available_width(), style::CONTROL_H);
+            ui.allocate_ui_with_layout(row, Layout::right_to_left(Align::Center), |ui| {
+                ui.add_enabled_ui(!locked, |ui| self.mode_segments(ui, "options-mode"));
+                ui.label(l.text("ui.mode"));
+                #[cfg(test)]
+                self.options.rects.push(("mode", ui.min_rect(), !locked));
+                #[cfg(test)]
+                self.options.rects.push(("export-label", title.rect, true));
+            });
+        });
+        ui.add_enabled_ui(!locked, |ui| self.mode_help(ui));
         self.processing_log(ui);
-        // 3. Lyrics: the transcription setup.
-        heading(ui, "lyrics.title");
+        // 3. Lyrics: the transcription model on the heading's row (Options fits
+        // 420 x 540 without scrolling), then the advanced setup.
+        ui.add_space(space::XS);
+        ui.horizontal(|ui| {
+            ui.label(style::strong(l.text("lyrics.title"), style::text::BODY));
+            let row = vec2(ui.available_width(), style::CONTROL_H);
+            ui.allocate_ui_with_layout(row, Layout::right_to_left(Align::Center), |ui| {
+                self.subtitles.model_selector(ui, ctx, l, locked);
+                #[cfg(test)]
+                self.options
+                    .rects
+                    .push(("speech-model", ui.min_rect(), true));
+            });
+        });
+        if let Some(notice) = &self.subtitles.model_notice {
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(notice.render(l))
+                        .small()
+                        .color(t.text_2),
+                )
+                .wrap(),
+            );
+        }
         let lyrics = egui::CollapsingHeader::new(l.text("options.lyrics_advanced"))
             .id_salt("options-lyrics")
             .icon(app_sheet::disclosure)
@@ -260,6 +322,9 @@ mod tests {
         let mut output = ctx.run_ui(
             egui::RawInput {
                 screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(size.0, size.1))),
+                // The system theme is known (dark), as on Windows: the theme list
+                // then says « System · Dark ».
+                system_theme: Some(egui::Theme::Dark),
                 events,
                 ..Default::default()
             },
@@ -322,6 +387,8 @@ mod tests {
         app.locale.language = language;
         app.locale.choice = noh::i18n::Choice(Some(language));
         app.locale.path = Some(folder.join("language"));
+        // Never the theme saved on this computer: tests start from System.
+        app.locale.theme = app_locale::Theme::System;
         app.worker = folder.join("no-worker.exe");
         let mut info = noh::media::MediaInfo::default();
         info.seconds = 5.0;
@@ -376,6 +443,126 @@ mod tests {
         find(&texts, "Settings");
         find(&texts, "Export the video");
         assert!(app.settings_open, "choosing a language keeps Options open");
+    }
+
+    /// A theme that cannot be saved is said as the theme, not the language; it
+    /// still applies for this session.
+    #[test]
+    fn a_failed_theme_save_says_the_theme() {
+        let folder = tempfile::tempdir().unwrap();
+        let (ctx, mut app) = app(folder.path(), Language::Fr);
+        // A file where the settings folder should be: saving cannot succeed.
+        std::fs::write(folder.path().join("blocker"), "").unwrap();
+        app.locale.path = Some(folder.path().join("blocker").join("language"));
+        let size = (980.0, 850.0);
+        frame(&ctx, &mut app, size, vec![]);
+        let texts = frame(&ctx, &mut app, size, vec![]);
+        click(
+            &ctx,
+            &mut app,
+            size,
+            find(&texts, "Système · Sombre").center(),
+        );
+        let texts = frame(&ctx, &mut app, size, vec![]);
+        click(&ctx, &mut app, size, find(&texts, "Clair").center());
+        assert_eq!(app.locale.theme, app_locale::Theme::Light);
+        assert_eq!(ctx.theme(), egui::Theme::Light);
+        let notice = app.notice.clone().expect("the failure is said");
+        assert_eq!(notice.key, "error.theme_preferences");
+        assert!(
+            notice
+                .render(Language::Fr)
+                .starts_with("Impossible de mémoriser le thème : "),
+            "{notice:?}"
+        );
+    }
+
+    /// Maintainer, 2026-11-12: the theme is a choice. System says what the system
+    /// gives; Light applies at once and is saved beside the language, read back
+    /// at the next launch; System again follows the system.
+    #[test]
+    fn theme_choice_applies_at_once_and_is_saved() {
+        let folder = tempfile::tempdir().unwrap();
+        let (ctx, mut app) = app(folder.path(), Language::Fr);
+        app.locale.theme = app_locale::Theme::System;
+        ctx.set_theme(app.locale.theme.preference());
+        let size = (980.0, 850.0);
+        let with_system = |ctx: &egui::Context, app: &mut NohApp, size: (f32, f32)| {
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(size.0, size.1))),
+                    system_theme: Some(egui::Theme::Dark),
+                    ..Default::default()
+                },
+                |ui| {
+                    app.draw(ui);
+                },
+            );
+            output.textures_delta.clear();
+            output
+                .shapes
+                .iter()
+                .filter_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) => Some((
+                        // A cut label would not read whole.
+                        if text.galley.elided {
+                            format!("{}…", text.galley.text())
+                        } else {
+                            text.galley.text().to_owned()
+                        },
+                        text.galley.rect.translate(text.pos.to_vec2()),
+                    )),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        // Whole, and inside its list, at 420 as at 980.
+        for compact in [(420.0, 540.0), size] {
+            with_system(&ctx, &mut app, compact);
+            let texts = with_system(&ctx, &mut app, compact);
+            let label = find(&texts, "Système · Sombre");
+            let (list, _) = rect(&app, "theme");
+            assert!(
+                list.contains_rect(label) && list.right() <= compact.0 - 16.0 + 0.5,
+                "{compact:?} label {label:?} list {list:?}"
+            );
+        }
+        let texts = with_system(&ctx, &mut app, size);
+        let closed = find(&texts, "Système · Sombre");
+        assert_eq!(ctx.theme(), egui::Theme::Dark, "System follows the system");
+        click(&ctx, &mut app, size, closed.center());
+        let texts = frame(&ctx, &mut app, size, vec![]);
+        click(&ctx, &mut app, size, find(&texts, "Clair").center());
+        assert_eq!(app.locale.theme, app_locale::Theme::Light);
+        assert_eq!(
+            ctx.options(|o| o.theme_preference),
+            egui::ThemePreference::Light
+        );
+        assert_eq!(ctx.theme(), egui::Theme::Light);
+        let file = app_locale::Theme::path(&folder.path().join("language"));
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "light");
+        assert_eq!(app_locale::Theme::read(&file), app_locale::Theme::Light);
+        assert!(app.settings_open, "choosing a theme keeps Options open");
+        // The closed list says the chosen theme; System again follows the system.
+        let texts = frame(&ctx, &mut app, size, vec![]);
+        click(&ctx, &mut app, size, find(&texts, "Clair").center());
+        let texts = frame(&ctx, &mut app, size, vec![]);
+        click(&ctx, &mut app, size, find(&texts, "Système").center());
+        assert_eq!(app.locale.theme, app_locale::Theme::System);
+        assert_eq!(
+            ctx.options(|o| o.theme_preference),
+            egui::ThemePreference::System
+        );
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "system");
+        // A missing or unknown file follows the system.
+        assert_eq!(
+            app_locale::Theme::read(&folder.path().join("none")),
+            app_locale::Theme::System
+        );
+        assert_eq!(
+            app_locale::Theme::parse("violet"),
+            app_locale::Theme::System
+        );
     }
 
     /// FFmpeg (and Mode) cannot change while an export runs; the language can.
@@ -442,13 +629,22 @@ mod tests {
         assert!(!app.settings_open, "✕");
     }
 
-    /// Every control of Options fits 420 × 540 and 980 × 850 in seven languages.
+    /// Every control of Options fits 420 × 540 and 980 × 850 in seven languages,
+    /// with the language and the theme chosen or following the system (the
+    /// longest labels: « System language · English », « System · Dark »).
     #[test]
     fn options_fit_in_every_language() {
         let folder = tempfile::tempdir().unwrap();
-        for language in Language::ALL {
+        for (language, system) in Language::ALL
+            .into_iter()
+            .flat_map(|l| [(l, false), (l, true)])
+        {
             for size in [(420.0, 540.0), (980.0, 850.0)] {
                 let (ctx, mut app) = app(folder.path(), language);
+                if system {
+                    app.locale.choice = noh::i18n::Choice::default();
+                    app.locale.theme = app_locale::Theme::System;
+                }
                 app.ffmpeg = Some(folder.path().join("a very long folder name/ffmpeg.exe"));
                 frame(&ctx, &mut app, size, vec![]);
                 frame(&ctx, &mut app, size, vec![]);
@@ -459,14 +655,30 @@ mod tests {
                 let modal = ctx
                     .memory(|m| m.area_rect(egui::Id::new("options")))
                     .expect("Options drawn");
-                for name in ["language", "engine"] {
+                for name in ["language", "theme", "mode", "speech-model", "engine"] {
                     let (r, _) = rect(&app, name);
                     assert!(
                         r.left() >= margin - 0.5
                             && r.right() <= size.0 - margin + 0.5
                             && r.bottom() <= size.1
                             && modal.contains_rect(r),
-                        "{} {size:?} {name}: {r:?} modal {modal:?}",
+                        "{} system={system} {size:?} {name}: {r:?} modal {modal:?}",
+                        language.code()
+                    );
+                }
+                // Each label stays clear of what it names, on its row: the
+                // language, the theme, and Mode on the Export heading.
+                for (label, list) in [
+                    ("language-label", "language"),
+                    ("theme-label", "theme"),
+                    ("export-label", "mode"),
+                ] {
+                    let (l, _) = rect(&app, label);
+                    let (s, _) = rect(&app, list);
+                    assert!(
+                        s.left() - l.right() >= space::S - 0.5
+                            && (l.center().y - s.center().y).abs() < 4.0,
+                        "{} system={system} {size:?} {label} {l:?} {list} {s:?}",
                         language.code()
                     );
                 }

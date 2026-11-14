@@ -81,6 +81,7 @@ fn fixture() -> (Fixture, ProjectRequest) {
             restart_loops: false,
             framing: Framing::Pad,
         }),
+        effect: None,
         captions: Some(ShortCaptions {
             subtitles: f.path("reviewed.srt"),
             style: CaptionStyle::default(),
@@ -310,6 +311,7 @@ fn project_h264_level_uses_picture_rate_instead_of_nut_timestamp_ticks() {
                 framing: Framing::Crop,
                 restart_loops: false,
             }),
+            effect: None,
             captions: None,
         };
         success(&run(&f, &request));
@@ -486,4 +488,188 @@ fn additive_cli_exports_a_late_selection_without_a_full_project_video() {
     assert!(f.path("late.mp4").exists());
     assert!((f.duration(&f.path("late.mp4")) - 5.0).abs() < 0.05);
     f.clean();
+}
+
+/// Task 39 B4: libass's layout limits never stop a Classique export the GPU draws.
+/// A cue too tall for a YouTube Short's safe area: libass (a preview render) refuses
+/// it; Classique draws it and only warns (the maintainer's rule: warn, never correct), both
+/// when chosen and, since Task 43, by default (no effect: the CLI and the MCP).
+#[test]
+#[ignore = "needs an OpenGL 3.3 GPU and FFmpeg on PATH"]
+fn a_cue_too_tall_for_libass_is_drawn_by_classique_with_an_overflow_warning() {
+    let f = Fixture::new();
+    f.ff(args![
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=0x202020:s=1280x720:r=25:d=4",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        f.path("clip.mp4")
+    ]);
+    f.ff(args![
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=r=48000:cl=stereo",
+        "-t",
+        "4",
+        "-c:a",
+        "pcm_s16le",
+        f.path("song.wav")
+    ]);
+    let words =
+        "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor ".repeat(8);
+    std::fs::write(
+        f.path("tall.srt"),
+        format!("1\n00:00:00,500 --> 00:00:02,500\n{words}\n"),
+    )
+    .unwrap();
+    let style = CaptionStyle {
+        size: noh::captions::CaptionSize::Large,
+        safe_area: noh::safe_area::SafeArea::YoutubeShorts,
+        ..CaptionStyle::default()
+    };
+    let request =
+        |name: &str, effect: Option<noh::project::EffectChoice>, preview: bool| ProjectRequest {
+            montage: ExportRequest {
+                items: vec![f.path("clip.mp4").into()],
+                wav: f.path("song.wav"),
+                output: f.path(name),
+                ffmpeg: f.ffmpeg.clone(),
+                fade_in: 0.0,
+                fade_out: 0.0,
+                partial_fades: false,
+                preview,
+                clip_audio: false,
+                force_encode: false,
+            },
+            short: Some(ProjectShort {
+                start_ms: 0,
+                end_ms: 3_000,
+                restart_loops: false,
+                framing: Framing::Pad,
+            }),
+            effect,
+            captions: Some(ShortCaptions {
+                subtitles: f.path("tall.srt"),
+                style,
+            }),
+        };
+    let events = run(&f, &request("libass.mp4", None, true));
+    match events.last() {
+        Some(Event::Done(Err(e))) => assert_eq!(e.code, "error.caption_layout", "{e:?}"),
+        other => panic!("libass should refuse this cue: {other:?}"),
+    }
+    let classic = noh::project::EffectChoice {
+        id: "noh.classic".into(),
+        preset: Some("classique".into()),
+        dir: Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/effects/classique"),
+        values: [("size".to_string(), serde_json::json!("large"))]
+            .into_iter()
+            .collect(),
+    };
+    for (name, effect) in [("classic.mp4", Some(classic)), ("default.mp4", None)] {
+        let events = run(&f, &request(name, effect, false));
+        assert!(
+            matches!(events.last(), Some(Event::Done(Ok(_)))),
+            "{name}: {events:?}"
+        );
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Event::Warning(m) if m.code == "warning.effect_overflow")),
+            "{name}: {events:?}"
+        );
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, Event::Warning(m) if m.code == "warning.effect_fallback")),
+            "{name}"
+        );
+    }
+}
+
+/// Plan D (lyrics step 7): a font setting naming an installed family this
+/// machine lacks draws the plugin's own face and says so in the export report;
+/// NOH does not pick another font.
+#[test]
+#[ignore = "needs an OpenGL 3.3 GPU and FFmpeg on PATH"]
+fn a_missing_installed_font_is_drawn_in_the_plugin_face_with_a_warning() {
+    let f = Fixture::new();
+    f.ff(args![
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=0x202020:s=1280x720:r=25:d=3",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        f.path("clip.mp4")
+    ]);
+    f.ff(args![
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=r=48000:cl=stereo",
+        "-t",
+        "3",
+        "-c:a",
+        "pcm_s16le",
+        f.path("song.wav")
+    ]);
+    std::fs::write(
+        f.path("words.srt"),
+        "1\n00:00:00,500 --> 00:00:02,500\nOn a gardé la lumière\n",
+    )
+    .unwrap();
+    let family = "NOH Missing Family For Tests";
+    let effect = noh::project::EffectChoice {
+        id: "noh.drop".into(),
+        preset: Some("white".into()),
+        dir: Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/effects/drop"),
+        values: [(
+            "font".to_string(),
+            serde_json::json!(format!("system:{family}")),
+        )]
+        .into_iter()
+        .collect(),
+    };
+    let request = ProjectRequest {
+        montage: ExportRequest {
+            items: vec![f.path("clip.mp4").into()],
+            wav: f.path("song.wav"),
+            output: f.path("font.mp4"),
+            ffmpeg: f.ffmpeg.clone(),
+            fade_in: 0.0,
+            fade_out: 0.0,
+            partial_fades: false,
+            preview: false,
+            clip_audio: false,
+            force_encode: false,
+        },
+        short: None,
+        effect: Some(effect),
+        captions: Some(ShortCaptions {
+            subtitles: f.path("words.srt"),
+            style: CaptionStyle::default(),
+        }),
+    };
+    let events = run(&f, &request);
+    assert!(
+        matches!(events.last(), Some(Event::Done(Ok(_)))),
+        "{events:?}"
+    );
+    let warned: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::Warning(m) if m.code == "warning.effect_font_missing" => Some(m.args.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(warned, vec![vec![family.to_string()]], "{events:?}");
+    assert!(f.path("font.mp4").exists());
 }

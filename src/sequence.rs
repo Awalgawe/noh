@@ -81,6 +81,7 @@ pub(crate) fn prepare(
         decode_delay,
         normalize,
         heterogeneous,
+        ref color,
         ..
     } = decision;
     let copy: Vec<_> = decision
@@ -144,7 +145,7 @@ pub(crate) fn prepare(
             if item.is_image() {
                 args.extend(words(&[
                     "-filter_complex",
-                    &crate::images::filter(target, meta.image_orientation),
+                    &crate::images::filter(target, meta.image_orientation, color),
                     "-map",
                     "[v]",
                     "-an",
@@ -201,7 +202,9 @@ pub(crate) fn prepare(
                     .ok_or("Missing video filter")?
                     + 1;
                 let mut value = args[filter].to_string_lossy().into_owned();
-                value.push_str(",tpad=stop_mode=clone:stop_duration=1");
+                value.push_str(",tpad=stop_mode=clone:stop_duration=1,");
+                // One matrix per export; tags follow the copied segments (rule E).
+                value.push_str(&color.video_tail(&crate::color::Input::video(meta)));
                 args[filter] = value.into();
                 args.extend(words(&["-frames:v", &frames.to_string()]));
             } else {
@@ -426,7 +429,8 @@ pub(crate) fn inspect_with(
         || info
             .iter()
             .skip(1)
-            .any(|i| i.signature != info[0].signature);
+            .any(|i| i.signature != info[0].signature)
+        || crate::plan::mixed_matrices(items, &info);
     let mut headers = vec![None; items.len()];
     for (index, (item, meta)) in items.iter().zip(&info).enumerate() {
         let path = item.path();
@@ -445,6 +449,12 @@ pub(crate) fn inspect_with(
     }
     sources.verify()?;
     let decision = crate::plan::decide(items, &info, support, encode, preview, for_fades);
+    // The maintainer's rule 2: say when clips do not share one colour matrix, and what changes.
+    if decision.normalize
+        && let Some(warning) = decision.color.warning()
+    {
+        report.warning(&warning);
+    }
 
     Ok(Inspection { info, decision })
 }

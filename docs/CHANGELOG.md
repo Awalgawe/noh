@@ -5,6 +5,63 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
+## 0.1.6 — unreleased
+
+Not published yet: no download exists for this version. The section records
+what the source contains.
+
+### Captions
+
+- Draw captions with a GPU effect engine, in the preview and in the export.
+  Six effects are built in: Classic (the default, which reproduces the former
+  captions), Simple karaoke, Falling words, Sung sweep, Breath and Type block.
+- Choose an effect and its settings in a style panel beside the monitor. The
+  five effects other than Classic can draw with a font installed on the
+  computer, chosen in a list that shows each font in its own type; a missing
+  font is reported and replaced by the effect's own typeface.
+- Wipe karaoke captions syllable by syllable, with syllables proposed from
+  language packs.
+- Report a caption that leaves the safe area or that is too wide, instead of
+  cutting a word between letters.
+- Choose a caption effect from the command line and from the MCP server.
+- Without OpenGL 3.3, Classic falls back to the former FFmpeg captions and
+  the other effects are refused with a message.
+
+### Lyrics and subtitles
+
+- Edit the subtitles in the lyrics lane, place the words of a line by hand,
+  and keep Whisper's word times beside the subtitles.
+- Keep every cue in a lyrics file beside the `.srt`. Edits are written as they
+  are made; NOH asks once before modifying an `.srt`, and asks which file is
+  the reference when the two differ. Read-only files are left untouched.
+- Choose the Whisper model, with an automatic default that prefers the most
+  accurate model present. The lyrics remember which model produced them.
+- Keep the lyrics when Whisper's last segment runs past the end of the song.
+
+### Export and playback
+
+- Encode composed project exports and caption burns with NVENC when available.
+- Use one colour matrix per export, read untagged video as players do, and
+  show a colour matrix conflict in the simple view.
+- Move the playhead only from the time ruler.
+- On Linux with FFmpeg 6.1, say when FFmpeg draws caption colours in the
+  older standard.
+
+### Interface
+
+- Choose the interface theme in Options: system, dark or light.
+
+### MCP
+
+- Serve tool schemas without the `uint` formats that JSON Schema does not
+  define.
+
+### Dependencies
+
+- Update the dependencies, which clears
+  five vulnerabilities and two unsound advisories reported by the RustSec
+  audit. rmcp moves to 3.10.0 and ZIP to 9.5.1.
+
 ## 0.1.5 — 2026-10-17, Windows packages added 2026-10-18
 
 Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.1.5).

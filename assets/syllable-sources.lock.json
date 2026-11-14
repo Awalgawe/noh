@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "about": "Task 44: public datasets the release build downloads to make NOH's syllable dictionaries (tools/delivery.py acquire-datasets, then tools/build_syllable_dicts.py --inputs). Never committed (workspace rule). Licences and changes: docs/THIRD-PARTY.md, Syllable dictionaries.",
+  "datasets": {
+    "moby": {
+      "name": "Moby Hyphenation List (Grady Ward), Project Gutenberg eBook #3204",
+      "url": "https://www.gutenberg.org/files/3204/files.zip",
+      "sha256": "fc7e5ddc173e3150eb3f611f2ad91df63845ac9f2d9d1bc86562e57c1463c6f2",
+      "file": "moby-files.zip",
+      "member": "mhyph.txt",
+      "member_sha256": "eeb30474c86b8af3469035ec1a0913e35905325ca885290db9dfed9881e230ac",
+      "licence": "Public domain by grant from the author. The work's own documentation, \"Moby (tm) Hyphenator II Documentation Notes\" (https://www.gutenberg.org/files/3204/3204-0.txt, read 2026-11-10), states verbatim: \"Public Domain material by grant from the author, January, 2001.\" The same sentence heads the Moby Words II notes (https://www.gutenberg.org/files/3201/3201-0.txt, read 2026-11-10). No statement by the author himself could be read: his original site (icon.shef.ac.uk/Moby) no longer resolves and its web.archive.org copy could not be fetched, so this line in the list's documentation, which dates the grant January 2001, is the record relied on. gutenberg.org/ebooks/3204, read 2026-11-10: \"Copyright: Public domain in the USA.\" Its licence (section 1.C) waives Project Gutenberg's rights only for users located in the United States, and section 1.D asks others to check their own law; NOH ships worldwide, so the basis is the author's grant above. The shipped files do not name Project Gutenberg (its trademark terms: copies that are not verbatim drop its licence and all references to it). This lock, a source input, keeps the fetch URL. On 2026-11-10 the project maintainer accepted this record of the grant as sufficient for worldwide distribution.",
+      "licence_read": "2026-11-10"
+    },
+    "lexique": {
+      "name": "Lexique 3.83 (Boris New, Christophe Pallier and contributors)",
+      "url": "https://www.lexique.org/databases/Lexique383/Lexique383.zip",
+      "sha256": "e181d132b3b0d3d87efc98d376968441b517353933011cebea5366321a6024e6",
+      "file": "Lexique383.zip",
+      "member": "Lexique383.tsv",
+      "member_sha256": "637ba37a767a66679c48371d673ece50cbf541b49a4e40e598963d4f3fbce52b",
+      "licence": "CC BY-SA 4.0 (README-Lexique.txt in the archive)",
+      "licence_read": "2026-11-09"
+    }
+  },
+  "outputs": {
+    "en": {"source": "moby", "words": 168001, "sha256": "ef650cc991dd8ac001572968af792d2288ca84f462c527d8e389378b7d464981"},
+    "fr": {"source": "lexique", "words": 116202, "sha256": "1dd376d0f34e6197a24cf3f9b4da56f289586b38dfc5c3274a7588d76c3ea014"}
+  }
+}

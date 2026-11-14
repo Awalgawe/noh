@@ -8,10 +8,17 @@ use std::{
 };
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 pub mod build_info;
+#[cfg(feature = "effects")]
+mod caption_gpu;
 mod caption_layout;
 pub mod captions;
 pub mod cli;
+pub mod color;
+pub mod effect_choice;
+mod encoder;
 pub mod engine;
+#[cfg(feature = "effects")]
+pub mod fx;
 mod h264;
 mod hybrid;
 pub mod i18n;
@@ -19,6 +26,8 @@ mod images;
 pub mod input;
 pub mod inspection;
 pub mod jobs;
+pub mod languages;
+pub mod lyrics_input;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 pub mod media;
@@ -35,9 +44,12 @@ pub mod scrub;
 mod sequence;
 pub mod shorts;
 mod storage;
+pub mod subtitle_edit;
 pub mod subtitle_srt;
 pub mod subtitle_track;
+pub mod subtitle_words;
 pub mod subtitles;
+pub mod syllables;
 pub mod timeline;
 mod timing;
 #[cfg(feature = "updates")]

@@ -285,6 +285,7 @@ fn stdio_negotiation_schemas_strict_inputs_and_session_ownership() {
                 "noh_export_project",
                 "noh_inspect",
                 "noh_job",
+                "noh_list_effects",
                 "noh_make_short",
                 "noh_preview",
                 "noh_transcribe",
@@ -297,6 +298,10 @@ fn stdio_negotiation_schemas_strict_inputs_and_session_ownership() {
                 tool["outputSchema"].is_object(),
                 "Missing output schema: {tool}"
             );
+            // JSON Schema defines no "uint32"-style format; a real client
+            // warned on each one. The served list carries none.
+            let text = tool.to_string();
+            assert!(!text.contains(r#""format":"uint"#), "{tool}");
         }
         for arguments in [
             json!({"job_id":"unowned","unexpected":true}),
@@ -312,6 +317,37 @@ fn stdio_negotiation_schemas_strict_inputs_and_session_ownership() {
                 "{reply}"
             );
         }
+        // Caption effects over stdio: the listing (Classique is always there,
+        // built in when no folder holds it) and a refusal before any job.
+        let effects = client.tool("noh_list_effects", json!({}));
+        assert_ne!(effects["isError"], true, "{effects}");
+        let listing = structured(&effects);
+        assert_eq!(listing["version"], 1, "{effects}");
+        assert!(
+            listing["folders"][0]["path"]
+                .as_str()
+                .is_some_and(|p| p.ends_with("effects")),
+            "{effects}"
+        );
+        assert!(
+            listing["effects"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|e| e["id"] == "noh.classic"),
+            "{effects}"
+        );
+        let refused = client.tool(
+            "noh_burn_subtitles",
+            json!({"source":"C:/in.mp4","subtitles":"C:/x.srt","output":"C:/out.mp4",
+                "size":"large","effect":{"id":"noh.drop"}}),
+        );
+        assert_eq!(refused["isError"], true, "{refused}");
+        assert_eq!(
+            structured(&refused)["error"]["code"],
+            "error.effect",
+            "{refused}"
+        );
         let unknown = client.tool("noh_job", json!({"job_id":"unowned"}));
         assert_eq!(unknown["isError"], true);
         assert!(structured(&unknown)["error"]["code"].as_str().is_some());
@@ -521,6 +557,21 @@ fn shared_diagnosis_export_preview_errors_and_no_overwrite() {
     let metadata = structured(&terminal(&mut client, &inspect));
     assert_eq!(metadata["state"], "succeeded");
     assert_eq!(metadata["result"]["kind"], "metadata");
+    // The quick read carries the picture size (testsrc2 128x96, square pixels).
+    let info = &metadata["result"]["info"];
+    assert_eq!(
+        (info["width"].as_u64(), info["height"].as_u64()),
+        (Some(128), Some(96)),
+        "{info}"
+    );
+    assert_eq!(
+        (
+            info["display_width"].as_f64(),
+            info["display_height"].as_f64()
+        ),
+        (Some(128.0), Some(96.0)),
+        "{info}"
+    );
     let quick = start(
         &mut client,
         "noh_diagnose",

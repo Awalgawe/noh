@@ -1,0 +1,239 @@
+{
+  "engine": 1,
+  "id": "test.glow",
+  "name": {
+    "en": "Test glow"
+  },
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "target": "text",
+  "params": [
+    {
+      "id": "palette",
+      "type": "palette",
+      "default": [
+        "#FF2D55",
+        "#19E6FF",
+        "#FFE600",
+        "#B84DFF",
+        "#3DFF8A"
+      ],
+      "level": 1,
+      "label": {
+        "en": "Colours"
+      }
+    },
+    {
+      "id": "size",
+      "type": "number",
+      "default": {
+        "landscape": 80,
+        "portrait": 92
+      },
+      "min": 24,
+      "max": 160,
+      "unit": "px",
+      "level": 1,
+      "label": {
+        "en": "Size"
+      }
+    },
+    {
+      "id": "active_glow",
+      "type": "number",
+      "default": 2.4,
+      "min": 0,
+      "max": 5,
+      "level": 1,
+      "label": {
+        "en": "Glow of the sung word"
+      }
+    },
+    {
+      "id": "rest_glow",
+      "type": "number",
+      "default": 1.0,
+      "min": 0,
+      "max": 5,
+      "level": 2,
+      "label": {
+        "en": "Glow of words already sung"
+      }
+    },
+    {
+      "id": "future_glow",
+      "type": "number",
+      "default": 0.45,
+      "min": 0,
+      "max": 5,
+      "level": 2,
+      "label": {
+        "en": "Glow of upcoming words"
+      }
+    }
+  ],
+  "presets": [
+    {
+      "id": "arc-en-ciel",
+      "name": {
+        "en": "Rainbow"
+      },
+      "values": {}
+    },
+    {
+      "id": "glace",
+      "name": {
+        "en": "Ice"
+      },
+      "values": {
+        "palette": [
+          "#19E6FF",
+          "#7FDBFF",
+          "#B3F0FF"
+        ]
+      }
+    }
+  ],
+  "layout": {
+    "mode": "line",
+    "font": "sans_semibold",
+    "size": "$size",
+    "line_height": 1.18,
+    "box": {
+      "x": 0.5,
+      "y": {
+        "landscape": 0.88,
+        "portrait": 0.62
+      },
+      "width": 0.86,
+      "anchor": {
+        "landscape": "bottom",
+        "portrait": "center"
+      }
+    },
+    "visible": "line",
+    "anchor": "unit"
+  },
+  "animate": [
+    {
+      "unit": "line",
+      "slot": "enter",
+      "property": "opacity",
+      "duration": 0.15,
+      "keys": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "unit": "line",
+      "slot": "exit",
+      "property": "opacity",
+      "duration": 0.12,
+      "keys": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          0
+        ]
+      ]
+    },
+    {
+      "unit": "word",
+      "slot": "active",
+      "property": "glow",
+      "value": "$active_glow"
+    },
+    {
+      "unit": "word",
+      "slot": "past",
+      "property": "glow",
+      "value": "$rest_glow"
+    },
+    {
+      "unit": "word",
+      "slot": "future",
+      "property": "glow",
+      "value": "$future_glow"
+    },
+    {
+      "unit": "word",
+      "slot": "active",
+      "property": "color",
+      "value": {
+        "mix": [
+          {
+            "pick": [
+              "$palette",
+              "word_index"
+            ]
+          },
+          "#FFFFFF",
+          0.75
+        ]
+      }
+    },
+    {
+      "unit": "word",
+      "slot": "past",
+      "property": "color",
+      "value": {
+        "mix": [
+          {
+            "pick": [
+              "$palette",
+              "word_index"
+            ]
+          },
+          "#FFFFFF",
+          0.55
+        ]
+      }
+    },
+    {
+      "unit": "word",
+      "slot": "future",
+      "property": "color",
+      "value": {
+        "mix": [
+          {
+            "pick": [
+              "$palette",
+              "word_index"
+            ]
+          },
+          "#FFFFFF",
+          0.55
+        ]
+      }
+    }
+  ],
+  "render": {
+    "passes": [
+      {
+        "kind": "glow",
+        "color": {
+          "pick": [
+            "$palette",
+            "word_index"
+          ]
+        },
+        "gain": 1
+      },
+      {
+        "kind": "fill",
+        "color": "#FFFFFF"
+      }
+    ]
+  },
+  "shader": "shaders/tint.wgsl"
+}

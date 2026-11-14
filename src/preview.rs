@@ -502,15 +502,19 @@ fn thumbnail(
             0
         };
         command.args(crate::images::input_args(source, 25, 1).map_err(unavailable)?);
-        crate::images::orientation_filter(orientation)
+        crate::images::orientation_filter(orientation).to_owned()
     } else {
         command.arg("-i").arg(source);
-        ""
+        // Read an untagged video the way players do before the RGB conversion.
+        crate::color::decode_tags(&snapshot.0[1].resolved, source)
+            .map(|tags| format!("{tags},"))
+            .unwrap_or_default()
     };
     // Composite alpha onto black before conversion. SAR and decoder autorotation
     // contribute to DAR, so neither non-square pixels nor portraits are stretched.
+    // Accurate rounding: one picture, and the chart's worst patch goes from 10 to 1.
     let filter = format!(
-        "color=c=black:s={w}x{h}:r=25,format=rgba[bg];[0:v]{orientation}scale=w='max(2,trunc(min({w},{h}*dar)/2)*2)':h='max(2,trunc(min({h},{w}/dar)/2)*2)',setsar=1,format=rgba[image];[bg][image]overlay=x=(W-w)/2:y=(H-h)/2:format=rgb:alpha=straight,format=rgba[v]",
+        "color=c=black:s={w}x{h}:r=25,format=rgba[bg];[0:v]{orientation}scale=w='max(2,trunc(min({w},{h}*dar)/2)*2)':h='max(2,trunc(min({h},{w}/dar)/2)*2)':flags=bicubic+accurate_rnd+full_chroma_int,setsar=1,format=rgba[image];[bg][image]overlay=x=(W-w)/2:y=(H-h)/2:format=rgb:alpha=straight,format=rgba[v]",
         w = width,
         h = height
     );
@@ -822,7 +826,12 @@ fn caption_workspace(
         .short
         .as_ref()
         .map_or((0, source_ms), |s| (s.start_ms, s.end_ms));
-    let key = if let Some(captions) = &project.captions {
+    // A caption effect is drawn over the preview by the GPU engine, not by libass.
+    let key = if let Some(captions) = project
+        .captions
+        .as_ref()
+        .filter(|_| project.active_effect().is_none())
+    {
         WorkspaceKey {
             captions: Some((snapshot.0.last().unwrap().clone(), captions.style)),
             source_ms,
@@ -961,13 +970,18 @@ fn project_command(
     let workspace = caption_workspace(project, snapshot, prepared, (canvas_w, canvas_h))?;
     let mut command = base_command(ffmpeg);
     command.current_dir(&workspace.path);
+    let color = crate::color::Plan::for_items(
+        &montage.items,
+        &prepared.info,
+        (target.width, target.height),
+    );
     let source_seconds = mapped.playback.source_seconds;
     let mut graph = if item.is_image() {
         command.args(
             crate::images::input_args(source, target.rate_num, target.rate_den)
                 .map_err(unavailable)?,
         );
-        crate::images::filter(target, meta.image_orientation)
+        crate::images::filter(target, meta.image_orientation, &color)
     } else {
         // Only video needs the final-frame clamp used for export's cloned
         // padding. Audio mapping retains the exact source clock at that edge.
@@ -993,9 +1007,10 @@ fn project_command(
             String::new()
         };
         format!(
-            "[0:v]setpts=PTS-STARTPTS,scale=w='max(2,trunc(min({w},{h}*dar)/2)*2)':h='max(2,trunc(min({h},{w}/dar)/2)*2)',setsar=1,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,{cadence}format=yuv420p[v]",
+            "[0:v]setpts=PTS-STARTPTS,scale=w='max(2,trunc(min({w},{h}*dar)/2)*2)':h='max(2,trunc(min({h},{w}/dar)/2)*2)',setsar=1,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,{cadence}{tail}[v]",
             w = target.width,
             h = target.height,
+            tail = color.video_tail(&crate::color::Input::video(meta)),
         )
     };
     let has_captions = workspace.has_captions;
@@ -1340,6 +1355,7 @@ mod tests {
                 restart_loops: false,
                 framing: Framing::Pad,
             }),
+            effect: None,
             captions: None,
         };
         let prepared = Prepared {
@@ -1436,6 +1452,7 @@ mod tests {
                 restart_loops: false,
                 framing: Framing::Pad,
             }),
+            effect: None,
             captions: Some(ShortCaptions {
                 subtitles: subtitles.clone(),
                 style: crate::captions::CaptionStyle::default(),

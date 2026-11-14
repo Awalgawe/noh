@@ -105,7 +105,7 @@ on Windows; a different native component notice stops the Mac candidate pending
 explicit review. Full compiler/LLVM/build-tool notices and native runtime coverage
 remain separate review items.
 
-The optional MCP adapter uses the official `rmcp` 3.4.1 and `rmcp-macros` 3.5.0
+The optional MCP adapter uses the official `rmcp` 3.10.0 and `rmcp-macros` 3.10.0
 crates (Apache-2.0), together with Tokio, tokio-util and schema dependencies.
 These are compiled dependencies; running the portable server does not require
 Cargo, Node.js, Python or a separately installed SDK. The dependency inventory
@@ -144,8 +144,49 @@ as `licenses/FONT-NOTO-SANS-LICENSE.txt`. Both fonts are embedded; startup downl
 family and license, with provenance in `assets/NOTICE.md`; it is embedded as the
 body text face. Its license is the same packaged `FONT-NOTO-SANS-LICENSE.txt`.
 `assets/Jost-ExtraBold.ttf` is the weight-800 instance of Jost under
-the SIL Open Font License 1.1, embedded for the NOH wordmark only; provenance
+the SIL Open Font License 1.1, embedded for the NOH wordmark and caption effects; provenance
 in `assets/NOTICE.md`, license packaged as `licenses/FONT-JOST-LICENSE.txt`.
+Caption effects also embed, unmodified and under the SIL Open Font License 1.1,
+`assets/Inter-Variable.ttf` (Inter, drawn at weight 600),
+`assets/BarlowCondensed-ExtraBold.ttf` and `assets/Jost-Variable.ttf` (Jost,
+drawn at weight 500), all from the `google/fonts` repository at a pinned commit,
+and `assets/NotoSerif-Italic.ttf` (Noto Serif Italic). Provenance and SHA-256 are
+in `assets/NOTICE.md`; their licenses are packaged as
+`licenses/FONT-INTER-LICENSE.txt`, `licenses/FONT-BARLOW-CONDENSED-LICENSE.txt`,
+`licenses/FONT-JOST-LICENSE.txt` and `licenses/FONT-NOTO-SERIF-LICENSE.txt`.
+
+## Syllable dictionaries
+
+The subtitle editor's « Couper en syllabes » proposes splits from a dictionary
+per language (`languages/<code>/dictionary.txt` beside the application), then
+from the language's vowel rule. The English and French dictionaries are built
+from public datasets when a release is built; the datasets are never committed
+to this repository.
+
+- **English, Moby Hyphenation List** by Grady Ward (Moby Project): public
+  domain (grant from the author, January 2001). Licence read 2026-11-10. The
+  built dictionary does not name the site the list is fetched from, whose
+  trademark terms ask that copies which are not verbatim drop its name.
+- **French, Lexique 3.83** (http://www.lexique.org) by Boris New, Christophe
+  Pallier and contributors: Creative Commons Attribution-ShareAlike 4.0
+  International, https://creativecommons.org/licenses/by-sa/4.0/legalcode
+  (README-Lexique.txt in the archive, read 2026-11-09). Citation: New, B.,
+  Pallier, C., Brysbaert, M., Ferrand, L. (2004). Lexique 2: A New French
+  Lexical Database. Behavior Research Methods, Instruments, & Computers,
+  36(3), 516-524. The built French dictionary is an adaptation shared under
+  CC BY-SA 4.0.
+
+The release build downloads both archives with `tools/delivery.py
+acquire-datasets` (HTTPS, SHA-256 pinned in `assets/syllable-sources.lock.json`,
+cached), and `tools/build_syllable_dicts.py --inputs` builds the dictionaries.
+The archive members and the built dictionaries (SHA-256 and word counts) are
+also pinned, so a different input or build fails. The changes made to each
+dataset, the licences and the attribution are in
+`assets/syllable-dictionaries-NOTICE.txt`, packaged as
+`licenses/syllable-dictionaries.txt` beside `languages/README.md`.
+
+The Windows and Linux bundles ship them. macOS bundles do not yet; see
+`assets/delivery-policy.json`.
 
 ## FFmpeg
 

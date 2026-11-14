@@ -1,6 +1,7 @@
 //! Plain SRT captions rendered in a private worker workspace. Publication is
 //! exclusively the controller's responsibility; every video frame is encoded.
 use crate::{
+    encoder::VideoEncoder,
     engine::{EngineError, Event, ExportResult, Reporter},
     inspection::{FileStamp, Snapshot},
     subtitle_track::SubtitleTrack,
@@ -18,7 +19,7 @@ use std::{
 pub const TOTAL_TIMEOUT_SECS: u64 = 8100;
 const MAX_DURATION_SECONDS: f64 = 7200.0;
 const MAX_ASS_BYTES: usize = 2 * 1024 * 1024;
-const FONT: &[u8] = include_bytes!("../assets/NOHCJK.otf");
+pub(crate) const FONT: &[u8] = include_bytes!("../assets/NOHCJK.otf");
 pub(crate) const FILTER: &str = "subtitles=filename=captions.ass:fontsdir=fonts:wrap_unicode=1";
 const UNSUPPORTED_WRAP: &str = "libass wasn't built with ASS_FEATURE_WRAP_UNICODE support";
 
@@ -46,7 +47,17 @@ pub struct CaptionStyle {
     pub placement: CaptionPlacement,
     #[serde(default)]
     pub safe_area: crate::safe_area::SafeArea,
+    /// Classique's « Largeur des lignes », in hundredths of a percent of the
+    /// usable width, when its libass fallback draws: lines wrap where Classique's
+    /// do. None keeps NOH's historical width (69.06 %, Classique's default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_width: Option<u32>,
 }
+
+/// libass draws text at Fontsize x upem / (ascender - descender) of the bundled
+/// NOHCJK.otf (1000 / 1448), while the pre-wrap measures at Fontsize: NOH's lines
+/// have always wrapped at this share of libass's max width.
+pub(crate) const LIBASS_EM: f32 = 1000.0 / 1448.0;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -57,6 +68,10 @@ pub struct CaptionRequest {
     pub ffmpeg: PathBuf,
     pub style: CaptionStyle,
     pub preview: bool,
+    /// The effect plugin chosen instead of Classique (command line, MCP), drawn
+    /// by the GPU engine with no libass fallback. None draws Classique.
+    #[serde(default)]
+    pub effect: Option<crate::project::EffectChoice>,
 }
 
 impl CaptionRequest {
@@ -89,6 +104,9 @@ impl CaptionRequest {
                 Some(&self.output),
                 "Caption output must be MP4 and the FFmpeg path must not contain NUL characters.",
             ));
+        }
+        if let Some(effect) = &self.effect {
+            effect.check("validate_captions")?;
         }
         Ok(())
     }
@@ -167,16 +185,33 @@ pub(crate) fn execute(
         request.style,
     )?;
     let srt = read_srt(subtitles)?;
-    let track = crate::subtitle_srt::parse(&srt, duration_ms)
+    let mut track = crate::subtitle_srt::parse(&srt, duration_ms)
         .map_err(|e| error("error.caption_track", "parse_captions", Some(subtitles), e))?;
+    // A chosen effect draws with the word times kept beside the subtitles, as in
+    // a project export; Classique and libass do not use them.
+    if request.effect.is_some() {
+        let words = crate::subtitle_words::read_beside(subtitles, &mut track);
+        report.diagnostic(word_times_diagnostic(words));
+    }
     snapshot.verify()?;
-    let quantized = stage(
-        &track,
-        &canvas,
-        media.video_start,
-        media.video_end,
-        &workspace,
-    )?;
+    // Classique draws the cues (Task 43): checked whatever draws them, libass's
+    // own limits (layout, centiseconds) only if libass does.
+    let gpu = cfg!(feature = "effects");
+    let mut quantized = false;
+    if gpu {
+        check_timeline(&track, media.video_start, media.video_end)?;
+    } else {
+        quantized = stage(
+            &track,
+            &canvas,
+            media.video_start,
+            media.video_end,
+            &workspace,
+        )?;
+        if let Some(at) = first_too_wide(&track, &canvas) {
+            report.warning(&word_too_wide_warning(at));
+        }
+    }
     let staged = workspace.join("export.mp4");
     require_absent(&staged)?;
     report.warning("caption.reencode");
@@ -194,26 +229,22 @@ pub(crate) fn execute(
         report.warning("caption.unknown_duration");
     }
     report.progress(1, "caption.rendering");
-    let command = render_command(
-        ffmpeg,
-        source,
-        &workspace,
-        &canvas,
-        request.preview,
-        copy_audio,
-    );
-    let timeout = Duration::from_secs(TOTAL_TIMEOUT_SECS)
-        .checked_sub(started.elapsed())
-        .filter(|remaining| !remaining.is_zero())
-        .ok_or_else(|| {
-            error(
-                "error.caption_backend",
-                "render_captions",
-                Some(source),
-                "Caption preparation exceeded the operation deadline.",
-            )
-        })?;
-    let (status, log) = crate::process::stream(command, Some(timeout), false, |line| {
+    // What is left of the operation's deadline, for each encode attempt.
+    let remaining = || {
+        Duration::from_secs(TOTAL_TIMEOUT_SECS)
+            .checked_sub(started.elapsed())
+            .filter(|remaining| !remaining.is_zero())
+            .ok_or_else(|| {
+                error(
+                    "error.caption_backend",
+                    "render_captions",
+                    Some(source),
+                    "Caption preparation exceeded the operation deadline.",
+                )
+            })
+    };
+    remaining()?;
+    let rendering = |report: &mut Reporter<'_>, line: &str| {
         if let Some(value) = line
             .strip_prefix("out_time_us=")
             .and_then(|s| s.parse::<f64>().ok())
@@ -223,32 +254,162 @@ pub(crate) fn execute(
                 1 + (98.0 * (value / 1_000_000.0 / media.duration).clamp(0.0, 1.0)) as u32;
             report.progress(percent, "caption.rendering");
         }
-        Ok(())
-    })
-    .map_err(|e| {
-        let mut failure = error(
-            "error.caption_backend",
-            "render_captions",
-            Some(source),
-            "FFmpeg could not complete caption rendering.",
-        );
-        failure.technical = crate::engine::bounded(&e.to_string(), 8192).into();
-        failure
-    })?;
-    if !status.success() || unsupported_renderer(&log) {
-        let mut failure = error(
-            "error.caption_backend",
-            "render_captions",
-            Some(source),
-            if unsupported_renderer(&log) {
-                "FFmpeg lacks required Unicode wrapping or bundled glyph support."
+    };
+    // NVENC with the burn's own settings when a real encode with them works; a
+    // preview stays on x264.
+    let selection = crate::encoder::select_for(ffmpeg, request.preview, crate::encoder::Use::Burn);
+    if let Some(probe) = selection.probe {
+        report.diagnostic(format!(
+            "NVENC probe: {} in {} ms.",
+            if selection.encoder == VideoEncoder::Nvenc {
+                "available"
             } else {
-                "FFmpeg could not render the captions."
+                "unavailable"
             },
-        );
-        failure.technical = crate::engine::bounded(&log, 8192).into();
-        return Err(failure);
+            probe.as_millis()
+        ));
     }
+    // Without an OpenGL context, libass's captions are staged once: an NVENC retry
+    // goes straight to libass.
+    #[cfg(feature = "effects")]
+    let mut gl_failed = false;
+    let mut fallback_log = None;
+    let mut libass_checked = false;
+    let rendered = crate::encoder::render_with_fallback(
+        selection.encoder,
+        &staged,
+        |encoder| {
+            // A libx264 retry gets only what the NVENC attempt left.
+            let timeout = remaining()?;
+            #[cfg(feature = "effects")]
+            if gpu && !gl_failed {
+                let style_safe = request.style.safe_area.insets(canvas.width, canvas.height);
+                let (head, tags, matrix) = crate::color::Plan::single_source_split(&media.video);
+                let finish: Vec<String> = tags
+                    .into_iter()
+                    .chain(request.preview.then(|| preview_scale(&canvas)))
+                    .collect();
+                let job = crate::caption_gpu::Job {
+                    ffmpeg: ffmpeg.to_path_buf(),
+                    source: source.to_path_buf(),
+                    workspace: workspace.clone(),
+                    input: Vec::new(),
+                    limit: Vec::new(),
+                    filter: format!("{head},scale={}:{},setsar=1", canvas.width, canvas.height),
+                    finish: (!finish.is_empty()).then(|| finish.join(",")),
+                    size: (canvas.width, canvas.height),
+                    matrix,
+                    track: track.clone(),
+                    style: request.style,
+                    effect: request.effect.clone(),
+                    encode: encode_args(request.preview, copy_audio, encoder),
+                    deadline: timeout,
+                    end: Some(media.video_end),
+                };
+                let failed = (
+                    "error.caption_backend",
+                    "render_captions",
+                    "FFmpeg could not render the captions.",
+                );
+                match crate::caption_gpu::run(job, failed, |line| rendering(&mut report, line)) {
+                    Ok(done) => {
+                        if let Some(at) = done.overflow_at {
+                            let safe = style_safe.is_some();
+                            report.warning(&crate::caption_gpu::overflow_warning(at, safe));
+                        }
+                        if let Some(at) = done.too_wide_at {
+                            report.warning(&word_too_wide_warning(at));
+                        }
+                        if let Some(family) = &done.font_missing {
+                            report.warning(&crate::caption_gpu::font_missing_warning(family));
+                        }
+                        report.diagnostic(done.diagnostic);
+                        return Ok(());
+                    }
+                    Err(crate::caption_gpu::Failure::Gl(message)) => {
+                        gl_failed = true;
+                        report.warning("warning.effect_fallback");
+                        report.diagnostic(format!(
+                            "No OpenGL context ({message}): libass draws the captions."
+                        ));
+                        if stage(
+                            &track,
+                            &canvas,
+                            media.video_start,
+                            media.video_end,
+                            &workspace,
+                        )? {
+                            report.warning("caption.quantization");
+                        }
+                        if let Some(at) = first_too_wide(&track, &canvas) {
+                            report.warning(&word_too_wide_warning(at));
+                        }
+                    }
+                    Err(crate::caption_gpu::Failure::Engine(mut e)) => {
+                        e.path = Some(source.clone());
+                        return Err(e);
+                    }
+                }
+            }
+            {
+                // libass draws these captions: an FFmpeg older than 7.1 blends
+                // them in BT.601 whatever the export matrix (said once, an NVENC
+                // retry comes back here).
+                if !libass_checked {
+                    libass_checked = true;
+                    let (_, _, matrix) = crate::color::Plan::single_source_split(&media.video);
+                    if let Some(w) = crate::color::libass_colour_warning(ffmpeg, matrix) {
+                        report.warning(w);
+                    }
+                }
+                let command = render_command(
+                    ffmpeg,
+                    source,
+                    &workspace,
+                    &canvas,
+                    (request.preview, copy_audio, encoder),
+                    &crate::color::Plan::single_source(&media.video),
+                );
+                let (status, log) = crate::process::stream(command, Some(timeout), false, |line| {
+                    rendering(&mut report, line);
+                    Ok(())
+                })
+                .map_err(|e| {
+                    let mut failure = error(
+                        "error.caption_backend",
+                        "render_captions",
+                        Some(source),
+                        "FFmpeg could not complete caption rendering.",
+                    );
+                    failure.technical = crate::engine::bounded(&e.to_string(), 8192).into();
+                    failure
+                })?;
+                if !status.success() || unsupported_renderer(&log) {
+                    let mut failure = error(
+                        "error.caption_backend",
+                        "render_captions",
+                        Some(source),
+                        if unsupported_renderer(&log) {
+                            "FFmpeg lacks required Unicode wrapping or bundled glyph support."
+                        } else {
+                            "FFmpeg could not render the captions."
+                        },
+                    );
+                    failure.technical = crate::engine::bounded(&log, 8192).into();
+                    return Err(failure);
+                }
+                Ok(())
+            }
+        },
+        |failure: &EngineError| fallback_log = Some(failure.technical.to_string()),
+    );
+    // Said even when the libx264 retry fails too (as the project export does).
+    if let Some(log) = fallback_log {
+        report.warning("short.encoder_fallback");
+        report.diagnostic(format!("NVENC failure, retried with libx264:\n{log}"));
+    }
+    let used = rendered?;
+    report.diagnostic(format!("Video encoder: {}.", used.name()));
     snapshot.verify()?;
     let metadata = fs::symlink_metadata(&staged).map_err(|e| {
         error(
@@ -373,11 +534,36 @@ pub(crate) struct Canvas {
     margin_right: u32,
     margin_vertical: u32,
     outline: u32,
+    /// libass's max width (read by the Classique parity test).
+    #[cfg_attr(not(test), allow(dead_code))]
     max_width: f32,
+    /// The width the pre-wrap measures lines against (at the em Fontsize).
+    wrap_width: f32,
     max_height: f32,
     alignment: u8,
 }
 impl Canvas {
+    /// The canvas size and the pre-wrap width (read by the Classique parity tests).
+    #[cfg(test)]
+    pub(crate) fn wrap(&self) -> (u32, u32, f32, f32) {
+        (self.width, self.height, self.wrap_width, self.max_height)
+    }
+
+    /// For the Classique parity test: font size, left, right and vertical margins,
+    /// outline, max width and alignment, as libass receives them.
+    #[cfg(test)]
+    pub(crate) fn geometry(&self) -> (f32, u32, u32, u32, u32, f32, u8) {
+        (
+            self.font_size,
+            self.margin_left,
+            self.margin_right,
+            self.margin_vertical,
+            self.outline,
+            self.max_width,
+            self.alignment,
+        )
+    }
+
     pub(crate) fn new(width: f64, height: f64, style: CaptionStyle) -> Result<Self, EngineError> {
         let even = |value: f64| {
             if !value.is_finite() || !(1.0..=16384.0).contains(&value) {
@@ -433,6 +619,13 @@ impl Canvas {
             },
             outline,
             max_width,
+            // A line measured at Fontsize is drawn LIBASS_EM as wide: to fill
+            // `line_width` of the usable width, measure up to line_width / LIBASS_EM.
+            wrap_width: match style.line_width {
+                None => max_width,
+                // Classique's range (40 to 100 %).
+                Some(h) => max_width * (h.clamp(4_000, 10_000) as f32 / 10_000.0) / LIBASS_EM,
+            },
             max_height,
             alignment: if style.placement == CaptionPlacement::Top {
                 8
@@ -475,12 +668,45 @@ fn rounded(milliseconds: u64) -> u64 {
 fn intersects(start: u64, end: u64, video_start: f64, video_end: f64) -> bool {
     start as f64 / 1000.0 < video_end && end as f64 / 1000.0 > video_start
 }
-fn compose(
+/// The warning for a word wider than the text area, first shown at `at` seconds:
+/// it is drawn whole and overflows; NOH never cuts it between letters.
+pub(crate) fn word_too_wide_warning(at: f64) -> String {
+    let at = at.max(0.0).round() as u64;
+    format!("warning.effect_word_too_wide|{}:{:02}", at / 60, at % 60)
+}
+
+/// The start (seconds) of the first cue whose libass lines hold a word wider than
+/// the canvas's wrap width (`caption_layout::wrap_lines`), for the libass routes.
+pub(crate) fn first_too_wide(track: &SubtitleTrack, canvas: &Canvas) -> Option<f64> {
+    track
+        .cues
+        .iter()
+        .find(|cue| {
+            crate::caption_layout::wrap_lines(
+                &cue.text,
+                canvas.font_size,
+                canvas.wrap_width,
+                canvas.max_height,
+            )
+            .is_ok_and(|w| w.too_wide)
+        })
+        .map(|cue| cue.start_ms as f64 / 1000.0)
+}
+
+/// What a chosen effect got from the lyrics file beside the subtitles: the number
+/// of cues whose word times it draws with (the others are split by the effect).
+pub(crate) fn word_times_diagnostic(cues: usize) -> String {
+    format!("Caption effect word times: {cues} cues from the lyrics file beside the subtitles.")
+}
+/// The checks whatever draws the captions: a valid, nonempty track, a known video
+/// timeline, characters the bundled font has, and every cue overlapping the video
+/// (an SRT on the wrong clock). libass's own limits (layout, centiseconds) are
+/// checked by `compose` only.
+pub(crate) fn check_timeline(
     track: &SubtitleTrack,
-    canvas: &Canvas,
     video_start: f64,
     video_end: f64,
-) -> Result<(String, bool), EngineError> {
+) -> Result<(), EngineError> {
     track
         .validate()
         .map_err(|e| error("error.caption_track", "compose_captions", None, e))?;
@@ -500,6 +726,41 @@ fn compose(
             "Source video timeline is unavailable.",
         ));
     }
+    for (index, cue) in track.cues.iter().enumerate() {
+        crate::caption_layout::check_characters(&cue.text).map_err(|e| {
+            error(
+                "error.caption_layout",
+                "layout_captions",
+                None,
+                format!("Cue {}: {e}", index + 1),
+            )
+        })?;
+    }
+    if let Some(index) = track
+        .cues
+        .iter()
+        .position(|c| !intersects(c.start_ms, c.end_ms, video_start, video_end))
+    {
+        return Err(error(
+            "error.caption_track",
+            "compose_captions",
+            None,
+            format!(
+                "Cue {} has no overlap with the actual video timeline.",
+                index + 1
+            ),
+        ));
+    }
+    Ok(())
+}
+
+fn compose(
+    track: &SubtitleTrack,
+    canvas: &Canvas,
+    video_start: f64,
+    video_end: f64,
+) -> Result<(String, bool), EngineError> {
+    check_timeline(track, video_start, video_end)?;
     let mut output = format!(
         "[Script Info]\nScriptType: v4.00+\nPlayResX: {}\nPlayResY: {}\nLayoutResX: {}\nLayoutResY: {}\nScaledBorderAndShadow: yes\nWrapStyle: 2\nYCbCr Matrix: None\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Default,NOH CJK,{},&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,{},0,{},{},{},{},1\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\n",
         canvas.width,
@@ -545,7 +806,7 @@ fn compose(
         let lines = crate::caption_layout::layout_text(
             &cue.text,
             canvas.font_size,
-            canvas.max_width,
+            canvas.wrap_width,
             canvas.max_height,
         )
         .map_err(|e| {
@@ -605,22 +866,62 @@ pub(crate) fn stage(
     Ok(quantized)
 }
 
+/// A burn preview's size: the canvas fitted in 960 x 540, even.
+fn preview_scale(canvas: &Canvas) -> String {
+    let ratio = (960.0 / f64::from(canvas.width))
+        .min(540.0 / f64::from(canvas.height))
+        .min(1.0);
+    let width = ((f64::from(canvas.width) * ratio / 2.0).floor().max(1.0) * 2.0) as u32;
+    let height = ((f64::from(canvas.height) * ratio / 2.0).floor().max(1.0) * 2.0) as u32;
+    format!("scale={width}:{height}")
+}
+
+/// The encoder and audio arguments of a burn, the same with libass
+/// (render_command) and with Classique (FFmpeg #2).
+fn encode_args(preview: bool, copy_audio: bool, encoder: VideoEncoder) -> Vec<String> {
+    let mut args: Vec<String> = match encoder {
+        // The burn's NVENC settings: x264's picture, measured (encoder::BURN_NVENC).
+        VideoEncoder::Nvenc => crate::encoder::BURN_NVENC.map(String::from).to_vec(),
+        VideoEncoder::X264 => [
+            "-c:v",
+            "libx264",
+            // With irregular PTS, the qualified libx264/MP4 path can shorten
+            // the container timeline when output pictures are reordered.
+            // Input B-frames remain supported; this affects the new encode.
+            "-bf",
+            "0",
+            "-pix_fmt",
+            "yuv420p",
+            "-crf",
+            if preview { "24" } else { "16" },
+            "-preset",
+            "medium",
+        ]
+        .map(String::from)
+        .to_vec(),
+    };
+    args.extend(["-c:a", if copy_audio { "copy" } else { "aac" }].map(String::from));
+    if !copy_audio {
+        args.extend(["-b:a", "320k"].map(String::from));
+    }
+    args.extend(["-movflags", "+faststart"].map(String::from));
+    args
+}
+
 fn render_command(
     ffmpeg: &Path,
     source: &Path,
     workspace: &Path,
     canvas: &Canvas,
-    preview: bool,
-    copy_audio: bool,
+    (preview, copy_audio, encoder): (bool, bool, VideoEncoder),
+    color: &str,
 ) -> Command {
-    let mut filter = format!("scale={}:{},setsar=1,{FILTER}", canvas.width, canvas.height);
+    let mut filter = format!(
+        "{color},scale={}:{},setsar=1,{FILTER}",
+        canvas.width, canvas.height
+    );
     if preview {
-        let ratio = (960.0 / f64::from(canvas.width))
-            .min(540.0 / f64::from(canvas.height))
-            .min(1.0);
-        let width = ((f64::from(canvas.width) * ratio / 2.0).floor().max(1.0) * 2.0) as u32;
-        let height = ((f64::from(canvas.height) * ratio / 2.0).floor().max(1.0) * 2.0) as u32;
-        write!(filter, ",scale={width}:{height}").expect("Writing to String is infallible");
+        write!(filter, ",{}", preview_scale(canvas)).expect("Writing to String is infallible");
     }
     let mut cmd = crate::command(ffmpeg);
     cmd.current_dir(workspace)
@@ -646,32 +947,9 @@ fn render_command(
             "passthrough",
             "-enc_time_base:v",
             "filter",
-            "-c:v",
-            "libx264",
-            // With irregular PTS, the qualified libx264/MP4 path can shorten
-            // the container timeline when output pictures are reordered.
-            // Input B-frames remain supported; this affects the new encode.
-            "-bf",
-            "0",
-            "-pix_fmt",
-            "yuv420p",
-            "-crf",
-            if preview { "24" } else { "16" },
-            "-preset",
-            "medium",
-            "-c:a",
-            if copy_audio { "copy" } else { "aac" },
-        ]);
-    if !copy_audio {
-        cmd.args(["-b:a", "320k"]);
-    }
-    cmd.args([
-        "-movflags",
-        "+faststart",
-        "-progress",
-        "pipe:1",
-        "export.mp4",
-    ]);
+        ])
+        .args(encode_args(preview, copy_audio, encoder))
+        .args(["-progress", "pipe:1", "export.mp4"]);
     cmd
 }
 pub(crate) fn unsupported_renderer(log: &str) -> bool {
@@ -687,6 +965,7 @@ mod tests {
 
     fn request() -> CaptionRequest {
         CaptionRequest {
+            effect: None,
             source: "source.mp4".into(),
             subtitles: "captions.srt".into(),
             output: "out.mp4".into(),
@@ -695,6 +974,36 @@ mod tests {
             preview: false,
         }
     }
+    /// The libass routes' warning time: the start of the first cue holding a word
+    /// wider than the wrap width, None when every word fits.
+    #[test]
+    fn the_first_too_wide_cue_gives_the_warning_time() {
+        let canvas = Canvas::new(1280.0, 720.0, CaptionStyle::default()).unwrap();
+        let cue = |start_ms, text: &str| SubtitleCue {
+            start_ms,
+            end_ms: start_ms + 900,
+            text: text.into(),
+            words: None,
+        };
+        let long = "W".repeat(90);
+        let mut two = SubtitleTrack {
+            language: None,
+            duration_ms: 10_000,
+            cues: vec![
+                cue(1_000, "On a gardé la lumière"),
+                cue(4_250, &format!("et {long} ici")),
+                cue(7_000, &long),
+            ],
+        };
+        assert_eq!(first_too_wide(&two, &canvas), Some(4.25));
+        assert_eq!(
+            word_too_wide_warning(4.25),
+            "warning.effect_word_too_wide|0:04"
+        );
+        two.cues.truncate(1);
+        assert_eq!(first_too_wide(&two, &canvas), None);
+    }
+
     fn track(start: u64, end: u64, text: &str) -> SubtitleTrack {
         SubtitleTrack {
             language: None,
@@ -703,6 +1012,7 @@ mod tests {
                 start_ms: start,
                 end_ms: end,
                 text: text.into(),
+                words: None,
             }],
         }
     }
@@ -784,10 +1094,26 @@ mod tests {
                     )
                     .unwrap();
                     assert_eq!(lines.concat(), text);
-                    assert!(lines.iter().all(|s| {
-                        crate::caption_layout::measure_line(s, canvas.font_size).unwrap()
-                            <= canvas.max_width
-                    }));
+                    let too_wide = crate::caption_layout::wrap_lines(
+                        text,
+                        canvas.font_size,
+                        canvas.max_width,
+                        canvas.max_height,
+                    )
+                    .unwrap()
+                    .too_wide;
+                    if text.starts_with('W') {
+                        // One 90-letter word: kept whole on one line and said
+                        // (the maintainer's choice B), never cut between letters.
+                        assert_eq!(lines, [text]);
+                        assert!(too_wide);
+                    } else {
+                        assert!(!too_wide);
+                        assert!(lines.iter().all(|s| {
+                            crate::caption_layout::measure_line(s, canvas.font_size).unwrap()
+                                <= canvas.max_width
+                        }));
+                    }
                     assert!(
                         compose(&track(0, 1000, text), &canvas, 0.0, 1.0)
                             .unwrap()
@@ -823,8 +1149,8 @@ mod tests {
             source,
             Path::new("workspace"),
             &canvas,
-            true,
-            true,
+            (true, true, VideoEncoder::X264),
+            "format=yuv420p",
         );
         let args: Vec<_> = cmd
             .get_args()
@@ -847,6 +1173,33 @@ mod tests {
             assert!(!args.iter().any(|s| s == forbidden));
         }
         assert_eq!(args.last().unwrap(), "export.mp4");
+    }
+
+    /// The burn encodes with its own NVENC settings or its unchanged x264 ones;
+    /// the audio and container arguments are the same.
+    #[test]
+    fn the_burn_encodes_with_nvenc_or_its_own_x264_settings() {
+        let nvenc = encode_args(false, false, VideoEncoder::Nvenc).join(" ");
+        assert_eq!(
+            nvenc,
+            format!(
+                "{} -c:a aac -b:a 320k -movflags +faststart",
+                crate::encoder::BURN_NVENC.join(" ")
+            )
+        );
+        assert!(nvenc.starts_with("-c:v h264_nvenc"), "{nvenc}");
+        assert!(
+            nvenc.contains("-bf 0 ") && nvenc.contains("-pix_fmt yuv420p"),
+            "{nvenc}"
+        );
+        assert_eq!(
+            encode_args(false, true, VideoEncoder::X264).join(" "),
+            "-c:v libx264 -bf 0 -pix_fmt yuv420p -crf 16 -preset medium -c:a copy -movflags +faststart"
+        );
+        assert_eq!(
+            encode_args(true, true, VideoEncoder::X264).join(" "),
+            "-c:v libx264 -bf 0 -pix_fmt yuv420p -crf 24 -preset medium -c:a copy -movflags +faststart"
+        );
     }
 
     #[test]

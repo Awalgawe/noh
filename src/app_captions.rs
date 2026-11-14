@@ -104,6 +104,7 @@ impl Workspace {
     }
     pub fn request(&self, ffmpeg: Option<&PathBuf>, preview: bool) -> CaptionRequest {
         CaptionRequest {
+            effect: None,
             source: self.source.clone().into(),
             subtitles: self.subtitles.clone().into(),
             output: if preview {
@@ -483,11 +484,28 @@ impl NohApp {
         {
             return;
         }
-        let request = self.captions.request(self.ffmpeg.as_ref(), preview);
+        let mut request = self.captions.request(self.ffmpeg.as_ref(), preview);
         if let Err(error) = request.validate() {
             self.captions.fail(&error, self.captions.revision);
             return;
         }
+        // An .srt or a lyrics file, kept in step with each other (lyrics plan
+        // 10). No answer can be given here: a difference stops the burn with
+        // error.lyrics_truth_required (the app's lyrics area asks the question).
+        let notes = match noh::lyrics_input::resolve(&request.subtitles, None, |_| None) {
+            Ok(resolved) => {
+                request.subtitles = resolved.srt;
+                resolved.notes
+            }
+            Err(mut error) => {
+                // Nothing here can answer: say where it can be answered.
+                if error.code == "error.lyrics_truth_required" {
+                    error.code = "error.lyrics_truth_workspace".into();
+                }
+                self.captions.fail(&error, self.captions.revision);
+                return;
+            }
+        };
         if let Some(preflight) = &self.preflight {
             preflight.cancel();
         }
@@ -498,6 +516,11 @@ impl NohApp {
         self.phase = "caption.preparing".into();
         self.log.clear();
         self.captions.warnings.clear();
+        self.captions.warnings.extend(
+            notes
+                .into_iter()
+                .map(|note| Message::new(note.code, &note.args)),
+        );
         // No preview plays or decodes while an export runs (as start_project).
         self.mini_preview.invalidate();
         self.captions.prepare(request, ctx);

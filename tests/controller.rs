@@ -66,6 +66,7 @@ fn cancelled_before_start_does_not_spawn_or_touch_files() {
 fn worker_short_requires_exactly_one_operation_and_no_montage_diagnosis() {
     let f = Fixture::new();
     let short = noh::shorts::ShortRequest {
+        effect: None,
         source: f.path("missing.mp4"),
         output: f.path("short.mp4"),
         ffmpeg: f.ffmpeg.clone(),
@@ -82,6 +83,7 @@ fn worker_short_requires_exactly_one_operation_and_no_montage_diagnosis() {
         ffmpeg: Some(f.ffmpeg.clone()),
     };
     let caption = noh::captions::CaptionRequest {
+        effect: None,
         source: f.path("missing.mp4"),
         subtitles: f.path("reviewed.srt"),
         output: f.path("captioned.mp4"),

@@ -18,6 +18,7 @@ use support::Fixture;
 
 fn request(f: &Fixture) -> CaptionRequest {
     CaptionRequest {
+        effect: None,
         source: f.path("source.mp4"),
         subtitles: f.path("reviewed.srt"),
         output: f.path("captioned.mp4"),
@@ -189,19 +190,6 @@ fn invalid_tracks_and_unsupported_or_overflowing_text_never_publish() {
             "error.caption_layout",
         ),
         (
-            format!(
-                "1\n00:00:00,100 --> 00:00:00,900\n{}\n",
-                std::iter::repeat_n("Text", 70)
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ),
-            "error.caption_layout",
-        ),
-        (
-            "1\n00:00:00,101 --> 00:00:00,102\nText\n".into(),
-            "error.caption_track",
-        ),
-        (
             "1\n00:00:00,100 --> 00:00:02,000\nText\n".into(),
             "error.caption_track",
         ),
@@ -218,6 +206,54 @@ fn invalid_tracks_and_unsupported_or_overflowing_text_never_publish() {
                 .iter()
                 .any(|event| matches!(event, Event::Progress { percent: 100, .. }))
         );
+    }
+    // libass's own limits (Task 43): a cue too tall for the picture, and one that
+    // collapses at libass's centiseconds. Classique draws them (the tall one with a
+    // warning that captions leave the picture); libass, without OpenGL, refuses
+    // them as before.
+    // One long line of 600 words, too tall for 320 x 180 once wrapped (whether
+    // typed lines or one line: Classique keeps a cue's typed lines).
+    let tall = format!(
+        "1\n00:00:00,100 --> 00:00:00,900\n{}\n",
+        std::iter::repeat_n("Text", 600)
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+    for (text, refused, warning) in [
+        (
+            tall,
+            "error.caption_layout",
+            Some("warning.effect_off_frame"),
+        ),
+        (
+            "1\n00:00:00,101 --> 00:00:00,102\nText\n".to_string(),
+            "error.caption_track",
+            None,
+        ),
+    ] {
+        let _ = std::fs::remove_file(&req.output);
+        std::fs::write(&req.subtitles, text).unwrap();
+        let events = burn(&f, &req);
+        let warned = |code: &str| {
+            events
+                .iter()
+                .any(|e| matches!(e, Event::Warning(m) if m.code == code))
+        };
+        if warned("warning.effect_fallback") {
+            assert!(
+                matches!(events.last(), Some(Event::Done(Err(e))) if e.code == refused),
+                "{events:?}"
+            );
+            assert!(!req.output.exists());
+        } else {
+            assert!(
+                matches!(events.last(), Some(Event::Done(Ok(_)))),
+                "{events:?}"
+            );
+            if let Some(code) = warning {
+                assert!(warned(code), "{events:?}");
+            }
+        }
     }
 }
 
@@ -331,10 +367,32 @@ fn delayed_video_keeps_presentation_times_and_original_aac_packets() {
         support::near(b, *a, 0.00003);
     }
     assert!(f.duration(&req.output) > 3.99, "audio tail lost");
+    // Task 43: the picture ends where the source's does, to the tick, through the
+    // caption engine's pipe and its -itsoffset (fx/export.rs compensates FFmpeg
+    // 7.1's last-frame duration); a different FFmpeg behaviour fails here.
+    let video_end = |path: &std::path::Path| {
+        let packets = f.packets(path, false, false, false);
+        let (a, b) = packets
+            .lines()
+            .find_map(|l| l.strip_prefix("#tb 0: "))
+            .unwrap()
+            .split_once('/')
+            .unwrap();
+        let step = a.parse::<f64>().unwrap() / b.parse::<f64>().unwrap();
+        support::rows(&packets)
+            .iter()
+            .map(|row| {
+                (row[2].parse::<i64>().unwrap() + row[3].parse::<i64>().unwrap()) as f64 * step
+            })
+            .fold(0.0, f64::max)
+    };
+    support::near(video_end(&req.output), video_end(&req.source), 0.00005);
     let frames = gray(&f, &req.output);
     for (index, frame) in frames.as_chunks::<{ 320 * 180 }>().0.iter().enumerate() {
+        // Classique draws about 10 px letters at 320 x 180, unhinted: their
+        // brightest pixel is about 170 (libass's hinted ones reach 211), on black.
         assert_eq!(
-            frame.iter().any(|p| *p > 180),
+            frame.iter().any(|p| *p > 120),
             (1..4).contains(&index),
             "frame {index}"
         );
@@ -400,4 +458,98 @@ fn cli_preview_and_export_share_composition_and_report_json_success() {
         masks[0].0.abs_diff(masks[1].0) <= 1 && masks[0].1.abs_diff(masks[1].1) <= 1,
         "{masks:?}"
     );
+}
+
+/// Step 7 B: the caption burn draws an effect chosen by id (the command line and
+/// the MCP resolve it the same way); a font setting naming an installed family
+/// this machine lacks is drawn in the effect's own face and said, once.
+#[test]
+#[ignore = "needs an OpenGL 3.3 GPU and FFmpeg on PATH"]
+fn a_chosen_effect_burns_and_warns_when_its_installed_font_is_missing() {
+    use noh::effect_choice::{Chosen, Flags, Given, Wanted, resolve_in};
+    let f = Fixture::new();
+    black(&f, &f.path("source.mp4"), 640, 360, 3);
+    std::fs::write(
+        f.path("reviewed.srt"),
+        "1\n00:00:00,500 --> 00:00:02,500\nOn a gardé la lumière\n",
+    )
+    .unwrap();
+    words_beside(&f.path("reviewed.srt"));
+    let family = "NOH Missing Family For Tests";
+    let wanted = Wanted {
+        id: "noh.drop".into(),
+        preset: None,
+        values: vec![("font".into(), Given::Text(format!("system:{family}")))],
+    };
+    let roots = [Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/effects")];
+    let Ok(Chosen::Plugin(choice)) = resolve_in(
+        &wanted,
+        CaptionStyle::default(),
+        Flags::default(),
+        false,
+        &roots,
+    ) else {
+        panic!("noh.drop resolves to its bundled folder");
+    };
+    let mut req = request(&f);
+    req.effect = Some(choice);
+    let events = burn(&f, &req);
+    success(&events);
+    let warned: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::Warning(m) if m.code == "warning.effect_font_missing" => Some(m.args.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(warned, vec![vec![family.to_string()]], "{events:?}");
+    // The effect drew with the word times kept beside the subtitles.
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, Event::Diagnostic(d) if d.contains("word times: 1 cues"))),
+        "{events:?}"
+    );
+    assert!(
+        events
+            .iter()
+            .all(|e| !matches!(e, Event::Warning(m) if m.code == "warning.effect_fallback")),
+        "a chosen effect has no libass fallback: {events:?}"
+    );
+    assert!(f.path("captioned.mp4").exists());
+}
+
+/// A lyrics file with hand-placed word times beside `srt`, for its one cue
+/// "On a gardé la lumière" at 0.5..2.5 s.
+fn words_beside(srt: &Path) {
+    use noh::subtitle_track::{SubtitleCue, SubtitleTrack, WordSource, WordTime};
+    let words = [
+        ("On", 500),
+        ("a", 800),
+        ("gardé", 1100),
+        ("la", 1500),
+        ("lumière", 1800),
+    ]
+    .map(|(text, start_ms)| WordTime {
+        text: text.into(),
+        start_ms,
+        source: WordSource::Hand,
+        syllables: None,
+    })
+    .to_vec();
+    let track = SubtitleTrack {
+        language: None,
+        duration_ms: 3_000,
+        cues: vec![SubtitleCue {
+            start_ms: 500,
+            end_ms: 2_500,
+            text: "On a gardé la lumière".into(),
+            words: Some(words),
+        }],
+    };
+    std::fs::write(
+        noh::subtitle_words::lyrics_path(srt),
+        noh::subtitle_words::to_lyrics_json(&track, None),
+    )
+    .unwrap();
 }

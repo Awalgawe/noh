@@ -28,6 +28,9 @@ pub struct Stamp {
     pub revision: u64,
     pub short_revision: Option<u64>,
     pub captions: Option<(u64, CaptionStyle)>,
+    /// Captions drawn by an effect (no libass). Which effect does not matter: the
+    /// preview draws it live and renders carry no captions.
+    pub effect: bool,
 }
 pub struct ProjectArtifact {
     pub path: PathBuf,
@@ -50,6 +53,11 @@ pub struct State {
     pub track: app_track::Attachment,
     pub apply_subtitles: bool,
     pub caption_style: CaptionStyle,
+    /// The caption effect (level 0), or libass captions when none.
+    pub effect: Option<super::app_effects::Choice>,
+    /// The monitor could not draw the effect: libass shows the captions in the
+    /// preview until the effect is chosen again. Exports still use the effect.
+    pub effect_preview_failed: bool,
     pub range: Option<Range>,
     /// A replacement song shortened the selection; shown until the next edit.
     pub range_moved: bool,
@@ -83,6 +91,10 @@ pub struct State {
     pub(super) verifying: Option<Receiver<Verified>>,
     pub(super) short_destination: Option<app_destination::Destination>,
     pub(super) seen_track_revision: u64,
+    /// Lane edits of the attached subtitles, in memory until saved.
+    pub(super) edit: Option<super::app_lyrics_edit::Session>,
+    /// Bumped by every lane edit and undo: part of the captions' identity.
+    pub(super) edit_revision: u64,
     pub(super) input_changed: bool,
     input: Option<(u64, Option<PathBuf>, Option<PathBuf>)>,
     waveform_worker: Option<WaveformWorker>,
@@ -214,9 +226,11 @@ impl State {
         Stamp {
             revision,
             short_revision: short.then_some(self.short_revision),
-            captions: self
-                .apply_subtitles
-                .then_some((self.track.revision, self.effective_caption_style(short))),
+            captions: self.apply_subtitles.then_some((
+                self.track.revision.wrapping_add(self.edit_revision),
+                self.effective_caption_style(short),
+            )),
+            effect: self.apply_subtitles && self.effect.is_some() && !self.effect_preview_failed,
         }
     }
     pub fn busy(&self) -> bool {

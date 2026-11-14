@@ -12,6 +12,7 @@
       ],
       "target": "aarch64-apple-darwin",
       "unresolved": [
+        "Effects/ and languages/ (syllable dictionaries) are not packaged for macOS: they belong in Contents/Resources, with a macOS lookup of <exe>/../Resources in fx/catalog.rs and languages.rs, verified for codesign and ZIP transport on the Mac runner.",
         "Execute the locked Homebrew acquisition and portable packaging on the macos-26 arm64 runner; verify its actual native dependency closure and minimum OS.",
         "All 114 locked Homebrew main sources, 46 stable resources and 22 patches have been collected locally; review exact bottle/build correspondence and all native notices against the relocated Mach-O closure.",
         "Review the complete 486-crate vendor notice inventory, applicable license alternatives, Rust standard-library/toolchain/native runtime notices, difflib 0.4.0 upstream notice applicability/attribution and the missing dispatch 0.2.0 original text.",

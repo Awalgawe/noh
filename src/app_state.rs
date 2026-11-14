@@ -140,6 +140,9 @@ pub struct Inputs<'a> {
     pub outcome: Option<&'a Message>,
     pub phase: &'a Message,
     pub fraction: f32,
+    /// The current check found clips in different colour matrices (the maintainer's
+    /// rule 2): ready, but say what the export converts.
+    pub color_warning: Option<Message>,
 }
 fn availability(reason: Option<Message>) -> Availability {
     Availability {
@@ -213,6 +216,7 @@ pub fn status_view(s: Inputs<'_>) -> StatusView {
     };
     let mut actions = Vec::new();
     let mut destination = false;
+    let mut color_third = None;
     let (severity, headline, detail) = match s.operation {
         Operation::Cancelling { .. }
         | Operation::CancellingSubtitles
@@ -374,6 +378,16 @@ pub fn status_view(s: Inputs<'_>) -> StatusView {
                     "bar.stale".into(),
                     "ui.current_settings".into(),
                 )
+            } else if let Some(warning) = s.color_warning.clone() {
+                // Ready, with the destination as usual; the conversion is the third line.
+                destination = true;
+                bar.change = true;
+                color_third = Some(warning);
+                (
+                    Severity::Warning,
+                    "bar.ready".into(),
+                    "ui.current_settings".into(),
+                )
             } else {
                 destination = true;
                 bar.change = true;
@@ -388,7 +402,10 @@ pub fn status_view(s: Inputs<'_>) -> StatusView {
     let third = if !idle {
         Some("ui.locked".into())
     } else {
-        s.notice.cloned().or_else(|| s.outcome.cloned())
+        s.notice
+            .cloned()
+            .or_else(|| s.outcome.cloned())
+            .or(color_third)
     };
     StatusView {
         destination,
@@ -437,6 +454,7 @@ mod tests {
             outcome: None,
             phase,
             fraction: 0.0,
+            color_warning: None,
         }
     }
     fn bar(v: &StatusView) -> &MontageBar {
@@ -723,5 +741,20 @@ mod tests {
         let v = status_view(s);
         assert_eq!(v.headline.key, "ui.cancel_requested");
         assert!(!v.export.enabled);
+    }
+
+    #[test]
+    fn a_colour_matrix_conflict_stays_ready_but_warns_with_the_conversion() {
+        let phase = Message::new("bar.checking", &[]);
+        let mut s = inputs(&phase);
+        s.color_warning = Some(Message::from("warning.color_matrix|BT.709|1|BT.601"));
+        let v = status_view(s);
+        assert_eq!(v.headline.key, "bar.ready");
+        assert_eq!(v.severity, Severity::Warning);
+        assert!(v.destination);
+        let third = v.third.expect("the conversion is said");
+        assert_eq!(third.key, "warning.color_matrix");
+        assert_eq!(third.args, ["BT.709", "1", "BT.601"]);
+        assert!(v.export.enabled);
     }
 }

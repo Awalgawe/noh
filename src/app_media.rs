@@ -334,7 +334,8 @@ impl Drop for Metadata {
     }
 }
 
-/// What a dropped or picked file is, from its extension only.
+/// What a dropped or picked file is, from its name only: its extension, or the
+/// full suffix of a NOH lyrics file (`.noh-lyrics.json`, `.noh-words.json`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Picture,
@@ -343,6 +344,9 @@ pub enum Kind {
     Lyrics,
 }
 pub fn kind_of(path: &Path) -> Option<Kind> {
+    if noh::subtitle_words::is_lyrics_file(path) {
+        return Some(Kind::Lyrics);
+    }
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
     Some(match ext.as_str() {
         "png" | "jpg" | "jpeg" => Kind::Picture,
@@ -381,7 +385,8 @@ pub fn classify(
     }
     let mut plan = DropPlan::default();
     let mut songs = 0;
-    let mut lyrics = 0;
+    // An .srt and the lyrics file beside it count as one lyrics item.
+    let (mut srts, mut lyrics_files) = (Vec::new(), Vec::new());
     for path in paths {
         let refused = |path: &Path| Message::new("drop.rejected_unsupported", &[file_name(path)]);
         let Some(path) = path else {
@@ -404,15 +409,51 @@ pub fn classify(
                 songs += 1;
                 plan.song = Some(path.clone());
             }
+            Kind::Lyrics if noh::subtitle_words::is_lyrics_file(path) => {
+                // A lyrics file attaches the .srt beside it; while hovering, its
+                // name is enough.
+                let srt = if check_files {
+                    match noh::subtitle_words::find_srt_beside(path) {
+                        Some(srt) => srt,
+                        // Alone: usable lyrics rebuild their .srt (plan 6), a
+                        // version-1 file needs its .srt, anything else is refused.
+                        None => match noh::subtitle_words::read_lyrics(path) {
+                            Ok(Ok(_)) => noh::subtitle_words::srt_beside(path)
+                                .ok_or_else(|| refused(path))?,
+                            Ok(Err(noh::subtitle_words::LyricsError::Version1)) => {
+                                return Err(Message::new(
+                                    "drop.lyrics_need_srt",
+                                    &[file_name(path)],
+                                ));
+                            }
+                            _ => {
+                                return Err(Message::new(
+                                    "drop.lyrics_unusable",
+                                    &[file_name(path)],
+                                ));
+                            }
+                        },
+                    }
+                } else {
+                    noh::subtitle_words::srt_beside(path).ok_or_else(|| refused(path))?
+                };
+                plan.lyrics = Some(srt.clone());
+                lyrics_files.push(srt);
+            }
             Kind::Lyrics => {
-                lyrics += 1;
                 plan.lyrics = Some(path.clone());
+                srts.push(path.clone());
             }
         }
     }
     if songs > 1 {
         return Err("drop.rejected_songs".into());
     }
+    // Each .srt dropped counts (the same one twice is refused); lyrics files
+    // count once per .srt they point to that was not dropped itself.
+    lyrics_files.sort();
+    lyrics_files.dedup();
+    let lyrics = srts.len() + lyrics_files.iter().filter(|t| !srts.contains(t)).count();
     if lyrics > 1 {
         return Err("drop.rejected_lyrics".into());
     }
@@ -559,6 +600,49 @@ mod tests {
             "drop.rejected_lyrics"
         );
         assert_eq!(refused(&[srt.clone()], false), "drop.lyrics_need_song");
+        // A lyrics file attaches the .srt beside it, found whatever its case; the
+        // pair counts as one item; alone without its .srt it is refused.
+        let lyrics = file("words.noh-lyrics.json");
+        let plan = classify(&[lyrics.clone()], true, true).unwrap();
+        assert_eq!(plan.lyrics, srt);
+        let plan = classify(&[srt.clone(), lyrics.clone()], true, true).unwrap();
+        assert_eq!(plan.lyrics, srt);
+        assert!(classify(&[lyrics.clone(), lyrics.clone()], true, true).is_ok());
+        // The old and new names of one song point to the same .srt: one item.
+        let old = file("words.noh-words.json");
+        let plan = classify(&[lyrics.clone(), old.clone()], true, true).unwrap();
+        assert_eq!(plan.lyrics, srt);
+        let other = file("other.srt");
+        assert_eq!(
+            refused(&[other.clone(), lyrics.clone()], true),
+            "drop.rejected_lyrics"
+        );
+        // Alone: unusable lyrics are refused, a version-1 file needs its .srt,
+        // usable lyrics attach the .srt they rebuild.
+        let alone = file("alone.noh-lyrics.json");
+        let error = classify(&[alone.clone()], true, true).unwrap_err();
+        assert_eq!(error.key, "drop.lyrics_unusable");
+        assert_eq!(error.args, ["alone.noh-lyrics.json"]);
+        let track =
+            noh::subtitle_srt::parse("1\n00:00:01,000 --> 00:00:02,000\nla\n", 5000).unwrap();
+        let old = folder.path().join("v1.noh-words.json");
+        let mut worded = track.clone();
+        worded.cues[0].words = Some(noh::subtitle_edit::words_or_estimate(&worded.cues[0]));
+        std::fs::write(&old, noh::subtitle_words::to_json(&worded, None).unwrap()).unwrap();
+        assert_eq!(
+            classify(&[Some(old)], true, true).unwrap_err().key,
+            "drop.lyrics_need_srt"
+        );
+        let usable = folder.path().join("usable.noh-lyrics.json");
+        noh::subtitle_words::write_lyrics(&usable, &track, None).unwrap();
+        let plan = classify(&[Some(usable)], true, true).unwrap();
+        assert_eq!(plan.lyrics, Some(folder.path().join("usable.srt")));
+        assert!(
+            classify(&[alone], true, false).is_ok(),
+            "hovering: names only"
+        );
+        let json = file("notes.json");
+        assert_eq!(refused(&[json], true), "drop.rejected_unsupported");
         assert!(classify(&[srt.clone()], true, true).is_ok());
         let unsupported = classify(&[video.clone(), file("notes.txt")], false, true).unwrap_err();
         assert_eq!(unsupported.key, "drop.rejected_unsupported");
@@ -585,6 +669,8 @@ mod tests {
             ("a.m4v", Kind::Video),
             ("a.wav", Kind::Song),
             ("a.Srt", Kind::Lyrics),
+            ("a.noh-lyrics.json", Kind::Lyrics),
+            ("a.NOH-Words.JSON", Kind::Lyrics),
         ] {
             assert_eq!(kind_of(Path::new(name)), Some(kind), "{name}");
         }

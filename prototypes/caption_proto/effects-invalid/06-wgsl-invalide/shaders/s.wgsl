@@ -1,0 +1,1 @@
+fn shade(i: GlyphIn) -> vec4<f32> { return i.color * ; }

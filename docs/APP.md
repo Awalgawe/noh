@@ -54,7 +54,9 @@ platform layouts; always check the destination platform's upload preview.
 Use **Lyrics** to attach a reviewed UTF-8 `.srt` file. With the local speech
 runtime available, you can also generate a transcript from the soundtrack.
 Review the words and timing, particularly for singing. Recognition is local;
-no audio is uploaded by this feature.
+no audio is uploaded by this feature. In **Settings**, the Whisper menu on the
+**Lyrics** row chooses the model; **Automatic** takes the most accurate one that
+runs at a usable speed here (see [Installing](INSTALLING.md)).
 
 Attaching or generating a track does not automatically place text on the video.
 Enable **Show on the video** in the lyrics menu when you want burned-in text.

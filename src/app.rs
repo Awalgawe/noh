@@ -4,10 +4,15 @@ mod app_captions;
 mod app_capture;
 mod app_destination;
 mod app_diagnosis;
+mod app_effects;
+mod app_font_rows;
 mod app_icons;
 mod app_job;
 mod app_locale;
 mod app_lyrics;
+mod app_lyrics_edit;
+mod app_lyrics_pair;
+mod app_lyrics_save;
 mod app_media;
 mod app_navigation;
 mod app_options;
@@ -22,6 +27,7 @@ mod app_shorts;
 mod app_state;
 mod app_strip;
 mod app_style;
+mod app_style_panel;
 mod app_subtitles;
 mod app_timeline;
 mod app_track;
@@ -44,6 +50,13 @@ struct NohApp {
     project_ui: app_project_ui::State,
     strip: app_strip::State,
     mini_preview: app_preview::State,
+    effects: app_effects::State,
+    style_panel: app_style_panel::State,
+    lyrics_edit: app_lyrics_edit::State,
+    lyrics_save: app_lyrics_save::State,
+    lyrics_pair: app_lyrics_pair::State,
+    /// Close the window this frame (the unsaved-lyrics question was answered).
+    close_now: bool,
     subtitles: app_subtitles::Workspace,
     resources: app_resources::State,
     locale: Locale,
@@ -136,6 +149,12 @@ impl Default for NohApp {
             project_ui: app_project_ui::State::default(),
             strip: app_strip::State::default(),
             mini_preview: app_preview::State::default(),
+            effects: app_effects::State::default(),
+            style_panel: app_style_panel::State::default(),
+            lyrics_edit: app_lyrics_edit::State::default(),
+            lyrics_save: app_lyrics_save::State::default(),
+            lyrics_pair: app_lyrics_pair::State::default(),
+            close_now: false,
             subtitles: app_subtitles::Workspace::default(),
             resources: app_resources::State::default(),
             locale: Locale::load(),
@@ -277,7 +296,12 @@ impl NohApp {
             self.pick_wav(song, ctx);
         }
         if let Some(lyrics) = plan.lyrics {
-            self.project.attach(lyrics, self.wav.as_ref());
+            if self.has_unsaved_lyrics() && !self.flush_lyrics() {
+                // Attaching another .srt would drop edits NOH could not write: ask first.
+                self.lyrics_save.pending = Some(app_lyrics::PendingLyrics::Attach(lyrics));
+            } else {
+                self.project.attach(lyrics, self.wav.as_ref());
+            }
         }
         self.drop_error = None;
         self.invalidated();
@@ -464,6 +488,7 @@ impl NohApp {
 
     fn receive(&mut self) {
         self.subtitles.receive_picker();
+        self.subtitles.receive_probe();
         self.metadata.retain(
             self.clips
                 .iter()
@@ -634,6 +659,11 @@ impl NohApp {
             Event::Inspected(_) => {}
             Event::Subtitled(result) => {
                 done = true;
+                // A retry only regenerates the song that was being transcribed.
+                let generated =
+                    self.project.generation.as_ref().is_some_and(|g| {
+                        g.wav_id == self.wav_id && self.wav.as_ref() == Some(&g.wav)
+                    });
                 let attached = self.project_subtitled(&result);
                 match result {
                     Ok(result) => {
@@ -655,7 +685,20 @@ impl NohApp {
                             "{}: {}\n{}",
                             error.operation, error.detail, error.technical
                         ));
-                        self.subtitles.failure = Some(error.message_code().into());
+                        // Automatique: a large model that failed is retried once,
+                        // smaller (the next frame starts it, see `draw`).
+                        if generated && self.subtitles.fall_back(&error.code) {
+                            return done;
+                        }
+                        let explicit = self.subtitles.choice != app_subtitles::ModelChoice::Auto
+                            && error.code == "error.subtitle_backend";
+                        self.subtitles.failure =
+                            Some(match app_subtitles::model_name(&self.subtitles.model) {
+                                Some(name) if explicit => {
+                                    Message::new("ui.subtitle_model_failed", &[name])
+                                }
+                                _ => error.message_code().into(),
+                            });
                         self.subtitles.failure_revision = Some(self.subtitles.operation_revision);
                     }
                 }
@@ -754,6 +797,9 @@ fn main() -> eframe::Result {
         && let Some(folder) = executable.parent()
     {
         app.subtitles.load_bundled(folder);
+        app.subtitles.load_choice();
+        app.subtitles.resolve_choice();
+        app.subtitles.start_probe();
     }
     // Populate the actual diagnostic path for reproducible render QA only.
     if std::env::var_os("NOH_CAPTURE_UI").is_some()
@@ -781,6 +827,14 @@ fn main() -> eframe::Result {
                 app.project.caption_style = captions.style;
                 app.project.short_safe_area = captions.style.safe_area;
                 app.project.attach(captions.subtitles, None);
+            }
+            if let Some(effect) = project.effect {
+                app.project.effect = Some(app_effects::Choice {
+                    id: effect.id,
+                    preset: effect.preset.unwrap_or_default(),
+                    dir: effect.dir,
+                    values: Default::default(),
+                });
             }
             project.montage
         } else {
@@ -885,7 +939,8 @@ fn main() -> eframe::Result {
                 }
             }
             app_locale::install_fonts(&cc.egui_ctx);
-            cc.egui_ctx.set_theme(egui::ThemePreference::System);
+            // The saved theme (System when none); capture mode sets its own below.
+            cc.egui_ctx.set_theme(app.locale.theme.preference());
             if std::env::var_os("NOH_CAPTURE_UI").is_some() {
                 cc.egui_ctx.set_pixels_per_point(app_capture::number(
                     "NOH_CAPTURE_SCALE",
@@ -1197,6 +1252,67 @@ mod metadata_tests {
             "ui.subtitle_cancelled"
         );
         assert_eq!(app.outcome.as_ref().unwrap().key, "status.export_cancelled");
+    }
+
+    #[test]
+    fn a_large_model_failing_under_automatique_regenerates_the_same_song_smaller_once() {
+        let folder = tempfile::tempdir().unwrap();
+        let speech = folder.path().join("bin/speech");
+        std::fs::create_dir_all(&speech).unwrap();
+        for file in [
+            &app_subtitles::transcriber_name(),
+            "ggml-silero-v6.2.0.bin",
+            "ggml-large-v3.bin",
+            "ggml-small.bin",
+        ] {
+            std::fs::write(speech.join(file), []).unwrap();
+        }
+        let mut app = app();
+        assert!(app.subtitles.load_bundled(folder.path()));
+        app.subtitles.vram = Some(Some(8 << 30));
+        app.subtitles.resolve_choice();
+        assert!(app.subtitles.model.ends_with("ggml-large-v3.bin"));
+        app.wav = Some(folder.path().join("song.wav"));
+        app.output_folder = folder.path().into();
+        let ctx = egui::Context::default();
+        let backend = || {
+            Event::Subtitled(Err(noh::engine::EngineError::new(
+                "error.subtitle_backend",
+                "transcribe_subtitles",
+                None,
+                "CUDA error: out of memory",
+            )))
+        };
+        // The preparation's job is simulated: its result is not awaited.
+        let prepared = |app: &mut NohApp| {
+            app.project.work = None;
+            app.project.work_cancel = None;
+        };
+        app.project_generate(&ctx);
+        assert!(app.subtitles.running && app.project.generation.is_some());
+        prepared(&mut app);
+        // large-v3 runs out of GPU memory: no error, a retry instead.
+        assert!(app.receive_job_event(backend()));
+        assert!(app.subtitles.failure.is_none());
+        app.subtitles.running = false; // as `receive` does once the job is done
+        app.retry_generation(&ctx);
+        assert!(app.subtitles.running && app.project.generation.is_some());
+        assert!(app.subtitles.model.ends_with("ggml-small.bin"));
+        prepared(&mut app);
+        let retries = |app: &NohApp| {
+            app.warnings
+                .iter()
+                .filter(|w| w.key == "lyrics.retry_smaller")
+                .count()
+        };
+        assert_eq!(retries(&app), 1);
+        // Small fails too: the error is shown, with no third run.
+        assert!(app.receive_job_event(backend()));
+        assert!(app.subtitles.failure.is_some());
+        app.subtitles.running = false;
+        app.retry_generation(&ctx);
+        assert!(!app.subtitles.running);
+        assert_eq!(retries(&app), 1);
     }
 
     #[test]

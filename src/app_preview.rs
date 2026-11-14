@@ -63,18 +63,19 @@ pub struct State {
     requested: Option<(u64, u64)>,
     still_pending: bool,
     changed_at: Instant,
-    hover_candidate: Option<(u64, Instant)>,
     error: Option<String>,
     player: Option<Player>,
-    player_stamp: Option<app_project::Stamp>,
+    pub player_stamp: Option<app_project::Stamp>,
     player_texture: Option<egui::TextureHandle>,
     player_frame: Option<(u64, u64)>,
+    /// Clock of the frame in `player_texture` (local seconds): the effect layer's time.
+    pub player_position: f64,
     volume: f32,
-    capture_started: Option<Instant>,
+    pub capture_started: Option<Instant>,
     capture_first_frame_ms: Option<f64>,
     pub scrubber: Option<noh::scrub::Scrubber>,
     scrub_requested: Option<u64>,
-    scrub_active: bool,
+    pub scrub_active: bool,
     scrub_failed: bool,
 }
 impl Default for State {
@@ -95,12 +96,12 @@ impl Default for State {
             requested: None,
             still_pending: false,
             changed_at: Instant::now(),
-            hover_candidate: None,
             error: None,
             player: None,
             player_stamp: None,
             player_texture: None,
             player_frame: None,
+            player_position: 0.0,
             volume: 0.7,
             capture_started: None,
             capture_first_frame_ms: None,
@@ -164,7 +165,6 @@ impl State {
         self.still_pending = false;
         self.error = None;
         self.changed_at = Instant::now();
-        self.hover_candidate = None;
     }
     pub fn thumbnail(
         &mut self,
@@ -276,11 +276,11 @@ impl NohApp {
             None
         };
         let captions = if self.project.apply_subtitles {
-            if self.project.track.loaded.is_none() || self.project.track.validating() {
+            if !self.lyrics_ready() {
                 return None;
             }
             Some(ShortCaptions {
-                subtitles: self.project.track.path.clone()?,
+                subtitles: self.captions_file()?.0,
                 style: self
                     .project
                     .effective_caption_style(self.mini_preview.short),
@@ -291,6 +291,7 @@ impl NohApp {
         Some(ProjectRequest {
             montage,
             short,
+            effect: self.preview_effect(),
             captions,
         })
     }
@@ -352,9 +353,13 @@ impl NohApp {
             }
         }
     }
-    pub(super) fn mini_hover(&mut self, ms: Option<u64>, ctx: &egui::Context) {
-        let Some(ms) = ms else {
-            self.mini_preview.hover_candidate = None;
+    /// The time ruler is the timeline's only way to move the playhead (maintainer,
+    /// 8 Nov.); its lanes only select the excerpt. While playing, the live player is
+    /// repositioned. Otherwise a paused player is stopped and the still preview
+    /// follows the cursor (mpv, or FFmpeg stills without it); the next Play reopens
+    /// the player at the cursor.
+    pub(super) fn apply_timeline(&mut self, output: &app_timeline::Output, ctx: &egui::Context) {
+        let Some(ms) = output.seek_ms else {
             return;
         };
         if ms != self.mini_preview.cursor_ms
@@ -366,55 +371,14 @@ impl NohApp {
         {
             self.mini_preview.scrub_failed = false;
         }
-        if self.mini_preview.scrubber.is_some() && !self.mini_preview.scrub_failed {
-            if self
+        let playing = self.mini_preview.player_stamp.is_some()
+            && self
                 .mini_preview
                 .player
                 .as_ref()
-                .is_some_and(|p| self.mini_preview.player_stamp.is_some() && p.snapshot().playing)
-            {
-                return;
-            }
-            // Silent scrubbing uses its own persistent decoder. Pause/play audio
-            // is only repositioned when the user resumes playback.
-            self.mini_seek(ms, false);
-            ctx.request_repaint();
-            return;
-        }
-        if self.mini_preview.player_stamp.is_none() {
-            self.mini_seek(ms, false);
-            return;
-        }
-        if self
-            .mini_preview
-            .player
-            .as_ref()
-            .is_some_and(|p| p.snapshot().playing)
-        {
-            self.mini_preview.hover_candidate = None;
-            return;
-        }
-        let (start, end) = self.mini_bounds();
-        let ms = ms.clamp(start, end.saturating_sub(1).max(start));
-        if ms == self.mini_preview.cursor_ms {
-            self.mini_preview.hover_candidate = None;
-            return;
-        }
-        let candidate = self
-            .mini_preview
-            .hover_candidate
-            .get_or_insert((ms, Instant::now()));
-        if candidate.0 != ms {
-            *candidate = (ms, Instant::now());
-        }
-        let remaining = Duration::from_millis(120).saturating_sub(candidate.1.elapsed());
-        if remaining.is_zero() {
-            // Keep the paused player and its audio/session alive. Only a settled
-            // hover seeks it; range drags and pointer jitter do not reopen it.
-            self.mini_seek(ms, true);
-        } else {
-            ctx.request_repaint_after(remaining);
-        }
+                .is_some_and(|p| p.snapshot().playing);
+        self.mini_seek(ms, playing);
+        ctx.request_repaint();
     }
     pub(super) fn poll_mini_preview(&mut self, ctx: &egui::Context) {
         if self.capture_state.is_some() {
@@ -488,6 +452,8 @@ impl NohApp {
                             ));
                         }
                         self.mini_preview.player_frame = Some(key);
+                        self.mini_preview.player_position = frame.position;
+                        super::app_effects::trace("video", frame.position, None, None, "");
                     }
                 }
                 if state.phase == Phase::Error {
@@ -598,6 +564,41 @@ impl NohApp {
         self.mini_preview.source = None;
         self.mini_preview.error = None;
     }
+    /// Whether the live player is playing.
+    pub(super) fn mini_playing(&self) -> bool {
+        self.mini_preview.player_stamp.is_some()
+            && self
+                .mini_preview
+                .player
+                .as_ref()
+                .is_some_and(|p| p.snapshot().playing)
+    }
+    /// Pause the live player, if it plays.
+    pub(super) fn mini_pause(&mut self) {
+        if self.mini_playing()
+            && let Some(player) = &self.mini_preview.player
+        {
+            player.set_playing(false);
+        }
+    }
+    /// The song time the live player is at now (rhythm taps read it at the key
+    /// press, not the playhead of the last frame); otherwise the playhead.
+    pub(super) fn mini_position(&self) -> u64 {
+        if self.mini_playing()
+            && let Some(player) = &self.mini_preview.player
+        {
+            let (start, end) = self.mini_bounds();
+            return (start + (player.snapshot().position * 1000.0).round() as u64).min(end);
+        }
+        self.mini_preview.cursor_ms
+    }
+    /// Play from `ms` (playing or not), unlike `mini_play`, which toggles.
+    pub(super) fn mini_play_from(&mut self, ms: u64, ctx: &egui::Context) {
+        self.mini_seek(ms, true);
+        if !self.mini_playing() {
+            self.mini_play(ctx);
+        }
+    }
     pub(super) fn mini_play(&mut self, ctx: &egui::Context) {
         self.mini_preview.scrub_active = false;
         if self.mini_preview.player_stamp.is_some()
@@ -662,6 +663,24 @@ impl NohApp {
             self.mini_play(ctx);
         }
     }
+    /// The canvas the export lays the captions out on: the 1080x1920 short, or the
+    /// composed export's target, computed from the clips as the export does
+    /// (`plan::export_canvas`). It does not wait for the analysis, which every
+    /// setting change clears. None until every clip has been read.
+    pub(super) fn effect_canvas(&self) -> Option<(u32, u32)> {
+        if self.mini_preview.short {
+            return Some((1080, 1920));
+        }
+        let items: Vec<_> = self.clips.iter().map(|c| c.item.clone()).collect();
+        let info: Option<Vec<_>> = self.clips.iter().map(|c| c.info.clone()).collect();
+        let info = info?;
+        // A read without the picture size would give a 2x2 canvas (the target's
+        // minimum), on which no caption is visible: no canvas until it is known.
+        if info.iter().any(|i| i.width == 0 || i.height == 0) {
+            return None;
+        }
+        noh::plan::export_canvas(&items, &info).filter(|(w, h)| *w > 0 && *h > 0)
+    }
     /// Width / height of the full-video frame: the export canvas when known.
     fn canvas_aspect(&self) -> f32 {
         let from_plan = self
@@ -682,8 +701,47 @@ impl NohApp {
             .map_or(16.0 / 9.0, |(w, h)| w as f32 / h as f32)
             .clamp(0.25, 4.0)
     }
-    /// Stage: the aspect-aware monitor and the transport under it.
+    /// Stage: the monitor and, beside it when there is room, the caption style
+    /// panel, with the transport under both across the whole width (as before);
+    /// without room, the panel is a row under the transport.
     pub(super) fn stage_ui(&mut self, ui: &mut egui::Ui, locked: bool) -> Option<TransportLayout> {
+        let full = ui.available_width();
+        let has_transport = self.wav.is_some() && self.project.duration_ms > 0;
+        let split = if full < style::COMPACT_BELOW {
+            None
+        } else {
+            let mode = if has_transport {
+                self.transport_mode(ui, full)
+            } else {
+                TransportMode::One
+            };
+            let fixed = if mode == TransportMode::Two {
+                590.0
+            } else {
+                550.0
+            };
+            super::app_style_panel::split(
+                full,
+                ui.ctx().viewport_rect().height(),
+                self.canvas_aspect(),
+                fixed,
+            )
+        };
+        let layout = self.monitor_column(ui, locked, split);
+        if split.is_none() {
+            self.style_row(ui);
+        }
+        layout
+    }
+
+    /// The aspect-aware monitor and the transport under it; with `split`, the
+    /// monitor sits in the left column and the style panel fills the right.
+    fn monitor_column(
+        &mut self,
+        ui: &mut egui::Ui,
+        locked: bool,
+        split: Option<super::app_style_panel::Split>,
+    ) -> Option<TransportLayout> {
         let l = self.locale.language;
         let ctx = ui.ctx().clone();
         let t = style::tokens(ui);
@@ -702,9 +760,9 @@ impl NohApp {
         // 320 at 980×850: the fixed zones above and below take 530 px, 40
         // more when the transport needs two rows. Width alone picks the mode.
         let fixed = if mode == TransportMode::Two {
-            570.0
+            590.0
         } else {
-            530.0
+            550.0
         };
         let mut height = if compact {
             200.0
@@ -713,6 +771,9 @@ impl NohApp {
         };
         let aspect = self.canvas_aspect();
         height = height.min(width / aspect.max(16.0 / 9.0));
+        if let Some(split) = split {
+            height = split.height;
+        }
         let frame_width = if self.mini_preview.short {
             height * 9.0 / 16.0
         } else {
@@ -720,7 +781,11 @@ impl NohApp {
         };
         let transport_width = (height * 16.0 / 9.0).max(frame_width).min(width);
         let (row, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
-        let monitor = egui::Rect::from_center_size(row.center(), egui::vec2(frame_width, height));
+        let centre = match split {
+            Some(split) => egui::pos2(row.left() + split.column / 2.0, row.center().y),
+            None => row.center(),
+        };
+        let monitor = egui::Rect::from_center_size(centre, egui::vec2(frame_width, height));
         if self.mini_preview.reveal {
             ui.scroll_to_rect(monitor, Some(egui::Align::Min));
             self.mini_preview.reveal = false;
@@ -764,6 +829,7 @@ impl NohApp {
                     .mini_preview
                     .requested
                     .is_some_and(|(_, ms)| ms != self.mini_preview.cursor_ms));
+        let has_texture = texture.is_some();
         if let Some(texture) = texture {
             paint_texture(ui, monitor, texture);
         }
@@ -772,6 +838,15 @@ impl NohApp {
             && self.mini_preview.player_stamp.is_none();
         if let Some(scrubber) = &self.mini_preview.scrubber {
             scrubber.paint(ui, monitor, scrub_visible, style::radius::L as f32);
+        }
+        let shown = if self.mini_preview.player_stamp.is_some() {
+            self.mini_preview.player_texture.is_some()
+        } else {
+            scrub_visible || self.mini_preview.still.is_some()
+        };
+        if shown && self.mini_preview.source.is_none() && self.ready() {
+            self.paint_effect(ui, monitor, scrub_visible);
+            self.paint_try_tag(ui, monitor);
         }
         if self.mini_preview.short && !self.project.hide_safe_area {
             paint_safe_area(ui, monitor, self.project.short_safe_area, l);
@@ -792,8 +867,7 @@ impl NohApp {
             if style::button(&mut inside, l.text("preview.retry"), true, false, 0.0).clicked() {
                 self.mini_preview.invalidate();
             }
-        } else if texture.is_none() && !scrub_visible && (loading || still_loading || self.ready())
-        {
+        } else if !has_texture && !scrub_visible && (loading || still_loading || self.ready()) {
             let spinner = egui::Rect::from_center_size(monitor.center(), egui::vec2(24.0, 24.0));
             // This overlay must not advance the layout cursor inside the monitor.
             ui.place(
@@ -819,6 +893,19 @@ impl NohApp {
                 galley,
                 egui::Color32::WHITE,
             );
+        }
+        if let Some(split) = split {
+            let rect = egui::Rect::from_min_size(
+                egui::pos2(row.left() + split.column + 16.0, row.top()),
+                egui::vec2(split.panel, height),
+            );
+            let mut panel = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt("style-panel-area")
+                    .max_rect(rect)
+                    .layout(Layout::top_down(Align::Min)),
+            );
+            self.style_panel(&mut panel, height);
         }
         if !has_transport {
             return None;
@@ -1854,8 +1941,19 @@ mod tests {
         assert!(!app.mini_preview.still_pending);
     }
 
+    fn seek_output(hover_ms: Option<u64>, seek_ms: Option<u64>) -> app_timeline::Output {
+        app_timeline::Output {
+            hover_ms,
+            seek_ms,
+            range: None,
+            viewport: None,
+            commit_changed: false,
+            retry: false,
+            cue: None,
+        }
+    }
     #[test]
-    fn paused_hover_debounces_seek_without_stopping_the_player() {
+    fn hovering_the_timeline_never_moves_the_playhead_or_the_player() {
         let ctx = egui::Context::default();
         let mut app = NohApp::default();
         app.project.duration_ms = 20_000;
@@ -1868,14 +1966,10 @@ mod tests {
             .unwrap()
             .snapshot()
             .generation;
-        app.mini_hover(Some(5000), &ctx);
+        for ms in [0, 5000, 12_000, 19_999] {
+            app.apply_timeline(&seek_output(Some(ms), None), &ctx);
+        }
         assert_eq!(app.mini_preview.cursor_ms, 0);
-        app.mini_hover(Some(0), &ctx);
-        assert!(app.mini_preview.hover_candidate.is_none());
-        app.mini_preview.hover_candidate =
-            Some((5000, Instant::now() - Duration::from_millis(150)));
-        app.mini_hover(Some(5000), &ctx);
-        assert_eq!(app.mini_preview.cursor_ms, 5000);
         assert!(app.mini_preview.player_stamp.is_some());
         assert_eq!(
             app.mini_preview
@@ -1886,8 +1980,37 @@ mod tests {
                 .generation,
             before
         );
-        app.mini_hover(None, &ctx);
-        assert!(app.mini_preview.hover_candidate.is_none());
+    }
+    #[test]
+    fn the_ruler_seeks_without_a_player_and_stops_a_paused_one() {
+        // scrubber is None here (NohApp::default): this is the "without mpv" row.
+        let ctx = egui::Context::default();
+        let mut app = NohApp::default();
+        app.project.duration_ms = 20_000;
+        app.apply_timeline(&seek_output(None, Some(4000)), &ctx);
+        assert_eq!(app.mini_preview.cursor_ms, 4000);
+        app.mini_preview.player = Some(Player::new(|| {}));
+        app.mini_preview.player_stamp = Some(app.project.stamp(0, false));
+        app.apply_timeline(&seek_output(Some(9000), Some(7000)), &ctx);
+        assert_eq!(app.mini_preview.cursor_ms, 7000);
+        assert!(
+            app.mini_preview.player_stamp.is_none(),
+            "a paused player hands the picture to the still preview"
+        );
+    }
+    #[test]
+    fn the_ruler_repositions_a_playing_player_and_keeps_it() {
+        let ctx = egui::Context::default();
+        let mut app = NohApp::default();
+        app.project.duration_ms = 20_000;
+        let player = Player::new(|| {});
+        player.set_playing(true);
+        app.mini_preview.player = Some(player);
+        app.mini_preview.player_stamp = Some(app.project.stamp(0, false));
+        app.apply_timeline(&seek_output(None, Some(6000)), &ctx);
+        assert_eq!(app.mini_preview.cursor_ms, 6000);
+        assert!(app.mini_preview.player_stamp.is_some());
+        assert!(app.mini_preview.player.as_ref().unwrap().snapshot().playing);
     }
     #[test]
     fn settings_edits_retain_thumbnails_but_removed_sources_are_released() {
@@ -2048,9 +2171,15 @@ mod tests {
                     output.textures_delta.clear();
                 }
             }
-            // Width alone picks the mode; two rows cost the monitor 40 px.
+            // Width alone picks the mode; two rows cost the monitor 40 px of
+            // budget, and the style panel's 300 px bound the monitor beside it.
+            let h = |w: f32, fixed: f32| {
+                super::super::app_style_panel::split(w, 850.0, 16.0 / 9.0, fixed)
+                    .unwrap()
+                    .height
+            };
             assert!(
-                (tops[&700] + 40.0 - tops[&932]).abs() < 0.5,
+                (tops[&932] - tops[&700] - (h(932.0, 550.0) - h(700.0, 590.0))).abs() < 0.5,
                 "{} {tops:?}",
                 language.code()
             );

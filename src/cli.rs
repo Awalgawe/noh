@@ -16,7 +16,9 @@ use std::{
     group = clap::ArgGroup::new("short_operation").args(["short", "project"]),
     version = crate::build_info::VERSION,
     about = "Loop a sequence, generate or burn captions, or extract a selected vertical short.",
-    after_help = "Positional form: noh VIDEO WAV [--video VIDEO ...]. The positional video comes first.\nFlagged form: noh --soundtrack WAV --video VIDEO --image IMAGE SECONDS [...]. Named items follow their option order.\nWithout fades: copy compatible video without re-encoding. Images are encoded.\nWith fades: high-quality H.264 (CRF 16). --partial-fades copies compatible central loops.\nMP4: AAC 320 kbit/s. MKV: lossless audio copy. Existing files are never overwritten.\nSubtitles: noh --transcribe SOURCE --output captions.srt --transcriber WHISPER --model MODEL --vad-model VAD [--language fr].\nTranscription uses a local GPU when available, otherwise CPU. Review the generated text and timing before use.\nCaption burn: noh --burn-subtitles SOURCE --srt captions.srt --output captioned.mp4 [--caption-size medium] [--caption-placement bottom] [--preview] [--json].\nBurning captions re-encodes video and never overwrites output.\nShort: noh --short SOURCE --start-ms 135 --end-ms 1775 --output short.mp4 [--framing pad|crop] [--srt reviewed.srt] [--preview] [--json].\nShort intervals use source playback milliseconds; optional SRT times refer to the original source.\nProject: noh --project --soundtrack voice.wav --video A.mp4 --video B.mp4 --output selected.mp4 --start-ms 13000 --end-ms 18000 [--restart-loops] [--srt reviewed.srt].\nProject start/end and SRT use the full WAV clock. Restart changes visuals and original-clip audio only. Omit start/end for a full montage; captions remain optional."
+    after_help = "Positional form: noh VIDEO WAV [--video VIDEO ...]. The positional video comes first.\nFlagged form: noh --soundtrack WAV --video VIDEO --image IMAGE SECONDS [...]. Named items follow their option order.\nWithout fades: copy compatible video without re-encoding. Images are encoded.\nWith fades: high-quality H.264 (CRF 16). --partial-fades copies compatible central loops.\nMP4: AAC 320 kbit/s. MKV: lossless audio copy. Existing files are never overwritten.\nSubtitles: noh --transcribe SOURCE --output captions.srt --transcriber WHISPER --model MODEL --vad-model VAD [--language fr].\nTranscription uses a local GPU when available, otherwise CPU. Review the generated text and timing before use.\nCaption burn: noh --burn-subtitles SOURCE --srt captions.srt --output captioned.mp4 [--caption-size medium] [--caption-placement bottom] [--preview] [--json].\nBurning captions re-encodes video and never overwrites output. Captions (burn, short, project) use the Classique style by default, drawn by the OpenGL engine as in the app; without OpenGL, libass draws them, with the same line breaks.
+Effects: noh --list-effects shows the caption effects; --effect ID [--effect-preset NAME] [--effect-value KEY=VALUE ...] draws one instead of Classique, with OpenGL only (no libass fallback). An installed font missing on this computer is drawn in the effect's own font, with a warning. A project --preview cannot draw an effect.\nShort: noh --short SOURCE --start-ms 135 --end-ms 1775 --output short.mp4 [--framing pad|crop] [--srt reviewed.srt] [--preview] [--json].\nShort intervals use source playback milliseconds; optional SRT times refer to the original source.\nProject: noh --project --soundtrack voice.wav --video A.mp4 --video B.mp4 --output selected.mp4 --start-ms 13000 --end-ms 18000 [--restart-loops] [--srt reviewed.srt].\nProject start/end and SRT use the full WAV clock. Restart changes visuals and original-clip audio only. Omit start/end for a full montage; captions remain optional.
+A project --preview draws its captions with libass."
 )]
 pub struct Options {
     /// Print the embedded build identity as JSON, without reading media.
@@ -64,9 +66,16 @@ pub struct Options {
     /// Preserve the full picture with black padding, or fill by centered crop.
     #[arg(long, value_parser = ["pad", "crop"], requires_all = ["short_operation", "start_ms"])]
     framing: Option<String>,
-    /// Reviewed plain UTF-8 SRT, timed from source zero (full WAV zero with --project).
+    /// Reviewed plain UTF-8 SRT, or its NOH lyrics file (.noh-lyrics.json), timed
+    /// from source zero (full WAV zero with --project). The lyrics file is created
+    /// beside an .srt given alone; the two are kept identical (see --truth).
     #[arg(long, value_name = "FILE", requires = "caption_operation")]
     srt: Option<PathBuf>,
+    /// When the .srt and its lyrics file differ: which one is the source of truth.
+    /// lyrics rewrites the .srt, srt replaces the lyrics; the replaced file is kept
+    /// beside as <name>.replaced…. Asked in a terminal; required otherwise.
+    #[arg(long, value_parser = ["lyrics", "srt"], requires = "srt")]
+    truth: Option<String>,
     /// Caption size preset (default: medium); text is never silently shrunk.
     #[arg(long, value_parser = ["small", "medium", "large"], requires = "srt")]
     caption_size: Option<String>,
@@ -76,6 +85,30 @@ pub struct Options {
     /// Protected caption region; conservative platform UI guides (default: none).
     #[arg(long, value_parser = ["none", "youtube_shorts", "tiktok", "reels", "universal"], requires = "srt")]
     caption_safe_area: Option<String>,
+    /// Caption effect by id instead of Classique (see --list-effects). Its own
+    /// settings come with --effect-value; --caption-size and --caption-placement
+    /// are Classique's and are refused with another effect.
+    #[arg(long, value_name = "ID", requires = "srt")]
+    effect: Option<String>,
+    /// One of the effect's presets (see --list-effects).
+    #[arg(long, value_name = "NAME", requires = "effect")]
+    effect_preset: Option<String>,
+    /// One effect setting, read by its declared type: a number (decimal comma
+    /// accepted), true/false, a palette as comma-separated colors, a font as a
+    /// bundled face or system:<installed family>, a landscape/portrait pair as
+    /// JSON. Repeatable.
+    #[arg(long = "effect-value", value_name = "KEY=VALUE", requires = "effect")]
+    effect_values: Vec<String>,
+    /// List the caption effects --effect can name, their presets and settings,
+    /// the folders read and the folders refused (=json for JSON).
+    #[arg(long, num_args = 0..=1, default_missing_value = "text", require_equals = true, value_parser = ["text", "json"], exclusive = true)]
+    list_effects: Option<String>,
+    /// The caption style once the effect is resolved (Classique's values folded in).
+    #[arg(skip)]
+    chosen_style: Option<crate::captions::CaptionStyle>,
+    /// The effect plugin resolved from --effect, if not Classique.
+    #[arg(skip)]
+    chosen_effect: Option<crate::project::EffectChoice>,
     video: Option<PathBuf>,
     wav: Option<PathBuf>,
     /// WAV soundtrack for fully flagged or image-only input.
@@ -137,7 +170,11 @@ fn image_seconds(value: &std::ffi::OsStr) -> Result<f64, String> {
 impl Options {
     fn caption_style(&self) -> crate::captions::CaptionStyle {
         use crate::captions::{CaptionPlacement, CaptionSize, CaptionStyle};
+        if let Some(style) = self.chosen_style {
+            return style;
+        }
         CaptionStyle {
+            line_width: None,
             safe_area: match self.caption_safe_area.as_deref() {
                 Some("youtube_shorts") => crate::safe_area::SafeArea::YoutubeShorts,
                 Some("tiktok") => crate::safe_area::SafeArea::Tiktok,
@@ -288,7 +325,7 @@ fn present(event: Event, machine_output: bool) -> Option<i32> {
                 }
             }
             for note in result.notes {
-                println!("{}", crate::i18n::Language::En.text(&note));
+                println!("{}", note_text(&note));
             }
             return Some(0);
         }
@@ -346,8 +383,29 @@ pub fn run(arguments: impl IntoIterator<Item = OsString>) -> i32 {
     if let Some(path) = args.engine_worker {
         return crate::jobs::worker(&path);
     }
+    if let Some(format) = args.list_effects.as_deref() {
+        let listing = crate::effect_choice::list();
+        if format == "json" {
+            println!("{}", listing_json(&listing));
+        } else {
+            print!("{}", crate::effect_choice::listing_text(&listing));
+        }
+        return 0;
+    }
     if args.transcribe.is_some() {
         return transcribe(args);
+    }
+    // The effect is checked first: a refused one leaves the subtitles and their
+    // lyrics file untouched and asks nothing.
+    let mut args = args;
+    if let Err(error) = args.resolve_effect() {
+        return start_error(&error, args.json);
+    }
+    // The subtitles given are kept in step with their lyrics file before any
+    // job starts (lyrics plan 10).
+    match args.resolve_subtitles() {
+        Ok(srt) => args.srt = srt,
+        Err(code) => return code,
     }
     if args.burn_subtitles.is_some() {
         return burn_subtitles(args);
@@ -429,6 +487,7 @@ pub fn run(arguments: impl IntoIterator<Item = OsString>) -> i32 {
         CliOperation::Project(crate::project::ProjectRequest {
             montage: request,
             short: project_short,
+            effect: args.chosen_effect.clone(),
             captions: project_captions,
         })
     } else if let Some(level) = args.diagnose {
@@ -454,9 +513,100 @@ enum CliOperation {
     Project(crate::project::ProjectRequest),
 }
 
+/// `--list-effects=json`: the MCP's `noh_list_effects` shape (version, folders,
+/// effects, refused), flat.
+fn listing_json(listing: &crate::effect_choice::Listing) -> serde_json::Value {
+    let mut json = serde_json::to_value(listing).unwrap_or_default();
+    if let Some(fields) = json.as_object_mut() {
+        fields.insert("version".into(), 1.into());
+    }
+    json
+}
+
+/// A failure before any job starts, printed as the job's own would be (JSON with
+/// --json): the exit code.
+fn start_error(error: &crate::engine::EngineError, json: bool) -> i32 {
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({ "version": 1, "error": {
+                "code": error.code,
+                "path": error.path,
+                "detail": error.detail.as_ref(),
+                "technical": serde_json::from_str::<serde_json::Value>(&error.technical)
+                    .unwrap_or_default(),
+            }})
+        );
+    } else {
+        eprintln!("Error [{}]: {}", error.code, error.detail);
+    }
+    1
+}
+
 impl Options {
+    /// `--srt` (an .srt or a lyrics file) kept in step with its lyrics file: the
+    /// .srt the job reads. A difference is answered by `--truth` or the terminal
+    /// (both stdin and stderr, never with --json); without an answer nothing is
+    /// written and the command stops. What was done goes to stderr.
+    fn resolve_subtitles(&self) -> Result<Option<PathBuf>, i32> {
+        let Some(input) = &self.srt else {
+            return Ok(None);
+        };
+        let truth = self.truth.as_deref().and_then(|t| t.parse().ok());
+        let json = self.json;
+        match crate::lyrics_input::resolve(input, truth, |difference| {
+            crate::lyrics_input::ask_terminal(difference, json)
+        }) {
+            Ok(resolved) => {
+                for note in &resolved.notes {
+                    eprintln!("{}", crate::lyrics_input::note_text(note));
+                }
+                Ok(Some(resolved.srt))
+            }
+            Err(error) => Err(start_error(&error, json)),
+        }
+    }
+
+    /// `--effect` resolved before any job starts (effect_choice): Classique's
+    /// values become the caption style, another effect is kept for the request.
+    fn resolve_effect(&mut self) -> Result<(), crate::engine::EngineError> {
+        use crate::effect_choice::{Chosen, Flags, Given, Wanted};
+        let Some(id) = self.effect.clone() else {
+            return Ok(());
+        };
+        let mut values = Vec::new();
+        for pair in &self.effect_values {
+            let Some((key, value)) = pair.split_once('=') else {
+                return Err(crate::engine::EngineError::new(
+                    "error.effect",
+                    "choose_effect",
+                    None,
+                    format!("--effect-value takes KEY=VALUE: \"{pair}\" has no \"=\"."),
+                ));
+            };
+            values.push((key.trim().to_string(), Given::Text(value.to_string())));
+        }
+        let wanted = Wanted {
+            id,
+            preset: self.effect_preset.clone(),
+            values,
+        };
+        // Given on the command line, not defaulted.
+        let flags = Flags {
+            size: self.caption_size.is_some(),
+            placement: self.caption_placement.is_some(),
+        };
+        let style = self.caption_style();
+        match crate::effect_choice::resolve(&wanted, style, flags, self.project && self.preview)? {
+            Chosen::Classic(style) => self.chosen_style = Some(style),
+            Chosen::Plugin(choice) => self.chosen_effect = Some(choice),
+        }
+        Ok(())
+    }
+
     fn short_request(&self, ffmpeg: PathBuf) -> crate::shorts::ShortRequest {
         crate::shorts::ShortRequest {
+            effect: self.chosen_effect.clone(),
             source: self.short.clone().unwrap(),
             output: self.output.clone().unwrap(),
             ffmpeg,
@@ -507,6 +657,7 @@ fn burn_subtitles(args: Options) -> i32 {
     };
     // Clap requires the fields; validation, rendering and publication are shared.
     let request = crate::captions::CaptionRequest {
+        effect: args.chosen_effect.clone(),
         source: args.burn_subtitles.unwrap(),
         subtitles: args.srt.unwrap(),
         output: args.output.unwrap(),
@@ -682,6 +833,52 @@ fn run_job(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn truth_needs_srt_and_takes_lyrics_or_srt() {
+        let (options, _) = parse(&[
+            "noh",
+            "--burn-subtitles",
+            "source.mp4",
+            "--srt",
+            "song.noh-lyrics.json",
+            "--truth",
+            "srt",
+            "--output",
+            "out.mp4",
+        ])
+        .unwrap();
+        assert_eq!(options.truth.as_deref(), Some("srt"));
+        assert_eq!(options.srt, Some("song.noh-lyrics.json".into()));
+        for bad in [
+            vec![
+                "noh",
+                "--burn-subtitles",
+                "s.mp4",
+                "--srt",
+                "a.srt",
+                "--truth",
+                "paroles",
+                "--output",
+                "o.mp4",
+            ],
+            vec![
+                "noh",
+                "--short",
+                "s.mp4",
+                "--start-ms",
+                "0",
+                "--end-ms",
+                "10",
+                "--output",
+                "o.mp4",
+                "--truth",
+                "lyrics",
+            ],
+        ] {
+            assert!(parse(&bad).is_err(), "{bad:?}");
+        }
+    }
 
     fn parse(arguments: &[&str]) -> Result<(Options, ArgMatches), clap::Error> {
         let matches = Options::command().try_get_matches_from(arguments)?;
@@ -1092,5 +1289,179 @@ mod tests {
         assert!(parse(&["noh", "--build-info", "--image", "photo.png", "1"]).is_err());
         let (options, _) = parse(&["noh", "--engine-worker", "request.json"]).unwrap();
         assert_eq!(options.engine_worker, Some("request.json".into()));
+    }
+}
+
+/// A diagnosis note in English: a key, or `key|arg|...` (the colour matrix warning).
+fn note_text(note: &str) -> String {
+    crate::i18n::Message::from(note).render(crate::i18n::Language::En)
+}
+
+#[cfg(test)]
+mod note_tests {
+    #[test]
+    fn notes_with_arguments_are_rendered_not_looked_up_whole() {
+        assert_eq!(
+            super::note_text("warning.color_matrix|BT.709|2|BT.601"),
+            "The videos do not use the same color standard. The whole export uses BT.709; clips converted from BT.601: 2."
+        );
+        assert_eq!(
+            super::note_text("diagnosis.color_limit"),
+            crate::i18n::Language::En.text("diagnosis.color_limit")
+        );
+    }
+
+    /// The command line says which installed family was missing, by name.
+    #[test]
+    fn a_missing_installed_font_is_named_in_the_terminal() {
+        let text = super::note_text("warning.effect_font_missing|NOH Absent Family");
+        assert!(text.contains("NOH Absent Family"), "{text}");
+        assert!(!text.contains("warning.effect_font_missing"), "{text}");
+        // A word wider than the text area: the terminal gives its time.
+        let text = super::note_text(&crate::captions::word_too_wide_warning(42.4));
+        assert!(text.contains("0:42") && text.contains("NOH"), "{text}");
+        assert!(!text.contains("warning."), "{text}");
+    }
+}
+
+#[cfg(test)]
+mod effect_tests {
+    use super::Options;
+    use clap::{CommandFactory, FromArgMatches};
+
+    fn options(arguments: &[&str]) -> Result<Options, clap::Error> {
+        let matches = Options::command().try_get_matches_from(arguments)?;
+        Options::from_arg_matches(&matches)
+    }
+    const BURN: [&str; 7] = [
+        "noh",
+        "--burn-subtitles",
+        "in.mp4",
+        "--srt",
+        "x.srt",
+        "--output",
+        "out.mp4",
+    ];
+
+    /// --effect needs captions; its preset and values need --effect; the
+    /// listing stands alone (=json for JSON).
+    #[test]
+    fn effect_options_need_their_parents_and_the_listing_stands_alone() {
+        assert!(
+            options(&[
+                "noh",
+                "--short",
+                "in.mp4",
+                "--start-ms",
+                "0",
+                "--end-ms",
+                "9",
+                "--output",
+                "o.mp4",
+                "--effect",
+                "noh.drop"
+            ])
+            .is_err()
+        );
+        let mut alone = BURN.to_vec();
+        alone.extend(["--effect-value", "font=sans"]);
+        assert!(options(&alone).is_err());
+        let mut preset = BURN.to_vec();
+        preset.extend(["--effect-preset", "white"]);
+        assert!(options(&preset).is_err());
+        assert_eq!(
+            options(&["noh", "--list-effects"])
+                .unwrap()
+                .list_effects
+                .as_deref(),
+            Some("text")
+        );
+        assert_eq!(
+            options(&["noh", "--list-effects=json"])
+                .unwrap()
+                .list_effects
+                .as_deref(),
+            Some("json")
+        );
+        assert!(options(&["noh", "--list-effects=xml"]).is_err());
+        // The JSON listing is flat, as noh_list_effects replies.
+        let json = super::listing_json(&crate::effect_choice::list());
+        let mut keys: Vec<&str> = json
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        assert_eq!(keys, ["effects", "folders", "refused", "version"]);
+        assert_eq!(json["version"], 1);
+        assert!(
+            json["effects"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|e| e["id"] == "noh.classic")
+        );
+        let mut both = BURN.to_vec();
+        both.push("--list-effects");
+        assert!(options(&both).is_err());
+    }
+
+    /// Classique by id: its values become the style the burn draws (and libass
+    /// would); an option given twice is refused before any job.
+    #[test]
+    fn classique_by_id_folds_into_the_style_and_twice_is_refused() {
+        let mut args = BURN.to_vec();
+        args.extend([
+            "--effect",
+            "noh.classic",
+            "--effect-value",
+            "size=large",
+            "--effect-value",
+            "width=75,5",
+        ]);
+        let mut o = options(&args).unwrap();
+        o.resolve_effect().unwrap();
+        assert!(o.chosen_effect.is_none());
+        let style = o.caption_style();
+        assert_eq!(style.size, crate::captions::CaptionSize::Large);
+        assert_eq!(style.line_width, Some(7_550));
+        args.extend(["--caption-size", "small"]);
+        let mut o = options(&args).unwrap();
+        let e = o.resolve_effect().unwrap_err();
+        assert!(e.detail.contains("given twice"), "{}", e.detail);
+    }
+
+    /// Refused before any job: Classique's options with another effect, a
+    /// project preview with one, a value without "=". Nothing is dropped.
+    #[test]
+    fn wrong_effect_requests_are_refused_before_any_job() {
+        let mut sized = BURN.to_vec();
+        sized.extend(["--effect", "noh.drop", "--caption-placement", "top"]);
+        let e = options(&sized).unwrap().resolve_effect().unwrap_err();
+        assert!(e.detail.contains("Classique's options"), "{}", e.detail);
+        let preview = [
+            "noh",
+            "--project",
+            "--soundtrack",
+            "s.wav",
+            "--video",
+            "v.mp4",
+            "--output",
+            "o.mp4",
+            "--srt",
+            "x.srt",
+            "--preview",
+            "--effect",
+            "noh.drop",
+        ];
+        let e = options(&preview).unwrap().resolve_effect().unwrap_err();
+        assert_eq!(e.code, "error.effect_preview");
+        // A project export (no preview) and a burn preview may draw an effect:
+        // nothing refuses them before the folders are read.
+        let mut no_equals = BURN.to_vec();
+        no_equals.extend(["--effect", "noh.classic", "--effect-value", "large"]);
+        let e = options(&no_equals).unwrap().resolve_effect().unwrap_err();
+        assert!(e.detail.contains("KEY=VALUE"), "{}", e.detail);
     }
 }

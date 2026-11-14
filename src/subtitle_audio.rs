@@ -15,6 +15,13 @@ pub(super) fn trim_silence(path: &Path, track: &mut SubtitleTrack) -> io::Result
     let mut reader = BufReader::new(File::open(path)?);
     let active = activity(&mut reader, track.duration_ms)?;
     trim(track, &active);
+    // Trimmed bounds can leave word times outside their cue: those cues fall
+    // back to the letter split, the others keep theirs.
+    for cue in &mut track.cues {
+        if cue.words.as_ref().is_some_and(|w| !cue.words_fit(w)) {
+            cue.words = None;
+        }
+    }
     track.validate().map_err(io::Error::other)
 }
 
@@ -122,16 +129,19 @@ mod tests {
                     start_ms: 0,
                     end_ms: 10000,
                     text: "first".into(),
+                    words: None,
                 },
                 SubtitleCue {
                     start_ms: 20000,
                     end_ms: 25000,
                     text: "silence".into(),
+                    words: None,
                 },
                 SubtitleCue {
                     start_ms: 71000,
                     end_ms: 90000,
                     text: "last".into(),
+                    words: None,
                 },
             ],
         };
