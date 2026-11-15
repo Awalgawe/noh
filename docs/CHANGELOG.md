@@ -69,9 +69,16 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
 
 ### Known issues
 
-- On Debian 13 with GNOME, the preview did not start playing in 2 of 21
-  automated test runs made while preparing this release: the application stayed open and playback never began.
-  The cause is not known, nor whether a real computer is affected.
+- On Debian 13 with GNOME, in 3 of 23 automated test runs made while
+  preparing this release, the preview's picture stopped updating after about
+  one second. In the one occurrence that was recorded in detail, the player
+  reported the end of the clip at that moment. A possible cause is being
+  investigated: the preview ending when its audio queue is momentarily empty;
+  the same condition is already in 0.1.5. It is not known whether a real computer
+  is affected.
+- In the desktop test run of this release, Debian 13 passed on a second
+  attempt after that failure, and Mint 22.3 passed on a second attempt after
+  its first one timed out downloading its test image, before any test started.
 - The automated tests use software rendering and virtual audio. No real
   graphics card, sound card, NVENC or CUDA device was tested.
 
