@@ -435,7 +435,7 @@ def test(work):
                               "Microsoft prerequisite download is not executed in silent mode.",
                               "Upgrade: the previous version is installed but never run, so settings or data it writes are not exercised; new components come from adjacent archives, not a download; silent mode only.",
                               "The installed interface starts with Mesa's software OpenGL placed beside it for the test, then removed; no hardware GPU is exercised and nobody looks at the capture.",
-                              "Audio/GPU/media qualification of the source portable remains a separate release gate.",
+                              "No hardware audio device or GPU is exercised; the portable package's media behaviour is tested by the build and by the acceptance run only.",
                               "No Authenticode signing or SmartScreen reputation is claimed."]}
     delivery.write(work / "output/INSTALLER-TESTS.json", report)
 
