@@ -130,9 +130,24 @@ def changelog_section(text, version):
     require(len(matches) == 1, "The changelog has no single entry for " + version)
     end = next((i for i in starts if i > matches[0]), len(lines))
     section = "\n".join(lines[matches[0] + 1:end]).strip()
+    # An entry may open with a paragraph sending the reader to the release's downloads. In the
+    # release's own notes that paragraph would point to the page it is on: leave it out.
+    opening, _, rest = section.partition("\n\n")
+    if opening.startswith("Download "):
+        section = rest.strip()
     require(section and "unreleased" not in lines[matches[0]].lower(),
             "The changelog entry of " + version + " is empty or still marked unreleased")
     return section
+
+
+def desktop_rerun_lines(identity):
+    """Say which desktops passed only on a later attempt of the run: a re-run must leave a trace."""
+    again = {case: n for case, n in sorted(identity.get("desktop_case_attempts", {}).items()) if n > 1}
+    if not again:
+        return []
+    return ["- These desktops failed first and passed when re-run in the same run: "
+            + ", ".join(f"{case} (attempt {n})" for case, n in again.items())
+            + ". See the known issues under Changes."]
 
 
 def release_notes(version, identity, limits, changes):
@@ -152,6 +167,7 @@ def release_notes(version, identity, limits, changes):
         "published version, started the installed interface and uninstalled.",
         f"- [Run {identity['desktop_run']}]({runs}{identity['desktop_run']}) started the exact Linux package on "
         f"{identity['desktop_cases']} desktops in virtual machines.",
+        *desktop_rerun_lines(identity),
         "- Each file here matches a digest recorded by those runs. `SHA256SUMS` lists them.", "",
         "### Limits", "",
         *["- " + limit for limit in limits],
@@ -312,7 +328,7 @@ def gather_desktops(github, identity, scratch, output):
             and run["conclusion"] == "success", "Not a successful Linux desktop run on main")
     require(github.request("/compare/" + run["head_sha"] + "...main")["status"] in ("ahead", "identical"),
             "The desktop run's commit is not retained on main")
-    attempt, cases = run["run_attempt"], desktop_cases()
+    attempt, cases, taken = run["run_attempt"], desktop_cases(), {}
     inventory = github.request("/actions/runs/" + str(identity["desktop_run"]) + "/artifacts?per_page=100")
     require(inventory["total_count"] == len(inventory["artifacts"]), "Incomplete desktop artifact listing")
     from linux_matrix import CHECKS
@@ -324,14 +340,14 @@ def gather_desktops(github, identity, scratch, output):
             found = sorted((int(pattern.fullmatch(a["name"]).group(1)), a) for a in inventory["artifacts"]
                            if pattern.fullmatch(a["name"]))
             require(found and found[-1][0] <= attempt, "No desktop result for " + case)
-            folder = download_artifact(github, found[-1][1], scratch)
+            folder, taken[case] = download_artifact(github, found[-1][1], scratch), found[-1][0]
             validate_desktop_candidate(delivery.read(folder / "CANDIDATE.json"), identity)
             require(delivery.read(folder / "case.json").get("checks") == {check: "passed" for check in CHECKS},
                     "A desktop case did not pass every check: " + case)
             for path in sorted(p for p in folder.rglob("*") if p.is_file()):
                 evidence.write(path, case + "/" + path.relative_to(folder).as_posix())
             shutil.rmtree(folder)
-    identity.update(desktop_attempt=attempt, desktop_cases=len(cases))
+    identity.update(desktop_attempt=attempt, desktop_cases=len(cases), desktop_case_attempts=taken)
 
 
 def publication_record(identity, release_id, files):
@@ -341,6 +357,7 @@ def publication_record(identity, release_id, files):
             "build_run": identity["build_run"], "build_attempt": identity["build_attempt"],
             "installer_run": identity["installer_run"], "installer_attempt": identity["installer_attempt"],
             "desktop_run": identity["desktop_run"], "desktop_attempt": identity["desktop_attempt"],
+            "desktop_case_attempts": identity["desktop_case_attempts"],
             "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
             "assets": {path.name: "sha256:" + delivery.digest(path) for path in files}}
 

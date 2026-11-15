@@ -4,7 +4,7 @@ This branch/manual workflow tests an existing sealed Linux candidate in actual
 QEMU/KVM desktop VMs. It never recompiles or publishes NOH. The first adapter
 covers Ubuntu 24.04 and 26.04 GNOME/Wayland/PipeWire, Debian 13
 GNOME/X11/PulseAudio, Fedora 44 GNOME/Wayland/PipeWire, openSUSE Tumbleweed
-KDE/X11/PipeWire, Arch KDE/Wayland/PipeWire and installed Mint 22.3
+KDE/Wayland/PipeWire, Arch KDE/Wayland/PipeWire and installed Mint 22.3
 Cinnamon/X11/PipeWire. All seven rows in `assets/linux-validation-matrix.json`
 remain required. A subset or a successful shell exit cannot qualify the release.
 

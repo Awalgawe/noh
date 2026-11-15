@@ -228,6 +228,14 @@ that digest at download.
    package in a virtual machine. Failed desktops may be re-run in the same run; a
    new run must cover all of them. Its screens are kept as evidence; nobody
    reviews them.
+
+   Re-run a failed desktop only after reading why it failed. Two intermittent
+   failures are known on Debian 13 and may be re-run: the interface capture that
+   never ends (`gui-timeout.json` is present; seen in 2 of 21 runs, cause unknown,
+   in the application's live preview), and the file dialog left open
+   ("The Zenity fallback remains running"; seen once, the test's keys did not reach
+   the dialog). The release notes then name the desktop and the attempt that
+   passed. Any other failure stops the release.
 5. `stage=publish`, with the build run, attempt and commit, plus `installer_run_id`,
    `installer_attempt` and `desktop_run_id`: every file is checked against a digest
    recorded by those runs, then published unchanged under the final tag `v<version>`

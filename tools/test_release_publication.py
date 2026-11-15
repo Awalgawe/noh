@@ -3,6 +3,7 @@ import copy
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 import release_publication as publication
 
@@ -17,7 +18,8 @@ def spec(name, seed, size=10):
 def identity():
     return {"commit": COMMIT, "build_run": 11, "build_attempt": 1, "installer_run": 22, "installer_attempt": 2,
             "wrapper_commit": WRAPPER, "version": "1.2.3", "portable_sha256": "c" * 64, "delivery_sha256": "d" * 64,
-            "linux_delivery_sha256": "e" * 64, "desktop_run": 44, "desktop_attempt": 1, "desktop_cases": 7}
+            "linux_delivery_sha256": "e" * 64, "desktop_run": 44, "desktop_attempt": 1, "desktop_cases": 7,
+            "desktop_case_attempts": {"arch": 1, "debian-13": 1}}
 
 
 def report():
@@ -112,6 +114,11 @@ class Publication(unittest.TestCase):
         text = "# Changelog\n\n## 1.2.3\n\n- New effect.\n\n## 1.2.2 — 2026-01-01\n\n- Older.\n"
         self.assertEqual(publication.changelog_section(text, "1.2.3"), "- New effect.")
         self.assertEqual(publication.changelog_section(text, "1.2.2"), "- Older.")
+        # A leading paragraph pointing to the downloads is not repeated on the release page itself.
+        linked = "## 1.2.3\n\nDownload the [packages](https://example.invalid/v1.2.3).\nSecond line.\n\n- New effect.\n"
+        self.assertEqual(publication.changelog_section(linked, "1.2.3"), "- New effect.")
+        with self.assertRaises(ValueError):
+            publication.changelog_section("## 1.2.3\n\nDownload the [packages](https://example.invalid).\n", "1.2.3")
         for bad in ("# Changelog\n\n## 1.2.3 — unreleased\n\n- New effect.\n", "# Changelog\n\n## 1.2.30\n\n- Other.\n",
                     "## 1.2.3\n\n## 1.2.2\n\n- Older.\n", "## 1.2.3\n\n- a\n\n## 1.2.3\n\n- b\n"):
             with self.assertRaises(ValueError, msg=bad):
@@ -124,6 +131,17 @@ class Publication(unittest.TestCase):
                          "- Silent installation only.", "No hardware GPU", "- New effect.",
                          "blob/v1.2.3/docs/INSTALLING.md", "PUBLICATION.json"):
             self.assertIn(expected, notes)
+
+    def test_notes_name_a_desktop_that_passed_only_when_re_run(self):
+        once = publication.release_notes("1.2.3", identity(), [], "- New effect.")
+        self.assertNotIn("re-run", once)
+        again = identity() | {"desktop_attempt": 2, "desktop_case_attempts": {"arch": 1, "debian-13": 2}}
+        notes = publication.release_notes("1.2.3", again, [], "- New effect.")
+        self.assertIn("failed first and passed when re-run in the same run: debian-13 (attempt 2).", notes)
+        self.assertNotIn("arch (attempt", notes)
+        with mock.patch.dict("os.environ", {"GITHUB_RUN_ID": "55", "GITHUB_RUN_ATTEMPT": "1"}):
+            record = publication.publication_record(again, 9, [])
+        self.assertEqual(record["desktop_case_attempts"], {"arch": 1, "debian-13": 2})
 
     def test_provenance_binds_both_runs_and_every_profile(self):
         record = publication.installer_provenance(report(), identity())
