@@ -1,12 +1,14 @@
 """Exercise rejection paths without installing software or using the network."""
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import tempfile
 import subprocess
 import unittest
 import zipfile
+import unittest.mock
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("public_ci", Path(__file__).with_name("public-ci.py"))
@@ -71,6 +73,7 @@ class InstallerGuards(unittest.TestCase):
                     archive.writestr('DELIVERY.json', '{}')
 
             with patch.object(ci, 'GitHub') as github, \
+                    patch.object(ci, 'fetch_upgrade_baseline') as baseline, \
                     patch.object(ci.delivery, 'authorize_redistribution'), \
                     patch.object(ci.delivery, 'verify_envelope', return_value={
                         'source_commit': source, 'run_id': '1', 'run_attempt': '1',
@@ -89,6 +92,7 @@ class InstallerGuards(unittest.TestCase):
                     return
                 ci.prepare(root / 'work')
                 github.return_value.download.assert_called_once()
+                baseline.assert_called_once_with(root / 'work', github.return_value, '0.1.1')
                 verify.assert_called_once_with(root / 'work/portable', 'x86_64-pc-windows-gnu', source)
                 self.assertEqual(ci.delivery.read(root / 'work/SOURCE.json')['source_commit'], source)
 
@@ -122,6 +126,55 @@ class InstallerGuards(unittest.TestCase):
             with patch.object(ci.subprocess, 'run', side_effect=known_failure):
                 with self.assertRaisesRegex(ValueError, 'unexpected exit'):
                     ci.run(root, 'gui', ['unused'])
+
+    def test_the_upgrade_baseline_is_the_recorded_published_installer(self):
+        baseline = ci.upgrade_baseline()
+        self.assertEqual(baseline['tag'], 'v0.1.5')
+        self.assertEqual(baseline['name'], 'NOH-0.1.5-windows-x64-Complete-Setup.exe')
+        # While the repository still holds the publication record of that version, both must agree.
+        record = json.loads((ci.ROOT / 'docs/release-evidence/publication-0.1.5.json').read_text(encoding='utf-8'))
+        self.assertEqual(record['tag'], baseline['tag'])
+        self.assertEqual(record['assets'][baseline['name']], {'sha256': baseline['sha256'], 'size': baseline['size']})
+        valid = {'schema': 1, 'tag': 'v0.1.5', 'installer': baseline['name'],
+                 'sha256': baseline['sha256'], 'size': baseline['size']}
+        with tempfile.TemporaryDirectory() as temporary:
+            lock = Path(temporary) / 'lock.json'
+            lock.write_text(json.dumps(valid), encoding='utf-8')
+            self.assertEqual(ci.upgrade_baseline(lock), baseline)
+            for changes in ({'tag': 'v0.1.4'}, {'installer': 'NOH-0.1.5-windows-x64-Minimal-Setup.exe'},
+                            {'sha256': 'abc'}, {'size': '1220701762'}, {'size': 0}, {'schema': 2}):
+                lock.write_text(json.dumps({**valid, **changes}), encoding='utf-8')
+                with self.assertRaises(ValueError, msg=str(changes)):
+                    ci.upgrade_baseline(lock)
+
+    def test_the_baseline_download_is_bound_to_the_pin_and_to_a_published_release(self):
+        pin = ci.upgrade_baseline()
+        release = {'draft': False, 'prerelease': False, 'assets': [{'id': 5, 'name': pin['name']},
+                                                                    {'id': 6, 'name': 'SHA256SUMS'}]}
+        with tempfile.TemporaryDirectory() as temporary:
+            work = Path(temporary)
+            github = unittest.mock.Mock()
+            github.request.return_value = release
+            ci.fetch_upgrade_baseline(work, github, '0.1.6')
+            github.request.assert_called_once_with('/releases/tags/' + pin['tag'])
+            github.download.assert_called_once_with('/releases/assets/5', work / 'baseline' / pin['name'],
+                                                    pin['sha256'], pin['size'])
+            for change, message in (({'prerelease': True}, 'not a published release'),
+                                    ({'draft': True}, 'not a published release'),
+                                    ({'assets': []}, 'missing or ambiguous')):
+                github.request.return_value = {**release, **change}
+                with self.assertRaisesRegex(ValueError, message):
+                    ci.fetch_upgrade_baseline(work, github, '0.1.6')
+            with self.assertRaisesRegex(ValueError, 'version under test'):
+                ci.fetch_upgrade_baseline(work, github, pin['tag'][1:])
+
+    def test_the_tests_run_without_github_access(self):
+        # The test step has no token, and the installed application must never see one:
+        # downloads belong to the prepare step.
+        import inspect
+        for function in (ci.test, ci.test_profile, ci.test_additions, ci.test_upgrade, ci.start_installed):
+            self.assertNotIn('GitHub(', inspect.getsource(function), function.__name__)
+        self.assertIn('fetch_upgrade_baseline(work, github', inspect.getsource(ci.prepare))
 
     def test_local_host_is_rejected(self):
         with patch.dict(os.environ, {}, clear=True):

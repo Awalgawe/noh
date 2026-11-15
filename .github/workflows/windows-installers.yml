@@ -25,7 +25,7 @@ jobs:
   public-installer:
     if: github.repository_id == '1411000018' && github.ref == 'refs/heads/main' && github.workflow == 'Release'
     runs-on: windows-2025
-    timeout-minutes: 35
+    timeout-minutes: 60
     permissions:
       contents: write
       actions: read
@@ -60,7 +60,7 @@ jobs:
           "NOH_ISCC_DIRECTORY=$compiler" >> $env:GITHUB_ENV
       - name: Package offline profiles and the shared web wizard from unchanged application bytes
         run: python tools/installer/public-ci.py build
-      - name: Test profiles, component additions, repair, rejection and removal
+      - name: Test profiles, component additions, repair, rejection, upgrade and removal
         run: python tools/installer/public-ci.py test
       - name: Retain exact tested bytes and evidence in an unpublished draft
         env:
