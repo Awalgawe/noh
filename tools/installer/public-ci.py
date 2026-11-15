@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 import delivery
 import public_components
+import software_opengl
 from setup_delivery import GitHub
 
 spec = importlib.util.spec_from_file_location('delivery_release', ROOT / 'tools/delivery-release.py')
@@ -95,25 +96,20 @@ def prepare(work):
                  'tools/installer/public-messages.iss', 'tools/installer/public-profile.iss',
                  'tools/installer/public-verify.iss',
                  'tools/installer/public-ci.py', 'tools/installer/public-content.iss',
-                 'tools/public_components.py', 'assets/installer-extraction.lock.json'):
+                 'tools/public_components.py', 'assets/installer-extraction.lock.json',
+                 'tools/software_opengl.py', 'assets/software-opengl.lock.json'):
         checked_in = subprocess.check_output(['git', 'show', os.environ['GITHUB_SHA'] + ':' + name], cwd=ROOT)
         require(checked_in.replace(b'\r\n', b'\n') == (ROOT / name).read_bytes().replace(b'\r\n', b'\n'),
                 'Installer source differs from the workflow commit: ' + name)
     print("Exact successful build, portable and wrapper verified; independent release qualification remains required", flush=True)
 
 
-def run(work, name, args, timeout=600, env=None, allow_missing_opengl=False, expect_failure=False):
+def run(work, name, args, timeout=600, env=None, expect_failure=False):
     started = time.monotonic()
     with (work / (name + ".log")).open("wb") as log:
         result = subprocess.run([str(a) for a in args], cwd=work, env=env,
                                 stdout=log, stderr=subprocess.STDOUT, timeout=timeout)
     record = {"name": name, "exit": result.returncode, "seconds": round(time.monotonic() - started, 3)}
-    if (allow_missing_opengl and result.returncode == 1
-            and (work / (name + ".log")).read_text(encoding="utf-8").strip()
-            == 'Error: OpenGL(PainterError("egui_glow requires opengl 2.0+. "))'):
-        record["outcome"] = "unavailable: hosted runner lacks OpenGL 2.0"
-        print(json.dumps(record), flush=True)
-        return record
     print(json.dumps(record), flush=True)
     require((result.returncode != 0) if expect_failure else (result.returncode == 0),
             name + " returned an unexpected exit; inspect " + name + ".log")
@@ -249,7 +245,7 @@ def test_additions(work, setup, record, components):
     return {'status': 'passed', 'results': results, 'user_data_preserved': True}
 
 
-def test_profile(work, profile, records, web):
+def test_profile(work, profile, records, web, opengl):
     work.mkdir()
     installed = work / 'installation with spaces'
     record = records[profile]
@@ -288,11 +284,16 @@ def test_profile(work, profile, records, web):
         Path(env[key]).mkdir(parents=True)
     env["NOH_CAPTURE_UI"] = str(work / "installed-gui.ppm")
     env["NOH_LANGUAGE"] = "fr"
-    results.append(run(work, "installed-gui", [installed / "noh.exe"], 90, env, allow_missing_opengl=True))
-    gui_passed = results[-1]["exit"] == 0
-    if gui_passed:
-        gui = delivery.read(work / "installed-gui.json")
-        require(gui["capture_ready"] and not gui["timed_out"], "Installed GUI capture failed")
+    # The hosted runner has no OpenGL 2.0. Mesa's software renderer is test material:
+    # it arrives after the installed payload was verified and leaves before the uninstall.
+    env["GALLIUM_DRIVER"] = "llvmpipe"
+    software_opengl.deploy(opengl, [installed])
+    try:
+        results.append(run(work, "installed-gui", [installed / "noh.exe"], 90, env))
+    finally:
+        software_opengl.remove(opengl, [installed])
+    gui = delivery.read(work / "installed-gui.json")
+    require(gui["capture_ready"] and not gui["timed_out"], "Installed GUI capture failed")
     results.append(run(work, "installed-cli", [installed / "bin/noh-cli.exe", "--version"], 30, env))
     results.append(run(work, "uninstall", [installed / "unins000.exe", "/VERYSILENT",
                                           "/SUPPRESSMSGBOXES", "/NORESTART",
@@ -306,7 +307,9 @@ def test_profile(work, profile, records, web):
     require(delivery.digest(setup) == record["installer"]["sha256"], "Test changed installer bytes")
     return {"status": "passed", "profile": profile,
               "results": results, "installed_files_verified": len(expected),
-              "installed_gui_passed": gui_passed,
+              "installed_gui_passed": True,
+              "installed_gui_opengl": "Mesa files from assets/software-opengl.lock.json placed beside noh.exe, "
+                                      "GALLIUM_DRIVER=llvmpipe; the renderer was not read back",
               "user_data_preserved": True, "uninstall_registration_removed": True}
 
 
@@ -329,7 +332,8 @@ def test(work):
     for profile in PROFILES:
         require(records['web']['profile_files'][profile] == records[profile]['installed_files'],
                 'Web and offline installers must install identical profile bytes')
-    results = [test_profile(work / ('test-' + p), p, records, web) for p in PROFILES]
+    opengl = software_opengl.acquire(Path(os.environ["RUNNER_TEMP"]) / "noh-software-opengl")
+    results = [test_profile(work / ('test-' + p), p, records, web, opengl) for p in PROFILES]
     additions = test_additions(work / 'test-additions',
         work / 'output/minimal' / records['minimal']['installer']['name'], records['minimal'], work / 'components')
     guard = work / 'test-web-rejection'
@@ -353,7 +357,7 @@ def test(work):
               "limitations": ["Silent profile and cached web installation; no interactive wizard acceptance.",
                               "The web executable verifies adjacent component archives; real HTTPS acquisition is a separate acceptance check.",
                               "Microsoft prerequisite download is not executed in silent mode.",
-                              "The exact OpenGL-unavailable runner error is recorded, not a GUI pass; local installed-GUI validation is required before publication when it occurs.",
+                              "The installed interface starts with Mesa's software OpenGL placed beside it for the test, then removed; no hardware GPU is exercised and nobody looks at the capture.",
                               "Audio/GPU/media qualification of the source portable remains a separate release gate.",
                               "No Authenticode signing or SmartScreen reputation is claimed."]}
     delivery.write(work / "output/INSTALLER-TESTS.json", report)

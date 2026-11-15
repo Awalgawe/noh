@@ -45,6 +45,7 @@ jobs:
           python3 -m unittest discover -s tools/installer -p 'test_*.py'
           python3 tools/test-runtime-cache.py
           python3 -m unittest discover -s tools -p test_setup_delivery.py
+          python3 -m unittest discover -s tools -p test_software_opengl.py
 
   audit:
     needs: scope
@@ -125,6 +126,14 @@ jobs:
           cargo fetch --locked
       - name: Compile QA workers and run GUI, CLI, media, MCP and update tests
         run: ./tools/windows-qa.ps1 -Cache "$env:RUNNER_TEMP/noh-pr-downloads" -Runtime "$env:RUNNER_TEMP/noh-pr-ffmpeg"
+      - name: Restore the software OpenGL archive
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/noh-software-opengl/*.7z
+          key: noh-software-opengl-v1-${{ hashFiles('assets/software-opengl.lock.json') }}
+      - name: Draw caption effects with software OpenGL
+        # This job builds no package: Mesa is test material, checked against its pinned hash on every run.
+        run: ./tools/windows-effect-tests.ps1 -Cache "$env:RUNNER_TEMP/noh-software-opengl" -Runtime "$env:RUNNER_TEMP/noh-pr-ffmpeg"
       - name: Show timings and test results without artifact storage
         if: always()
         run: |
