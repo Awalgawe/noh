@@ -244,11 +244,19 @@ that digest at download.
    `installer_attempt` and `desktop_run_id`: every file is checked against a digest
    recorded by those runs, then published unchanged under the final tag `v<version>`
    as a **pre-release** that is not the latest release. The stage creates a draft
-   first; if anything fails before publication it deletes that draft, which holds
-   nothing public and creates no tag, so the stage can be run again. It refuses an
-   existing tag. `stage=rehearse-publish` takes the same inputs and does everything
-   up to reading the uploaded files back, then deletes the draft: nothing is
-   published, and its draft carries a `rehearsal-…` tag, never the real one. The
+   first; if anything fails while it is being filled, the stage deletes that draft,
+   which holds nothing public and creates no tag, so the stage can be run again.
+   If the last step refuses to publish the filled draft, the draft stays and
+   nothing is public. Inspect it and delete it by hand before running the stage
+   again: a new run would otherwise take that draft over, fail on the files each
+   run produces anew, delete it and fail. It refuses an existing tag.
+   `stage=rehearse-publish` takes the same inputs and does everything except the
+   one request that publishes, including the checks that request is preceded by,
+   then deletes the draft: nothing is published, and its draft carries a
+   `rehearsal-…` tag, never the real one. Every change the stages make to a release
+   names its tag and commit: GitHub replaces the tag of a draft changed without it
+   by an `untagged-…` placeholder, and the first publication of 0.1.6 stopped on
+   that. The
    published release carries `PUBLICATION.json`, the list of files and digests this
    run verified. The same list is kept as an artifact of the run before anything
    becomes public: acceptance and promotion rely on that artifact, not on how the

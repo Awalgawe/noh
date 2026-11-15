@@ -244,7 +244,8 @@ class Publication(unittest.TestCase):
         def request(route, method="GET", body=None):
             calls.append((route, method, body))
             if method == "PATCH":
-                return {"draft": False, "prerelease": True, "tag_name": "v1.2.3", "html_url": "https://example.invalid/r"}
+                return {"draft": False, "prerelease": True, "tag_name": "v1.2.3", "target_commitish": COMMIT,
+                        "html_url": "https://example.invalid/r"}
             return {"": {"id": publication.REPOSITORY_ID}, "/releases/5": draft, "/git/matching-refs/tags/v1.2.3": [],
                     "/releases/latest": {"tag_name": "v1.2.2"}}[route]
         github = Mock()
@@ -260,9 +261,12 @@ class Publication(unittest.TestCase):
             with patch.object(publication, "GitHub", return_value=github), patch.dict(os.environ, environment):
                 publication.finalize(args)
             patches = [call for call in calls if call[1] == "PATCH"]
-            self.assertEqual(patches, [("/releases/5", "PATCH", {"draft": False, "prerelease": True, "make_latest": "false"})])
+            self.assertEqual(patches, [("/releases/5", "PATCH", {
+                "tag_name": "v1.2.3", "target_commitish": COMMIT,
+                "draft": False, "prerelease": True, "make_latest": "false"})])
         refusals = {
             "already published": {"draft": False},
+            "tag replaced by GitHub's placeholder": {"tag_name": "untagged-f2480c7e77d6aef16e38"},
             "other commit": {"target_commitish": "0" * 40},
             "file replaced": {"assets": [{"name": "SHA256SUMS", "digest": "sha256:" + "9" * 64}]},
         }
@@ -323,6 +327,31 @@ class Publication(unittest.TestCase):
             (root / "runtime" / "case.json").unlink()
             (root / "case.json").write_text(json.dumps({"checks": passed}))
             self.assertFalse(publication.desktop_case_passed(root))
+
+    def test_every_change_to_a_release_names_its_tag_and_commit(self):
+        # GitHub replaces the tag of a draft patched without tag_name by "untagged-…": the first
+        # publication of 0.1.6 stopped on exactly that. One function sends every PATCH, and it names both.
+        github = mock.Mock()
+        publication.patch_release(github, 5, "v1.2.3", COMMIT, {"body": "notes"})
+        github.request.assert_called_once_with("/releases/5", "PATCH", {
+            "tag_name": "v1.2.3", "target_commitish": COMMIT, "body": "notes"})
+        source = Path(publication.__file__).read_text(encoding="utf-8")
+        self.assertEqual(source.count('"PATCH"'), 1, "A release is changed outside patch_release")
+
+    def test_a_staged_draft_must_still_carry_its_tag_commit_and_files(self):
+        assets = {"SHA256SUMS": "sha256:" + "1" * 64}
+        draft = {"draft": True, "published_at": None, "tag_name": "v1.2.3", "target_commitish": COMMIT,
+                 "assets": [{"name": "SHA256SUMS", "digest": "sha256:" + "1" * 64}]}
+        github = mock.Mock()
+        github.request.return_value = []
+        publication.require_staged(github, draft, "v1.2.3", COMMIT, assets)
+        for change in ({"tag_name": "untagged-713420b93b0d0e26287a"}, {"draft": False},
+                       {"published_at": "2026-01-01T00:00:00Z"}, {"target_commitish": "0" * 40}, {"assets": []}):
+            with self.assertRaises(ValueError, msg=str(change)):
+                publication.require_staged(github, draft | change, "v1.2.3", COMMIT, assets)
+        github.request.return_value = [{"ref": "refs/tags/v1.2.3"}]
+        with self.assertRaisesRegex(ValueError, "Tag already exists"):
+            publication.require_staged(github, draft, "v1.2.3", COMMIT, assets)
 
     def test_names_shared_with_the_workflows(self):
         self.assertEqual(publication.installer_draft_tag("1.2.3", 22, 2), "profile-installer-check-v1.2.3-22-2")
