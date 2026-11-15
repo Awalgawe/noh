@@ -209,6 +209,12 @@ for investigations; it does not produce a reusable public package.
 Releases are built, published, tested and promoted on GitHub. No step runs on a
 maintainer's machine, and each stage is one manual dispatch of **Release** on main.
 
+Before a release, refresh the rolling-release pins of `assets/linux-desktop-images.json`
+(Arch, openSUSE Tumbleweed) in a pull request: their publishers remove an image after
+a few weeks, and the desktop run of step 4 fails on an address that no longer exists.
+Each new pin states its address and the digest its publisher gives; the probe checks
+that digest at download.
+
 1. Merge the release commit through PR checks. It is written as if the version
    were already published: the changelog entry is `## <version>`, without
    "unreleased". The `publish` stage refuses an entry still marked unreleased.
