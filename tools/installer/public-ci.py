@@ -90,6 +90,7 @@ def prepare(work):
         'version': record['version'], 'portable_sha256': delivery.digest(archive),
         'manifest_sha256': delivery.digest(bundle / 'manifest.json'), 'artifact_id': artifact['id'],
         'artifact_digest': artifact['digest'], 'delivery_sha256': delivery.digest(candidate / 'DELIVERY.json')})
+    fetch_upgrade_baseline(work, github, record['version'])
     # Application and wrapper identities are separate: the current reviewed
     # workflow may fix the wrapper without rebuilding the qualified application.
     for name in ('tools/public-installer.py', 'tools/installer/public.iss',
@@ -97,7 +98,8 @@ def prepare(work):
                  'tools/installer/public-verify.iss',
                  'tools/installer/public-ci.py', 'tools/installer/public-content.iss',
                  'tools/public_components.py', 'assets/installer-extraction.lock.json',
-                 'tools/software_opengl.py', 'assets/software-opengl.lock.json'):
+                 'tools/software_opengl.py', 'assets/software-opengl.lock.json',
+                 'assets/upgrade-baseline.lock.json'):
         checked_in = subprocess.check_output(['git', 'show', os.environ['GITHUB_SHA'] + ':' + name], cwd=ROOT)
         require(checked_in.replace(b'\r\n', b'\n') == (ROOT / name).read_bytes().replace(b'\r\n', b'\n'),
                 'Installer source differs from the workflow commit: ' + name)
@@ -245,6 +247,95 @@ def test_additions(work, setup, record, components):
     return {'status': 'passed', 'results': results, 'user_data_preserved': True}
 
 
+def upgrade_baseline(lock=None):
+    """The published installer the upgrade test starts from, pinned in the repository."""
+    lock = delivery.read(lock or ROOT / 'assets/upgrade-baseline.lock.json')
+    require(lock.get('schema') == 1 and re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', str(lock.get('tag')))
+            and lock.get('installer') == 'NOH-' + str(lock.get('tag'))[1:] + '-windows-x64-Complete-Setup.exe'
+            and re.fullmatch('[0-9a-f]{64}', str(lock.get('sha256')))
+            and isinstance(lock.get('size'), int) and lock['size'] > 0, 'Invalid upgrade baseline')
+    return {'tag': lock['tag'], 'name': lock['installer'], 'sha256': lock['sha256'], 'size': lock['size']}
+
+
+def fetch_upgrade_baseline(work, github, version):
+    """Download the pinned published installer while the token is at hand, before any test runs."""
+    baseline = upgrade_baseline()
+    require(baseline['tag'] != 'v' + version, 'The upgrade baseline is the version under test')
+    release = github.request('/releases/tags/' + baseline['tag'])
+    require(not release['draft'] and not release['prerelease'], 'The upgrade baseline is not a published release')
+    assets = [a for a in release['assets'] if a['name'] == baseline['name']]
+    require(len(assets) == 1, 'Upgrade baseline asset missing or ambiguous')
+    github.download('/releases/assets/' + str(assets[0]['id']), work / 'baseline' / baseline['name'],
+                    baseline['sha256'], baseline['size'])
+
+
+def start_installed(work, installed, opengl):
+    """Start the installed interface and command line; returns their two results."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("NOH_")}
+    env["PATH"] = os.environ["SystemRoot"] + "/System32;" + os.environ["SystemRoot"]
+    env["APPDATA"] = str(work / "profile/roaming")
+    env["LOCALAPPDATA"] = str(work / "profile/local")
+    for key in ("APPDATA", "LOCALAPPDATA"):
+        Path(env[key]).mkdir(parents=True)
+    env["NOH_CAPTURE_UI"] = str(work / "installed-gui.ppm")
+    env["NOH_LANGUAGE"] = "fr"
+    # The hosted runner has no OpenGL 2.0. Mesa's software renderer is test material:
+    # it arrives after the installed payload was verified and leaves before the uninstall.
+    env["GALLIUM_DRIVER"] = "llvmpipe"
+    software_opengl.deploy(opengl, [installed])
+    try:
+        gui = run(work, "installed-gui", [installed / "noh.exe"], 90, env)
+    finally:
+        software_opengl.remove(opengl, [installed])
+    capture = delivery.read(work / "installed-gui.json")
+    require(capture["capture_ready"] and not capture["timed_out"], "Installed GUI capture failed")
+    return [gui, run(work, "installed-cli", [installed / "bin/noh-cli.exe", "--version"], 30, env)]
+
+
+def test_upgrade(work, setup, record, components, previous, opengl):
+    """Install the last published Complete version, then run the new Minimal installer over it.
+
+    It needs no GitHub access: `previous` was downloaded by the prepare step.
+    """
+    require(registration() is None, 'Refusing to replace an existing NOH installation')
+    work.mkdir()
+    baseline = upgrade_baseline()
+    require(previous.name == baseline['name'] and previous.stat().st_size == baseline['size']
+            and delivery.digest(previous) == baseline['sha256'], 'The upgrade baseline changed since it was downloaded')
+    installed = work / 'installation with spaces'
+    common = ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', '/NOICONS',
+              '/TASKS=!desktopicon', '/DIR=' + str(installed)]
+    results = [run(work, 'install-previous-complete', [previous, *common,
+                                                       '/LOG=' + str(work / 'install-previous-complete-inno.log')], 1200)]
+    require(registration() and Path(registration()).resolve() == installed.resolve(),
+            'The previous version registered another folder')
+    marker = installed / 'user-data.txt'
+    marker.write_text('User data must survive an upgrade.\n', encoding='utf-8')
+    catalog = delivery.read(components / 'COMPONENTS.json')
+    caches = []
+    try:
+        # Before publication the new components exist only beside the installer.
+        for item in catalog['groups'].values():
+            cache = setup.parent / item['name']
+            require(not cache.exists(), 'Test cache path is already occupied')
+            os.link(components / item['name'], cache)
+            caches.append(cache)
+        results.append(run(work, 'upgrade-with-minimal', [setup, '/PROFILE=minimal', *common,
+                                                          '/LOG=' + str(work / 'upgrade-with-minimal-inno.log')], 1200))
+    finally:
+        for cache in caches:
+            cache.unlink()
+    require(registration() and Path(registration()).resolve() == installed.resolve(),
+            'The upgrade registered another folder')
+    verify_installed(installed, record['profile_files']['complete'])
+    require(marker.read_text(encoding='utf-8') == 'User data must survive an upgrade.\n', 'The upgrade altered user data')
+    results.extend(start_installed(work, installed, opengl))
+    results.append(remove_test_installation(work, installed))
+    return {'status': 'passed', 'from': baseline['tag'], 'from_installer_sha256': baseline['sha256'],
+            'results': results, 'complete_components_retained': True, 'upgraded_interface_started': True,
+            'user_data_preserved': True}
+
+
 def test_profile(work, profile, records, web, opengl):
     work.mkdir()
     installed = work / 'installation with spaces'
@@ -276,25 +367,7 @@ def test_profile(work, profile, records, web, opengl):
             '/DIR=' + str(destination), '/LOG=' + str(work / (name + '-inno.log'))], expect_failure=True))
         require(delivery.inventory(installed) == before, 'Rejected operation changed the installed payload')
         require(not (work / 'other location').exists(), 'Rejected operation created another installation')
-    env = {k: v for k, v in os.environ.items() if not k.startswith("NOH_")}
-    env["PATH"] = os.environ["SystemRoot"] + "/System32;" + os.environ["SystemRoot"]
-    env["APPDATA"] = str(work / "profile/roaming")
-    env["LOCALAPPDATA"] = str(work / "profile/local")
-    for key in ("APPDATA", "LOCALAPPDATA"):
-        Path(env[key]).mkdir(parents=True)
-    env["NOH_CAPTURE_UI"] = str(work / "installed-gui.ppm")
-    env["NOH_LANGUAGE"] = "fr"
-    # The hosted runner has no OpenGL 2.0. Mesa's software renderer is test material:
-    # it arrives after the installed payload was verified and leaves before the uninstall.
-    env["GALLIUM_DRIVER"] = "llvmpipe"
-    software_opengl.deploy(opengl, [installed])
-    try:
-        results.append(run(work, "installed-gui", [installed / "noh.exe"], 90, env))
-    finally:
-        software_opengl.remove(opengl, [installed])
-    gui = delivery.read(work / "installed-gui.json")
-    require(gui["capture_ready"] and not gui["timed_out"], "Installed GUI capture failed")
-    results.append(run(work, "installed-cli", [installed / "bin/noh-cli.exe", "--version"], 30, env))
+    results.extend(start_installed(work, installed, opengl))
     results.append(run(work, "uninstall", [installed / "unins000.exe", "/VERYSILENT",
                                           "/SUPPRESSMSGBOXES", "/NORESTART",
                                           "/LOG=" + str(work / "uninstall-inno.log")], 180))
@@ -336,6 +409,9 @@ def test(work):
     results = [test_profile(work / ('test-' + p), p, records, web, opengl) for p in PROFILES]
     additions = test_additions(work / 'test-additions',
         work / 'output/minimal' / records['minimal']['installer']['name'], records['minimal'], work / 'components')
+    upgrade = test_upgrade(work / 'test-upgrade',
+        work / 'output/minimal' / records['minimal']['installer']['name'], records['minimal'], work / 'components',
+        work / 'baseline' / upgrade_baseline()['name'], opengl)
     guard = work / 'test-web-rejection'
     guard.mkdir()
     isolated_web = guard / web.name
@@ -352,11 +428,12 @@ def test(work):
               "component_catalog_sha256": delivery.digest(work / 'components/COMPONENTS.json'),
               "wrapper_commit": os.environ.get('GITHUB_SHA', 'local-uncommitted'),
               "run_id": os.environ.get('GITHUB_RUN_ID'), "run_attempt": os.environ.get('GITHUB_RUN_ATTEMPT'),
-              "host": platform.platform(), "profiles": results, "additions": additions,
+              "host": platform.platform(), "profiles": results, "additions": additions, "upgrade": upgrade,
               "rejections": rejects, "artifacts": records,
               "limitations": ["Silent profile and cached web installation; no interactive wizard acceptance.",
                               "The web executable verifies adjacent component archives; real HTTPS acquisition is a separate acceptance check.",
                               "Microsoft prerequisite download is not executed in silent mode.",
+                              "Upgrade: the previous version is installed but never run, so settings or data it writes are not exercised; new components come from adjacent archives, not a download; silent mode only.",
                               "The installed interface starts with Mesa's software OpenGL placed beside it for the test, then removed; no hardware GPU is exercised and nobody looks at the capture.",
                               "Audio/GPU/media qualification of the source portable remains a separate release gate.",
                               "No Authenticode signing or SmartScreen reputation is claimed."]}
