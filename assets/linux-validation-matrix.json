@@ -16,7 +16,7 @@
     {"id": "ubuntu-26.04", "desktop": "GNOME", "display": "wayland", "audio": "pipewire"},
     {"id": "debian-13", "desktop": "GNOME", "display": "x11", "audio": "pulseaudio"},
     {"id": "fedora-44", "desktop": "GNOME", "display": "wayland", "audio": "pipewire"},
-    {"id": "opensuse-tumbleweed", "desktop": "KDE", "display": "x11", "audio": "pipewire"},
+    {"id": "opensuse-tumbleweed", "desktop": "KDE", "display": "wayland", "audio": "pipewire"},
     {"id": "arch", "desktop": "KDE", "display": "wayland", "audio": "pipewire"},
     {"id": "mint-22.3", "desktop": "Cinnamon", "display": "x11", "audio": "pipewire"}
   ]

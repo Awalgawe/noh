@@ -158,8 +158,8 @@ def rpm_arch_provisioning(row, image):
     if image['os_id'] == 'opensuse-tumbleweed':
         commands = [
             ['zypper', '--non-interactive', 'install', '--no-recommends', '--', 'kernel-default', '-kernel-default-base',
-             'python3', 'ffmpeg-8', 'libmpv2', 'mpv', 'plasma6-desktop', 'plasma6-session-x11', 'sddm',
-             'xorg-x11-server', 'pipewire', 'pipewire-pulseaudio', 'pipewire-alsa', 'wireplumber',
+             'python3', 'ffmpeg-8', 'libmpv2', 'mpv', 'plasma6-desktop', 'plasma6-session', 'sddm',
+             'xwayland', 'python3-gobject', 'python3-gobject-Gdk', 'typelib-1_0-Gtk-3_0', 'pipewire', 'pipewire-pulseaudio', 'pipewire-alsa', 'wireplumber',
              'pulseaudio-utils', 'alsa-utils', 'Mesa-dri', 'Mesa-libEGL1', 'libglvnd', 'libxkbcommon-x11-0',
              'libXcursor1', 'libXrandr2', 'libXi6', 'libXinerama1', 'dejavu-fonts',
              'pciutils', 'binutils', 'espeak-ng', 'zenity', 'xdg-utils'],

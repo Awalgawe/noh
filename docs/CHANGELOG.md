@@ -5,10 +5,9 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
-## 0.1.6 — unreleased
+## 0.1.6
 
-Not published yet: no download exists for this version. The section records
-what the source contains.
+Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.1.6).
 
 ### Captions
 
@@ -61,6 +60,20 @@ what the source contains.
 - Update the dependencies, which clears
   five vulnerabilities and two unsound advisories reported by the RustSec
   audit. rmcp moves to 3.10.0 and ZIP to 9.5.1.
+
+### Linux desktops tested
+
+- openSUSE Tumbleweed is now tested with KDE on Wayland: its main repository
+  no longer has the package of the KDE X11 session. KDE on X11 is no longer tested; X11 remains tested with
+  GNOME on Debian 13 and Cinnamon on Mint 22.3.
+
+### Known issues
+
+- On Debian 13 with GNOME, the preview did not start playing in 2 of 21
+  automated test runs made while preparing this release: the application stayed open and playback never began.
+  The cause is not known, nor whether a real computer is affected.
+- The automated tests use software rendering and virtual audio. No real
+  graphics card, sound card, NVENC or CUDA device was tested.
 
 ## 0.1.5 — 2026-10-17, Windows packages added 2026-10-18
 
