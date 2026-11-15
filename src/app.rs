@@ -137,6 +137,7 @@ struct NohApp {
     capture_project_started: bool,
     // QA geometry deadline begins only after the real captured Job is reaped.
     capture_terminal_at: Option<Instant>,
+    capture_state_at: Option<Instant>,
     opened: Instant,
     scrub_qa: app_capture::ScrubQa,
 }
@@ -227,6 +228,7 @@ impl Default for NohApp {
             capture_requested: false,
             capture_project_started: false,
             capture_terminal_at: None,
+            capture_state_at: None,
             opened: Instant::now(),
         }
     }

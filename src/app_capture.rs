@@ -1397,6 +1397,35 @@ impl NohApp {
         } else {
             timed_out
         };
+        // A real operation has no deadline of its own here, so a capture that never
+        // ends leaves no report. Once a second, record where it stands: the harness
+        // reads this file whether the capture ends or not. It decides nothing.
+        if actual
+            && self
+                .capture_state_at
+                .is_none_or(|at| at.elapsed() >= Duration::from_secs(1))
+        {
+            self.capture_state_at = Some(Instant::now());
+            let state = serde_json::json!({
+                "elapsed_ms": self.opened.elapsed().as_millis() as u64,
+                "focused": ctx.input(|i| i.focused),
+                "geometry_ready": geometry_ready,
+                "ready": self.ready(),
+                "diagnosis_current": self.diagnosis_current(),
+                "track_loading": self.project.track.loading(),
+                "waveform_loading": self.project.waveform_loading,
+                "project_started": self.capture_project_started,
+                "project_terminal": terminal,
+                "capture_ready": capture_ready,
+                "capture_requested": self.capture_requested,
+                "mini_preview": self.mini_capture_report(),
+            });
+            let target = std::path::PathBuf::from(&path).with_extension("state.json");
+            let partial = target.with_extension("json.partial");
+            if std::fs::write(&partial, state.to_string()).is_ok() {
+                let _ = std::fs::rename(&partial, &target);
+            }
+        }
         if !self.capture_requested
             && self.opened.elapsed() > Duration::from_secs(2)
             && (capture_ready || timed_out)
@@ -1405,6 +1434,7 @@ impl NohApp {
             let mut report = report;
             report["resource_issues"] = serde_json::json!(self.resources.issues.len());
             report["project_action"] = serde_json::json!(project_action);
+            report["focused"] = serde_json::json!(ctx.input(|i| i.focused));
             report["mini_preview"] = self.mini_capture_report();
             if scrub_qa {
                 let snapshot = self.mini_preview.scrubber.as_ref().map(|s| s.snapshot());

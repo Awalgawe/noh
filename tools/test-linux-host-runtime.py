@@ -114,6 +114,13 @@ class HostRuntimeTests(unittest.TestCase):
             self.assertEqual(state['seconds'], 120.5)
             # Every observation is optional: a missing /proc or tool is recorded, never raised.
             probe.gui_timeout_state(100, 1.0, proc / 'absent')
+            # The application's own record is read beside the capture, and is optional too.
+            capture = proc / 'gui.ppm'
+            self.assertIn('unreadable', probe.capture_state(capture))
+            (proc / 'gui.state.json').write_text('{"elapsed_ms": 3000, "focused": false}')
+            self.assertEqual(probe.capture_state(capture), {'elapsed_ms': 3000, 'focused': False})
+            (proc / 'gui.state.json').write_text('{"elapsed')
+            self.assertIn('unreadable', probe.capture_state(capture))
 
 
 if __name__ == '__main__':
