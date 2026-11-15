@@ -49,7 +49,9 @@ def gui_preview(appdir, clip, soundtrack, tmp, evidence):
         except subprocess.TimeoutExpired:
             # Record what the stuck application and the desktop look like before ending it: the
             # screen taken afterwards cannot tell whether a window ever appeared.
-            write(evidence / 'gui-timeout.json', gui_timeout_state(app.pid, time.monotonic() - started))
+            write(evidence / 'gui-timeout.json',
+                  dict(gui_timeout_state(app.pid, time.monotonic() - started),
+                       capture_state=capture_state(capture)))
             app.kill()
             app.wait(timeout=10)
             raise
@@ -60,8 +62,19 @@ def gui_preview(appdir, clip, soundtrack, tmp, evidence):
     check_gui_report(report)
     if not capture.is_file() or capture.stat().st_size < 10000:
         raise ValueError('NOH GUI capture is missing')
+    # The application's last recorded state, as on a timeout, so a capture that ends and one that
+    # does not can be compared. It does not decide whether the capture passed.
     return {'report_sha256': digest(capture.with_suffix('.json')),
-            'capture_sha256': digest(capture), 'preview': report['mini_preview'], 'capture_seconds': seconds}
+            'capture_sha256': digest(capture), 'preview': report['mini_preview'], 'capture_seconds': seconds,
+            'focused': report.get('focused'), 'capture_state': capture_state(capture)}
+
+
+def capture_state(capture):
+    """The last state the application recorded during a real capture, or why it cannot be read."""
+    try:
+        return json.loads(capture.with_suffix('.state.json').read_text())
+    except (OSError, ValueError) as error:
+        return {'unreadable': str(error)}
 
 
 def gui_timeout_state(pid, seconds, proc=Path('/proc')):
