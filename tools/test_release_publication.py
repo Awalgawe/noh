@@ -1,5 +1,6 @@
 """Controls for release publication and promotion; no network and no real release."""
 import copy
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -306,6 +307,22 @@ class Publication(unittest.TestCase):
         run["status"] = "in_progress"
         with self.assertRaisesRegex(ValueError, "Not a completed Release run"):
             publication.release_run(github, 55, 1, 7, successful=False)
+
+    def test_a_desktop_case_is_read_where_the_artifact_keeps_it(self):
+        from linux_matrix import CHECKS
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.assertFalse(publication.desktop_case_passed(root))
+            (root / "runtime").mkdir()
+            passed = {check: "passed" for check in CHECKS}
+            (root / "runtime" / "case.json").write_text(json.dumps({"checks": passed}))
+            self.assertTrue(publication.desktop_case_passed(root))
+            (root / "runtime" / "case.json").write_text(json.dumps({"checks": passed | {sorted(CHECKS)[0]: "failed"}}))
+            self.assertFalse(publication.desktop_case_passed(root))
+            # A case.json at the artifact's root is not where the guest's record is kept.
+            (root / "runtime" / "case.json").unlink()
+            (root / "case.json").write_text(json.dumps({"checks": passed}))
+            self.assertFalse(publication.desktop_case_passed(root))
 
     def test_names_shared_with_the_workflows(self):
         self.assertEqual(publication.installer_draft_tag("1.2.3", 22, 2), "profile-installer-check-v1.2.3-22-2")

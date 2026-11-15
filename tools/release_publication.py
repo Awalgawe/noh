@@ -328,6 +328,13 @@ def validate_desktop_candidate(candidate, identity):
         require(candidate.get(key) == value, "A desktop case tested another Linux package: " + key)
 
 
+def desktop_case_passed(folder):
+    """A desktop artifact keeps what the guest wrote under runtime/: its case.json lists the checks."""
+    from linux_matrix import CHECKS
+    record = folder / "runtime" / "case.json"
+    return record.is_file() and delivery.read(record).get("checks") == {check: "passed" for check in CHECKS}
+
+
 def gather_desktops(github, identity, scratch, output):
     """Every required desktop must have started this exact Linux package in one successful run on main."""
     run = github.request("/actions/runs/" + str(identity["desktop_run"]))
@@ -340,7 +347,6 @@ def gather_desktops(github, identity, scratch, output):
     attempt, cases, taken = run["run_attempt"], desktop_cases(), {}
     inventory = github.request("/actions/runs/" + str(identity["desktop_run"]) + "/artifacts?per_page=100")
     require(inventory["total_count"] == len(inventory["artifacts"]), "Incomplete desktop artifact listing")
-    from linux_matrix import CHECKS
     with zipfile.ZipFile(output / "linux-desktop-evidence.zip", "x", zipfile.ZIP_DEFLATED) as evidence:
         for case in cases:
             # After "re-run failed jobs" a case keeps the artifact of the attempt that ran it: take its
@@ -351,8 +357,7 @@ def gather_desktops(github, identity, scratch, output):
             require(found and found[-1][0] <= attempt, "No desktop result for " + case)
             folder, taken[case] = download_artifact(github, found[-1][1], scratch), found[-1][0]
             validate_desktop_candidate(delivery.read(folder / "CANDIDATE.json"), identity)
-            require(delivery.read(folder / "case.json").get("checks") == {check: "passed" for check in CHECKS},
-                    "A desktop case did not pass every check: " + case)
+            require(desktop_case_passed(folder), "A desktop case did not pass every check: " + case)
             for path in sorted(p for p in folder.rglob("*") if p.is_file()):
                 evidence.write(path, case + "/" + path.relative_to(folder).as_posix())
             shutil.rmtree(folder)
@@ -417,12 +422,16 @@ def publish(args):
     records = gather_build(github, identity, workflow, scratch, output)
     version = records["windows-x64"]["version"]
     require(VERSION.fullmatch(version), "Unexpected version: " + version)
+    print("Build verified: both packages match their recorded digests, version " + version, flush=True)
     identity.update(version=version,
                     portable_sha256=delivery.digest(output / f"NOH-{version}-windows-x64.zip"),
                     delivery_sha256=delivery.digest(output / "windows-x64-DELIVERY.json"),
                     linux_delivery_sha256=delivery.digest(output / "linux-x64-DELIVERY.json"))
     report = gather_installers(github, identity, workflow, scratch, output)
+    print("Installers verified: the staged installers match the tested report", flush=True)
     gather_desktops(github, identity, scratch, output)
+    print(f"Desktops verified: {identity['desktop_cases']} cases passed, attempts {identity['desktop_case_attempts']}",
+          flush=True)
     final_tag = "v" + version
     # A rehearsal draft never carries the real tag: publishing it by mistake could not create v<version>.
     tag = f"rehearsal-v{version}-{os.environ['GITHUB_RUN_ID']}" if args.rehearse else final_tag
@@ -465,6 +474,7 @@ def publish(args):
             github.request("/releases/assets/" + str(stale["id"]), "DELETE")
         expected = publication_record(identity, draft["id"], files)
         delivery.write(record_path, expected)
+        print(f"Draft {draft['id']} created under {tag}; uploading {len(files) + 1} files", flush=True)
         for path in files + [record_path]:
             github.upload(draft["id"], path, path.name, delivery.digest(path))
         uploaded = {a["name"]: a["digest"] for a in github.request("/releases/" + str(draft["id"]))["assets"]}
