@@ -46,6 +46,7 @@ jobs:
           python3 tools/test-runtime-cache.py
           python3 -m unittest discover -s tools -p test_setup_delivery.py
           python3 -m unittest discover -s tools -p test_software_opengl.py
+          python3 -m unittest discover -s tools -p 'test_release_*.py'
 
   audit:
     needs: scope
@@ -168,6 +169,87 @@ jobs:
     uses: ./.github/workflows/native.yml
     with:
       skip_audit: true
+
+  # TEMPORARY REHEARSAL, to remove before merge: run the Linux acceptance of a published release
+  # against the existing v0.1.6-pre.1 pre-release. It needs no token and is not a required check.
+  linux-acceptance-rehearsal:
+    name: Rehearsal - Linux acceptance of a published release
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the host packages a Linux user needs, and the test display
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 ffmpeg libmpv2 libasound2-plugins \
+            libgl1-mesa-dri libegl1 libxkbcommon-x11-0 xvfb xauth espeak-ng
+      - name: Download the published Linux files as a user would and test them
+        run: |
+          mkdir -p logs
+          espeak-ng -v en-us -s 140 -w logs/synthetic-speech.wav 'This is a synthetic speech sample. The video and audio tools work together.'
+          python3 tools/release_acceptance.py linux --rehearsal --tag v0.1.6-pre.1 \
+            --speech-fixture logs/synthetic-speech.wav --output "$RUNNER_TEMP/acceptance-linux"
+          cat "$RUNNER_TEMP/acceptance-linux/evidence/part.json"
+
+  # TEMPORARY REHEARSAL, to remove before merge: does the published Web installer download its
+  # components in silent mode, with nothing beside it? The 0.1.6 installer scripts are the 0.1.5
+  # ones, so the published 0.1.5 Web installer answers it. No token; not a required check.
+  windows-web-installer-rehearsal:
+    name: Rehearsal - published Web installer downloads components silently
+    if: github.event_name == 'pull_request'
+    runs-on: windows-2025
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+      - name: Install the Standard profile from the published 0.1.5 Web installer and check every file
+        run: |
+          $script = @'
+          import importlib.util, json, os, sys, time, urllib.request
+          from pathlib import Path
+          root = Path.cwd()
+          sys.path.insert(0, str(root / "tools"))
+          import delivery
+          spec = importlib.util.spec_from_file_location("public_ci", root / "tools/installer/public-ci.py")
+          ci = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(ci)
+          record = json.loads((root / "docs/release-evidence/windows-0.1.5-installers.json").read_text(encoding="utf-8"))
+          web = record["artifacts"]["web"]
+          work = Path(os.environ["RUNNER_TEMP"]) / "web-rehearsal"
+          work.mkdir()
+          setup = work / web["installer"]["name"]
+          urllib.request.urlretrieve("https://github.com/Awalgawe/noh/releases/download/v0.1.5/" + setup.name, setup)
+          assert delivery.digest(setup) == web["installer"]["sha256"], "not the recorded 0.1.5 Web installer"
+          assert sorted(p.name for p in work.iterdir()) == [setup.name], "nothing may sit beside the installer"
+          assert ci.registration() is None
+          installed = work / "installation with spaces"
+          started = time.monotonic()
+          ci.run(work, "web-standard-silent", [setup, "/PROFILE=standard", "/VERYSILENT", "/SUPPRESSMSGBOXES",
+                 "/NORESTART", "/CURRENTUSER", "/NOICONS", "/TASKS=!desktopicon", "/DIR=" + str(installed),
+                 "/LOG=" + str(work / "web-standard-silent-inno.log")], 1800)
+          print("silent web install seconds:", round(time.monotonic() - started))
+          ci.verify_installed(installed, web["profile_files"]["standard"])
+          print("installed files match the recorded Standard profile:", len(web["profile_files"]["standard"]))
+          (installed / "user-data.txt").write_text("keep\n", encoding="utf-8")
+          ci.remove_test_installation(work, installed)
+          print("REHEARSAL PASSED: the Web installer downloaded its components in silent mode")
+          '@
+          $path = Join-Path $env:RUNNER_TEMP 'web-rehearsal.py'
+          Set-Content -LiteralPath $path -Value $script -Encoding utf8
+          python $path
+      - name: Show the installer log tail
+        if: always()
+        run: Get-Content "$env:RUNNER_TEMP/web-rehearsal/web-standard-silent-inno.log" -Tail 40 -ErrorAction SilentlyContinue
 
   required:
     name: PR checks

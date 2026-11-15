@@ -89,6 +89,13 @@ class DesktopEvidenceTests(unittest.TestCase):
                 else:
                     self.assertTrue((output / 'payload/NOH.AppDir/AppRun').is_file())
 
+    def test_a_combined_build_run_names_every_platform_it_retained(self):
+        def inventory_of(*names):
+            return {'artifacts': [{'name': name} for name in names]}
+        self.assertEqual(desktop.build_platforms(inventory_of('delivery-linux-x64', 'rust-audit-1-1')), ['linux-x64'])
+        self.assertEqual(desktop.build_platforms(inventory_of(
+            'delivery-windows-x64', 'delivery-linux-x64', 'linux-validation-1-1')), ['linux-x64', 'windows-x64'])
+
     def test_xorg_uses_observed_shell_environment_without_inventing_desktop_values(self):
         observed = desktop.desktop_environment('DISPLAY=:1\nUNRELATED=excluded\n',
                     b'DISPLAY=:0\0XAUTHORITY=/run/user/1000/gdm/Xauthority\0XDG_CURRENT_DESKTOP=GNOME\0')

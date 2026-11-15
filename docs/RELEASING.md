@@ -21,7 +21,7 @@ dispatched independently and do not start additional push or PR runs.
 | Workflow | Trigger and output | Authority |
 | --- | --- | --- |
 | `pr.yml` | PRs and main pushes; select affected checks on Windows, Linux, macOS ARM64 and Intel. Shared/unknown changes select all platforms. Documentation-only changes avoid native builds. | Read-only tests and one shared RustSec audit, followed by the required `PR checks` aggregate. Windows and Linux also draw the caption effects with Mesa's software OpenGL. No distributions. |
-| `release.yml` | Manual dispatch on main: `verify` (default) tests portable packages without uploading them; `build` uploads reviewed candidates; `draft` prepares an independently qualified draft; `installer` wraps the qualified Windows portable. The default `windows-linux` target selects Windows x64 and Linux x64; individual targets and `all` (including macOS ARM64) are available. | Preflight before expensive work. Write tokens only in staging jobs; no automatic publication. |
+| `release.yml` | Manual dispatch on main: `verify` (default) tests portable packages without uploading them; `build` uploads candidates; `installer` wraps the Windows portable; `rehearse-publish` and `publish` gather and verify a build, its installers and its Linux desktop run; `acceptance` tests the published files; `promote` makes the accepted pre-release the latest version; `draft` is the former route. The default `windows-linux` target selects Windows x64 and Linux x64; individual targets and `all` (including macOS ARM64) are available. | Preflight before expensive work. Write tokens only in the staging, `publish`, `acceptance` (report attachment only; that job runs no downloaded file) and `promote` jobs. `publish` publishes a pre-release; only `promote` changes the latest release. The jobs that run installers or the application hold no token. |
 | `windows-installers.yml` | Reusable Windows installer stage called by Release on main. Produces Minimal, Standard and Complete offline installers plus a Web installer using the same wizard. Tests exact profile contents, installation, repair, cancellation, profile mismatch rejection, an upgrade from the last published version (`assets/upgrade-baseline.lock.json`) and removal before creating an unpublished review draft. | Reuses the released application bytes; records the wrapper commit and run separately. The installed interface starts with Mesa's software OpenGL, placed beside it for the test and removed before uninstalling. |
 | `delivery-candidates.yml` | Reusable Release build engine. Synthetic delivery controls also run inside PR validation. | Read-only token; optional Mac signing uses separate protected steps. Artifact upload requires reviewed redistribution materials. |
 | `delivery-draft.yml` | Reusable Release verifier and draft creator. | Exact run/attempt/commit and artifact verification; independently reviewed inert draft upload. |
@@ -203,6 +203,80 @@ Windows `cuda_terms`. Changed inputs invalidate that authority. A workflow input
 or publication token cannot clear missing evidence. Preflight checks this before
 an expensive retained build. The non-uploading `verify` mode remains available
 for investigations; it does not produce a reusable public package.
+
+## Publication from 0.1.6
+
+Releases are built, published, tested and promoted on GitHub. No step runs on a
+maintainer's machine, and each stage is one manual dispatch of **Release** on main.
+
+1. Merge the release commit through PR checks. It is written as if the version
+   were already published: the changelog entry is `## <version>`, without
+   "unreleased". The `publish` stage refuses an entry still marked unreleased.
+2. `stage=build`, `target=windows-linux`: one build of that commit. Note the run
+   ID, attempt and commit.
+3. `stage=installer`, `target=windows-x64`, with that run, attempt and commit: the
+   Windows installers wrap the same application bytes and are tested, including an
+   upgrade from the last published version.
+4. Dispatch **Linux desktop candidate checks** on main with `suite=all` and the same
+   build run, attempt and commit: every required desktop starts the exact Linux
+   package in a virtual machine. Failed desktops may be re-run in the same run; a
+   new run must cover all of them. Its screens are kept as evidence; nobody
+   reviews them.
+5. `stage=publish`, with the build run, attempt and commit, plus `installer_run_id`,
+   `installer_attempt` and `desktop_run_id`: every file is checked against a digest
+   recorded by those runs, then published unchanged under the final tag `v<version>`
+   as a **pre-release** that is not the latest release. The stage creates a draft
+   first; if anything fails before publication it deletes that draft, which holds
+   nothing public and creates no tag, so the stage can be run again. It refuses an
+   existing tag. `stage=rehearse-publish` takes the same inputs and does everything
+   up to reading the uploaded files back, then deletes the draft: nothing is
+   published, and its draft carries a `rehearsal-…` tag, never the real one. The
+   published release carries `PUBLICATION.json`, the list of files and digests this
+   run verified. The same list is kept as an artifact of the run before anything
+   becomes public: acceptance and promotion rely on that artifact, not on how the
+   run ends. If the stage fails after the release became public, do not run it
+   again and do not delete anything: read its message. A version is lost only when
+   the public state itself is wrong, for example a pre-release that became the
+   latest release.
+6. `stage=acceptance`, `tag=v<version>`: the published files are downloaded as a
+   user downloads them, checked against `SHA256SUMS` and exercised on Windows and
+   Linux. The result is attached to the release as `ACCEPTANCE.json`, the only file
+   added after publication.
+7. `stage=promote`, `tag=v<version>`: when the attached report passed for the exact
+   files the publishing run verified, and comes from a successful acceptance run on
+   main, the same release becomes the latest version. Nothing is rebuilt.
+
+Release files can be replaced after publication by anyone who can write to the
+repository. Acceptance and promotion therefore do not trust the release's own
+`SHA256SUMS`: they compare every file with the artifact of the publishing run, and
+the acceptance report with the artifact of the acceptance run.
+
+Time limits come from artifact retention. Build packages and desktop results are
+kept 7 days: the installer, desktop and publish stages must follow the build within
+that time.
+The publication and acceptance artifacts are kept 90 days: promote within that
+time. Attaching `ACCEPTANCE.json` requires that immutable releases stay disabled
+for this repository.
+
+A defect found after publication is fixed in the next version number. A published
+tag is never moved and its files are never replaced.
+
+Evidence lives beside the packages, not in this repository: `INSTALLER-TESTS.json`,
+`installer-test-evidence.zip`, `INSTALLER-PROVENANCE.json` and `ACCEPTANCE.json` are
+release files, and each states what was observed and its limits. Hosted runners have
+no hardware GPU, audio device, NVENC or CUDA: none of these is exercised before a
+release, and the release notes say so.
+
+After a release is promoted, a pull request moves `assets/upgrade-baseline.lock.json`
+to that release's Complete installer, so that the next version is tested as an
+upgrade from it.
+
+The two sections below describe the former route, in which a qualification record
+was committed to this repository before a draft was prepared. They are kept for
+reference and are not used to publish from 0.1.6. The redistribution gate above
+still applies to every stage that handles packages.
+
+## Former qualification record
 
 Both publication routes below require independent review of the final bytes.
 A qualification record binds `platform`, `source_commit`, `delivery_sha256` and
