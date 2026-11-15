@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "purpose": "Software OpenGL for tests on hosted Windows runners. Never packaged.",
+  "mesa": {
+    "name": "mesa3d-26.2.5-release-msvc.7z",
+    "url": "https://github.com/pal1000/mesa-dist-win/releases/download/26.2.5/mesa3d-26.2.5-release-msvc.7z",
+    "algorithm": "SHA256",
+    "hash": "997123ef4ce8896204ab912d5b54f19372c487ff9835bcefafa2fca23b8953c2",
+    "folder": "x64",
+    "files": ["opengl32.dll", "libgallium_wgl.dll"]
+  }
+}

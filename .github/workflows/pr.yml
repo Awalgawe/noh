@@ -45,6 +45,7 @@ jobs:
           python3 -m unittest discover -s tools/installer -p 'test_*.py'
           python3 tools/test-runtime-cache.py
           python3 -m unittest discover -s tools -p test_setup_delivery.py
+          python3 -m unittest discover -s tools -p test_software_opengl.py
 
   audit:
     needs: scope
@@ -125,6 +126,14 @@ jobs:
           cargo fetch --locked
       - name: Compile QA workers and run GUI, CLI, media, MCP and update tests
         run: ./tools/windows-qa.ps1 -Cache "$env:RUNNER_TEMP/noh-pr-downloads" -Runtime "$env:RUNNER_TEMP/noh-pr-ffmpeg"
+      - name: Restore the software OpenGL archive
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/noh-software-opengl/*.7z
+          key: noh-software-opengl-v1-${{ hashFiles('assets/software-opengl.lock.json') }}
+      - name: Draw caption effects with software OpenGL
+        # This job builds no package: Mesa is test material, checked against its pinned hash on every run.
+        run: ./tools/windows-effect-tests.ps1 -Cache "$env:RUNNER_TEMP/noh-software-opengl" -Runtime "$env:RUNNER_TEMP/noh-pr-ffmpeg"
       - name: Show timings and test results without artifact storage
         if: always()
         run: |
@@ -159,96 +168,6 @@ jobs:
     uses: ./.github/workflows/native.yml
     with:
       skip_audit: true
-
-  # TEMPORARY TRIAL, to remove before merge: does Mesa's software OpenGL let the
-  # published Windows package open its interface and draw a caption effect on a
-  # hosted runner? It is not part of the required checks.
-  windows-software-opengl-trial:
-    name: Trial - Windows package with software OpenGL
-    if: github.event_name == 'pull_request'
-    runs-on: windows-2025
-    timeout-minutes: 30
-    defaults:
-      run:
-        shell: pwsh
-    env:
-      PACKAGE_URL: https://github.com/Awalgawe/noh/releases/download/v0.1.6-pre.1/NOH-0.1.6-windows-x64.zip
-      PACKAGE_SHA256: 2bd4d639f20e41be2325a4fd79df95c060cd20bc8166593c34ccaf8d33238bba
-      # 26.2.5, not 26.2.6: the 26.2.6 release notes say its MSVC package has no OpenGL software rendering.
-      MESA_URL: https://github.com/pal1000/mesa-dist-win/releases/download/26.2.5/mesa3d-26.2.5-release-msvc.7z
-      MESA_SHA256: 997123ef4ce8896204ab912d5b54f19372c487ff9835bcefafa2fca23b8953c2
-      GALLIUM_DRIVER: llvmpipe
-    steps:
-      - name: Download and check the published package and Mesa
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $true
-          $work = Join-Path $env:RUNNER_TEMP 'trial'
-          [void][IO.Directory]::CreateDirectory($work)
-          foreach ($item in @(@('package.zip', $env:PACKAGE_URL, $env:PACKAGE_SHA256), @('mesa.7z', $env:MESA_URL, $env:MESA_SHA256))) {
-            $file = Join-Path $work $item[0]
-            curl.exe --fail --location --silent --show-error --output $file $item[1]
-            if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -ne $item[2]) { throw "Hash mismatch: $($item[0])" }
-          }
-          tar.exe -xf (Join-Path $work 'package.zip') -C $work
-          7z.exe x (Join-Path $work 'mesa.7z') "-o$(Join-Path $work 'mesa')" -y | Select-Object -Last 6
-          Get-ChildItem (Join-Path $work 'mesa') -Recurse -Filter *.dll | ForEach-Object { $_.FullName.Substring($work.Length) }
-          $app = (Get-ChildItem $work -Recurse -Filter noh.exe | Select-Object -First 1).Directory.FullName
-          "NOH_TRIAL_APP=$app" >> $env:GITHUB_ENV
-          "NOH_TRIAL_WORK=$work" >> $env:GITHUB_ENV
-          Get-ChildItem $app -Recurse -Filter *.exe | ForEach-Object { $_.FullName.Substring($app.Length) }
-      - name: Record the behaviour without Mesa
-        continue-on-error: true
-        run: |
-          $env:NOH_CAPTURE_UI = Join-Path $env:NOH_TRIAL_WORK 'before.ppm'
-          $process = Start-Process -FilePath (Join-Path $env:NOH_TRIAL_APP 'noh.exe') -PassThru -RedirectStandardError (Join-Path $env:NOH_TRIAL_WORK 'before.err')
-          $null = $process.Handle
-          if (-not $process.WaitForExit(90000)) { $process.Kill(); 'Timed out' }
-          "Exit without Mesa: $($process.ExitCode)"
-          Get-Content (Join-Path $env:NOH_TRIAL_WORK 'before.err') -Tail 20 -ErrorAction SilentlyContinue
-      - name: Open the interface with Mesa beside the executables
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $opengl = Get-ChildItem (Join-Path $env:NOH_TRIAL_WORK 'mesa') -Recurse -Filter opengl32.dll |
-            Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
-          if (-not $opengl) { throw 'The Mesa archive holds no 64-bit opengl32.dll: nothing was tried' }
-          $mesa = $opengl.Directory.FullName
-          # opengl32.dll is only a loader; the drivers are in libgallium_wgl.dll. Both or nothing.
-          $driver = Join-Path $mesa 'libgallium_wgl.dll'
-          if (-not (Test-Path -LiteralPath $driver)) { throw 'The Mesa archive holds no libgallium_wgl.dll beside opengl32.dll: nothing was tried' }
-          "Mesa OpenGL taken from $mesa"
-          foreach ($folder in @($env:NOH_TRIAL_APP, (Join-Path $env:NOH_TRIAL_APP 'bin'))) {
-            Copy-Item $opengl.FullName $folder
-            Copy-Item $driver $folder
-          }
-          $env:NOH_CAPTURE_UI = Join-Path $env:NOH_TRIAL_WORK 'after.ppm'
-          $env:NOH_LANGUAGE = 'fr'
-          $process = Start-Process -FilePath (Join-Path $env:NOH_TRIAL_APP 'noh.exe') -PassThru -RedirectStandardError (Join-Path $env:NOH_TRIAL_WORK 'after.err')
-          $null = $process.Handle
-          if (-not $process.WaitForExit(90000)) { $process.Kill(); throw 'The interface did not close after its capture' }
-          Get-Content (Join-Path $env:NOH_TRIAL_WORK 'after.err') -Tail 20 -ErrorAction SilentlyContinue
-          Get-ChildItem $env:NOH_TRIAL_WORK -Filter 'after.*' | ForEach-Object { "$($_.Name) $($_.Length)" }
-          "Raw interface exit code: '$($process.ExitCode)'"
-          if ($process.ExitCode -ne 0) { throw "Interface exit code $($process.ExitCode)" }
-          $report = Get-Content (Join-Path $env:NOH_TRIAL_WORK 'after.json') -Raw
-          $report
-          # The same two conditions as the installer check (tools/installer/public-ci.py, test_profile).
-          $gui = $report | ConvertFrom-Json
-          if (-not $gui.capture_ready -or $gui.timed_out) { throw 'The interface capture was not ready or timed out' }
-      - name: Burn captions with an effect from the command line
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $true
-          $work = $env:NOH_TRIAL_WORK
-          $ffmpeg = (Get-ChildItem $env:NOH_TRIAL_APP -Recurse -Filter ffmpeg.exe | Select-Object -First 1).FullName
-          $cli = Join-Path $env:NOH_TRIAL_APP 'bin/noh-cli.exe'
-          & $ffmpeg -hide_banner -loglevel error -f lavfi -i 'testsrc2=s=1280x720:r=25' -f lavfi -i 'sine=frequency=440' -t 3 -pix_fmt yuv420p (Join-Path $work 'source.mp4')
-          Set-Content -LiteralPath (Join-Path $work 'captions.srt') -Encoding utf8 -Value "1`n00:00:00,200 --> 00:00:02,800`nSoftware rendering trial`n"
-          & $cli --list-effects
-          & $cli --burn-subtitles (Join-Path $work 'source.mp4') --srt (Join-Path $work 'captions.srt') --output (Join-Path $work 'captioned.mp4') --effect noh.breath --json
-          $result = Get-Item (Join-Path $work 'captioned.mp4')
-          "captioned.mp4 $($result.Length) bytes"
-          if ($result.Length -lt 10000) { throw 'The captioned export is empty' }
 
   required:
     name: PR checks

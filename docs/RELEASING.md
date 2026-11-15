@@ -20,9 +20,9 @@ dispatched independently and do not start additional push or PR runs.
 
 | Workflow | Trigger and output | Authority |
 | --- | --- | --- |
-| `pr.yml` | PRs and main pushes; select affected checks on Windows, Linux, macOS ARM64 and Intel. Shared/unknown changes select all platforms. Documentation-only changes avoid native builds. | Read-only tests and one shared RustSec audit, followed by the required `PR checks` aggregate. No distributions. |
+| `pr.yml` | PRs and main pushes; select affected checks on Windows, Linux, macOS ARM64 and Intel. Shared/unknown changes select all platforms. Documentation-only changes avoid native builds. | Read-only tests and one shared RustSec audit, followed by the required `PR checks` aggregate. Windows and Linux also draw the caption effects with Mesa's software OpenGL. No distributions. |
 | `release.yml` | Manual dispatch on main: `verify` (default) tests portable packages without uploading them; `build` uploads reviewed candidates; `draft` prepares an independently qualified draft; `installer` wraps the qualified Windows portable. The default `windows-linux` target selects Windows x64 and Linux x64; individual targets and `all` (including macOS ARM64) are available. | Preflight before expensive work. Write tokens only in staging jobs; no automatic publication. |
-| `windows-installers.yml` | Reusable Windows installer stage called by Release on main. Produces Minimal, Standard and Complete offline installers plus a Web installer using the same wizard. Tests exact profile contents, installation, repair, cancellation, profile mismatch rejection and removal before creating an unpublished review draft. | Reuses the released application bytes; records the wrapper commit and run separately. Local graphics acceptance is required if hosted OpenGL is unavailable. |
+| `windows-installers.yml` | Reusable Windows installer stage called by Release on main. Produces Minimal, Standard and Complete offline installers plus a Web installer using the same wizard. Tests exact profile contents, installation, repair, cancellation, profile mismatch rejection and removal before creating an unpublished review draft. | Reuses the released application bytes; records the wrapper commit and run separately. The installed interface starts with Mesa's software OpenGL, placed beside it for the test and removed before uninstalling. |
 | `delivery-candidates.yml` | Reusable Release build engine. Synthetic delivery controls also run inside PR validation. | Read-only token; optional Mac signing uses separate protected steps. Artifact upload requires reviewed redistribution materials. |
 | `delivery-draft.yml` | Reusable Release verifier and draft creator. | Exact run/attempt/commit and artifact verification; independently reviewed inert draft upload. |
 | `rust-audit.yml` | Reusable audit called by PR validation and Release. No NOH compilation. | Vulnerabilities, unsoundness advisories and acquisition errors fail the job. Public diagnostic uploads are optional. |
@@ -318,10 +318,14 @@ Silent installation does not exercise
 the Microsoft prerequisite wizard. Existing portable media qualification remains
 valid for the unchanged installed application bytes.
 
-A hosted runner without OpenGL 2.0 cannot validate GUI startup. The exact observed
-renderer error is recorded as unavailable, never as a successful GUI check; other
-launch errors still fail the job. In that case, validate the exact hosted installer
-and installed GUI on a supported local Windows host before publication.
+A hosted runner has no OpenGL 2.0. The installer stage therefore places Mesa's
+software OpenGL beside the installed application, starts the interface, requires its
+capture, then removes those two files before uninstalling. The archive is pinned in
+`assets/software-opengl.lock.json`; it is test material and is never packaged. A
+launch error fails the job. This shows that the interface starts, not how it behaves
+on a hardware GPU. PR validation keeps the archive in the Actions cache; the installer
+stage downloads it from its publisher on each run and cannot pass while that file is
+unreachable.
 
 Successful output is retained in an unpublished review draft to avoid Actions
 artifact-storage quotas. This job never publishes that draft or changes the live
