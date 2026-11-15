@@ -12,6 +12,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 
 from delivery import digest, write
 from linux_elf import audit_bundle, require_host_runtime
@@ -40,15 +41,77 @@ def gui_preview(appdir, clip, soundtrack, tmp, evidence):
     capture = evidence / 'gui.ppm'
     env = dict(os.environ, NOH_CAPTURE_UI=str(capture), NOH_CAPTURE_PROJECT=str(project),
                NOH_CAPTURE_PROJECT_ACTION='live-preview', NOH_CAPTURE_PLAYBACK_UNTIL_MS='1000')
+    started = time.monotonic()
     with (evidence / 'gui.log').open('w') as log:
-        subprocess.run([str(appdir / 'AppRun')], check=True, stdout=log,
-                       stderr=subprocess.STDOUT, env=env, cwd='/', timeout=120)
+        app = subprocess.Popen([str(appdir / 'AppRun')], stdout=log, stderr=subprocess.STDOUT, env=env, cwd='/')
+        try:
+            code = app.wait(timeout=120)
+        except subprocess.TimeoutExpired:
+            # Record what the stuck application and the desktop look like before ending it: the
+            # screen taken afterwards cannot tell whether a window ever appeared.
+            write(evidence / 'gui-timeout.json', gui_timeout_state(app.pid, time.monotonic() - started))
+            app.kill()
+            app.wait(timeout=10)
+            raise
+    seconds = round(time.monotonic() - started, 3)
+    if code != 0:
+        raise subprocess.CalledProcessError(code, [str(appdir / 'AppRun')])
     report = json.loads(capture.with_suffix('.json').read_text())
     check_gui_report(report)
     if not capture.is_file() or capture.stat().st_size < 10000:
         raise ValueError('NOH GUI capture is missing')
     return {'report_sha256': digest(capture.with_suffix('.json')),
-            'capture_sha256': digest(capture), 'preview': report['mini_preview']}
+            'capture_sha256': digest(capture), 'preview': report['mini_preview'], 'capture_seconds': seconds}
+
+
+def gui_timeout_state(pid, seconds, proc=Path('/proc')):
+    """Observations only, each optional: nothing here decides whether the capture passed.
+
+    It shows whether the application and the processes it started were running or sleeping, and
+    on what kernel wait; and whether an X window existed when xwininfo/xprop are installed (they
+    say nothing on a Wayland session). It is not a stack trace.
+    """
+    def observe(command, limit=60000):
+        try:
+            result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+            return {'exit': result.returncode, 'output': (result.stdout + result.stderr)[-limit:]}
+        except (OSError, subprocess.SubprocessError) as error:
+            return {'error': str(error)}
+
+    def text(path, limit=4000):
+        try:
+            return Path(path).read_text(errors='replace')[-limit:]
+        except OSError as error:
+            return 'unreadable: ' + str(error)
+
+    # The application and every process it started, read straight from /proc so that no tool
+    # and no truncated listing can hide them.
+    parents = {}
+    for entry in (sorted(proc.iterdir()) if proc.is_dir() else []):
+        if entry.name.isdigit():
+            fields = text(entry / 'stat').rsplit(') ', 1)
+            if len(fields) == 2 and len(fields[1].split()) > 1:
+                parents[int(entry.name)] = int(fields[1].split()[1])
+    family, grew = {pid}, True
+    while grew:
+        more = {child for child, parent in parents.items() if parent in family} - family
+        family, grew = family | more, bool(more)
+    application = {}
+    for member in sorted(family):
+        threads = {}
+        for task in sorted((proc / str(member) / 'task').glob('*')):
+            fields = text(task / 'stat').rsplit(') ', 1)
+            threads[task.name] = {'name': text(task / 'comm').strip(),
+                                  'state': fields[1].split()[0] if len(fields) == 2 else 'unknown',
+                                  'wchan': text(task / 'wchan').strip()}
+        application[str(member)] = {'parent': parents.get(member),
+                                    'cmdline': text(proc / str(member) / 'cmdline').replace('\0', ' ').strip(),
+                                    'status': text(proc / str(member) / 'status', 1500), 'threads': threads}
+    return {'seconds': round(seconds, 3), 'pid': pid, 'application': application,
+            'processes': observe(['ps', '-eo', 'pid,ppid,stat,etimes,pcpu,comm,args', '--sort=pid']),
+            'windows': observe(['xwininfo', '-root', '-tree']),
+            'client_list': observe(['xprop', '-root', '_NET_CLIENT_LIST', '_NET_ACTIVE_WINDOW']),
+            'load': text(proc / 'loadavg')}
 
 
 def transcribe(home, source, tmp):
