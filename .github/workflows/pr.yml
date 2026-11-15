@@ -174,8 +174,9 @@ jobs:
     env:
       PACKAGE_URL: https://github.com/Awalgawe/noh/releases/download/v0.1.6-pre.1/NOH-0.1.6-windows-x64.zip
       PACKAGE_SHA256: 2bd4d639f20e41be2325a4fd79df95c060cd20bc8166593c34ccaf8d33238bba
-      MESA_URL: https://github.com/pal1000/mesa-dist-win/releases/download/26.2.6/mesa3d-26.2.6-release-msvc.7z
-      MESA_SHA256: b2e00615feaba45942343c265cc8c5f576142ca682c1ac6661922d4b72492877
+      # 26.2.5, not 26.2.6: the 26.2.6 release notes say its MSVC package has no OpenGL software rendering.
+      MESA_URL: https://github.com/pal1000/mesa-dist-win/releases/download/26.2.5/mesa3d-26.2.5-release-msvc.7z
+      MESA_SHA256: 997123ef4ce8896204ab912d5b54f19372c487ff9835bcefafa2fca23b8953c2
       GALLIUM_DRIVER: llvmpipe
     steps:
       - name: Download and check the published package and Mesa
@@ -190,8 +191,8 @@ jobs:
             if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -ne $item[2]) { throw "Hash mismatch: $($item[0])" }
           }
           tar.exe -xf (Join-Path $work 'package.zip') -C $work
-          7z.exe x (Join-Path $work 'mesa.7z') "-o$(Join-Path $work 'mesa')" -y | Out-Null
-          Get-ChildItem (Join-Path $work 'mesa/x64') -Filter *.dll | ForEach-Object Name
+          7z.exe x (Join-Path $work 'mesa.7z') "-o$(Join-Path $work 'mesa')" -y | Select-Object -Last 6
+          Get-ChildItem (Join-Path $work 'mesa') -Recurse -Filter *.dll | ForEach-Object { $_.FullName.Substring($work.Length) }
           $app = (Get-ChildItem $work -Recurse -Filter noh.exe | Select-Object -First 1).Directory.FullName
           "NOH_TRIAL_APP=$app" >> $env:GITHUB_ENV
           "NOH_TRIAL_WORK=$work" >> $env:GITHUB_ENV
@@ -208,11 +209,17 @@ jobs:
       - name: Open the interface with Mesa beside the executables
         run: |
           $ErrorActionPreference = 'Stop'
-          $mesa = Join-Path $env:NOH_TRIAL_WORK 'mesa/x64'
+          $opengl = Get-ChildItem (Join-Path $env:NOH_TRIAL_WORK 'mesa') -Recurse -Filter opengl32.dll |
+            Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+          if (-not $opengl) { throw 'The Mesa archive holds no 64-bit opengl32.dll: nothing was tried' }
+          $mesa = $opengl.Directory.FullName
+          # opengl32.dll is only a loader; the drivers are in libgallium_wgl.dll. Both or nothing.
+          $driver = Join-Path $mesa 'libgallium_wgl.dll'
+          if (-not (Test-Path -LiteralPath $driver)) { throw 'The Mesa archive holds no libgallium_wgl.dll beside opengl32.dll: nothing was tried' }
+          "Mesa OpenGL taken from $mesa"
           foreach ($folder in @($env:NOH_TRIAL_APP, (Join-Path $env:NOH_TRIAL_APP 'bin'))) {
-            foreach ($name in @('opengl32.dll', 'libgallium_wgl.dll', 'libglapi.dll')) {
-              if (Test-Path -LiteralPath (Join-Path $mesa $name)) { Copy-Item (Join-Path $mesa $name) $folder }
-            }
+            Copy-Item $opengl.FullName $folder
+            Copy-Item $driver $folder
           }
           $env:NOH_CAPTURE_UI = Join-Path $env:NOH_TRIAL_WORK 'after.ppm'
           $env:NOH_LANGUAGE = 'fr'
