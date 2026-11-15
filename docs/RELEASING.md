@@ -218,6 +218,10 @@ that digest at download.
 1. Merge the release commit through PR checks. It is written as if the version
    were already published: the changelog entry is `## <version>`, without
    "unreleased". The `publish` stage refuses an entry still marked unreleased.
+   The stage reads the entry from main as it is when it runs, not from the built
+   commit: the changelog is not in the packages, so a correction merged after the
+   build reaches the release notes without building again. The notes then name the
+   commit the text was read from; the tree under the tag keeps the older text.
 2. `stage=build`, `target=windows-linux`: one build of that commit. Note the run
    ID, attempt and commit.
 3. `stage=installer`, `target=windows-x64`, with that run, attempt and commit: the
@@ -231,8 +235,8 @@ that digest at download.
 
    Re-run a failed desktop only after reading why it failed. Two intermittent
    failures are known on Debian 13 and may be re-run: the interface capture that
-   never ends (`gui-timeout.json` is present; seen in 2 of 21 runs, cause unknown,
-   in the application's live preview), and the file dialog left open
+   never ends (`gui-timeout.json` is present; seen in 3 of 23 runs; the player
+   reports the end of the clip after about one second, cause under investigation), and the file dialog left open
    ("The Zenity fallback remains running"; seen once, the test's keys did not reach
    the dialog). The release notes then name the desktop and the attempt that
    passed. Any other failure stops the release.

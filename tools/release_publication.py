@@ -150,6 +150,15 @@ def desktop_rerun_lines(identity):
             + ". See the known issues under Changes."]
 
 
+def changes_source_lines(identity):
+    """Say so when the changes were written after the build: the tagged tree then holds an older text."""
+    commit = identity.get("changes_commit")
+    if not commit or commit == identity["commit"]:
+        return []
+    return [f"This text was corrected after the build and is read from commit `{commit}`; "
+            f"the changelog inside the tagged tree is older.", ""]
+
+
 def release_notes(version, identity, limits, changes):
     runs = "https://github.com/" + REPOSITORY + "/actions/runs/"
     return "\n".join([
@@ -183,7 +192,7 @@ def release_notes(version, identity, limits, changes):
         "- `INSTALLER-TESTS.json`, `installer-test-evidence.zip`, `linux-desktop-evidence.zip`, `ACCEPTANCE.json` "
         "(once attached): what was observed.",
         "- `PUBLICATION.json`: the digests of these files as the publishing run verified them.", "",
-        "### Changes", "", changes, ""])
+        "### Changes", "", *changes_source_lines(identity), changes, ""])
 
 
 def download_artifact(github, artifact, scratch):
@@ -358,6 +367,7 @@ def publication_record(identity, release_id, files):
             "installer_run": identity["installer_run"], "installer_attempt": identity["installer_attempt"],
             "desktop_run": identity["desktop_run"], "desktop_attempt": identity["desktop_attempt"],
             "desktop_case_attempts": identity["desktop_case_attempts"],
+            "changes_commit": identity["changes_commit"],
             "run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
             "assets": {path.name: "sha256:" + delivery.digest(path) for path in files}}
 
@@ -425,7 +435,16 @@ def publish(args):
                 and r["name"] == title for r in existing) and len(existing) <= 1,
             "A release or another draft already uses " + tag + ": inspect it; delete it only if it is an unpublished "
             "draft left by a failed publish run")
-    text = provenance.subprocess.check_output(["git", "show", args.commit + ":docs/CHANGELOG.md"], cwd=ROOT).decode("utf-8")
+    # The changelog is not in the packages. Its entry is read from this checkout, so that a
+    # correction made on main after the build reaches the notes without building again; the notes
+    # then say which commit the text comes from. The built commit must be part of that history.
+    git = lambda *command: provenance.subprocess.check_output(["git", *command], cwd=ROOT).decode("utf-8").strip()
+    text_commit = git("rev-parse", "HEAD")
+    require(provenance.subprocess.run(["git", "merge-base", "--is-ancestor", args.commit, text_commit],
+                                      cwd=ROOT).returncode == 0,
+            "This checkout does not descend from the built commit: its changelog cannot describe that build")
+    identity["changes_commit"] = text_commit
+    text = (ROOT / "docs/CHANGELOG.md").read_text(encoding="utf-8")
     try:
         changes = changelog_section(text, version)
     except ValueError as error:

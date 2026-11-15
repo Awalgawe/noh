@@ -19,7 +19,7 @@ def identity():
     return {"commit": COMMIT, "build_run": 11, "build_attempt": 1, "installer_run": 22, "installer_attempt": 2,
             "wrapper_commit": WRAPPER, "version": "1.2.3", "portable_sha256": "c" * 64, "delivery_sha256": "d" * 64,
             "linux_delivery_sha256": "e" * 64, "desktop_run": 44, "desktop_attempt": 1, "desktop_cases": 7,
-            "desktop_case_attempts": {"arch": 1, "debian-13": 1}}
+            "desktop_case_attempts": {"arch": 1, "debian-13": 1}, "changes_commit": COMMIT}
 
 
 def report():
@@ -132,6 +132,14 @@ class Publication(unittest.TestCase):
                          "blob/v1.2.3/docs/INSTALLING.md", "PUBLICATION.json"):
             self.assertIn(expected, notes)
 
+    def test_notes_say_when_the_changes_were_written_after_the_build(self):
+        same = publication.release_notes("1.2.3", identity() | {"changes_commit": COMMIT}, [], "- New effect.")
+        self.assertNotIn("corrected after the build", same)
+        later = publication.release_notes("1.2.3", identity() | {"changes_commit": "f" * 40}, [], "- New effect.")
+        self.assertIn("corrected after the build and is read from commit `" + "f" * 40 + "`", later)
+        self.assertLess(later.index("### Changes"), later.index("corrected after the build"))
+        self.assertLess(later.index("corrected after the build"), later.index("- New effect."))
+
     def test_notes_name_a_desktop_that_passed_only_when_re_run(self):
         once = publication.release_notes("1.2.3", identity(), [], "- New effect.")
         self.assertNotIn("re-run", once)
@@ -142,6 +150,7 @@ class Publication(unittest.TestCase):
         with mock.patch.dict("os.environ", {"GITHUB_RUN_ID": "55", "GITHUB_RUN_ATTEMPT": "1"}):
             record = publication.publication_record(again, 9, [])
         self.assertEqual(record["desktop_case_attempts"], {"arch": 1, "debian-13": 2})
+        self.assertEqual(record["changes_commit"], COMMIT)
 
     def test_provenance_binds_both_runs_and_every_profile(self):
         record = publication.installer_provenance(report(), identity())
