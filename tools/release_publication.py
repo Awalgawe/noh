@@ -60,6 +60,11 @@ def desktop_artifact_name(case, run, attempt):
     return f"linux-desktop-{case}-{run}-{attempt}"
 
 
+def desktop_artifact_pattern(case, run):
+    """A required case's result in a desktop run, any attempt. Matched in full: nothing else counts."""
+    return re.compile(re.escape(f"linux-desktop-{case}-{run}-") + "([1-9][0-9]*)")
+
+
 def validate_report(report, identity):
     """The installer test report must describe this build, this installer run and a full pass."""
     expected = {"status": "passed", "source_commit": identity["commit"],
@@ -320,7 +325,7 @@ def gather_desktops(github, identity, scratch, output):
         for case in cases:
             # After "re-run failed jobs" a case keeps the artifact of the attempt that ran it: take its
             # latest one. What binds it to the build is the content of CANDIDATE.json, not the name.
-            pattern = re.compile(re.escape(f"linux-desktop-{case}-{identity['desktop_run']}-") + "([1-9][0-9]*)")
+            pattern = desktop_artifact_pattern(case, identity["desktop_run"])
             found = sorted((int(pattern.fullmatch(a["name"]).group(1)), a) for a in inventory["artifacts"]
                            if pattern.fullmatch(a["name"]))
             require(found and found[-1][0] <= attempt, "No desktop result for " + case)

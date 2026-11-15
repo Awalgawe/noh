@@ -7,6 +7,9 @@ root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 evidence="$root/logs/linux-desktop-probe"
 case_id=${NOH_DESKTOP_CASE:?Select an approved desktop case}
 payload=${NOH_CANDIDATE_PAYLOAD:?Provide the verified candidate payload}
+# Sampling only: how many more times the guest repeats the interface capture after the first.
+capture_repeats=${NOH_DESKTOP_CAPTURE_REPEATS:-0}
+[[ "$capture_repeats" =~ ^(0|[1-9]|10)$ ]] || { echo 'NOH_DESKTOP_CAPTURE_REPEATS must be 0 to 10' >&2; exit 2; }
 test -f "$payload"
 mkdir -p "$evidence"
 exec > >(tee "$evidence/probe.log") 2>&1
@@ -218,7 +221,7 @@ guest_status=0
 scp -P 2222 "${transport_args[@]}" "$payload" noh@127.0.0.1:payload.tar
 ssh "${ssh_args[@]}" noh@127.0.0.1 'mkdir noh-candidate && tar -xf payload.tar -C noh-candidate'
 timeout 12m ssh "${ssh_args[@]}" noh@127.0.0.1 \
-    "python3 /home/noh/noh-candidate/tools/linux_desktop_candidate.py guest --case '$case_id' --output /home/noh/noh-evidence" \
+    "python3 /home/noh/noh-candidate/tools/linux_desktop_candidate.py guest --case '$case_id' --capture-repeats '$capture_repeats' --output /home/noh/noh-evidence" \
     > "$evidence/guest.log" 2>&1 || guest_status=$?
 ssh "${ssh_args[@]}" noh@127.0.0.1 'sudo journalctl -b --no-pager -u display-manager.service' \
     > "$evidence/display-manager.log" || guest_status=1

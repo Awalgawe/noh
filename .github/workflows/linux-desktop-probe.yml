@@ -20,6 +20,11 @@ on:
         description: Optional JSON array of approved case IDs; overrides suite for targeted retries
         type: string
         default: ''
+      samples:
+        description: Diagnostic sampling only - identical machines per case, each repeating the capture; never release evidence
+        type: choice
+        options: [none, '4', '8']
+        default: none
       source_run:
         description: Successful Linux Release run containing the candidate
         type: string
@@ -47,10 +52,20 @@ jobs:
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: ${{ (inputs.samples == '4' || inputs.samples == '8') && 8 || 3 }}
       matrix:
+        # 0 is the ordinary run. A sampling run has no sample 0, so it produces no artifact under
+        # the name a release looks for and cannot stand for a desktop run.
+        sample: ${{ fromJSON(inputs.samples == '8' && '[1,2,3,4,5,6,7,8]' || inputs.samples == '4' && '[1,2,3,4]' || '[0]') }}
         case: ${{ fromJSON(inputs.cases_json || (inputs.suite == 'mint' && '["mint-22.3"]' || inputs.suite == 'additional' && '["fedora-44","opensuse-tumbleweed","arch"]' || inputs.suite == 'baseline' && '["ubuntu-24.04","ubuntu-26.04","debian-13"]' || inputs.suite == 'cloud' && '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch"]' || '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch","mint-22.3"]')) }}
     steps:
+      - name: Refuse sampling without a named case
+        if: inputs.samples == '4' || inputs.samples == '8'
+        env:
+          CASES_JSON: ${{ inputs.cases_json }}
+        run: |
+          # Sampling multiplies every selected case; it is a diagnostic on cases named one by one.
+          test -n "$CASES_JSON" || { echo 'samples needs cases_json naming the case(s) to sample' >&2; exit 1; }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -82,6 +97,7 @@ jobs:
       - name: Test actual desktop with virtual graphics and audio
         env:
           NOH_DESKTOP_CASE: ${{ matrix.case }}
+          NOH_DESKTOP_CAPTURE_REPEATS: ${{ matrix.sample != 0 && '5' || '0' }}
           NOH_CANDIDATE_PAYLOAD: ${{ runner.temp }}/noh-native-candidate/payload.tar
           NOH_DESKTOP_IMAGE_CACHE: ${{ runner.temp }}/noh-desktop-image
         run: timeout --signal=TERM --kill-after=30s 35m bash tools/probe-linux-desktop-vm.sh
@@ -89,7 +105,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: linux-desktop-${{ matrix.case }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: ${{ matrix.sample != 0 && format('linux-desktop-sample-{0}-s{1}', matrix.case, matrix.sample) || format('linux-desktop-{0}', matrix.case) }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: logs/linux-desktop-probe/
           if-no-files-found: error
           retention-days: 7

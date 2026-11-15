@@ -465,6 +465,7 @@ def guest(args):
     with (args.output / 'runtime.log').open('w') as log:
         subprocess.run(['python3', str(ROOT / 'tools/probe-linux-host.py'), '--appdir', str(ROOT / 'NOH.AppDir'),
                         '--graphics', 'wayland' if row['display'] == 'wayland' else 'surfaceless', '--gui', '--retain-media',
+                        '--gui-repeats', str(args.capture_repeats),
                         '--speech-fixture', str(speech), '--output', str(args.output / 'result.json')],
                        check=True, stdout=log, stderr=subprocess.STDOUT, timeout=600)
     report = read(args.output / 'result.json')
@@ -646,6 +647,8 @@ def main():
     p = sub.add_parser('guest')
     p.add_argument('--case', required=True)
     p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--capture-repeats', type=int, default=0, choices=range(0, 11), metavar='0..10',
+                   help='Sampling only: repeat the GUI capture this many more times after the first')
     p.set_defaults(fn=guest)
     p = sub.add_parser('open-output')
     p.add_argument('--output', type=Path, required=True)

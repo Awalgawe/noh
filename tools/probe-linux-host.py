@@ -69,6 +69,29 @@ def gui_preview(appdir, clip, soundtrack, tmp, evidence):
             'focused': report.get('focused'), 'capture_state': capture_state(capture)}
 
 
+def repeat_gui_preview(count, appdir, clip, soundtrack, tmp, evidence, preview=None):
+    """The same capture again, in the same session, each in its own folder.
+
+    The first capture runs seconds after login; these run later. They tell whether a capture that
+    never ends belongs to the start of the session or can happen at any time. A repeat that fails
+    stops the series and fails the probe like the first one would, once its record is written.
+    """
+    preview = preview or gui_preview
+    records = []
+    for index in range(1, count + 1):
+        folder, scratch = evidence / f'gui-repeat-{index}', Path(tmp) / f'gui-repeat-{index}'
+        folder.mkdir()
+        scratch.mkdir()
+        try:
+            records.append(dict(preview(appdir, clip, soundtrack, scratch, folder), repeat=index))
+        except Exception as error:
+            records.append({'repeat': index, 'failed': type(error).__name__ + ': ' + str(error)})
+            write(evidence / 'gui-repeats.json', records)
+            raise
+    write(evidence / 'gui-repeats.json', records)
+    return records
+
+
 def capture_state(capture):
     """The last state the application recorded during a real capture, or why it cannot be read."""
     try:
@@ -226,12 +249,16 @@ def main():
     parser.add_argument('--retain-media', action='store_true', help='Retain synthetic import/export files for subsequent desktop interaction')
     parser.add_argument('--loader-only', action='store_true', help='Record an explicitly partial graphics/audio check without the FFmpeg export')
     parser.add_argument('--gui', action='store_true', help='Use the existing NOH capture path for actual import and video/audio preview')
+    parser.add_argument('--gui-repeats', type=int, default=0, choices=range(0, 11), metavar='0..10',
+                        help='Sampling only: repeat the GUI capture this many more times in the same session')
     parser.add_argument('--speech-fixture', type=Path, help='Synthetic spoken WAV for actual packaged CPU transcription')
     args = parser.parse_args()
     if args.output.exists():
         raise ValueError('Refusing to overwrite probe evidence')
     args.appdir = args.appdir.resolve()
     args.output = args.output.resolve()
+    if args.gui_repeats and not args.gui:
+        parser.error('--gui-repeats needs --gui')
     if args.loader_only and (args.gui or args.speech_fixture):
         parser.error('Loader-only mode cannot claim GUI or transcription coverage')
     for key in ('ALSA_PLUGIN_DIR', 'LD_LIBRARY_PATH', 'LD_PRELOAD', 'NOH_LIBMPV', 'NOH_FFMPEG'):
@@ -280,6 +307,9 @@ def main():
             result['no_overwrite_exit_code'] = duplicate.returncode
             if args.gui:
                 result['gui'] = gui_preview(args.appdir, clip, soundtrack, tmp, args.output.parent)
+                if args.gui_repeats:
+                    result['gui_repeats'] = repeat_gui_preview(args.gui_repeats, args.appdir, clip, soundtrack,
+                                                               tmp, args.output.parent)
             if args.speech_fixture:
                 result['transcription'] = transcribe(home, args.speech_fixture.resolve(), tmp)
             if args.retain_media:

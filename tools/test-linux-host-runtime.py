@@ -1,4 +1,5 @@
 """Check the host-only package boundary and actionable dependency failures."""
+import json
 import importlib.util
 import os
 from pathlib import Path
@@ -121,6 +122,24 @@ class HostRuntimeTests(unittest.TestCase):
             self.assertEqual(probe.capture_state(capture), {'elapsed_ms': 3000, 'focused': False})
             (proc / 'gui.state.json').write_text('{"elapsed')
             self.assertIn('unreadable', probe.capture_state(capture))
+            # Repeats: each in its own folder; the first failure is recorded, then raised.
+            evidence, scratch = proc / 'evidence', proc / 'scratch'
+            evidence.mkdir()
+            scratch.mkdir()
+            seen = []
+
+            def preview(appdir, clip, soundtrack, tmp, folder):
+                seen.append((tmp.name, folder.name))
+                if len(seen) == 3:
+                    raise TimeoutError('stuck')
+                return {'capture_seconds': 2.0}
+
+            with self.assertRaises(TimeoutError):
+                probe.repeat_gui_preview(5, None, None, None, scratch, evidence, preview)
+            self.assertEqual(seen, [(f'gui-repeat-{i}',) * 2 for i in (1, 2, 3)])
+            self.assertEqual(json.loads((evidence / 'gui-repeats.json').read_text()),
+                             [{'capture_seconds': 2.0, 'repeat': 1}, {'capture_seconds': 2.0, 'repeat': 2},
+                              {'repeat': 3, 'failed': 'TimeoutError: stuck'}])
 
 
 if __name__ == '__main__':

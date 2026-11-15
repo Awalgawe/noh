@@ -287,6 +287,20 @@ class Publication(unittest.TestCase):
         self.assertEqual(publication.publication_artifact_name(55, 1), "publication-55-1")
         self.assertEqual(publication.desktop_artifact_name("arch", 44, 1), "linux-desktop-arch-44-1")
 
+    def test_a_sampling_artifact_never_names_a_required_desktop_result(self):
+        # The sampling mode of the desktop workflow names its artifacts
+        # linux-desktop-sample-<case>-s<n>-<run>-<attempt>; gather_desktops accepts only what
+        # desktop_artifact_pattern matches in full, for the required cases.
+        workflow = (Path(__file__).parents[1] / ".github/workflows/linux-desktop-probe.yml").read_text()
+        self.assertIn("format('linux-desktop-sample-{0}-s{1}', matrix.case, matrix.sample)", workflow)
+        for case in publication.desktop_cases():
+            for other in publication.desktop_cases():
+                pattern = publication.desktop_artifact_pattern(case, 44)
+                self.assertIsNone(pattern.fullmatch(f"linux-desktop-sample-{other}-s1-44-1"))
+            # The same pattern still accepts the ordinary name, for any attempt.
+            name = publication.desktop_artifact_name(case, 44, 2)
+            self.assertEqual(publication.desktop_artifact_pattern(case, 44).fullmatch(name).group(1), "2")
+
 
 if __name__ == "__main__":
     unittest.main()
