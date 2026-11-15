@@ -34,7 +34,7 @@
       "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261111.qcow2",
       "algorithm": "sha256",
       "digest": "d25ae6c4254a3f0d9971e98011040643394f79f660a153079c58ad9404564020",
-      "os_id": "opensuse-tumbleweed", "version_id": null, "session": "plasma6.desktop",
+      "os_id": "opensuse-tumbleweed", "version_id": null, "session": "plasmawayland.desktop",
       "reboot_after_provisioning": true
     },
     "arch": {

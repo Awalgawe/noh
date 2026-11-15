@@ -183,7 +183,7 @@ class DesktopEvidenceTests(unittest.TestCase):
             key.write_text('ssh-ed25519 fixture-only')
             for name, manager, path, session, kernel in (
                 ('fedora-44', 'gdm', '/etc/gdm/custom.conf', 'gnome.desktop', 'kernel-modules-extra'),
-                ('opensuse-tumbleweed', 'sddm', '/etc/sddm.conf.d/noh-test.conf', 'plasma6.desktop', 'kernel-default'),
+                ('opensuse-tumbleweed', 'sddm', '/etc/sddm.conf.d/noh-test.conf', 'plasmawayland.desktop', 'kernel-default'),
                 ('arch', 'sddm', '/etc/sddm.conf.d/noh-test.conf', 'plasma.desktop', 'linux'),
             ):
                 with self.subTest(name=name):
