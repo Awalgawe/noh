@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       stage:
-        description: Verify packages, build artifacts, prepare a draft, or build/test the Windows profile installers
+        description: Verify, build, wrap the Windows installers, publish as a pre-release, accept it, promote it (draft is the former route)
         type: choice
-        options: [verify, build, draft, installer]
+        options: [verify, build, installer, rehearse-publish, publish, acceptance, promote, draft]
         default: verify
       target:
         description: Windows x64, Linux x64 and/or macOS ARM64
@@ -18,15 +18,31 @@ on:
         type: boolean
         default: false
       source_run_id:
-        description: Draft/installer stages - successful Release build run ID
+        description: Installer/publish/draft stages - successful Release build run ID
         type: string
         default: ''
       source_attempt:
-        description: Draft/installer stages - exact build attempt
+        description: Installer/publish/draft stages - exact build attempt
         type: string
         default: '1'
       source_commit:
-        description: Draft/installer stages - exact 40-character build commit
+        description: Installer/publish/draft stages - exact 40-character build commit
+        type: string
+        default: ''
+      installer_run_id:
+        description: Publish stage - successful Release installer run ID
+        type: string
+        default: ''
+      installer_attempt:
+        description: Publish stage - exact installer attempt
+        type: string
+        default: '1'
+      desktop_run_id:
+        description: Publish stage - successful Linux desktop run ID for the same build
+        type: string
+        default: ''
+      tag:
+        description: Acceptance/promote stages - tag of the published pre-release, such as v0.1.6
         type: string
         default: ''
 
@@ -54,6 +70,10 @@ jobs:
           SOURCE_RUN: ${{ inputs.source_run_id }}
           SOURCE_ATTEMPT: ${{ inputs.source_attempt }}
           SOURCE_COMMIT: ${{ inputs.source_commit }}
+          INSTALLER_RUN: ${{ inputs.installer_run_id }}
+          INSTALLER_ATTEMPT: ${{ inputs.installer_attempt }}
+          DESKTOP_RUN: ${{ inputs.desktop_run_id }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           python3 - <<'PY'
           import os
@@ -64,16 +84,31 @@ jobs:
               raise SystemExit('Release must run from main')
           stage = os.environ['RELEASE_STAGE']
           target = os.environ['RELEASE_TARGET']
-          if stage not in ('verify', 'build', 'draft', 'installer') or target not in delivery.TARGETS:
+          stages = ('verify', 'build', 'installer', 'rehearse-publish', 'publish', 'acceptance', 'promote', 'draft')
+          publishing = stage in ('rehearse-publish', 'publish')
+          if stage not in stages or target not in delivery.TARGETS:
               raise SystemExit('Unsupported release stage or packaged platform')
+          if (publishing or stage in ('acceptance', 'promote')) and target != 'windows-linux':
+              raise SystemExit('Publication, acceptance and promotion cover Windows x64 and Linux x64 together')
+          if stage in ('acceptance', 'promote'):
+              if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+', os.environ['RELEASE_TAG']):
+                  raise SystemExit('Acceptance and promotion require the tag of the published pre-release')
+              print('Release preflight passed for ' + stage)
+              raise SystemExit(0)
           if stage == 'installer' and target != 'windows-x64':
               raise SystemExit('The installer stage requires Windows x64')
-          if stage in ('draft', 'installer') and not (
+          if publishing and not (
+              re.fullmatch(r'[1-9][0-9]*', os.environ['INSTALLER_RUN'])
+              and re.fullmatch(r'[1-9][0-9]*', os.environ['INSTALLER_ATTEMPT'])
+              and re.fullmatch(r'[1-9][0-9]*', os.environ['DESKTOP_RUN'])
+          ):
+              raise SystemExit('Publishing requires the exact installer run and attempt, and the Linux desktop run')
+          if (publishing or stage in ('draft', 'installer')) and not (
               re.fullmatch(r'[1-9][0-9]*', os.environ['SOURCE_RUN'])
               and re.fullmatch(r'[1-9][0-9]*', os.environ['SOURCE_ATTEMPT'])
               and re.fullmatch(r'[0-9a-f]{40}', os.environ['SOURCE_COMMIT'])
           ):
-              raise SystemExit('Draft/installer stages require exact successful run, attempt and source commit')
+              raise SystemExit('Draft/installer/publish stages require exact successful run, attempt and source commit')
           platforms = delivery.selected_platforms(target)
           if stage != 'verify':
               for platform in platforms:
@@ -127,3 +162,169 @@ jobs:
       source_run_id: ${{ inputs.source_run_id }}
       source_attempt: ${{ inputs.source_attempt }}
       source_commit: ${{ inputs.source_commit }}
+
+  publish:
+    name: publish
+    needs: preflight
+    if: inputs.stage == 'publish' || inputs.stage == 'rehearse-publish'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Check publication guards
+        run: python3 -m unittest discover -s tools -p test_release_publication.py
+      - name: Verify the build, its installers and its desktop run, and stage them in a draft
+        env:
+          REHEARSE: ${{ inputs.stage == 'rehearse-publish' && '--rehearse' || '' }}
+          DESKTOP_RUN: ${{ inputs.desktop_run_id }}
+          GH_TOKEN: ${{ github.token }}
+          NOH_DELIVERY_WORKFLOW_ID: ${{ vars.NOH_DELIVERY_WORKFLOW_ID }}
+          SOURCE_RUN: ${{ inputs.source_run_id }}
+          SOURCE_ATTEMPT: ${{ inputs.source_attempt }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          INSTALLER_RUN: ${{ inputs.installer_run_id }}
+          INSTALLER_ATTEMPT: ${{ inputs.installer_attempt }}
+        run: |
+          python3 tools/release_publication.py publish --commit "$SOURCE_COMMIT" \
+            --build-run "$SOURCE_RUN" --build-attempt "$SOURCE_ATTEMPT" \
+            --installer-run "$INSTALLER_RUN" --installer-attempt "$INSTALLER_ATTEMPT" \
+            --desktop-run "$DESKTOP_RUN" $REHEARSE
+      - name: Keep the list of verified files as this run's artifact
+        # Later stages compare the release with this list: an artifact is bound to this run by a digest.
+        # It is kept BEFORE anything becomes public: without it the version could never be promoted.
+        if: inputs.stage == 'publish'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/noh-release-publication/PUBLICATION.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish the staged draft as a pre-release
+        if: inputs.stage == 'publish'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/release_publication.py finalize --record "$RUNNER_TEMP/noh-release-publication/PUBLICATION.json"
+
+  acceptance-linux:
+    name: acceptance-linux
+    needs: preflight
+    if: inputs.stage == 'acceptance'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the host packages a Linux user needs, and the test display
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y python3 ffmpeg libmpv2 libasound2-plugins \
+            libgl1-mesa-dri libegl1 libxkbcommon-x11-0 xvfb xauth espeak-ng
+      - name: Download the published Linux files as a user would and test them
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          mkdir -p logs
+          espeak-ng -v en-us -s 140 -w logs/synthetic-speech.wav 'This is a synthetic speech sample. The video and audio tools work together.'
+          python3 tools/release_acceptance.py linux --tag "$RELEASE_TAG" \
+            --speech-fixture logs/synthetic-speech.wav --output "$RUNNER_TEMP/acceptance-linux"
+      - name: Keep what was observed
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: acceptance-part-linux-x64
+          path: ${{ runner.temp }}/acceptance-linux/evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  acceptance-windows:
+    name: acceptance-windows
+    needs: preflight
+    if: inputs.stage == 'acceptance'
+    runs-on: windows-2025
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+      - name: Download the published installers as a user would and test them
+        # No token in this job: the installers and the installed application run here.
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python tools/release_acceptance.py windows --tag "$env:RELEASE_TAG" --output "$env:RUNNER_TEMP/acceptance-windows"
+      - name: Keep what was observed
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: acceptance-part-windows-x64
+          path: ${{ runner.temp }}/acceptance-windows/evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  acceptance:
+    name: acceptance
+    needs: [preflight, acceptance-linux, acceptance-windows]
+    if: inputs.stage == 'acceptance'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: acceptance-part-*
+          path: parts
+      - name: Bind both platform results to the release files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOH_DELIVERY_WORKFLOW_ID: ${{ vars.NOH_DELIVERY_WORKFLOW_ID }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 tools/release_acceptance.py collect --tag "$RELEASE_TAG" --parts parts --output ACCEPTANCE.json
+      - name: Keep the report as this run's artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ACCEPTANCE.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Attach the report to the pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 tools/release_acceptance.py attach --tag "$RELEASE_TAG" --report ACCEPTANCE.json
+
+  promote:
+    name: promote
+    needs: preflight
+    if: inputs.stage == 'promote'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Promote the accepted pre-release to the latest version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOH_DELIVERY_WORKFLOW_ID: ${{ vars.NOH_DELIVERY_WORKFLOW_ID }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 tools/release_publication.py promote --tag "$RELEASE_TAG"

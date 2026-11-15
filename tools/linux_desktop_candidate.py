@@ -41,6 +41,12 @@ def case_inputs(name):
     return row, image
 
 
+def build_platforms(inventory):
+    """Linux first, then every other platform whose package the run retained."""
+    names = {a['name'] for a in inventory['artifacts']}
+    return ['linux-x64'] + [p for p in ('windows-x64', 'macos-arm64') if 'delivery-' + p in names]
+
+
 def acquire(args, destination):
     """Reuse the release consumer's provenance gates, before executing any payload."""
     source = importlib.import_module('delivery-release')
@@ -50,11 +56,14 @@ def acquire(args, destination):
     if comparison['status'] not in ('ahead', 'identical'):
         raise ValueError('Candidate source is not retained on trusted main')
     jobs = source.api(args.repository, f'actions/runs/{args.run}/attempts/{args.attempt}/jobs?per_page=100')
-    source.validate_jobs(jobs, ['linux-x64'], run['path'])
+    inventory = source.api(args.repository, f'actions/runs/{args.run}/artifacts?per_page=100')
+    # A release build holds Windows and Linux together: every platform the run built must have
+    # succeeded, and the Linux package is the one taken.
+    platforms = build_platforms(inventory)
+    source.validate_jobs(jobs, platforms, run['path'])
     artifacts = source.validate_artifacts(
-        source.api(args.repository, f'actions/runs/{args.run}/artifacts?per_page=100'),
-        ['linux-x64'], f'rust-audit-{args.run}-{args.attempt}', f'linux-validation-{args.run}-{args.attempt}')
-    artifact, = artifacts
+        inventory, platforms, f'rust-audit-{args.run}-{args.attempt}', f'linux-validation-{args.run}-{args.attempt}')
+    artifact, = [a for a in artifacts if a['name'] == 'delivery-linux-x64']
     archive_path = destination / 'transport.zip'
     with archive_path.open('xb') as output:
         subprocess.run(['gh', 'api', f'repos/{args.repository}/actions/artifacts/{artifact["id"]}/zip'],

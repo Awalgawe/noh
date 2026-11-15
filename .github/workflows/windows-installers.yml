@@ -66,6 +66,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python tools/installer/public-ci.py stage
+      - name: Keep the test report and its evidence as this run's artifact
+        # The publish stage takes both from here: an artifact is bound to this run by a digest.
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: installer-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/noh-public-installer/output/INSTALLER-TESTS.json
+            ${{ runner.temp }}/noh-public-installer/output/installer-test-evidence.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
       - name: Show bounded diagnostics
         if: always()
         run: |

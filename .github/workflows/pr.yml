@@ -46,6 +46,7 @@ jobs:
           python3 tools/test-runtime-cache.py
           python3 -m unittest discover -s tools -p test_setup_delivery.py
           python3 -m unittest discover -s tools -p test_software_opengl.py
+          python3 -m unittest discover -s tools -p 'test_release_*.py'
 
   audit:
     needs: scope

@@ -49,7 +49,8 @@ def validate_jobs(data, platforms, workflow_path):
             raise ValueError('Missing/skipped/failed exact Linux candidate matrix')
     # GitHub may represent an unselected reusable call by its caller job or
     # its skipped child jobs. None of those jobs may have executed in a build run.
-    allowed_skips = {"draft", "draft / verify", "draft / draft", "installer", "installer / public-installer"} if wrapped else set()
+    allowed_skips = {"draft", "draft / verify", "draft / draft", "installer", "installer / public-installer",
+                     "publish", "acceptance-windows", "acceptance-linux", "acceptance", "promote"} if wrapped else set()
     if any(name not in allowed_skips or result != "skipped"
            for name, result in results.items() if name not in expected):
         raise ValueError("Unexpected source job or release stage")
