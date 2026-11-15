@@ -80,6 +80,41 @@ class HostRuntimeTests(unittest.TestCase):
                 self.assertEqual(result.stdout.splitlines(),
                                  [override or 'unset', 'unset', 'argument with spaces', ''])
 
+    def test_a_capture_timeout_records_the_application_and_the_processes_it_started(self):
+        spec = importlib.util.spec_from_file_location('probe_linux_host', Path(__file__).with_name('probe-linux-host.py'))
+        probe = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(probe)
+        with tempfile.TemporaryDirectory() as folder:
+            proc = Path(folder)
+
+            def process(pid, parent, name, threads):
+                base = proc / str(pid)
+                (base / 'task').mkdir(parents=True)
+                (base / 'stat').write_text(f'{pid} ({name}) S {parent} 1 1 0')
+                (base / 'cmdline').write_text(name + '\0--flag\0')
+                (base / 'status').write_text('State:\tS (sleeping)\n')
+                for tid, (state, wait) in threads.items():
+                    (base / 'task' / str(tid)).mkdir()
+                    (base / 'task' / str(tid) / 'stat').write_text(f'{tid} ({name} x) {state} {parent}')
+                    (base / 'task' / str(tid) / 'comm').write_text(name + '\n')
+                    (base / 'task' / str(tid) / 'wchan').write_text(wait)
+
+            process(1, 0, 'init', {1: ('S', 'do_wait')})
+            process(100, 1, 'noh-app', {100: ('S', 'futex_wait_queue'), 101: ('R', '0')})
+            process(200, 100, 'noh worker', {200: ('S', 'poll_schedule_timeout')})
+            process(300, 1, 'other', {300: ('R', '0')})
+            (proc / 'loadavg').write_text('3.10 2.00 1.00 2/300 999\n')
+            state = probe.gui_timeout_state(100, 120.5, proc)
+            self.assertEqual(list(state['application']), ['100', '200'])
+            self.assertEqual(state['application']['100']['threads']['101'],
+                             {'name': 'noh-app', 'state': 'R', 'wchan': '0'})
+            self.assertEqual(state['application']['200']['parent'], 100)
+            self.assertEqual(state['application']['200']['threads']['200']['wchan'], 'poll_schedule_timeout')
+            self.assertEqual(state['application']['100']['cmdline'], 'noh-app --flag')
+            self.assertEqual(state['seconds'], 120.5)
+            # Every observation is optional: a missing /proc or tool is recorded, never raised.
+            probe.gui_timeout_state(100, 1.0, proc / 'absent')
+
 
 if __name__ == '__main__':
     unittest.main()
