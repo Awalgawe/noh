@@ -364,6 +364,26 @@ def gather_desktops(github, identity, scratch, output):
     identity.update(desktop_attempt=attempt, desktop_cases=len(cases), desktop_case_attempts=taken)
 
 
+def patch_release(github, release_id, tag, commit, fields):
+    """Every change to a release names its tag and its commit.
+
+    GitHub replaces the tag of a draft patched without `tag_name` by an "untagged-…" placeholder;
+    publishing such a draft would create that placeholder as the public tag.
+    """
+    return github.request("/releases/" + str(release_id), "PATCH",
+                          {"tag_name": tag, "target_commitish": commit, **fields})
+
+
+def require_staged(github, draft, tag, commit, assets):
+    """What must hold just before a staged draft may be published; staging ends on the same checks."""
+    require(draft["draft"] and draft["published_at"] is None and draft["tag_name"] == tag
+            and draft["target_commitish"] == commit, "The staged draft changed or is already published")
+    require({a["name"]: a["digest"] for a in draft["assets"]} == assets,
+            "The staged draft no longer holds the verified files")
+    require(not [r for r in github.request("/git/matching-refs/tags/" + tag) if r["ref"] == "refs/tags/" + tag],
+            "Tag already exists: " + tag)
+
+
 def publication_record(identity, release_id, files):
     """What this run verified and uploaded: the reference later stages compare the release with."""
     return {"schema_version": 1, "tag": "v" + identity["version"], "release_id": release_id,
@@ -438,7 +458,13 @@ def publish(args):
     title = ("REHEARSAL, never publish: " if args.rehearse else "") + "NOH " + version
     require(not [r for r in github.request("/git/matching-refs/tags/" + final_tag)
                  if r["ref"] == "refs/tags/" + final_tag], "Tag already exists: " + final_tag)
-    existing = [r for r in all_releases(github) if r["tag_name"] == tag]
+    releases = all_releases(github)
+    existing = [r for r in releases if r["tag_name"] == tag]
+    # A draft that lost its tag is not found by tag: without this, a second draft would be staged beside it.
+    lost = [r["id"] for r in releases if r["tag_name"] != tag and r["draft"] and r["name"] == title
+            and r["target_commitish"] == args.commit]
+    require(not lost, f"An unpublished draft named {title!r} for this commit exists under another tag "
+            f"(release ids {lost}): a failed publish run left it; inspect it and delete it before running again")
     # A run killed after creating its draft leaves it behind: take it over when it is recognisably ours.
     require(all(r["draft"] and r["published_at"] is None and r["target_commitish"] == args.commit
                 and r["name"] == title for r in existing) and len(existing) <= 1,
@@ -469,6 +495,8 @@ def publish(args):
         "tag_name": tag, "target_commitish": args.commit, "name": title, "draft": True, "prerelease": True, "body": body})
     record_path = scratch / "PUBLICATION.json"
     try:
+        require(draft["tag_name"] == tag and draft["target_commitish"] == args.commit,
+                "GitHub did not give the draft the tag and commit asked for")
         # A draft taken over from a failed run still holds that run's record: it is replaced by ours.
         for stale in [a for a in draft.get("assets", []) if a["name"] == "PUBLICATION.json"]:
             github.request("/releases/assets/" + str(stale["id"]), "DELETE")
@@ -480,7 +508,13 @@ def publish(args):
         uploaded = {a["name"]: a["digest"] for a in github.request("/releases/" + str(draft["id"]))["assets"]}
         require(uploaded == {**expected["assets"], "PUBLICATION.json": "sha256:" + delivery.digest(record_path)},
                 "The uploaded files differ from the verified ones")
-        github.request("/releases/" + str(draft["id"]), "PATCH", {"body": body})
+        patch_release(github, draft["id"], tag, args.commit, {"body": body})
+        # The checks the publishing step starts with, here too: a rehearsal then covers everything
+        # except the one request that publishes.
+        require_staged(github, github.request("/releases/" + str(draft["id"])), tag, args.commit,
+                       {**expected["assets"], "PUBLICATION.json": "sha256:" + delivery.digest(record_path)})
+        print(f"Staged draft checked: still a draft under {tag} at {args.commit}, files unchanged, tag absent",
+              flush=True)
     except BaseException:
         # Nothing is public yet and a draft creates no tag: remove it so that the stage can run again.
         github.request("/releases/" + str(draft["id"]), "DELETE")
@@ -508,20 +542,18 @@ def finalize(args):
     require(re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag) and record["run_id"] == os.environ["GITHUB_RUN_ID"]
             and record["run_attempt"] == os.environ["GITHUB_RUN_ATTEMPT"], "The record is not this run's")
     draft = github.request("/releases/" + str(record["release_id"]))
-    require(draft["draft"] and draft["published_at"] is None and draft["tag_name"] == tag
-            and draft["target_commitish"] == record["source_commit"], "The staged draft changed or is already published")
-    require({a["name"]: a["digest"] for a in draft["assets"]}
-            == {**record["assets"], "PUBLICATION.json": "sha256:" + delivery.digest(args.record)},
-            "The staged draft no longer holds the verified files")
-    require(not [r for r in github.request("/git/matching-refs/tags/" + tag) if r["ref"] == "refs/tags/" + tag],
-            "Tag already exists: " + tag)
-    published = github.request("/releases/" + str(draft["id"]), "PATCH",
-                               {"draft": False, "prerelease": True, "make_latest": "false"})
+    commit = record["source_commit"]
+    require_staged(github, draft, tag, commit,
+                   {**record["assets"], "PUBLICATION.json": "sha256:" + delivery.digest(args.record)})
+    published = patch_release(github, draft["id"], tag, commit,
+                              {"draft": False, "prerelease": True, "make_latest": "false"})
     print(f"PUBLISHED {tag} with {len(draft['assets'])} files: {published['html_url']}", flush=True)
     # From here the release is public and its record is kept: acceptance and promotion rely on that
     # artifact, not on how this step ends. Only a wrong public state is a failure: never run this stage
     # again and never delete anything because of it.
-    require(not published["draft"] and published["prerelease"] and published["tag_name"] == tag,
+    require(published["tag_name"] == tag and published["target_commitish"] == commit,
+            "The release IS published under another tag or commit: inspect it, do not re-run")
+    require(not published["draft"] and published["prerelease"],
             "The release IS published but is not a pre-release: inspect it, do not re-run")
 
     def latest():
@@ -534,7 +566,7 @@ def finalize(args):
 
     current = latest()
     if current == tag:
-        github.request("/releases/" + str(draft["id"]), "PATCH", {"make_latest": "false"})
+        patch_release(github, draft["id"], tag, commit, {"make_latest": "false"})
         current = latest()
     if current is None:
         print("WARNING: the latest release could not be read; check by hand that it is not " + tag, flush=True)
@@ -595,10 +627,11 @@ def promote(args):
             "The attached acceptance report is not the one that run produced")
     validate_acceptance(delivery.read(evidence / "ACCEPTANCE.json"), release, {"run": run_id, "attempt": attempt},
                         publication["assets"])
-    promoted = github.request("/releases/" + str(release["id"]), "PATCH", {
+    promoted = patch_release(github, release["id"], args.tag, release["target_commitish"], {
         "prerelease": False, "make_latest": "true",
         "body": ACCEPTED + release["body"][len(PENDING):]})
-    require(not promoted["prerelease"] and github.request("/releases/latest")["tag_name"] == args.tag,
+    require(promoted["tag_name"] == args.tag and not promoted["prerelease"]
+            and github.request("/releases/latest")["tag_name"] == args.tag,
             "The release was not promoted to latest")
     print(f"Promoted {args.tag}: {promoted['html_url']}")
 
