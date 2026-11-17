@@ -43,6 +43,14 @@ struct TransportMetrics {
     group: f32,
     right: f32,
 }
+/// A failed libmpv preview is tried again at the next move of the playhead once
+/// this long has passed: one failure must not leave the slow stills for the
+/// rest of the session, nor may a broken source be retried at every frame.
+const SCRUB_RETRY: Duration = Duration::from_secs(2);
+/// This many errors in a row, whatever positions they answer, are a failure too:
+/// during a drag every answer is about a position already left, and a source
+/// that always fails must not be asked again at each of them.
+const SCRUB_ERRORS: u8 = 3;
 /// Navigation buttons are 28 px, 2 apart, around the 36 px Play.
 const NAV_BUTTON: f32 = 28.0;
 const NAV_GAP: f32 = 2.0;
@@ -77,6 +85,10 @@ pub struct State {
     scrub_requested: Option<u64>,
     pub scrub_active: bool,
     scrub_failed: bool,
+    /// Since when: a failure of the libmpv preview is tried again later.
+    scrub_failed_at: Option<Instant>,
+    /// Errors answered in a row, and the position of the last one counted.
+    scrub_errors: (u8, Option<u64>),
     /// Mean brightness (0–255) of the frame in `player_texture`, for measurement.
     pub player_luma: f64,
     /// Mean colour of the frame in `player_texture` over a 4 by 4 grid, for
@@ -118,6 +130,8 @@ impl Default for State {
             scrub_requested: None,
             scrub_active: false,
             scrub_failed: false,
+            scrub_failed_at: None,
+            scrub_errors: (0, None),
             player_luma: 0.0,
             player_grid: Vec::new(),
             painted: (false, false),
@@ -149,6 +163,55 @@ impl State {
             Err(error) => self.error = Some(error.to_string()),
         }
     }
+    /// Whether the libmpv preview has failed, given its latest answer. An error
+    /// about the position now asked is a failure. One about an earlier position
+    /// says nothing about this one, whose answer is still to come: the
+    /// controller works on the newest request. But `SCRUB_ERRORS` errors in a
+    /// row with no picture between them are a failure wherever they were.
+    ///
+    /// `still` marks the answer libmpv gives on a still image of the montage,
+    /// which it never shows: an error by design, at every position of the
+    /// image. It sends that position to the stills and says nothing of the
+    /// source before or after it, so it neither counts nor clears the count.
+    fn scrub_failure(&mut self, error: bool, still: bool, answered_ms: u64, asked_ms: u64) -> bool {
+        if !error {
+            self.scrub_errors = (0, None);
+            return false;
+        }
+        if still {
+            return answered_ms == asked_ms;
+        }
+        // The same answer is read at every frame until the next one: count it once.
+        if self.scrub_errors.1 != Some(answered_ms) {
+            self.scrub_errors = (self.scrub_errors.0.saturating_add(1), Some(answered_ms));
+        }
+        answered_ms == asked_ms || self.scrub_errors.0 >= SCRUB_ERRORS
+    }
+    /// Records the outcome for the position now asked.
+    fn note_scrub(&mut self, failed: bool) {
+        self.scrub_failed = failed;
+        if !failed {
+            self.scrub_failed_at = None;
+        } else if self.scrub_failed_at.is_none() {
+            self.scrub_failed_at = Some(Instant::now());
+        }
+    }
+    /// At a move of the playhead: lets the libmpv preview try again if its
+    /// failure is old enough. True when it will.
+    fn retry_scrub(&mut self, now: Instant) -> bool {
+        let due = self.scrub_failed
+            && self
+                .scrub_failed_at
+                .is_none_or(|at| now.saturating_duration_since(at) >= SCRUB_RETRY);
+        if due {
+            self.scrub_failed = false;
+            self.scrub_failed_at = None;
+            self.scrub_requested = None;
+            // The answer already counted stays known, so it is not counted again.
+            self.scrub_errors.0 = 0;
+        }
+        due
+    }
     /// The monitor shows a decoded frame (a cursor still or live playback).
     pub fn has_frame(&self) -> bool {
         self.still.is_some() || self.player_texture.is_some() || self.scrub_active
@@ -163,6 +226,8 @@ impl State {
         self.scrub_requested = None;
         self.scrub_active = false;
         self.scrub_failed = false;
+        self.scrub_failed_at = None;
+        self.scrub_errors = (0, None);
         if let Some(worker) = &self.worker {
             worker.cancel();
         }
@@ -359,6 +424,7 @@ impl NohApp {
             self.mini_preview.cursor_ms = ms;
             self.mini_preview.error = None;
             self.mini_preview.changed_at = Instant::now();
+            self.mini_preview.retry_scrub(Instant::now());
             if self.mini_preview.player_stamp.is_some()
                 && let Some(player) = &self.mini_preview.player
             {
@@ -522,8 +588,13 @@ impl NohApp {
             let scrubber = self.mini_preview.scrubber.as_ref().unwrap();
             let snapshot = scrubber.snapshot();
             if snapshot.epoch == scrubber.epoch() {
-                self.mini_preview.scrub_failed =
-                    snapshot.error.is_some() && (!snapshot.fallback || snapshot.time_ms == ms);
+                let failed = self.mini_preview.scrub_failure(
+                    snapshot.error.is_some(),
+                    snapshot.fallback,
+                    snapshot.time_ms,
+                    ms,
+                );
+                self.mini_preview.note_scrub(failed);
                 self.mini_preview.scrub_active = snapshot.frame > 0 && snapshot.error.is_none();
             }
             if self.mini_preview.scrub_active {
@@ -2020,6 +2091,81 @@ mod tests {
         assert!(!app.mini_preview.still_pending);
     }
 
+    #[test]
+    fn a_preview_error_about_an_earlier_position_does_not_stop_the_fast_preview() {
+        let mut state = State::default();
+        // The controller answered 100113 ms with an error while 96234 ms was
+        // already asked: nothing is known yet about 96234 ms, at this frame or
+        // the next ones that read the same answer.
+        for _ in 0..10 {
+            assert!(!state.scrub_failure(true, false, 100_113, 96_234));
+        }
+        // Its picture then arrives: the fast preview goes on.
+        assert!(!state.scrub_failure(false, false, 96_234, 96_234));
+        // An error about the position asked is a failure at once.
+        assert!(state.scrub_failure(true, false, 96_234, 96_234));
+    }
+    #[test]
+    fn a_drag_across_a_still_image_leaves_the_fast_preview_on_for_the_next_video() {
+        let mut state = State::default();
+        // Three positions on an image of the montage: libmpv answers each with
+        // its "still image" error, and each shows the FFmpeg still.
+        for ms in [10_000, 10_100, 10_200] {
+            assert!(state.scrub_failure(true, true, ms, ms));
+        }
+        // The playhead leaves the image for a video. The answer in hand is
+        // still the image's: the video's own answer is waited for.
+        for _ in 0..5 {
+            assert!(!state.scrub_failure(true, true, 10_200, 12_000));
+        }
+        assert!(!state.scrub_failure(false, false, 12_000, 12_000));
+        // An image between two real errors neither adds to the count nor clears it.
+        assert!(!state.scrub_failure(true, false, 13_000, 13_100));
+        assert!(!state.scrub_failure(true, false, 13_100, 13_200));
+        assert!(!state.scrub_failure(true, true, 13_200, 13_300));
+        assert!(state.scrub_failure(true, false, 13_300, 13_400));
+    }
+    #[test]
+    fn errors_in_a_row_during_a_drag_stop_the_fast_preview_until_the_retry() {
+        let mut state = State::default();
+        // A source that always fails, the pointer always one position ahead.
+        assert!(!state.scrub_failure(true, false, 1000, 1100));
+        assert!(!state.scrub_failure(true, false, 1100, 1200));
+        assert!(state.scrub_failure(true, false, 1200, 1300));
+        state.note_scrub(true);
+        // The retry starts a new count; the answer already seen is not counted twice.
+        assert!(state.retry_scrub(Instant::now() + SCRUB_RETRY));
+        assert!(!state.scrub_failure(true, false, 1200, 1400));
+        assert!(!state.scrub_failure(true, false, 1400, 1500));
+        // A picture between two errors: no failure.
+        assert!(!state.scrub_failure(false, false, 1500, 1500));
+        assert!(!state.scrub_failure(true, false, 1600, 1700));
+        assert!(!state.scrub_failure(true, false, 1700, 1800));
+        assert!(state.scrub_failure(true, false, 1800, 1900));
+    }
+    #[test]
+    fn a_failed_fast_preview_is_tried_again_later_and_not_at_every_frame() {
+        let mut state = State::default();
+        let began = Instant::now();
+        state.scrub_requested = Some(5000);
+        state.note_scrub(true);
+        let failed_at = state.scrub_failed_at.unwrap();
+        // Still failing: the first moment is kept, so the delay is not pushed back.
+        state.note_scrub(true);
+        assert_eq!(state.scrub_failed_at, Some(failed_at));
+        // A move right away keeps the stills: no retry at every frame of a drag.
+        assert!(!state.retry_scrub(failed_at + Duration::from_millis(100)));
+        assert!(state.scrub_failed && state.scrub_requested == Some(5000));
+        // A move after the delay asks libmpv again.
+        assert!(state.retry_scrub(failed_at + SCRUB_RETRY));
+        assert!(!state.scrub_failed && state.scrub_requested.is_none());
+        assert!(!state.retry_scrub(failed_at + SCRUB_RETRY * 2));
+        // A success forgets the failure.
+        state.note_scrub(true);
+        state.note_scrub(false);
+        assert!(!state.scrub_failed && state.scrub_failed_at.is_none());
+        assert!(began.elapsed() < SCRUB_RETRY);
+    }
     fn seek_output(hover_ms: Option<u64>, seek_ms: Option<u64>) -> app_timeline::Output {
         app_timeline::Output {
             hover_ms,

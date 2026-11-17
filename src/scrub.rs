@@ -512,10 +512,15 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
                 restarted |= event.id == 21;
                 let frame = shared.rendered.load(Ordering::Acquire);
                 if subtitles_ready && restarted && frame > before {
-                    let pts = api
+                    // Right after a change of clip libmpv may have rendered a
+                    // picture and have no position yet. That is not a failure:
+                    // a later event brings it, and this wait has its own limit.
+                    let Some(pts) = api
                         .property(handle, "time-pos")
                         .and_then(|v| v.parse::<f64>().ok())
-                        .ok_or("Missing preview timestamp")?;
+                    else {
+                        continue;
+                    };
                     if !pts.is_finite() || (pts - seek_seconds).abs() > 0.001 {
                         continue;
                     }
