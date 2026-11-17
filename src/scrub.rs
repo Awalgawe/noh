@@ -321,6 +321,9 @@ fn seek_position(times: &[f64], requested: f64) -> f64 {
     times[index]
 }
 
+/// A picture asked of libmpv is waited for this long before a newer position
+/// may take its place. It normally arrives well within it.
+const YIELD_AFTER: Duration = Duration::from_millis(250);
 fn seek_timed_out(elapsed: Duration) -> bool {
     elapsed > Duration::from_secs(5)
 }
@@ -460,8 +463,13 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
                 }
                 // Complete the async file/subtitle transition before yielding:
                 // the next request can then safely reuse source/captions state.
+                // And let the picture in flight arrive first: during a drag a newer
+                // position is always waiting, and giving up for it at once shows
+                // nothing until the pointer rests. Only a picture that is slow to
+                // come yields to the newer position.
                 if file_loaded
                     && subtitles_ready
+                    && began.elapsed() >= YIELD_AFTER
                     && shared
                         .pending
                         .lock()
