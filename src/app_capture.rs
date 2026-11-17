@@ -403,6 +403,194 @@ impl NohApp {
         (self.seek_qa.done && self.seek_qa.click.is_none()).then_some("finished")
     }
 }
+/// A drag on the time ruler while the live preview plays, and what the monitor
+/// showed at each frame of it (`NOH_CAPTURE_DRAG_PLAYING=1` with the
+/// `live-preview` or `live-short` action): slow inside a clip, held, fast across
+/// clips, held, released.
+#[derive(Default)]
+pub struct DragQa {
+    started: Option<Instant>,
+    /// Since when the preview has been playing steadily.
+    steady: Option<Instant>,
+    pressed: Option<Instant>,
+    released: Option<Instant>,
+    gone: bool,
+    /// The time under the pointer at the last frame of the drag.
+    target_ms: u64,
+    samples: Vec<serde_json::Value>,
+    done: bool,
+}
+/// The drag: seconds since the press, and the project time under the pointer.
+/// Between two points the pointer moves at a constant speed.
+const DRAG_PATH: [(f64, u64); 5] = [
+    (0.0, 2_000),
+    (2.0, 6_000),
+    (2.6, 6_000),
+    (3.6, 96_000),
+    (4.4, 96_000),
+];
+pub fn drag_playing_enabled() -> bool {
+    std::env::var_os("NOH_CAPTURE_UI").is_some()
+        && std::env::var("NOH_CAPTURE_DRAG_PLAYING").as_deref() == Ok("1")
+}
+fn drag_target(seconds: f64) -> u64 {
+    let mut before = DRAG_PATH[0];
+    for point in DRAG_PATH {
+        if seconds < point.0 {
+            let span = point.0 - before.0;
+            let part = if span > 0.0 {
+                (seconds - before.0) / span
+            } else {
+                1.0
+            };
+            return (before.1 as f64 + (point.1 as f64 - before.1 as f64) * part).round() as u64;
+        }
+        before = point;
+    }
+    before.1
+}
+impl NohApp {
+    /// The pointer of the drag: pressed once the preview plays steadily, moved
+    /// at every frame along `DRAG_PATH`, released at its end.
+    pub(super) fn drag_capture_input(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
+        if !drag_playing_enabled() || self.drag_qa.done {
+            return;
+        }
+        let Some(rect) = self.project_ui.timeline.ruler_rect() else {
+            return;
+        };
+        self.drag_qa.started.get_or_insert_with(Instant::now);
+        ctx.request_repaint_after(Duration::from_millis(8));
+        let view = self
+            .project
+            .viewport
+            .map(|v| v.0)
+            .unwrap_or(noh::timeline::Range {
+                start_ms: 0,
+                end_ms: self.project.duration_ms,
+            });
+        let at = |ms: u64| {
+            let x = rect.left()
+                + rect.width()
+                    * ((ms as f64 - view.start_ms as f64) / (view.end_ms - view.start_ms) as f64)
+                        as f32;
+            egui::pos2(x, rect.center().y)
+        };
+        if self.drag_qa.released.is_some() {
+            if !self.drag_qa.gone {
+                input.events.push(egui::Event::PointerGone);
+                self.drag_qa.gone = true;
+            }
+            return;
+        }
+        let Some(pressed) = self.drag_qa.pressed else {
+            let steady = self.mini_playing()
+                && self
+                    .mini_preview
+                    .player
+                    .as_ref()
+                    .is_some_and(|p| p.snapshot().frame.is_some());
+            if !steady {
+                self.drag_qa.steady = None;
+                return;
+            }
+            if self
+                .drag_qa
+                .steady
+                .get_or_insert_with(Instant::now)
+                .elapsed()
+                < SEEK_DWELL
+            {
+                return;
+            }
+            let target = drag_target(0.0);
+            input.events.push(egui::Event::PointerMoved(at(target)));
+            input.events.push(egui::Event::PointerButton {
+                pos: at(target),
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::default(),
+            });
+            self.drag_qa.pressed = Some(Instant::now());
+            self.drag_qa.target_ms = target;
+            return;
+        };
+        let seconds = pressed.elapsed().as_secs_f64();
+        let target = drag_target(seconds);
+        self.drag_qa.target_ms = target;
+        input.events.push(egui::Event::PointerMoved(at(target)));
+        if seconds >= DRAG_PATH[DRAG_PATH.len() - 1].0 {
+            input.events.push(egui::Event::PointerButton {
+                pos: at(target),
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::default(),
+            });
+            self.drag_qa.released = Some(Instant::now());
+        }
+    }
+    /// After the frame is painted: where the pointer is and what the monitor shows.
+    fn drag_capture_sample(&mut self) {
+        let Some(pressed) = self.drag_qa.pressed else {
+            return;
+        };
+        if self.drag_qa.done {
+            return;
+        }
+        let (start, _) = self.mini_bounds();
+        let player = self
+            .mini_preview
+            .player
+            .as_ref()
+            .filter(|_| self.mini_preview.player_stamp.is_some())
+            .map(noh::playback::Player::snapshot);
+        let scrub = self.mini_preview.scrubber.as_ref().map(|s| s.snapshot());
+        let (picture, spinner) = self.mini_preview.painted;
+        if self.drag_qa.samples.len() < 6000 {
+            self.drag_qa.samples.push(serde_json::json!([
+                (pressed.elapsed().as_secs_f64() * 10_000.0).round() / 10.0,
+                self.drag_qa.released.is_none(),
+                self.drag_qa.target_ms,
+                self.mini_preview.cursor_ms,
+                player.is_some(),
+                player.as_ref().map(|p| p.playing),
+                player.as_ref().and_then(|p| p.frame.as_ref().map(|f| f.id)),
+                player.as_ref().and_then(|p| p
+                    .frame
+                    .as_ref()
+                    .map(|f| (f.position * 1000.0).round() as u64 + start)),
+                scrub.as_ref().map(|s| s.time_ms),
+                scrub.as_ref().map(|s| s.frame),
+                scrub.as_ref().and_then(|s| s.error.clone()),
+                picture,
+                self.mini_preview.painted_scrub,
+                spinner,
+            ]));
+        }
+        let Some(released) = self.drag_qa.released else {
+            return;
+        };
+        // The drag is over once the preview plays again past where it ended.
+        let resumed = player.as_ref().is_some_and(|p| {
+            p.playing
+                && p.phase == noh::playback::Phase::Ready
+                && p.position * 1000.0 + start as f64 >= self.drag_qa.target_ms as f64 + 300.0
+        });
+        if resumed || released.elapsed() > SEEK_LIMIT {
+            self.drag_qa.done = true;
+        }
+    }
+    fn drag_capture_terminal(&self) -> Option<&'static str> {
+        if self
+            .drag_qa
+            .started
+            .is_some_and(|at| at.elapsed() > Duration::from_secs(120))
+        {
+            return Some("failed");
+        }
+        self.drag_qa.done.then_some("finished")
+    }
+}
 /// Requires an explicit capture output; ordinary launches never start a QA job.
 pub fn transcribe_enabled() -> bool {
     std::env::var_os("NOH_CAPTURE_UI").is_some()
@@ -1454,6 +1642,7 @@ impl NohApp {
         let project_action = std::env::var("NOH_CAPTURE_PROJECT_ACTION").ok();
         self.capture_effect_switch();
         self.seek_capture_sample();
+        self.drag_capture_sample();
         if let Some(action) = project_action.as_deref()
             && !self.capture_project_started
             && self.ready()
@@ -1539,7 +1728,9 @@ impl NohApp {
             .as_deref()
             .is_some_and(|a| a.starts_with("live-"))
         {
-            if seek_playing_enabled() {
+            if drag_playing_enabled() {
+                self.drag_capture_terminal()
+            } else if seek_playing_enabled() {
                 self.seek_capture_terminal()
             } else {
                 self.mini_capture_terminal()
@@ -1716,6 +1907,9 @@ impl NohApp {
             }
             if seek_playing_enabled() {
                 report["seek_playing"] = serde_json::json!({"targets_ms":seek_targets(),"dwell_ms":SEEK_DWELL.as_millis() as u64,"black_below":SEEK_BLACK,"results":self.seek_qa.results});
+            }
+            if drag_playing_enabled() {
+                report["drag_playing"] = serde_json::json!({"path":DRAG_PATH,"columns":["ms","down","target_ms","cursor_ms","player_open","playing","player_frame","player_ms","paused_ms","paused_frame","paused_error","picture","paused_picture","spinner"],"samples":self.drag_qa.samples});
             }
             report["project_terminal"] = serde_json::json!(terminal);
             report["project_range"] = serde_json::json!(self.project.range);

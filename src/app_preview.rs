@@ -108,6 +108,8 @@ pub struct State {
     pub player_grid: Vec<u8>,
     /// What the monitor painted last frame: a picture, the loading spinner.
     pub painted: (bool, bool),
+    /// And whether the paused preview's picture was painted over it.
+    pub painted_scrub: bool,
     /// Makes the light copies of the videos ahead of their first use.
     pub(super) warmer: Option<noh::copies::Warmer>,
 }
@@ -150,6 +152,7 @@ impl Default for State {
             player_luma: 0.0,
             player_grid: Vec::new(),
             painted: (false, false),
+            painted_scrub: false,
             warmer: None,
         }
     }
@@ -1065,6 +1068,7 @@ impl NohApp {
         }
         self.mini_preview.painted = (has_texture, false);
         let scrub_visible = self.mini_preview.scrub_visible();
+        self.mini_preview.painted_scrub = scrub_visible;
         if let Some(scrubber) = &self.mini_preview.scrubber {
             scrubber.paint(ui, monitor, scrub_visible, style::radius::L as f32);
         }
