@@ -11,7 +11,6 @@ use glow::HasContext;
 use std::{
     ffi::{CStr, CString, c_char, c_void},
     path::PathBuf,
-    process::Stdio,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -255,185 +254,62 @@ impl Default for Shared {
         }
     }
 }
+/// A source's light copy as this controller uses it. The file belongs to the
+/// copy store (`crate::copies`), or to a temporary folder without one.
 struct Proxy {
     source: FileStamp,
     ffmpeg: PathBuf,
-    directory: tempfile::TempDir,
-    bytes: u64,
-    // Actual presentation times, including VFR gaps; never infer tolerance
-    // from the montage target's average frame rate.
-    times: Vec<f64>,
+    copy: Arc<crate::copies::Light>,
 }
 impl Proxy {
     fn path(&self) -> PathBuf {
-        self.directory.path().join("preview.mp4")
+        self.copy.path.clone()
     }
 }
-const PROXY_BYTES: u64 = 128 * 1024 * 1024;
 fn proxy(
     plan: &ScrubPlan,
     shared: &Shared,
     cache: &mut std::collections::VecDeque<Arc<Proxy>>,
 ) -> Result<Arc<Proxy>> {
-    if let Some(index) = cache
-        .iter()
-        .position(|p| p.source == plan.source && p.ffmpeg == plan.ffmpeg)
-    {
-        let item = cache.remove(index).unwrap();
-        cache.push_back(item.clone());
+    if let Some(item) = remembered(cache, &plan.source, &plan.ffmpeg) {
         return Ok(item);
     }
-    let directory = tempfile::Builder::new().prefix("noh-scrub-").tempdir()?;
-    let path = directory.path().join("preview.mp4");
-    let stderr = std::fs::File::create(directory.path().join("encoder.log"))?;
-    // A 640-wide proxy would be read as BT.601 by mpv: tag the source's matrix.
-    let color = crate::color::proxy_tail(&plan.ffmpeg, &plan.source.resolved)
-        .map(|tail| format!(",{tail}"))
-        .unwrap_or_default();
-    let filter = format!(
-        "setpts=PTS-STARTPTS,scale=w='max(2,trunc(min(640,640*dar)/2)*2)':h='max(2,trunc(min(640,640/dar)/2)*2)',setsar=1{color}"
-    );
-    let mut child = crate::command(&plan.ffmpeg)
-        .args([
-            "-hide_banner",
-            "-nostdin",
-            "-v",
-            "error",
-            "-n",
-            "-threads",
-            "2",
-            "-ss",
-            &format!("{:.9}", plan.origin),
-            "-i",
-        ])
-        .arg(&plan.source.resolved)
-        .args([
-            "-map",
-            "0:v:0",
-            "-an",
-            "-sn",
-            "-dn",
-            "-vf",
-            &filter,
-            "-fps_mode",
-            "passthrough",
-            "-c:v",
-            "libx264",
-            "-threads",
-            "2",
-            "-preset",
-            "fast",
-            "-crf",
-            "18",
-            "-g",
-            "1",
-            "-pix_fmt",
-            "yuv420p",
-            "-fs",
-            &PROXY_BYTES.to_string(),
-        ])
-        .arg(&path)
-        .stdout(Stdio::null())
-        .stderr(stderr)
-        .spawn()?;
-    let began = Instant::now();
-    let status = loop {
-        if shared.quit.load(Ordering::Relaxed)
-            || shared.cancel.load(Ordering::Relaxed)
-            || began.elapsed() > Duration::from_secs(60)
-        {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err("Preview preparation cancelled or timed out".into());
-        }
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) => thread::sleep(Duration::from_millis(20)),
-            Err(e) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(e.into());
-            }
-        }
-    };
-    if !status.success() {
-        return Err("Preview working copy could not be prepared".into());
-    }
-    let bytes = std::fs::metadata(&path)?.len();
-    if bytes >= PROXY_BYTES - 1024 * 1024 {
-        return Err("Preview working copy exceeds its size limit".into());
-    }
-    if FileStamp::read(&plan.source.path)? != plan.source {
-        return Err("Preview input changed".into());
-    }
-    let times = proxy_times(&plan.ffmpeg, &path, &shared.cancel)?;
+    // Found by the source's signature, made if absent; if the warmer is making
+    // it, this waits for that one copy instead of encoding a second.
+    let copy = crate::copies::prepare(
+        &plan.source,
+        &plan.ffmpeg,
+        plan.origin,
+        &|| shared.quit.load(Ordering::Relaxed) || shared.cancel.load(Ordering::Relaxed),
+        &shared.cancel,
+    )?;
     let proxy = Arc::new(Proxy {
         source: plan.source.clone(),
         ffmpeg: plan.ffmpeg.clone(),
-        directory,
-        bytes,
-        times,
+        copy,
     });
     cache.push_back(proxy.clone());
     trim_proxies(cache);
     Ok(proxy)
 }
 
-fn proxy_times(
+/// The copy this session already holds for `source`, moved to the most recent
+/// place. One whose file is gone (the store emptied, or trimmed by another
+/// NOH) is forgotten, so that it is found or made again.
+fn remembered(
+    cache: &mut std::collections::VecDeque<Arc<Proxy>>,
+    source: &FileStamp,
     ffmpeg: &std::path::Path,
-    path: &std::path::Path,
-    cancel: &AtomicBool,
-) -> Result<Vec<f64>> {
-    let mut command = crate::command(ffmpeg);
-    command
-        .args(["-v", "error", "-nostdin", "-i"])
-        .arg(path)
-        .args([
-            "-map",
-            "0:v:0",
-            "-an",
-            "-c:v",
-            "copy",
-            "-f",
-            "framehash",
-            "-hash",
-            "adler32",
-            "-",
-        ]);
-    let mut time_base = None;
-    let mut times = Vec::new();
-    let (status, _) =
-        crate::process::stream_interruptible(command, Duration::from_secs(15), cancel, |line| {
-            if let Some(value) = line.strip_prefix("#tb 0: ") {
-                let (num, den) = value.split_once('/').ok_or("Invalid preview time base")?;
-                let tb = num.parse::<f64>()? / den.parse::<f64>()?;
-                if !tb.is_finite() || tb <= 0.0 {
-                    return Err("Invalid preview time base".into());
-                }
-                time_base = Some(tb);
-            } else if !line.starts_with('#') && !line.trim().is_empty() {
-                if times.len() >= 1_000_000 {
-                    return Err("Preview frame index exceeds its size limit".into());
-                }
-                let pts = line
-                    .split(',')
-                    .nth(2)
-                    .ok_or("Missing preview PTS")?
-                    .trim()
-                    .parse::<i64>()?;
-                let seconds = pts as f64 * time_base.ok_or("Missing preview time base")?;
-                if !seconds.is_finite() || times.last().is_some_and(|last| seconds <= *last) {
-                    return Err("Invalid preview frame order".into());
-                }
-                times.push(seconds);
-            }
-            Ok(())
-        })
-        .map_err(|e| e.to_string())?;
-    if !status.success() || times.is_empty() {
-        return Err("Preview frame index unavailable".into());
+) -> Option<Arc<Proxy>> {
+    let index = cache
+        .iter()
+        .position(|p| p.source == *source && p.ffmpeg == ffmpeg)?;
+    let item = cache.remove(index).unwrap();
+    if !item.path().is_file() {
+        return None;
     }
-    Ok(times)
+    cache.push_back(item.clone());
+    Some(item)
 }
 
 fn seek_position(times: &[f64], requested: f64) -> f64 {
@@ -451,10 +327,10 @@ fn seek_timed_out(elapsed: Duration) -> bool {
 fn trim_proxies(cache: &mut std::collections::VecDeque<Arc<Proxy>>) {
     // Count alone would constantly regenerate a three-clip montage. Keep small
     // sources together while bounding total disk use and metadata entries.
-    let mut bytes: u64 = cache.iter().map(|p| p.bytes).sum();
+    let mut bytes: u64 = cache.iter().map(|p| p.copy.bytes).sum();
     while cache.len() > 16 || bytes > 256 * 1024 * 1024 {
         if let Some(old) = cache.pop_front() {
-            bytes = bytes.saturating_sub(old.bytes);
+            bytes = bytes.saturating_sub(old.copy.bytes);
         } else {
             break;
         }
@@ -504,7 +380,7 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
                 proxy(&plan, &shared, &mut cache)?
             };
             let path = working.path();
-            let seek_seconds = seek_position(&working.times, plan.seconds);
+            let seek_seconds = seek_position(&working.copy.times, plan.seconds);
             while unsafe { (*(api.event)(handle as H, 0.0)).id } != 0 {}
             let mut before = shared.rendered.load(Ordering::Acquire);
             *shared.dimensions.lock().unwrap() = (plan.width, plan.height);
@@ -1151,16 +1027,35 @@ mod tests {
         let item = Arc::new(Proxy {
             source: FileStamp::read(input.path()).unwrap(),
             ffmpeg: "ffmpeg".into(),
-            directory: tempfile::tempdir().unwrap(),
-            bytes: 0,
-            times: vec![0.0],
+            copy: Arc::new(crate::copies::Light::temporary_for_test(0)),
         });
-        let path = item.directory.path().to_path_buf();
+        let path = item.path().parent().unwrap().to_path_buf();
         let mut cache = std::collections::VecDeque::from([item.clone()]);
         cache.pop_front();
         assert!(path.exists());
         drop(item);
         assert!(!path.exists());
+    }
+    #[test]
+    fn a_copy_whose_file_is_gone_is_forgotten_instead_of_handed_out() {
+        let input = tempfile::NamedTempFile::new().unwrap();
+        let source = FileStamp::read(input.path()).unwrap();
+        let item = Arc::new(Proxy {
+            source: source.clone(),
+            ffmpeg: "ffmpeg".into(),
+            copy: Arc::new(crate::copies::Light::temporary_for_test(0)),
+        });
+        let mut cache = std::collections::VecDeque::from([item.clone()]);
+        let ffmpeg = std::path::Path::new("ffmpeg");
+        // No file yet at its path: not handed out, and no longer remembered.
+        assert!(remembered(&mut cache, &source, ffmpeg).is_none());
+        assert!(cache.is_empty());
+        std::fs::write(item.path(), b"copy").unwrap();
+        cache.push_back(item.clone());
+        assert!(remembered(&mut cache, &source, ffmpeg).is_some());
+        assert_eq!(cache.len(), 1);
+        assert!(remembered(&mut cache, &source, std::path::Path::new("other")).is_none());
+        assert_eq!(cache.len(), 1);
     }
     #[test]
     fn cache_keeps_small_multi_clip_projects_but_enforces_count_and_bytes() {
@@ -1170,9 +1065,7 @@ mod tests {
             Arc::new(Proxy {
                 source: source.clone(),
                 ffmpeg: "ffmpeg".into(),
-                directory: tempfile::tempdir().unwrap(),
-                bytes,
-                times: vec![0.0],
+                copy: Arc::new(crate::copies::Light::temporary_for_test(bytes)),
             })
         };
         let mut cache = std::collections::VecDeque::from([

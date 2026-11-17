@@ -14,6 +14,8 @@ mod caption_layout;
 pub mod captions;
 pub mod cli;
 pub mod color;
+#[cfg(feature = "gui")]
+pub mod copies;
 pub mod effect_choice;
 mod encoder;
 pub mod engine;
