@@ -81,6 +81,8 @@ pub struct State {
     pub player_luma: f64,
     /// What the monitor painted last frame: a picture, the loading spinner.
     pub painted: (bool, bool),
+    /// Makes the light copies of the videos ahead of their first use.
+    pub(super) warmer: Option<noh::copies::Warmer>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -115,6 +117,7 @@ impl Default for State {
             scrub_failed: false,
             player_luma: 0.0,
             painted: (false, false),
+            warmer: None,
         }
     }
 }
@@ -389,6 +392,25 @@ impl NohApp {
     pub(super) fn poll_mini_preview(&mut self, ctx: &egui::Context) {
         if self.capture_state.is_some() {
             return;
+        }
+        // A light copy is made as soon as a video is read, not at its first use.
+        // Until it is ready the source itself is used, as without a copy.
+        if self.mini_preview.scrubber.is_some() {
+            let warmer = self.mini_preview.warmer.get_or_insert_with(|| {
+                let ctx = ctx.clone();
+                noh::copies::Warmer::new(move || ctx.request_repaint())
+            });
+            let ffmpeg = self.ffmpeg.clone().unwrap_or_default();
+            for clip in &self.clips {
+                if !clip.item.is_image() && clip.info.is_some() && clip.error.is_none() {
+                    warmer.request(clip.item.path(), &ffmpeg);
+                }
+            }
+        }
+        // No copy is encoded while an export or another job runs, as no still or
+        // scrub picture is decoded then.
+        if let Some(warmer) = &self.mini_preview.warmer {
+            warmer.hold(self.preview_blocked());
         }
         self.mini_preview.receive_thumbnails(ctx);
         if self.project.range.is_none() {

@@ -1815,6 +1815,8 @@ impl eframe::App for NohApp {
         self.seek_capture_input(ctx, input);
     }
     fn on_exit(&mut self, gl: Option<&eframe::glow::Context>) {
+        // Stops the copy in progress and waits for its encoder to be gone.
+        self.mini_preview.warmer.take();
         #[cfg(feature = "updates")]
         self.updates.worker.take();
         if let Some(scrubber) = &mut self.mini_preview.scrubber {

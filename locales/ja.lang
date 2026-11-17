@@ -359,6 +359,7 @@ strip.remove={0} を削除
 strip.duration={0} の長さ
 strip.duration_invalid=0より大きい長さを入力してください。
 strip.reading=読み込み中…
+strip.preparing=プレビューを準備中…
 strip.unreadable=読み込めません
 strip.tile_hint=クリックでプレビューに表示。ドラッグで順番を変更。
 strip.missing_visuals=画像または動画を追加
