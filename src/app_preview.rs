@@ -92,6 +92,12 @@ pub struct State {
     scrub_failed_at: Option<Instant>,
     /// Errors answered in a row, and the position of the last one counted.
     scrub_errors: (u8, Option<u64>),
+    /// Pictures of the paused preview up to this one were rendered before the
+    /// player last stopped: they show an older position and are not shown.
+    scrub_floor: u64,
+    /// The preview was playing when a drag on the ruler began: it plays again
+    /// from the playhead when the drag ends.
+    resume_after_drag: bool,
     /// The time the ruler last asked for, and when: a button held still asks
     /// for the same time at every frame.
     ruler_asked: Option<(u64, Instant)>,
@@ -138,6 +144,8 @@ impl Default for State {
             scrub_failed: false,
             scrub_failed_at: None,
             scrub_errors: (0, None),
+            scrub_floor: 0,
+            resume_after_drag: false,
             ruler_asked: None,
             player_luma: 0.0,
             player_grid: Vec::new(),
@@ -165,6 +173,10 @@ impl State {
                     ),
                     egui::TextureOptions::LINEAR,
                 ));
+                // It replaces the picture a stopped player left on the monitor.
+                if self.player_stamp.is_none() {
+                    self.player_texture = None;
+                }
                 self.error = None;
             }
             Err(error) => self.error = Some(error.to_string()),
@@ -219,6 +231,42 @@ impl State {
         }
         due
     }
+    /// The player has just been stopped so that the paused preview follows the
+    /// playhead. Its last picture stays on the monitor until the paused preview
+    /// has one for the new position, or a still arrives: never a black monitor
+    /// in between. What the paused preview or the stills showed before the
+    /// player ran is older than that picture and is not shown again. So both
+    /// are asked anew, even for the position they last answered: the playhead
+    /// may well come back to it, and its picture must then be a new one.
+    fn player_stopped(&mut self) {
+        self.player_stamp = None;
+        self.still = None;
+        self.requested = None;
+        self.scrub_active = false;
+        self.scrub_requested = None;
+        self.scrub_floor = self.scrubber.as_ref().map_or(0, |s| s.snapshot().frame);
+    }
+    /// Whether the picture on the monitor is the one a stopped player left
+    /// there: the caption layer is then drawn for that picture's time, not
+    /// for the playhead's, until a picture of the playhead replaces it.
+    pub(super) fn shows_left_picture(&self) -> bool {
+        self.player_stamp.is_none()
+            && self.player_texture.is_some()
+            && self.source.is_none()
+            && !self.scrub_visible()
+    }
+    /// Whether the paused preview's answer may be shown: a picture, rendered
+    /// after the player last stopped.
+    fn scrub_shows(&self, frame: u64, error: bool) -> bool {
+        frame > self.scrub_floor && !error
+    }
+    /// Whether the paused preview's picture is on the monitor: while no player
+    /// is open, and while one opens and has no picture of its own yet.
+    fn scrub_visible(&self) -> bool {
+        self.scrub_active
+            && self.source.is_none()
+            && (self.player_stamp.is_none() || self.player_texture.is_none())
+    }
     /// Whether the ruler asks again for the time it just asked for: the button
     /// held still, not a new click.
     fn ruler_held(&mut self, ms: u64, now: Instant) -> bool {
@@ -243,6 +291,8 @@ impl State {
         self.scrub_failed = false;
         self.scrub_failed_at = None;
         self.scrub_errors = (0, None);
+        self.scrub_floor = 0;
+        self.resume_after_drag = false;
         if let Some(worker) = &self.worker {
             worker.cancel();
         }
@@ -427,8 +477,7 @@ impl NohApp {
             if let Some(player) = &self.mini_preview.player {
                 player.stop();
             }
-            self.mini_preview.player_stamp = None;
-            self.mini_preview.player_texture = None;
+            self.mini_preview.player_stopped();
         }
         self.mini_preview.source = None;
         if ms != self.mini_preview.cursor_ms {
@@ -460,6 +509,15 @@ impl NohApp {
     /// follows the cursor (mpv, or FFmpeg stills without it); the next Play reopens
     /// the player at the cursor.
     pub(super) fn apply_timeline(&mut self, output: &app_timeline::Output, ctx: &egui::Context) {
+        // The drag that paused the preview has ended: it plays again from the
+        // playhead, the picture of the paused preview staying until the
+        // player has its own.
+        if self.mini_preview.resume_after_drag && !output.seek_drag {
+            self.mini_preview.resume_after_drag = false;
+            if !self.mini_playing() {
+                self.mini_play(ctx);
+            }
+        }
         let Some(ms) = output.seek_ms else {
             return;
         };
@@ -472,12 +530,24 @@ impl NohApp {
         {
             self.mini_preview.scrub_failed = false;
         }
-        let playing = self.mini_preview.player_stamp.is_some()
+        let mut playing = self.mini_preview.player_stamp.is_some()
             && self
                 .mini_preview
                 .player
                 .as_ref()
                 .is_some_and(|p| p.snapshot().playing);
+        // During a drag the picture under the pointer must be seen, playing or
+        // not. The live player cannot show it: it restarts at each position and
+        // waits for the pointer to rest. So a drag pauses it, the paused
+        // preview follows the pointer, and the end of the drag plays again.
+        if playing && output.seek_drag {
+            noh::profile!("app: drag on the ruler while playing: paused until its end");
+            if let Some(player) = &self.mini_preview.player {
+                player.set_playing(false);
+            }
+            self.mini_preview.resume_after_drag = true;
+            playing = false;
+        }
         // While playing, the playhead moves on after a seek. A button held
         // still on the ruler would then ask for its time again at every
         // frame and restart the player there each time: once is enough.
@@ -629,7 +699,13 @@ impl NohApp {
                     );
                 }
                 self.mini_preview.note_scrub(failed);
-                self.mini_preview.scrub_active = snapshot.frame > 0 && snapshot.error.is_none();
+                self.mini_preview.scrub_active = self
+                    .mini_preview
+                    .scrub_shows(snapshot.frame, snapshot.error.is_some());
+                if self.mini_preview.scrub_active {
+                    // It replaces the picture a stopped player left on the monitor.
+                    self.mini_preview.player_texture = None;
+                }
             }
             if self.mini_preview.scrub_active {
                 if self.mini_preview.still_pending
@@ -749,7 +825,6 @@ impl NohApp {
             self.mini_preview.player_stamp.is_some(),
             self.mini_playing()
         );
-        self.mini_preview.scrub_active = false;
         if self.mini_preview.player_stamp.is_some()
             && let Some(player) = &self.mini_preview.player
         {
@@ -779,7 +854,13 @@ impl NohApp {
         player.open_project(project, (cursor - start) as f64 / 1000.0, true);
         self.mini_preview.player_stamp =
             Some(self.project.stamp(self.revision, self.mini_preview.short));
-        self.mini_preview.player_texture = None;
+        // Until the player has a picture, the monitor keeps what it shows: the
+        // paused preview's picture of this very position if there is one,
+        // else whatever picture was there. Never a black monitor meanwhile.
+        if self.mini_preview.scrub_active {
+            self.mini_preview.player_texture = None;
+        }
+        self.mini_preview.player_position = (cursor - start) as f64 / 1000.0;
         self.mini_preview.player_frame = None;
         self.mini_preview.error = None;
     }
@@ -983,17 +1064,16 @@ impl NohApp {
             paint_texture(ui, monitor, texture);
         }
         self.mini_preview.painted = (has_texture, false);
-        let scrub_visible = self.mini_preview.scrub_active
-            && self.mini_preview.source.is_none()
-            && self.mini_preview.player_stamp.is_none();
+        let scrub_visible = self.mini_preview.scrub_visible();
         if let Some(scrubber) = &self.mini_preview.scrubber {
             scrubber.paint(ui, monitor, scrub_visible, style::radius::L as f32);
         }
-        let shown = if self.mini_preview.player_stamp.is_some() {
-            self.mini_preview.player_texture.is_some()
-        } else {
-            scrub_visible || self.mini_preview.still.is_some()
-        };
+        let shown = scrub_visible
+            || if self.mini_preview.player_stamp.is_some() {
+                self.mini_preview.player_texture.is_some()
+            } else {
+                self.mini_preview.still.is_some() || self.mini_preview.player_texture.is_some()
+            };
         if shown && self.mini_preview.source.is_none() && self.ready() {
             self.paint_effect(ui, monitor, scrub_visible);
             self.paint_try_tag(ui, monitor);
@@ -2219,10 +2299,133 @@ mod tests {
         // A new click at the same place, later: a new request.
         assert!(!state.ruler_held(96_500, now + Duration::from_millis(50) + RULER_HELD));
     }
+    #[test]
+    fn a_drag_on_the_ruler_while_playing_pauses_until_its_end_and_a_click_does_not() {
+        let ctx = egui::Context::default();
+        let playing_app = || {
+            let mut app = NohApp::default();
+            app.project.duration_ms = 20_000;
+            let player = Player::new(|| {});
+            player.set_playing(true);
+            app.mini_preview.player = Some(player);
+            app.mini_preview.player_stamp = Some(app.project.stamp(0, false));
+            app
+        };
+        // A click: the live player is moved and keeps playing.
+        let mut app = playing_app();
+        app.apply_timeline(&seek_output(None, Some(4000)), &ctx);
+        assert!(app.mini_preview.player_stamp.is_some());
+        assert!(!app.mini_preview.resume_after_drag);
+        assert_eq!(app.mini_preview.cursor_ms, 4000);
+        // A drag: the player is stopped so that the paused preview follows the
+        // pointer, and the preview remembers to play again.
+        let mut app = playing_app();
+        let drag = |ms| app_timeline::Output {
+            seek_drag: true,
+            ..seek_output(None, Some(ms))
+        };
+        app.apply_timeline(&drag(5000), &ctx);
+        assert!(app.mini_preview.player_stamp.is_none());
+        assert!(app.mini_preview.resume_after_drag);
+        assert_eq!(app.mini_preview.cursor_ms, 5000);
+        app.apply_timeline(&drag(7000), &ctx);
+        assert!(app.mini_preview.resume_after_drag);
+        assert_eq!(app.mini_preview.cursor_ms, 7000);
+        // The button goes up: no seek that frame, and playing is asked again
+        // (nothing can open here, the app has no media).
+        app.apply_timeline(&seek_output(None, None), &ctx);
+        assert!(!app.mini_preview.resume_after_drag);
+        assert_eq!(app.mini_preview.cursor_ms, 7000);
+        // A drag while paused changes nothing of that.
+        let mut app = NohApp::default();
+        app.project.duration_ms = 20_000;
+        app.apply_timeline(&drag(3000), &ctx);
+        assert!(!app.mini_preview.resume_after_drag);
+        assert_eq!(app.mini_preview.cursor_ms, 3000);
+    }
+    #[test]
+    fn a_playhead_back_on_the_position_shown_before_play_gets_a_new_picture() {
+        let ctx = egui::Context::default();
+        // Without libmpv: the still of 0 ms is on the monitor, then the
+        // preview plays and is paused elsewhere.
+        let mut app = NohApp::default();
+        app.project.duration_ms = 20_000;
+        app.mini_preview.requested = Some((3, 0));
+        app.mini_preview.still = Some(ctx.load_texture(
+            "still of 0",
+            egui::ColorImage::new([2, 2], vec![egui::Color32::WHITE; 4]),
+            egui::TextureOptions::LINEAR,
+        ));
+        app.mini_preview.player = Some(Player::new(|| {}));
+        app.mini_preview.player_stamp = Some(app.project.stamp(0, false));
+        app.mini_preview.cursor_ms = 8000;
+        // A click at the far left of the ruler: back to 0 ms.
+        app.apply_timeline(&seek_output(None, Some(0)), &ctx);
+        assert!(app.mini_preview.player_stamp.is_none());
+        assert_eq!(app.mini_preview.cursor_ms, 0);
+        // The still of 0 ms shown before Play is gone and is asked again: the
+        // test `requested.is_none_or(...)` of the poll now passes for 0 ms.
+        assert!(app.mini_preview.still.is_none());
+        assert!(app.mini_preview.requested.is_none());
+        // And so is the libmpv picture of a position it had already answered.
+        let mut state = State {
+            scrub_requested: Some(0),
+            ..Default::default()
+        };
+        state.player_stopped();
+        assert!(state.scrub_requested.is_none());
+        // Its new picture is rendered after the stop, so it is shown.
+        assert!(state.scrub_shows(state.scrub_floor + 1, false));
+    }
+    #[test]
+    fn the_monitor_keeps_a_picture_when_the_player_stops_and_when_it_opens() {
+        let ctx = egui::Context::default();
+        let texture = |name: &str| {
+            ctx.load_texture(
+                name,
+                egui::ColorImage::new([2, 2], vec![egui::Color32::WHITE; 4]),
+                egui::TextureOptions::LINEAR,
+            )
+        };
+        let mut state = State::default();
+        let stamp = NohApp::default().project.stamp(0, false);
+        // Playing: the player's picture, never the paused preview's.
+        state.player_stamp = Some(stamp.clone());
+        state.player_texture = Some(texture("player"));
+        state.still = Some(texture("old still"));
+        state.scrub_active = true;
+        // Before Play, both previews had answered the position 5000 ms.
+        state.scrub_requested = Some(5000);
+        state.requested = Some((7, 5000));
+        assert!(!state.scrub_visible() && !state.shows_left_picture());
+        // The player stops for the playhead: its last picture stays, and what
+        // the paused preview or the stills showed before it ran does not return.
+        state.player_stopped();
+        assert!(state.player_stamp.is_none() && state.player_texture.is_some());
+        assert!(state.still.is_none() && !state.scrub_active && !state.scrub_visible());
+        // Both previews are asked again, even for the position they last answered.
+        assert!(state.scrub_requested.is_none() && state.requested.is_none());
+        assert!(state.shows_left_picture());
+        // Only a picture rendered after the stop is shown (no scrubber here: floor 0).
+        state.scrub_floor = 41;
+        assert!(!state.scrub_shows(41, false));
+        assert!(!state.scrub_shows(42, true));
+        assert!(state.scrub_shows(42, false));
+        state.scrub_active = true;
+        assert!(state.scrub_visible() && !state.shows_left_picture());
+        // A player that opens has no picture yet: the paused preview's stays
+        // on the monitor until it has one.
+        state.player_stamp = Some(stamp);
+        state.player_texture = None;
+        assert!(state.scrub_visible());
+        state.player_texture = Some(texture("first frame"));
+        assert!(!state.scrub_visible());
+    }
     fn seek_output(hover_ms: Option<u64>, seek_ms: Option<u64>) -> app_timeline::Output {
         app_timeline::Output {
             hover_ms,
             seek_ms,
+            seek_drag: false,
             range: None,
             viewport: None,
             commit_changed: false,

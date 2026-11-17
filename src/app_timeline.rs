@@ -105,6 +105,9 @@ struct CueDrag {
 pub struct Output {
     pub hover_ms: Option<u64>,
     pub seek_ms: Option<u64>,
+    /// The ruler's button is down in a drag, moving or held: `seek_ms` is then
+    /// the time under the pointer at every frame.
+    pub seek_drag: bool,
     pub range: Option<Range>,
     pub viewport: Option<Viewport>,
     pub commit_changed: bool,
@@ -535,6 +538,7 @@ fn show_inner(
     let mut output = Output {
         hover_ms: None,
         seek_ms: None,
+        seek_drag: false,
         range: input.range,
         viewport: input.viewport,
         commit_changed: false,
@@ -577,6 +581,7 @@ fn show_inner(
         {
             output.seek_ms = Some(time_at(view, rect, position.x));
         }
+        output.seek_drag = ruler.dragged();
     }
     {
         state.geometry = Some(geometry);

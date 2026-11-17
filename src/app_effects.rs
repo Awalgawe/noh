@@ -629,13 +629,16 @@ impl super::NohApp {
         };
         let (start, end) = self.mini_bounds();
         let range = self.mini_preview.short.then_some((start, end));
-        let t = if self.mini_preview.player_stamp.is_some() {
-            self.mini_preview.player_position
-        } else if scrub_visible && let Some(scrubber) = &self.mini_preview.scrubber {
-            scrubber.snapshot().time_ms.saturating_sub(start) as f64 / 1000.0
-        } else {
-            self.mini_preview.cursor_ms.saturating_sub(start) as f64 / 1000.0
-        };
+        // The clock of the picture on the monitor: the player's frame, also
+        // while it is the one a stopped player left there.
+        let t =
+            if self.mini_preview.player_stamp.is_some() || self.mini_preview.shows_left_picture() {
+                self.mini_preview.player_position
+            } else if scrub_visible && let Some(scrubber) = &self.mini_preview.scrubber {
+                scrubber.snapshot().time_ms.saturating_sub(start) as f64 / 1000.0
+            } else {
+                self.mini_preview.cursor_ms.saturating_sub(start) as f64 / 1000.0
+            };
         let Some(canvas) = self.effect_canvas() else {
             return;
         };
