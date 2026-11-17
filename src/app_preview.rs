@@ -51,6 +51,9 @@ const SCRUB_RETRY: Duration = Duration::from_secs(2);
 /// during a drag every answer is about a position already left, and a source
 /// that always fails must not be asked again at each of them.
 const SCRUB_ERRORS: u8 = 3;
+/// Two requests of the ruler for the same time closer than this are one
+/// gesture: the button held still.
+const RULER_HELD: Duration = Duration::from_millis(250);
 /// Navigation buttons are 28 px, 2 apart, around the 36 px Play.
 const NAV_BUTTON: f32 = 28.0;
 const NAV_GAP: f32 = 2.0;
@@ -89,6 +92,9 @@ pub struct State {
     scrub_failed_at: Option<Instant>,
     /// Errors answered in a row, and the position of the last one counted.
     scrub_errors: (u8, Option<u64>),
+    /// The time the ruler last asked for, and when: a button held still asks
+    /// for the same time at every frame.
+    ruler_asked: Option<(u64, Instant)>,
     /// Mean brightness (0–255) of the frame in `player_texture`, for measurement.
     pub player_luma: f64,
     /// Mean colour of the frame in `player_texture` over a 4 by 4 grid, for
@@ -132,6 +138,7 @@ impl Default for State {
             scrub_failed: false,
             scrub_failed_at: None,
             scrub_errors: (0, None),
+            ruler_asked: None,
             player_luma: 0.0,
             player_grid: Vec::new(),
             painted: (false, false),
@@ -211,6 +218,13 @@ impl State {
             self.scrub_errors.0 = 0;
         }
         due
+    }
+    /// Whether the ruler asks again for the time it just asked for: the button
+    /// held still, not a new click.
+    fn ruler_held(&mut self, ms: u64, now: Instant) -> bool {
+        self.ruler_asked
+            .replace((ms, now))
+            .is_some_and(|(last, at)| last == ms && now.saturating_duration_since(at) < RULER_HELD)
     }
     /// The monitor shows a decoded frame (a cursor still or live playback).
     pub fn has_frame(&self) -> bool {
@@ -456,7 +470,13 @@ impl NohApp {
                 .player
                 .as_ref()
                 .is_some_and(|p| p.snapshot().playing);
-        self.mini_seek(ms, playing);
+        // While playing, the playhead moves on after a seek. A button held
+        // still on the ruler would then ask for its time again at every
+        // frame and restart the player there each time: once is enough.
+        let held = self.mini_preview.ruler_held(ms, Instant::now());
+        if !(held && playing) {
+            self.mini_seek(ms, playing);
+        }
         ctx.request_repaint();
     }
     pub(super) fn poll_mini_preview(&mut self, ctx: &egui::Context) {
@@ -2165,6 +2185,19 @@ mod tests {
         state.note_scrub(false);
         assert!(!state.scrub_failed && state.scrub_failed_at.is_none());
         assert!(began.elapsed() < SCRUB_RETRY);
+    }
+    #[test]
+    fn a_button_held_still_on_the_ruler_asks_once_and_a_new_click_asks_again() {
+        let mut state = State::default();
+        let now = Instant::now();
+        assert!(!state.ruler_held(96_477, now));
+        // The following frames, button still down at the same place.
+        assert!(state.ruler_held(96_477, now + Duration::from_millis(16)));
+        assert!(state.ruler_held(96_477, now + Duration::from_millis(33)));
+        // Dragged elsewhere: a new request.
+        assert!(!state.ruler_held(96_500, now + Duration::from_millis(50)));
+        // A new click at the same place, later: a new request.
+        assert!(!state.ruler_held(96_500, now + Duration::from_millis(50) + RULER_HELD));
     }
     fn seek_output(hover_ms: Option<u64>, seek_ms: Option<u64>) -> app_timeline::Output {
         app_timeline::Output {
