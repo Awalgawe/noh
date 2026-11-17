@@ -79,6 +79,9 @@ pub struct State {
     scrub_failed: bool,
     /// Mean brightness (0–255) of the frame in `player_texture`, for measurement.
     pub player_luma: f64,
+    /// Mean colour of the frame in `player_texture` over a 4 by 4 grid, for
+    /// comparing two captures of the same instant.
+    pub player_grid: Vec<u8>,
     /// What the monitor painted last frame: a picture, the loading spinner.
     pub painted: (bool, bool),
     /// Makes the light copies of the videos ahead of their first use.
@@ -116,6 +119,7 @@ impl Default for State {
             scrub_active: false,
             scrub_failed: false,
             player_luma: 0.0,
+            player_grid: Vec::new(),
             painted: (false, false),
             warmer: None,
         }
@@ -480,7 +484,12 @@ impl NohApp {
                             ));
                         }
                         self.mini_preview.player_frame = Some(key);
-                        self.mini_preview.player_luma = mean_luma(&frame.rgb);
+                        // Measurements of the played picture, for the seek capture only.
+                        if super::app_capture::seek_playing_enabled() {
+                            self.mini_preview.player_luma = mean_luma(&frame.rgb);
+                            self.mini_preview.player_grid =
+                                mean_grid(&frame.rgb, frame.width, frame.height);
+                        }
                         self.mini_preview.player_position = frame.position;
                         super::app_effects::trace("video", frame.position, None, None, "");
                     }
@@ -1753,6 +1762,31 @@ impl NohApp {
         serde_json::json!({"explicit_ffmpeg":self.ffmpeg.is_some(), "first_frame_ms":self.mini_preview.capture_first_frame_ms, "thumbnails":self.mini_preview.textures.len(), "still":self.mini_preview.still.is_some(), "cursor_ms":self.mini_preview.cursor_ms, "short":self.mini_preview.short, "error":self.mini_preview.error,
             "player":state.map(|s| serde_json::json!({"phase":format!("{:?}", s.phase), "playing":s.playing, "position":s.position, "audio_available":s.audio_available, "warning":s.warning, "error":s.error, "frame":s.frame.as_ref().map(|f|serde_json::json!({"width":f.width,"height":f.height,"position":f.position,"id":f.id}))})), "rendered_preview":self.preview_ready || self.project.short_preview_artifact.is_some()})
     }
+}
+
+/// Mean red, green and blue of each cell of a 4 by 4 grid over an RGB frame.
+fn mean_grid(rgb: &[u8], width: usize, height: usize) -> Vec<u8> {
+    let mut grid = Vec::with_capacity(48);
+    if width < 4 || height < 4 || rgb.len() < width * height * 3 {
+        return grid;
+    }
+    for row in 0..4 {
+        for column in 0..4 {
+            let mut sum = [0u64; 3];
+            let mut count = 0u64;
+            for y in (row * height / 4..(row + 1) * height / 4).step_by(3) {
+                for x in (column * width / 4..(column + 1) * width / 4).step_by(3) {
+                    let at = (y * width + x) * 3;
+                    for (channel, total) in sum.iter_mut().enumerate() {
+                        *total += u64::from(rgb[at + channel]);
+                    }
+                    count += 1;
+                }
+            }
+            grid.extend(sum.map(|total| (total / count.max(1)) as u8));
+        }
+    }
+    grid
 }
 
 /// Mean of a sparse sample of an RGB frame: enough to tell a black picture.

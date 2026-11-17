@@ -159,6 +159,8 @@ struct SeekClick {
     luma_before: f64,
     last_sample: f64,
     first_frame_ms: Option<f64>,
+    /// The first picture of the new position, as a grid of mean colours.
+    picture: Vec<u8>,
     resumed_ms: Option<f64>,
     black_ms: f64,
     no_picture_ms: f64,
@@ -281,6 +283,7 @@ impl NohApp {
             luma_before: 0.0,
             last_sample: 0.0,
             first_frame_ms: None,
+            picture: Vec::new(),
             resumed_ms: None,
             black_ms: 0.0,
             no_picture_ms: 0.0,
@@ -327,6 +330,7 @@ impl NohApp {
         }
         if landed && click.first_frame_ms.is_none() {
             click.first_frame_ms = Some(t);
+            click.picture = self.mini_preview.player_grid.clone();
         }
         if landed
             && click.resumed_ms.is_none()
@@ -368,6 +372,7 @@ impl NohApp {
             "spinner_ms": click.spinner_ms,
             "loading_ms": click.loading_ms,
             "luma_before": click.luma_before,
+            "picture": click.picture,
             "worker": seek.map(|s| serde_json::json!({
                 "target": s.target,
                 "started_ms": s.started_ms,
