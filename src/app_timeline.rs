@@ -105,8 +105,8 @@ struct CueDrag {
 pub struct Output {
     pub hover_ms: Option<u64>,
     pub seek_ms: Option<u64>,
-    /// The ruler's button is down in a drag, moving or held: `seek_ms` is then
-    /// the time under the pointer at every frame.
+    /// The ruler's button is down, from the press on, moving or held: `seek_ms`
+    /// is then the time under the pointer at every frame.
     pub seek_drag: bool,
     pub range: Option<Range>,
     pub viewport: Option<Viewport>,
@@ -123,6 +123,8 @@ pub struct TimelineState {
     pub body_id: Option<Id>,
     wave: Option<WavePaint>,
     geometry: Option<Geometry>,
+    /// The ruler's button was down last frame: its release asks nothing more.
+    ruler_down: bool,
     cue_drag: Option<CueDrag>,
     /// The track as a cue drag would leave it, drawn instead of the input's.
     cue_preview: Option<SubtitleTrack>,
@@ -576,12 +578,22 @@ fn show_inner(
         let ruler = ui
             .interact(geometry.ruler, id.with("seek"), Sense::click_and_drag())
             .on_hover_cursor(egui::CursorIcon::PointingHand);
-        if (ruler.clicked() || ruler.dragged())
+        // The playhead goes under the pointer at the press itself. `dragged()`
+        // says nothing until egui has told a drag from a click: after 6 px of
+        // movement, or 0.8 s with the pointer still, during which nothing moved.
+        // The primary button only, as for a click: `is_pointer_button_down_on`
+        // is true for any button.
+        let down = ruler.is_pointer_button_down_on() && ui.input(|i| i.pointer.primary_down());
+        // A press and its release within one frame are only a click.
+        if (down || (ruler.clicked() && !state.ruler_down))
             && let Some(position) = ruler.interact_pointer_pos()
         {
             output.seek_ms = Some(time_at(view, rect, position.x));
         }
-        output.seek_drag = ruler.dragged();
+        output.seek_drag = down;
+        state.ruler_down = down;
+    } else {
+        state.ruler_down = false;
     }
     {
         state.geometry = Some(geometry);
@@ -2376,11 +2388,50 @@ mod tests {
         let mut harness = Harness::new(range);
         let ruler = harness.state.geometry.unwrap().ruler;
         let point = pos2(x_at(harness.view.unwrap(), ruler, 12_000), ruler.center().y);
-        harness.press(point);
+        let pressed = harness.press(point);
+        assert!(pressed.seek_ms.is_some_and(|ms| ms.abs_diff(12_000) < 3));
         let result = harness.release(point);
-        assert!(result.seek_ms.is_some_and(|ms| ms.abs_diff(12_000) < 3));
         assert_eq!(result.range, range);
         assert!(!result.commit_changed);
+    }
+
+    #[test]
+    fn the_ruler_moves_the_playhead_at_the_press_without_waiting_for_a_drag() {
+        let mut harness = Harness::new(None);
+        let ruler = harness.state.geometry.unwrap().ruler;
+        let point = pos2(x_at(harness.view.unwrap(), ruler, 12_000), ruler.center().y);
+        // The button goes down and the pointer stays still: no drag yet for egui.
+        let pressed = harness.press(point);
+        assert!(pressed.seek_ms.is_some_and(|ms| ms.abs_diff(12_000) < 3));
+        assert!(pressed.seek_drag, "the button is down");
+        // Held still, the same time is asked at every frame.
+        let held = harness.frame(Vec::new());
+        assert!(held.seek_drag && held.seek_ms == pressed.seek_ms);
+        // The release ends it and asks for nothing more.
+        let released = harness.release(point);
+        assert!(!released.seek_drag && released.seek_ms.is_none());
+        // Another button asks nothing, as before.
+        let secondary = |pressed| egui::Event::PointerButton {
+            pos: point,
+            button: egui::PointerButton::Secondary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        let other_button = harness.frame(vec![secondary(true)]);
+        assert!(other_button.seek_ms.is_none() && !other_button.seek_drag);
+        harness.frame(vec![secondary(false)]);
+        // A press and its release within one frame are a click: one request.
+        let other = pos2(x_at(harness.view.unwrap(), ruler, 6_000), ruler.center().y);
+        harness.frame(vec![egui::Event::PointerMoved(other)]);
+        let button = |pressed| egui::Event::PointerButton {
+            pos: other,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Default::default(),
+        };
+        let clicked = harness.frame(vec![button(true), button(false)]);
+        assert!(clicked.seek_ms.is_some_and(|ms| ms.abs_diff(6_000) < 3));
+        assert!(!clicked.seek_drag);
     }
 
     fn lyrics_harness() -> Harness {

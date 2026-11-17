@@ -277,6 +277,12 @@ impl State {
             .replace((ms, now))
             .is_some_and(|(last, at)| last == ms && now.saturating_duration_since(at) < RULER_HELD)
     }
+    /// The project time of the still on the monitor, once it has arrived.
+    pub fn still_shown(&self) -> Option<u64> {
+        self.requested
+            .filter(|_| self.still.is_some() && !self.still_pending)
+            .map(|(_, ms)| ms)
+    }
     /// The monitor shows a decoded frame (a cursor still or live playback).
     pub fn has_frame(&self) -> bool {
         self.still.is_some() || self.player_texture.is_some() || self.scrub_active
