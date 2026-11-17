@@ -118,6 +118,11 @@ name = "playback_probe"
 path = "tools/playback_probe.rs"
 required-features = ["gui"]
 
+[[example]]
+name = "vlc_probe"
+path = "tools/vlc_probe.rs"
+required-features = ["gui"]
+
 [[bin]]
 name = "noh"
 path = "src/main.rs"
