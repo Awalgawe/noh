@@ -70,6 +70,49 @@ pub struct Light {
     /// A copy made outside the store lives as long as this folder.
     _temporary: Option<tempfile::TempDir>,
 }
+impl Light {
+    /// Where to ask FFmpeg for the picture this copy shows at `seconds`: just
+    /// before its first frame at or after that time, its last frame past the
+    /// end. The frame times are the copy's own, so no rounding of the request
+    /// can step over a frame.
+    pub fn seek(&self, seconds: f64) -> f64 {
+        let index = self
+            .times
+            .partition_point(|pts| *pts < seconds - 1e-7)
+            .min(self.times.len().saturating_sub(1));
+        (self.times.get(index).copied().unwrap_or(0.0) - 0.0005).max(0.0)
+    }
+}
+
+/// A finished copy of the store and what it was made from, for a reader that
+/// uses a copy only when it is there and never waits for one.
+struct Held {
+    source: FileStamp,
+    origin: f64,
+    copy: Arc<Light>,
+}
+fn held() -> &'static Mutex<HashMap<PathBuf, Held>> {
+    static HELD: OnceLock<Mutex<HashMap<PathBuf, Held>>> = OnceLock::new();
+    HELD.get_or_init(Default::default)
+}
+/// The copy of `source` made with this `origin`, if this session has it ready
+/// and its file is still there. The live player asks at each seek: it reads
+/// the source until then, and the copy from the next seek on.
+pub fn ready(source: &FileStamp, origin: f64) -> Option<Arc<Light>> {
+    let name = named(&source.path);
+    let mut held = held().lock().unwrap_or_else(|e| e.into_inner());
+    let found = held.get(&name)?;
+    if found.source != *source || (found.origin - origin).abs() > 1e-9 {
+        return None;
+    }
+    if !found.copy.path.is_file() {
+        held.remove(&name);
+        drop(held);
+        set_state(&source.path, State::Absent);
+        return None;
+    }
+    Some(found.copy.clone())
+}
 
 /// Where the copy of a source stands in this session, for the interface.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -447,6 +490,31 @@ impl Store {
         })
     }
 }
+/// Offers a finished copy of `source` to `ready`, as `prepare` does, for the
+/// tests of its readers. The file at `path` must exist.
+#[cfg(test)]
+pub(crate) fn offer_for_test(
+    source: &FileStamp,
+    origin: f64,
+    path: PathBuf,
+    times: Vec<f64>,
+) -> Arc<Light> {
+    let copy = Arc::new(Light {
+        path,
+        bytes: 0,
+        times,
+        _temporary: None,
+    });
+    held().lock().unwrap_or_else(|e| e.into_inner()).insert(
+        named(&source.path),
+        Held {
+            source: source.clone(),
+            origin,
+            copy: copy.clone(),
+        },
+    );
+    copy
+}
 #[cfg(test)]
 impl Light {
     /// A copy in a temporary folder of its own, for the tests of its users.
@@ -741,6 +809,7 @@ fn prepare_in(
             }
         }
     })();
+    let made = made.map(Arc::new);
     set_state(
         &source.path,
         if made.is_ok() {
@@ -749,7 +818,21 @@ fn prepare_in(
             State::Absent
         },
     );
-    made.map(Arc::new)
+    // Only a copy of the store is offered to other readers: a temporary one
+    // belongs to whoever asked for it and goes with them.
+    if let Ok(copy) = &made
+        && copy._temporary.is_none()
+    {
+        held().lock().unwrap_or_else(|e| e.into_inner()).insert(
+            named(&source.path),
+            Held {
+                source: source.clone(),
+                origin,
+                copy: copy.clone(),
+            },
+        );
+    }
+    made
 }
 
 /// Makes copies ahead of need, one at a time, as soon as a source is known.
@@ -1038,6 +1121,31 @@ mod tests {
     }
 
     #[test]
+    fn a_copy_is_asked_for_just_before_its_first_frame_at_or_after_a_time() {
+        let copy = Light {
+            path: PathBuf::new(),
+            bytes: 0,
+            // 24 pictures a second with one gap, as a variable-rate source has.
+            times: vec![0.0, 1.0 / 24.0, 2.0 / 24.0, 0.5, 13.0 / 24.0],
+            _temporary: None,
+        };
+        let frame = |seconds: f64| {
+            let asked = copy.seek(seconds);
+            // What FFmpeg then outputs first: the first frame not before `asked`.
+            copy.times.iter().position(|pts| *pts >= asked).unwrap()
+        };
+        assert_eq!(copy.seek(0.0), 0.0);
+        assert_eq!(frame(0.0), 0);
+        // A time written with nine decimals still lands on its own frame.
+        assert_eq!(frame(0.041666667), 1);
+        assert_eq!(frame(0.041666666), 1);
+        assert_eq!(frame(0.05), 2);
+        assert_eq!(frame(0.3), 3);
+        assert_eq!(frame(0.5), 3);
+        assert_eq!(frame(9.0), 4);
+    }
+
+    #[test]
     fn a_second_maker_of_the_same_copy_waits_for_the_first() {
         let folder = tempfile::tempdir().unwrap();
         let store = Store::at(folder.path().to_path_buf(), 1 << 20).unwrap();
@@ -1220,6 +1328,18 @@ mod tests {
         let found = prepare_in(Some(&store), &renamed, unusable, 0.0, &|| false, &cancel).unwrap();
         assert_eq!(found.path, made.path);
         assert_eq!(files(&folder.path().join("store")), stored);
+        // A reader that never waits gets it under either name, and only for the
+        // file and the origin it was made from.
+        assert_eq!(ready(&source, 0.0).unwrap().path, made.path);
+        assert_eq!(ready(&renamed, 0.0).unwrap().path, made.path);
+        assert!(ready(&source, 0.5).is_none());
+        let mut touched = source.clone();
+        touched.bytes += 1;
+        assert!(ready(&touched, 0.0).is_none());
+        // Its file gone: no longer offered, and the tile no longer says ready.
+        std::fs::remove_file(&made.path).unwrap();
+        assert!(ready(&source, 0.0).is_none());
+        assert_eq!(state(&source.path), State::Absent);
     }
 
     #[test]
@@ -1230,6 +1350,8 @@ mod tests {
         };
         let cancel = AtomicBool::new(false);
         let made = prepare_in(None, &source, &ffmpeg, 0.0, &|| false, &cancel).unwrap();
+        // Not offered to other readers: it goes with whoever asked for it.
+        assert!(ready(&source, 0.0).is_none());
         let directory = made.path.parent().unwrap().to_path_buf();
         assert!(made.path.is_file());
         drop(made);

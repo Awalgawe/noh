@@ -989,9 +989,29 @@ fn project_command(
         let origin = prepared.origins.get(source).copied().unwrap_or(0.0);
         let video_seek =
             source_seconds.min((origin + (meta.seconds - 1.0 / fps).max(0.0)).max(0.0));
+        // While playing, the source's light copy is read instead once it is
+        // ready: every frame of it is a keyframe, so a seek decodes nothing
+        // from a distant keyframe. Its pictures start at the source's origin.
+        // Without one, or until it is ready, the source is read as before.
+        // The colour tail must then describe the copy, already in limited range,
+        // not the source. A BT.2020 project keeps every clip as decoded, which
+        // the copy of another clip is not: there the sources are read.
+        #[cfg_attr(not(feature = "gui"), allow(unused_mut))]
+        let mut input = (source.clone(), video_seek);
+        #[cfg_attr(not(feature = "gui"), allow(unused_mut))]
+        let mut pictures = crate::color::Input::video(meta);
+        #[cfg(feature = "gui")]
+        if stream
+            && color.matrix != crate::color::Matrix::Bt2020
+            && let Some(copied) = pictures.light_copy()
+            && let Some(copy) = crate::copies::ready(&prepared.snapshot.0[mapped.item], origin)
+        {
+            input = (copy.path.clone(), copy.seek(video_seek - origin));
+            pictures = copied;
+        }
         command
-            .args(["-ss", &format!("{video_seek:.9}"), "-i"])
-            .arg(source);
+            .args(["-ss", &format!("{:.9}", input.1), "-i"])
+            .arg(&input.0);
         // A single final decoded frame can carry EOF at the same PTS inside a
         // complex graph. fps would discard it before duration-based padding.
         // Still extraction needs no cadence conversion. Streaming adds exactly
@@ -1010,7 +1030,7 @@ fn project_command(
             "[0:v]setpts=PTS-STARTPTS,scale=w='max(2,trunc(min({w},{h}*dar)/2)*2)':h='max(2,trunc(min({h},{w}/dar)/2)*2)',setsar=1,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,{cadence}{tail}[v]",
             w = target.width,
             h = target.height,
-            tail = color.video_tail(&crate::color::Input::video(meta)),
+            tail = color.video_tail(&pictures),
         )
     };
     let has_captions = workspace.has_captions;
@@ -1419,6 +1439,122 @@ mod tests {
             (audio_edge.playback.source_seconds - 5.99).abs() < 1e-9,
             "audio mapping must not jump back to the video's last frame"
         );
+    }
+
+    #[test]
+    #[cfg(feature = "gui")]
+    fn playback_reads_a_ready_light_copy_and_a_still_never_does() {
+        use crate::{engine::ExportRequest, inspection::FileStamp};
+        let folder = tempfile::tempdir().unwrap();
+        let paths: Vec<_> = ["a.mp4", "b.mp4", "clock.wav", "ffmpeg", "copy.mp4"]
+            .into_iter()
+            .map(|name| {
+                let path = folder.path().join(name);
+                std::fs::write(&path, b"identity-only fixture").unwrap();
+                path
+            })
+            .collect();
+        let snapshot = Snapshot(
+            paths[..4]
+                .iter()
+                .map(|p| FileStamp::read(p).unwrap())
+                .collect(),
+        );
+        let project = ProjectRequest {
+            montage: ExportRequest {
+                items: vec![paths[0].clone().into(), paths[1].clone().into()],
+                wav: paths[2].clone(),
+                output: folder.path().join("unused.mp4"),
+                ffmpeg: paths[3].clone(),
+                fade_in: 0.0,
+                fade_out: 0.0,
+                partial_fades: true,
+                preview: true,
+                clip_audio: false,
+                force_encode: false,
+            },
+            short: None,
+            effect: None,
+            captions: None,
+        };
+        // The first clip is full range, as a phone or an action camera records.
+        let info = |description: &str| crate::media::MediaInfo {
+            seconds: 4.0,
+            description: description.into(),
+            width: 640,
+            height: 360,
+            ..Default::default()
+        };
+        let mut prepared = Prepared {
+            snapshot: snapshot.clone(),
+            items: project.montage.items.clone(),
+            info: vec![
+                info("Video: mjpeg, yuvj420p(pc), 640x360"),
+                info("Video: h264, yuv420p(tv, smpte170m), 640x360"),
+            ],
+            origins: HashMap::from([(snapshot.0[0].resolved.clone(), 0.25)]),
+            target: crate::plan::Target {
+                width: 640,
+                height: 360,
+                rate_num: 25,
+                rate_den: 1,
+                codec: "h264".into(),
+                pixel_format: "yuv420p".into(),
+            },
+            duration: 20.0,
+        };
+        let words = |stream: bool, prepared: &Prepared, local: f64| -> Vec<String> {
+            project_command(&project, local, &snapshot, prepared, stream)
+                .unwrap()
+                .command
+                .get_args()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect()
+        };
+        let input = |words: &[String]| {
+            let at = words.iter().position(|w| w == "-i").unwrap();
+            (words[at - 1].clone(), PathBuf::from(&words[at + 1]))
+        };
+        let graph = |words: &[String]| {
+            let at = words.iter().position(|w| w == "-filter_complex").unwrap();
+            words[at + 1].clone()
+        };
+        let source = snapshot.0[0].resolved.clone();
+        // No copy yet: the source, at its own time (origin 0.25 + 1.3 s).
+        let before = words(true, &prepared, 1.3);
+        assert_eq!(input(&before), ("1.550000000".into(), source.clone()));
+        assert!(graph(&before).contains("in_range=pc:out_range=tv"));
+        // Its copy is ready: 25 pictures a second from the source's origin.
+        let times: Vec<f64> = (0..100).map(|i| f64::from(i) / 25.0).collect();
+        let copy = crate::copies::offer_for_test(&snapshot.0[0], 0.25, paths[4].clone(), times);
+        let playing = words(true, &prepared, 1.3);
+        // Asked just before the copy's first frame at or after 1.3 s: 1.32 s.
+        assert_eq!(
+            input(&playing),
+            (format!("{:.9}", copy.seek(1.3)), paths[4].clone())
+        );
+        assert_eq!(input(&playing).0, "1.319500000");
+        // The copy is already in limited range: no second range conversion.
+        assert!(
+            !graph(&playing).contains("in_range=pc"),
+            "{}",
+            graph(&playing)
+        );
+        assert!(graph(&playing).contains("range=tv"));
+        // A still is always decoded from the source.
+        let still = words(false, &prepared, 1.3);
+        assert_eq!(input(&still), ("1.550000000".into(), source.clone()));
+        assert!(graph(&still).contains("in_range=pc:out_range=tv"));
+        // The other clip has no copy: its source.
+        let other = words(true, &prepared, 5.0);
+        assert_eq!(input(&other).1, snapshot.0[1].resolved);
+        // A copy made for another origin is not this source's copy.
+        prepared.origins.insert(source.clone(), 0.5);
+        assert_eq!(input(&words(true, &prepared, 1.3)).1, source);
+        prepared.origins.insert(source.clone(), 0.25);
+        // In a BT.2020 project every clip is kept as decoded: sources only.
+        prepared.info[1] = info("Video: hevc, yuv420p10le(tv, bt2020nc/bt2020/smpte2084), 640x360");
+        assert_eq!(input(&words(true, &prepared, 1.3)).1, source);
     }
 
     #[test]
