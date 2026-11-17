@@ -534,6 +534,11 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
                         source_seconds: seek_seconds,
                         fallback: false,
                     };
+                    crate::profile!(
+                        "paused: picture of {} ms in {:.0} ms",
+                        request.time_ms,
+                        request.at.elapsed().as_secs_f64() * 1000.0
+                    );
                     active_proxy = Some(working);
                     ctx.request_repaint();
                     return Ok(request.epoch);
@@ -547,6 +552,7 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
             if epoch != shared.epoch.load(Ordering::Acquire) {
                 continue;
             }
+            crate::profile!("paused: no picture of {requested_time} ms: {error}");
             // The UI retains the exact existing renderer as a fallback.
             *shared.snapshot.lock().unwrap() = Snapshot {
                 epoch,
@@ -898,7 +904,10 @@ impl Scrubber {
             let api = api.clone();
             let shared = shared.clone();
             let ctx = cc.egui_ctx.clone();
-            thread::spawn(move || control(api, handle, shared, ctx))
+            thread::Builder::new()
+                .name("noh-preview-paused".into())
+                .spawn(move || control(api, handle, shared, ctx))
+                .map_err(|e| format!("Cannot start the preview controller: {e}"))?
         };
         Ok(Self {
             api,

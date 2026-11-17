@@ -1098,6 +1098,7 @@ struct Session {
 }
 impl Session {
     fn open(mut input: Input, desired: &Desired) -> Result<Self, String> {
+        let opening = Instant::now();
         let stamp = FileStamp::read(&input.path).map_err(|e| e.to_string())?;
         let info = if let Some(project) = &input.project {
             project.validate().map_err(|e| e.to_string())?;
@@ -1145,7 +1146,13 @@ impl Session {
                 Some("Silent preview: the rendered file has no audio track".into()),
             )
         };
+        let sound_ms = opening.elapsed().as_secs_f64() * 1000.0;
         let video = Video::open(&input, position.min((info.seconds - 1.0 / FPS).max(0.0)))?;
+        crate::profile!(
+            "player: opened at {position:.3} s: sound ready at {sound_ms:.0} ms, picture decoder started at {:.0} ms, sound {}",
+            opening.elapsed().as_secs_f64() * 1000.0,
+            warning.as_deref().unwrap_or("ok")
+        );
         Ok(Self {
             input,
             stamp,
@@ -1286,7 +1293,13 @@ impl Session {
                 self.clock.set(position, false, Instant::now());
                 self.ready = false;
             }
+            let preparing = Instant::now();
             self.next_video = Some(Video::open(&self.input, boundary)?);
+            crate::profile!(
+                "player: next clip at {boundary:.3} s prepared in {:.0} ms, late: {}",
+                preparing.elapsed().as_secs_f64() * 1000.0,
+                position >= boundary
+            );
             self.audio_progress_at = Instant::now();
             // Helper setup is off-thread but may take time; select due frames
             // against the current physical audio clock after that work.
@@ -1332,7 +1345,16 @@ impl Session {
                     if let Some((requested, timing)) = &mut self.seek_timing
                         && timing.frame_ms.is_none()
                     {
-                        timing.frame_ms = Some(requested.elapsed().as_secs_f64() * 1000.0);
+                        let frame_ms = requested.elapsed().as_secs_f64() * 1000.0;
+                        timing.frame_ms = Some(frame_ms);
+                        crate::profile!(
+                            "player: seek to {:.3} s: started at {:.0} ms, sound at {:.0}, command at {:.0}, decoder at {:.0}, FIRST PICTURE at {frame_ms:.0} ms",
+                            timing.target,
+                            timing.started_ms,
+                            timing.audio_ms,
+                            timing.command_ms,
+                            timing.spawned_ms
+                        );
                     }
                 } else {
                     break;
@@ -1442,6 +1464,7 @@ fn run(shared: Arc<Shared>) {
                     }
                 }),
                 Err(error) => {
+                    crate::profile!("player: ERROR {error}");
                     shared.publish(generation, |snapshot| {
                         snapshot.phase = Phase::Error;
                         snapshot.playing = false;

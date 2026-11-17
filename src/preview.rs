@@ -1009,6 +1009,20 @@ fn project_command(
             input = (copy.path.clone(), copy.seek(video_seek - origin));
             pictures = copied;
         }
+        if stream {
+            crate::profile!(
+                "player: reads {} at {:.3} s for local {:.3} s of {} (project matrix {:?})",
+                if input.0 == *source {
+                    "the SOURCE"
+                } else {
+                    "the copy"
+                },
+                input.1,
+                local,
+                source.display(),
+                color.matrix
+            );
+        }
         command
             .args(["-ss", &format!("{:.9}", input.1), "-i"])
             .arg(&input.0);
@@ -1072,6 +1086,9 @@ fn project_command(
     }
     filter.push("format=rgba".into());
     graph.push_str(&format!(";[v]{}[out]", filter.join(",")));
+    if stream {
+        crate::profile!("player: graph {graph}");
+    }
     command.args(["-filter_complex", &graph, "-map", "[out]"]);
     Ok(PlaybackSegment {
         command,

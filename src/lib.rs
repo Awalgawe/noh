@@ -37,6 +37,7 @@ pub mod plan;
 #[cfg(feature = "gui")]
 pub mod playback;
 pub mod preview;
+pub mod profile;
 mod progress;
 pub mod project;
 pub mod resources;

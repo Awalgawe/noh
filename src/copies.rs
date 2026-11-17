@@ -101,11 +101,26 @@ fn held() -> &'static Mutex<HashMap<PathBuf, Held>> {
 pub fn ready(source: &FileStamp, origin: f64) -> Option<Arc<Light>> {
     let name = named(&source.path);
     let mut held = held().lock().unwrap_or_else(|e| e.into_inner());
-    let found = held.get(&name)?;
+    let Some(found) = held.get(&name) else {
+        crate::profile!(
+            "copy: none ready for {} ({:?})",
+            name.display(),
+            state(&name)
+        );
+        return None;
+    };
     if found.source != *source || (found.origin - origin).abs() > 1e-9 {
+        crate::profile!(
+            "copy: not for this reader, {}: file changed {}, origin {} asked {}",
+            name.display(),
+            found.source != *source,
+            found.origin,
+            origin
+        );
         return None;
     }
     if !found.copy.path.is_file() {
+        crate::profile!("copy: file gone, {}", found.copy.path.display());
         held.remove(&name);
         drop(held);
         set_state(&source.path, State::Absent);
@@ -253,10 +268,18 @@ impl Store {
                 && known.modified == modified
                 && known.created == created
             {
+                crate::profile!("copy: signature known for {}", source.path.display());
                 return Ok(known.signature.clone());
             }
         }
+        let reading = Instant::now();
         let signature = hash(&source.resolved, stop)?;
+        crate::profile!(
+            "copy: signature read in {:.0} ms, {} bytes, {}",
+            reading.elapsed().as_secs_f64() * 1000.0,
+            source.bytes,
+            source.path.display()
+        );
         if FileStamp::read(&source.path)? != *source {
             return Err("Preview input changed".into());
         }
@@ -779,6 +802,7 @@ fn prepare_in(
     cancel: &AtomicBool,
 ) -> Result<Arc<Light>> {
     set_state(&source.path, State::Preparing);
+    let began = Instant::now();
     let filter = filter(ffmpeg, &source.resolved);
     let made = (|| {
         let Some(store) = store else {
@@ -788,8 +812,10 @@ fn prepare_in(
         let key = key(&signature, &format!("{RECIPE}|{origin:.9}|{filter}"));
         let _claim = store.claim(&key, stop)?;
         if let Some(copy) = store.get(&key) {
+            crate::profile!("copy: found in the store, {key}");
             return Ok(copy);
         }
+        crate::profile!("copy: to be made, {key}");
         // Known to be too large, or too slow today: not encoded again, here or
         // ahead of need.
         if let Some(reason) = store.refused(&key) {
@@ -810,6 +836,21 @@ fn prepare_in(
         }
     })();
     let made = made.map(Arc::new);
+    match &made {
+        Ok(copy) => crate::profile!(
+            "copy: ready in {:.0} ms, {} bytes, {} frames, {} -> {}",
+            began.elapsed().as_secs_f64() * 1000.0,
+            copy.bytes,
+            copy.times.len(),
+            source.path.display(),
+            copy.path.display()
+        ),
+        Err(error) => crate::profile!(
+            "copy: none after {:.0} ms for {}: {error}",
+            began.elapsed().as_secs_f64() * 1000.0,
+            source.path.display()
+        ),
+    }
     set_state(
         &source.path,
         if made.is_ok() {
@@ -915,6 +956,7 @@ impl Warmer {
         {
             return;
         }
+        crate::profile!("copy: asked ahead for {}", source.display());
         if sender
             .send((source.to_path_buf(), ffmpeg.to_path_buf()))
             .is_ok()
@@ -926,7 +968,12 @@ impl Warmer {
     /// Holds the work, the copy in progress included, while `held` is true: the
     /// app sets it during an export or another job, and releases it after.
     pub fn hold(&self, held: bool) {
-        self.held.store(held, Ordering::Relaxed);
+        if self.held.swap(held, Ordering::Relaxed) != held {
+            crate::profile!(
+                "copy: making ahead {}",
+                if held { "held" } else { "released" }
+            );
+        }
     }
     /// Whether copies are made ahead of need in this session.
     pub fn active(&self) -> bool {

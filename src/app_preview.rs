@@ -234,6 +234,7 @@ impl State {
         self.textures.contains_key(&(id | STILL_KEY))
     }
     pub fn invalidate(&mut self) {
+        noh::profile!("app: preview invalidated (player stopped, pictures dropped)");
         if let Some(scrubber) = &self.scrubber {
             scrubber.invalidate();
         }
@@ -409,6 +410,11 @@ impl NohApp {
         let (start, end) = self.mini_bounds();
         let ms = ms.clamp(start, end.saturating_sub(1).max(start));
         let live = self.mini_preview.player_stamp.is_some();
+        if ms != self.mini_preview.cursor_ms {
+            noh::profile!(
+                "app: playhead to {ms} ms (player open: {live}, moves the player: {seek_player})"
+            );
+        }
         if live && !seek_player {
             if self
                 .mini_preview
@@ -438,7 +444,9 @@ impl NohApp {
             self.mini_preview.cursor_ms = ms;
             self.mini_preview.error = None;
             self.mini_preview.changed_at = Instant::now();
-            self.mini_preview.retry_scrub(Instant::now());
+            if self.mini_preview.retry_scrub(Instant::now()) {
+                noh::profile!("app: paused preview tries libmpv again");
+            }
             if self.mini_preview.player_stamp.is_some()
                 && let Some(player) = &self.mini_preview.player
             {
@@ -614,6 +622,12 @@ impl NohApp {
                     snapshot.time_ms,
                     ms,
                 );
+                if failed && !self.mini_preview.scrub_failed {
+                    noh::profile!(
+                        "app: paused preview on stills from {ms} ms: {}",
+                        snapshot.error.as_deref().unwrap_or("")
+                    );
+                }
                 self.mini_preview.note_scrub(failed);
                 self.mini_preview.scrub_active = snapshot.frame > 0 && snapshot.error.is_none();
             }
@@ -729,6 +743,12 @@ impl NohApp {
         }
     }
     pub(super) fn mini_play(&mut self, ctx: &egui::Context) {
+        noh::profile!(
+            "app: Play or Pause pressed at {} ms (player open: {}, playing: {})",
+            self.mini_preview.cursor_ms,
+            self.mini_preview.player_stamp.is_some(),
+            self.mini_playing()
+        );
         self.mini_preview.scrub_active = false;
         if self.mini_preview.player_stamp.is_some()
             && let Some(player) = &self.mini_preview.player
