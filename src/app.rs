@@ -140,6 +140,7 @@ struct NohApp {
     capture_state_at: Option<Instant>,
     opened: Instant,
     scrub_qa: app_capture::ScrubQa,
+    seek_qa: app_capture::SeekQa,
 }
 
 impl Default for NohApp {
@@ -147,6 +148,7 @@ impl Default for NohApp {
         Self {
             project: app_project::State::default(),
             scrub_qa: app_capture::ScrubQa::default(),
+            seek_qa: app_capture::SeekQa::default(),
             project_ui: app_project_ui::State::default(),
             strip: app_strip::State::default(),
             mini_preview: app_preview::State::default(),

@@ -64,10 +64,10 @@ pub struct State {
     still_pending: bool,
     changed_at: Instant,
     error: Option<String>,
-    player: Option<Player>,
+    pub(super) player: Option<Player>,
     pub player_stamp: Option<app_project::Stamp>,
     player_texture: Option<egui::TextureHandle>,
-    player_frame: Option<(u64, u64)>,
+    pub(super) player_frame: Option<(u64, u64)>,
     /// Clock of the frame in `player_texture` (local seconds): the effect layer's time.
     pub player_position: f64,
     volume: f32,
@@ -77,6 +77,10 @@ pub struct State {
     scrub_requested: Option<u64>,
     pub scrub_active: bool,
     scrub_failed: bool,
+    /// Mean brightness (0–255) of the frame in `player_texture`, for measurement.
+    pub player_luma: f64,
+    /// What the monitor painted last frame: a picture, the loading spinner.
+    pub painted: (bool, bool),
 }
 impl Default for State {
     fn default() -> Self {
@@ -109,6 +113,8 @@ impl Default for State {
             scrub_requested: None,
             scrub_active: false,
             scrub_failed: false,
+            player_luma: 0.0,
+            painted: (false, false),
         }
     }
 }
@@ -452,6 +458,7 @@ impl NohApp {
                             ));
                         }
                         self.mini_preview.player_frame = Some(key);
+                        self.mini_preview.player_luma = mean_luma(&frame.rgb);
                         self.mini_preview.player_position = frame.position;
                         super::app_effects::trace("video", frame.position, None, None, "");
                     }
@@ -833,6 +840,7 @@ impl NohApp {
         if let Some(texture) = texture {
             paint_texture(ui, monitor, texture);
         }
+        self.mini_preview.painted = (has_texture, false);
         let scrub_visible = self.mini_preview.scrub_active
             && self.mini_preview.source.is_none()
             && self.mini_preview.player_stamp.is_none();
@@ -868,6 +876,7 @@ impl NohApp {
                 self.mini_preview.invalidate();
             }
         } else if !has_texture && !scrub_visible && (loading || still_loading || self.ready()) {
+            self.mini_preview.painted.1 = true;
             let spinner = egui::Rect::from_center_size(monitor.center(), egui::vec2(24.0, 24.0));
             // This overlay must not advance the layout cursor inside the monitor.
             ui.place(
@@ -1721,6 +1730,20 @@ impl NohApp {
         let state = self.mini_preview.player.as_ref().map(Player::snapshot);
         serde_json::json!({"explicit_ffmpeg":self.ffmpeg.is_some(), "first_frame_ms":self.mini_preview.capture_first_frame_ms, "thumbnails":self.mini_preview.textures.len(), "still":self.mini_preview.still.is_some(), "cursor_ms":self.mini_preview.cursor_ms, "short":self.mini_preview.short, "error":self.mini_preview.error,
             "player":state.map(|s| serde_json::json!({"phase":format!("{:?}", s.phase), "playing":s.playing, "position":s.position, "audio_available":s.audio_available, "warning":s.warning, "error":s.error, "frame":s.frame.as_ref().map(|f|serde_json::json!({"width":f.width,"height":f.height,"position":f.position,"id":f.id}))})), "rendered_preview":self.preview_ready || self.project.short_preview_artifact.is_some()})
+    }
+}
+
+/// Mean of a sparse sample of an RGB frame: enough to tell a black picture.
+fn mean_luma(rgb: &[u8]) -> f64 {
+    let (mut sum, mut count) = (0u64, 0u64);
+    for value in rgb.iter().step_by(997) {
+        sum += u64::from(*value);
+        count += 1;
+    }
+    if count == 0 {
+        0.0
+    } else {
+        sum as f64 / count as f64
     }
 }
 

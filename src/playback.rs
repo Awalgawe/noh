@@ -55,6 +55,24 @@ impl std::fmt::Debug for Frame {
     }
 }
 
+/// How the last seek of an open session went, for measurement. Each time is in
+/// milliseconds from the request ([`Player::seek`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SeekTiming {
+    pub seek_id: u64,
+    pub target: f64,
+    /// The worker began the seek: the settle delay, and the tick before it.
+    pub started_ms: f64,
+    /// Sound was repositioned.
+    pub audio_ms: f64,
+    /// The picture command was built.
+    pub command_ms: f64,
+    /// The picture decoder was started.
+    pub spawned_ms: f64,
+    /// The first picture at the new position was published.
+    pub frame_ms: Option<f64>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Snapshot {
     pub generation: u64,
@@ -69,6 +87,7 @@ pub struct Snapshot {
     pub warning: Option<String>,
     pub error: Option<String>,
     pub frame: Option<Arc<Frame>>,
+    pub seek: Option<SeekTiming>,
 }
 impl Default for Snapshot {
     fn default() -> Self {
@@ -84,6 +103,7 @@ impl Default for Snapshot {
             warning: None,
             error: None,
             frame: None,
+            seek: None,
         }
     }
 }
@@ -803,6 +823,8 @@ struct Video {
     ended: bool,
     last_frame: Instant,
     local_end: f64,
+    /// When the command was ready, before the decoder was started.
+    built: Instant,
     _workspace: Option<Arc<tempfile::TempDir>>,
 }
 impl Video {
@@ -869,6 +891,7 @@ impl Video {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        let built = Instant::now();
         let mut tree =
             Tree::spawn(command, true).map_err(|e| format!("Cannot start preview video: {e}"))?;
         let stdout = tree
@@ -930,6 +953,7 @@ impl Video {
             ended: false,
             last_frame: Instant::now(),
             local_end,
+            built,
             _workspace: workspace,
         })
     }
@@ -1069,6 +1093,8 @@ struct Session {
     ended: bool,
     audio_progress: f64,
     audio_progress_at: Instant,
+    /// The last seek's request time and how far it has got.
+    seek_timing: Option<(Instant, SeekTiming)>,
 }
 impl Session {
     fn open(mut input: Input, desired: &Desired) -> Result<Self, String> {
@@ -1134,9 +1160,13 @@ impl Session {
             ended: position >= info.seconds,
             audio_progress: position,
             audio_progress_at: Instant::now(),
+            seek_timing: None,
         })
     }
     fn seek(&mut self, desired: &Desired) -> Result<(), String> {
+        let requested = desired.seek_at;
+        let since = |at: Instant| at.saturating_duration_since(requested).as_secs_f64() * 1000.0;
+        let started_ms = since(Instant::now());
         if FileStamp::read(&self.input.path).as_ref() != Ok(&self.stamp) {
             return Err("Preview changed while playing it".into());
         }
@@ -1163,10 +1193,24 @@ impl Session {
                 self.audio.take();
             }
         }
-        self.video = Some(Video::open(
+        let audio_ms = since(Instant::now());
+        let video = Video::open(
             &self.input,
             position.min((self.duration - 1.0 / FPS).max(0.0)),
-        )?);
+        )?;
+        self.seek_timing = Some((
+            requested,
+            SeekTiming {
+                seek_id: desired.seek_id,
+                target: position,
+                started_ms,
+                audio_ms,
+                command_ms: since(video.built),
+                spawned_ms: since(Instant::now()),
+                frame_ms: None,
+            },
+        ));
+        self.video = Some(video);
         self.seek_id = desired.seek_id;
         self.ready = false;
         self.ended = position >= self.duration;
@@ -1285,6 +1329,11 @@ impl Session {
                     frame.id = *frame_id;
                     latest = Some(Arc::new(frame));
                     self.ready = true;
+                    if let Some((requested, timing)) = &mut self.seek_timing
+                        && timing.frame_ms.is_none()
+                    {
+                        timing.frame_ms = Some(requested.elapsed().as_secs_f64() * 1000.0);
+                    }
                 } else {
                     break;
                 }
@@ -1387,6 +1436,7 @@ fn run(shared: Arc<Shared>) {
                     snapshot.playing = desired.playing && !active.ended;
                     snapshot.audio_available = active.audio.is_some();
                     snapshot.warning = active.warning.clone();
+                    snapshot.seek = active.seek_timing.map(|(_, timing)| timing);
                     if let Some(frame) = frame {
                         snapshot.frame = Some(frame);
                     }
@@ -1478,6 +1528,7 @@ mod tests {
                 ended: false,
                 last_frame: Instant::now(),
                 local_end,
+                built: Instant::now(),
                 _workspace: None,
             },
         )
@@ -1520,6 +1571,7 @@ mod tests {
             ended: false,
             audio_progress: 1.1,
             audio_progress_at: Instant::now(),
+            seek_timing: None,
         };
         let mut frame_id = 0;
         assert!(session.tick(&desired, &mut frame_id).unwrap().is_none());
