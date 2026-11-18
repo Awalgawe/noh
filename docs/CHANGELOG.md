@@ -47,7 +47,7 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
 - Write each start to a small `startup.log` file beside the language
   preference, and show a message when the window cannot open. Until now the
   Windows interface closed without a word when it could not start. See the
-  [installation guide](INSTALLING.md#the-start-up-file) for where the file is
+  [installation guide](https://github.com/Awalgawe/noh/blob/v0.2.0/docs/INSTALLING.md#the-start-up-file) for where the file is
   and what it holds.
 
 ### Known issues
@@ -71,7 +71,7 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
 - On one Windows 10 tablet, Windows refused to run `noh.exe` ("Access is
   denied"). The cause is not established. This version does not fix it, and no
   `startup.log` is written in that case: nothing of NOH runs. See the
-  [installation guide](INSTALLING.md#the-start-up-file).
+  [installation guide](https://github.com/Awalgawe/noh/blob/v0.2.0/docs/INSTALLING.md#the-start-up-file).
 - On Debian 13 with GNOME, the preview's picture stopped updating after about
   one second in 3 of 23 automated test runs made while preparing 0.1.6. The
   cause is still not established, and nothing in this version was written to
