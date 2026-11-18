@@ -177,7 +177,10 @@ def release_notes(version, identity, limits, changes):
         f"- [Run {identity['desktop_run']}]({runs}{identity['desktop_run']}) started the exact Linux package on "
         f"{identity['desktop_cases']} desktops in virtual machines.",
         *desktop_rerun_lines(identity),
-        "- Each file here matches a digest recorded by those runs. `SHA256SUMS` lists them.", "",
+        "- Each package, installer and source archive here matches a digest recorded by those runs. "
+        "`SHA256SUMS`, `INSTALLER-PROVENANCE.json`, `linux-desktop-evidence.zip` and `PUBLICATION.json` are "
+        "written by the publication itself. `SHA256SUMS` lists every file except itself, "
+        "`PUBLICATION.json` and `ACCEPTANCE.json`, which is attached after the acceptance tests.", "",
         "### Limits", "",
         *["- " + limit for limit in limits],
         "- No hardware GPU, audio device, NVENC or CUDA is exercised on hosted runners.",
