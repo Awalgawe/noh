@@ -219,8 +219,8 @@ User-created files in the installation folder are preserved; keep your media
 and exports in your own folders.
 
 To remove the portable copy, close NOH and delete its folder. Media and exports saved elsewhere remain in place.
-The small language-preference file is stored separately and is not removed with
-the application.
+The small language-preference file and `startup.log` are stored separately and
+are not removed with the application.
 
 ## If it does not open
 
@@ -235,6 +235,25 @@ the application.
   download.
 - **The app opens but export is unavailable:** follow the message in the bottom
   bar or the [desktop troubleshooting guide](APP.md#if-something-does-not-work).
+- **Nothing appears, or an error message names the window:** NOH writes what
+  happened to a small file, `startup.log`, each time it starts. The window needs
+  OpenGL 2.0 or newer, and caption effects need OpenGL 3.3: check that the
+  graphics card's own driver is installed, not a generic one. If that does not
+  help, send the file with your report.
+
+### The start-up file
+
+`startup.log` is replaced at each start. It holds the NOH version, the system,
+the time, each step of the start, the OpenGL vendor, renderer and version once
+the window is open, and the error if the start failed. It is in the folder of
+the language preference:
+
+- Windows: `%APPDATA%\noh\startup.log`
+- Linux: `$XDG_CONFIG_HOME/noh/startup.log`, usually `~/.config/noh/startup.log`
+- macOS: `~/Library/Application Support/noh/startup.log`
+
+When NOH closes at once without a message, the last line of the file is the
+step it was on.
 
 ## If a feature is unavailable
 
