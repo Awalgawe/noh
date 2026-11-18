@@ -204,6 +204,46 @@ or publication token cannot clear missing evidence. Preflight checks this before
 an expensive retained build. The non-uploading `verify` mode remains available
 for investigations; it does not produce a reusable public package.
 
+## Version numbers
+
+From the version after 0.1.6, NOH follows [Semantic Versioning 2.0.0](https://semver.org/).
+A version is `MAJOR.MINOR.PATCH`. While MAJOR is 0:
+
+- **PATCH** (0.1.6 → 0.1.7): corrections only. Nothing in the list below is
+  added, removed or changed.
+- **MINOR** (0.1.x → 0.2.0): anything else — something is added to the list, or
+  something in it changes or goes away.
+
+What a change is measured against — the list as known on 2026-11-16, completed
+when something else is found to be relied on:
+
+- the command line of `noh`: commands, options, what it prints for other
+  programs (`--json` output) and its exit codes;
+- the MCP server: tool names and their schemas;
+- the environment variables NOH documents, such as `NOH_FFMPEG`;
+- the files exchanged with NOH: lyrics files (`.noh-lyrics.json`), the `.srt`
+  files it reads and writes, preferences;
+- the installers as people meet them: profiles and download file names;
+- the supported systems and what must be installed on them.
+
+When automatic updates are switched on, what an installed version reads from a
+newer release joins the list. A file written only to help diagnose a problem,
+such as `startup.log`, is not in it: its place is documented, its content may
+change.
+
+1.0.0 will mean the list is stable: from then on a breaking change needs a new
+MAJOR. Until then a MINOR may break it, and the changelog says so.
+
+The changelog's open section is headed `## Unreleased`. The release commit
+chooses the number from what that section holds — only corrections, a PATCH;
+anything else, a MINOR — and renames the heading. Versions up to 0.1.6 were
+numbered before this rule and are not renumbered; 0.1.6 added functions and
+would have been 0.2.0.
+
+The "pre-release" of the publication below is GitHub's flag on the final number
+while its files are tested. It is not a Semantic Versioning pre-release: a
+number never carries a suffix.
+
 ## Publication from 0.1.6
 
 Releases are built, published, tested and promoted on GitHub. No step runs on a
@@ -284,7 +324,8 @@ The publication and acceptance artifacts are kept 90 days: promote within that
 time. Attaching `ACCEPTANCE.json` requires that immutable releases stay disabled
 for this repository.
 
-A defect found after publication is fixed in the next version number. A published
+A defect found after publication is fixed in the next version number, a PATCH
+unless the correction changes something in the list above. A published
 tag is never moved and its files are never replaced.
 
 Evidence lives beside the packages, not in this repository: `INSTALLER-TESTS.json`,
