@@ -1811,9 +1811,29 @@ impl NohApp {
 }
 impl eframe::App for NohApp {
     fn raw_input_hook(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
+        // A capture that moves the pointer itself takes none from the person at
+        // the computer: while it holds its button down, a real mouse crossing
+        // the window would drag the playhead elsewhere.
+        if super::app_capture::drives_pointer() {
+            input.events.retain(|event| {
+                !matches!(
+                    event,
+                    egui::Event::PointerMoved(_)
+                        | egui::Event::MouseMoved(_)
+                        | egui::Event::PointerButton { .. }
+                        | egui::Event::PointerGone
+                        | egui::Event::MouseWheel { .. }
+                        | egui::Event::Touch { .. }
+                )
+            });
+        }
         self.scrub_capture_input(ctx, input);
+        self.seek_capture_input(ctx, input);
+        self.drag_capture_input(ctx, input);
     }
     fn on_exit(&mut self, gl: Option<&eframe::glow::Context>) {
+        // Stops the copy in progress and waits for its encoder to be gone.
+        self.mini_preview.warmer.take();
         #[cfg(feature = "updates")]
         self.updates.worker.take();
         if let Some(scrubber) = &mut self.mini_preview.scrubber {
@@ -1821,6 +1841,19 @@ impl eframe::App for NohApp {
         }
         // Delete the effect layer's GL objects while egui's context still exists.
         self.effects.release();
+    }
+    fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        // While the window is hidden no ui runs and nothing is painted. A
+        // montage libmpv plays goes on only if its pictures are taken: this is
+        // then the only place that can do it.
+        if ctx.input(|i| i.viewport().visible()) == Some(false)
+            && let Some(scrubber) = &self.mini_preview.scrubber
+            && scrubber.plays()
+            && let Some(gl) = frame.gl()
+        {
+            scrubber.serve_unpainted(gl);
+            ctx.request_repaint();
+        }
     }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // Measurement only (NOH_FX_TRACE): one row per UI frame, with or without effect.

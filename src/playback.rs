@@ -55,6 +55,24 @@ impl std::fmt::Debug for Frame {
     }
 }
 
+/// How the last seek of an open session went, for measurement. Each time is in
+/// milliseconds from the request ([`Player::seek`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SeekTiming {
+    pub seek_id: u64,
+    pub target: f64,
+    /// The worker began the seek: the settle delay, and the tick before it.
+    pub started_ms: f64,
+    /// Sound was repositioned.
+    pub audio_ms: f64,
+    /// The picture command was built.
+    pub command_ms: f64,
+    /// The picture decoder was started.
+    pub spawned_ms: f64,
+    /// The first picture at the new position was published.
+    pub frame_ms: Option<f64>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Snapshot {
     pub generation: u64,
@@ -69,6 +87,7 @@ pub struct Snapshot {
     pub warning: Option<String>,
     pub error: Option<String>,
     pub frame: Option<Arc<Frame>>,
+    pub seek: Option<SeekTiming>,
 }
 impl Default for Snapshot {
     fn default() -> Self {
@@ -84,6 +103,7 @@ impl Default for Snapshot {
             warning: None,
             error: None,
             frame: None,
+            seek: None,
         }
     }
 }
@@ -139,10 +159,37 @@ impl Shared {
     }
 }
 
+/// Another engine playing in the player's place. The player forwards its
+/// commands to it and returns its snapshots, so the interface drives either
+/// engine the same way. Such an engine draws its pictures itself: its frames
+/// carry a position and no pixels.
+pub trait Live: Send + Sync {
+    fn set_playing(&self, playing: bool);
+    fn seek(&self, seconds: f64);
+    fn set_volume(&self, volume: f32);
+    fn stop(&self);
+    fn snapshot(&self) -> Snapshot;
+    /// How the engine stopped serving its montage, once its snapshot reads an
+    /// error.
+    fn failure(&self) -> Option<LiveFailure> {
+        None
+    }
+}
+/// How another engine stopped serving a montage.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LiveFailure {
+    /// It refused the montage at once, before playing any of it. Otherwise it
+    /// gave up after taking it: after a wait, or in the middle.
+    pub refused: bool,
+    /// The montage was asked to play then, not to stay paused.
+    pub playing: bool,
+}
+
 /// One worker and one command slot, including during slider dragging. Dropping
 /// this handle requests cleanup without waiting on the GUI thread.
 pub struct Player {
     shared: Arc<Shared>,
+    live: Mutex<Option<Arc<dyn Live>>>,
 }
 impl Player {
     pub fn new(wake: impl Fn() + Send + Sync + 'static) -> Self {
@@ -170,7 +217,27 @@ impl Player {
             snapshot.phase = Phase::Error;
             snapshot.error = Some(format!("Cannot start preview playback: {error}"));
         }
-        Self { shared }
+        Self {
+            shared,
+            live: Mutex::new(None),
+        }
+    }
+
+    fn live(&self) -> Option<Arc<dyn Live>> {
+        self.live.lock().unwrap().clone()
+    }
+    /// Lets `live` play in this player's place until the next open or stop.
+    pub fn open_live(&self, live: Arc<dyn Live>) {
+        self.stop();
+        *self.live.lock().unwrap() = Some(live);
+    }
+    /// Whether another engine plays in this player's place now.
+    pub fn is_live(&self) -> bool {
+        self.live.lock().unwrap().is_some()
+    }
+    /// How the engine in this player's place stopped serving, if it has.
+    pub fn live_failure(&self) -> Option<LiveFailure> {
+        self.live().and_then(|live| live.failure())
     }
 
     pub fn open(&self, path: PathBuf, ffmpeg: PathBuf, start_seconds: f64, playing: bool) {
@@ -187,6 +254,9 @@ impl Player {
     }
 
     fn open_input(&self, input: Input, start_seconds: f64, playing: bool) {
+        if let Some(live) = self.live.lock().unwrap().take() {
+            live.stop();
+        }
         let mut desired = self.shared.desired.lock().unwrap();
         if let Some(input) = &desired.input {
             input.cancel.store(true, Ordering::Release);
@@ -234,6 +304,9 @@ impl Player {
     }
 
     pub fn set_playing(&self, playing: bool) {
+        if let Some(live) = self.live() {
+            return live.set_playing(playing);
+        }
         let mut desired = self.shared.desired.lock().unwrap();
         let mut snapshot = self.shared.snapshot.lock().unwrap();
         if playing && snapshot.phase == Phase::Ended {
@@ -249,6 +322,9 @@ impl Player {
     }
 
     pub fn seek(&self, seconds: f64) {
+        if let Some(live) = self.live() {
+            return live.seek(seconds);
+        }
         let mut desired = self.shared.desired.lock().unwrap();
         let mut snapshot = self.shared.snapshot.lock().unwrap();
         desired.position = finite_seconds(seconds);
@@ -271,10 +347,16 @@ impl Player {
         };
         self.shared.desired.lock().unwrap().volume = volume;
         self.shared.snapshot.lock().unwrap().volume = volume;
+        if let Some(live) = self.live() {
+            live.set_volume(volume);
+        }
         self.shared.changed.notify_one();
     }
 
     pub fn stop(&self) {
+        if let Some(live) = self.live.lock().unwrap().take() {
+            live.stop();
+        }
         let mut desired = self.shared.desired.lock().unwrap();
         desired.generation = desired.generation.wrapping_add(1);
         if let Some(input) = &desired.input {
@@ -292,11 +374,17 @@ impl Player {
     }
 
     pub fn snapshot(&self) -> Snapshot {
+        if let Some(live) = self.live() {
+            return live.snapshot();
+        }
         self.shared.snapshot.lock().unwrap().clone()
     }
 }
 impl Drop for Player {
     fn drop(&mut self) {
+        if let Some(live) = self.live.lock().unwrap().take() {
+            live.stop();
+        }
         let mut desired = self.shared.desired.lock().unwrap();
         desired.shutdown = true;
         if let Some(input) = &desired.input {
@@ -803,6 +891,8 @@ struct Video {
     ended: bool,
     last_frame: Instant,
     local_end: f64,
+    /// When the command was ready, before the decoder was started.
+    built: Instant,
     _workspace: Option<Arc<tempfile::TempDir>>,
 }
 impl Video {
@@ -869,6 +959,7 @@ impl Video {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        let built = Instant::now();
         let mut tree =
             Tree::spawn(command, true).map_err(|e| format!("Cannot start preview video: {e}"))?;
         let stdout = tree
@@ -930,6 +1021,7 @@ impl Video {
             ended: false,
             last_frame: Instant::now(),
             local_end,
+            built,
             _workspace: workspace,
         })
     }
@@ -1069,9 +1161,12 @@ struct Session {
     ended: bool,
     audio_progress: f64,
     audio_progress_at: Instant,
+    /// The last seek's request time and how far it has got.
+    seek_timing: Option<(Instant, SeekTiming)>,
 }
 impl Session {
     fn open(mut input: Input, desired: &Desired) -> Result<Self, String> {
+        let opening = Instant::now();
         let stamp = FileStamp::read(&input.path).map_err(|e| e.to_string())?;
         let info = if let Some(project) = &input.project {
             project.validate().map_err(|e| e.to_string())?;
@@ -1119,7 +1214,13 @@ impl Session {
                 Some("Silent preview: the rendered file has no audio track".into()),
             )
         };
+        let sound_ms = opening.elapsed().as_secs_f64() * 1000.0;
         let video = Video::open(&input, position.min((info.seconds - 1.0 / FPS).max(0.0)))?;
+        crate::profile!(
+            "player: opened at {position:.3} s: sound ready at {sound_ms:.0} ms, picture decoder started at {:.0} ms, sound {}",
+            opening.elapsed().as_secs_f64() * 1000.0,
+            warning.as_deref().unwrap_or("ok")
+        );
         Ok(Self {
             input,
             stamp,
@@ -1134,9 +1235,13 @@ impl Session {
             ended: position >= info.seconds,
             audio_progress: position,
             audio_progress_at: Instant::now(),
+            seek_timing: None,
         })
     }
     fn seek(&mut self, desired: &Desired) -> Result<(), String> {
+        let requested = desired.seek_at;
+        let since = |at: Instant| at.saturating_duration_since(requested).as_secs_f64() * 1000.0;
+        let started_ms = since(Instant::now());
         if FileStamp::read(&self.input.path).as_ref() != Ok(&self.stamp) {
             return Err("Preview changed while playing it".into());
         }
@@ -1163,10 +1268,24 @@ impl Session {
                 self.audio.take();
             }
         }
-        self.video = Some(Video::open(
+        let audio_ms = since(Instant::now());
+        let video = Video::open(
             &self.input,
             position.min((self.duration - 1.0 / FPS).max(0.0)),
-        )?);
+        )?;
+        self.seek_timing = Some((
+            requested,
+            SeekTiming {
+                seek_id: desired.seek_id,
+                target: position,
+                started_ms,
+                audio_ms,
+                command_ms: since(video.built),
+                spawned_ms: since(Instant::now()),
+                frame_ms: None,
+            },
+        ));
+        self.video = Some(video);
         self.seek_id = desired.seek_id;
         self.ready = false;
         self.ended = position >= self.duration;
@@ -1242,7 +1361,13 @@ impl Session {
                 self.clock.set(position, false, Instant::now());
                 self.ready = false;
             }
+            let preparing = Instant::now();
             self.next_video = Some(Video::open(&self.input, boundary)?);
+            crate::profile!(
+                "player: next clip at {boundary:.3} s prepared in {:.0} ms, late: {}",
+                preparing.elapsed().as_secs_f64() * 1000.0,
+                position >= boundary
+            );
             self.audio_progress_at = Instant::now();
             // Helper setup is off-thread but may take time; select due frames
             // against the current physical audio clock after that work.
@@ -1285,6 +1410,20 @@ impl Session {
                     frame.id = *frame_id;
                     latest = Some(Arc::new(frame));
                     self.ready = true;
+                    if let Some((requested, timing)) = &mut self.seek_timing
+                        && timing.frame_ms.is_none()
+                    {
+                        let frame_ms = requested.elapsed().as_secs_f64() * 1000.0;
+                        timing.frame_ms = Some(frame_ms);
+                        crate::profile!(
+                            "player: seek to {:.3} s: started at {:.0} ms, sound at {:.0}, command at {:.0}, decoder at {:.0}, FIRST PICTURE at {frame_ms:.0} ms",
+                            timing.target,
+                            timing.started_ms,
+                            timing.audio_ms,
+                            timing.command_ms,
+                            timing.spawned_ms
+                        );
+                    }
                 } else {
                     break;
                 }
@@ -1387,11 +1526,13 @@ fn run(shared: Arc<Shared>) {
                     snapshot.playing = desired.playing && !active.ended;
                     snapshot.audio_available = active.audio.is_some();
                     snapshot.warning = active.warning.clone();
+                    snapshot.seek = active.seek_timing.map(|(_, timing)| timing);
                     if let Some(frame) = frame {
                         snapshot.frame = Some(frame);
                     }
                 }),
                 Err(error) => {
+                    crate::profile!("player: ERROR {error}");
                     shared.publish(generation, |snapshot| {
                         snapshot.phase = Phase::Error;
                         snapshot.playing = false;
@@ -1478,6 +1619,7 @@ mod tests {
                 ended: false,
                 last_frame: Instant::now(),
                 local_end,
+                built: Instant::now(),
                 _workspace: None,
             },
         )
@@ -1520,6 +1662,7 @@ mod tests {
             ended: false,
             audio_progress: 1.1,
             audio_progress_at: Instant::now(),
+            seek_timing: None,
         };
         let mut frame_id = 0;
         assert!(session.tick(&desired, &mut frame_id).unwrap().is_none());
@@ -1729,6 +1872,99 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    /// An engine that records what it is asked.
+    #[derive(Default)]
+    struct FakeLive {
+        asked: Mutex<Vec<String>>,
+    }
+    impl FakeLive {
+        fn asked(&self) -> Vec<String> {
+            self.asked.lock().unwrap().clone()
+        }
+    }
+    impl Live for FakeLive {
+        fn set_playing(&self, playing: bool) {
+            self.asked
+                .lock()
+                .unwrap()
+                .push(format!("playing {playing}"));
+        }
+        fn seek(&self, seconds: f64) {
+            self.asked.lock().unwrap().push(format!("seek {seconds}"));
+        }
+        fn set_volume(&self, volume: f32) {
+            self.asked.lock().unwrap().push(format!("volume {volume}"));
+        }
+        fn stop(&self) {
+            self.asked.lock().unwrap().push("stop".into());
+        }
+        fn snapshot(&self) -> Snapshot {
+            Snapshot {
+                generation: 77,
+                phase: Phase::Ready,
+                position: 12.5,
+                playing: true,
+                ..Default::default()
+            }
+        }
+    }
+
+    #[test]
+    fn another_engine_plays_in_the_players_place_until_the_next_open_or_stop() {
+        let player = Player::new(|| {});
+        assert!(!player.is_live());
+        let live = Arc::new(FakeLive::default());
+        player.open_live(live.clone());
+        assert!(player.is_live());
+        // Its snapshot is the player's, and the commands go to it.
+        let state = player.snapshot();
+        assert_eq!(
+            (state.generation, state.position, state.playing),
+            (77, 12.5, true)
+        );
+        player.set_playing(false);
+        player.seek(3.0);
+        player.set_volume(0.5);
+        assert_eq!(live.asked(), ["playing false", "seek 3", "volume 0.5"]);
+        // A stop ends it: the player answers for itself again.
+        player.stop();
+        assert!(!player.is_live());
+        assert_eq!(live.asked().last().map(String::as_str), Some("stop"));
+        assert_ne!(player.snapshot().generation, 77);
+        player.seek(4.0);
+        assert_eq!(
+            live.asked().len(),
+            4,
+            "a stopped engine is asked nothing more"
+        );
+    }
+
+    #[test]
+    fn another_engine_is_stopped_by_an_open_by_its_successor_and_by_the_drop() {
+        let player = Player::new(|| {});
+        // An open of the usual player takes the place back.
+        let first = Arc::new(FakeLive::default());
+        player.open_live(first.clone());
+        player.open(
+            PathBuf::from("missing-preview.mp4"),
+            PathBuf::from("missing-ffmpeg"),
+            0.0,
+            false,
+        );
+        assert!(!player.is_live());
+        assert_eq!(first.asked(), ["stop"]);
+        // Another engine replaces the one before it.
+        let second = Arc::new(FakeLive::default());
+        let third = Arc::new(FakeLive::default());
+        player.open_live(second.clone());
+        player.open_live(third.clone());
+        assert_eq!(second.asked(), ["stop"]);
+        assert!(third.asked().is_empty() && player.is_live());
+        // Dropping the player stops the engine it holds.
+        drop(player);
+        assert_eq!(third.asked(), ["stop"]);
     }
 
     #[test]

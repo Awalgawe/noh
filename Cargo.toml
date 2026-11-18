@@ -8,7 +8,7 @@ publish = false
 
 [features]
 default = []
-gui = ["dep:eframe", "dep:rfd", "dep:open", "dep:rodio", "dep:libloading", "dep:chrono", "effects"]
+gui = ["dep:eframe", "dep:rfd", "dep:open", "dep:rodio", "dep:libloading", "dep:chrono", "dep:sha2_11", "effects"]
 # Caption effects engine (OpenGL): layout, plugins, GPU compositor and export mix.
 effects = ["dep:cosmic-text", "dep:fdsm", "dep:fdsm-ttf-parser", "dep:nalgebra", "dep:ttf-parser", "dep:naga", "dep:glow", "dep:glutin", "dep:glutin-winit", "dep:winit", "dep:bytemuck"]
 mcp = ["dep:rmcp", "dep:tokio", "dep:tokio-util"]
@@ -19,6 +19,9 @@ ring = { version = "=0.17.14", optional = true }
 base64 = { version = "0.22", optional = true }
 semver = { version = "1", features = ["serde"], optional = true }
 sha2 = { version = "0.10", optional = true }
+# The preview copies are named by SHA-256. rmcp already brings this release
+# into the packaged build; the 0.10 one above belongs to the updates only.
+sha2_11 = { package = "sha2", version = "0.11", optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"], optional = true }
 quick-xml = {version = "0.41", optional = true}
 zip = {version = "=9.5.1", default-features = false, features = ["deflate"], optional = true}
@@ -111,6 +114,16 @@ required-features = ["updates"]
 [[example]]
 name = "scrub_probe"
 path = "tools/scrub_probe.rs"
+required-features = ["gui"]
+
+[[example]]
+name = "playback_probe"
+path = "tools/playback_probe.rs"
+required-features = ["gui"]
+
+[[example]]
+name = "vlc_probe"
+path = "tools/vlc_probe.rs"
 required-features = ["gui"]
 
 [[bin]]

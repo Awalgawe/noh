@@ -359,6 +359,7 @@ strip.remove=Quitar {0}
 strip.duration=Duración de {0}
 strip.duration_invalid=Introduce una duración mayor que 0.
 strip.reading=Leyendo…
+strip.preparing=Preparando la vista previa…
 strip.unreadable=Ilegible
 strip.tile_hint=Haz clic para verlo en la vista previa. Arrastra para cambiar el orden.
 strip.missing_visuals=Añadir imágenes o vídeos

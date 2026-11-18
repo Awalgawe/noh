@@ -359,6 +359,7 @@ strip.remove=移除 {0}
 strip.duration={0} 的时长
 strip.duration_invalid=请输入大于 0 的时长。
 strip.reading=正在读取…
+strip.preparing=正在准备预览…
 strip.unreadable=无法读取
 strip.tile_hint=点击在预览中显示。拖动可调整顺序。
 strip.missing_visuals=添加图片或视频

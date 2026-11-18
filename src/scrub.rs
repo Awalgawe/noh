@@ -11,7 +11,6 @@ use glow::HasContext;
 use std::{
     ffi::{CStr, CString, c_char, c_void},
     path::PathBuf,
-    process::Stdio,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -19,6 +18,8 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+
+mod live;
 type H = *mut c_void;
 type Resolver = Arc<dyn Fn(&CStr) -> *const c_void + Send + Sync>;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -92,6 +93,13 @@ struct Event {
     error: i32,
     userdata: u64,
     data: H,
+}
+/// The head of what an end-of-file event (7) carries: why the file ended, 4
+/// being an error, and then which.
+#[repr(C)]
+struct EndFile {
+    reason: i32,
+    error: i32,
 }
 #[repr(C)]
 #[derive(Default)]
@@ -238,6 +246,11 @@ struct Shared {
     render_closed: AtomicBool,
     error: Mutex<Option<String>>,
     decoded_frame: Mutex<Option<u32>>,
+    /// A montage this libmpv plays, between the controller and the interface.
+    live: live::Exchange,
+    /// Mean colour of the last rendered picture over a 4 by 4 grid, measured
+    /// during a seek capture only.
+    grid: Mutex<Vec<u8>>,
 }
 impl Default for Shared {
     fn default() -> Self {
@@ -252,188 +265,67 @@ impl Default for Shared {
             render_closed: AtomicBool::new(false),
             error: Mutex::new(None),
             decoded_frame: Mutex::new(None),
+            live: live::Exchange::default(),
+            grid: Mutex::new(Vec::new()),
         }
     }
 }
+/// A source's light copy as this controller uses it. The file belongs to the
+/// copy store (`crate::copies`), or to a temporary folder without one.
 struct Proxy {
     source: FileStamp,
     ffmpeg: PathBuf,
-    directory: tempfile::TempDir,
-    bytes: u64,
-    // Actual presentation times, including VFR gaps; never infer tolerance
-    // from the montage target's average frame rate.
-    times: Vec<f64>,
+    copy: Arc<crate::copies::Light>,
 }
 impl Proxy {
     fn path(&self) -> PathBuf {
-        self.directory.path().join("preview.mp4")
+        self.copy.path.clone()
     }
 }
-const PROXY_BYTES: u64 = 128 * 1024 * 1024;
 fn proxy(
     plan: &ScrubPlan,
     shared: &Shared,
     cache: &mut std::collections::VecDeque<Arc<Proxy>>,
 ) -> Result<Arc<Proxy>> {
-    if let Some(index) = cache
-        .iter()
-        .position(|p| p.source == plan.source && p.ffmpeg == plan.ffmpeg)
-    {
-        let item = cache.remove(index).unwrap();
-        cache.push_back(item.clone());
+    if let Some(item) = remembered(cache, &plan.source, &plan.ffmpeg) {
         return Ok(item);
     }
-    let directory = tempfile::Builder::new().prefix("noh-scrub-").tempdir()?;
-    let path = directory.path().join("preview.mp4");
-    let stderr = std::fs::File::create(directory.path().join("encoder.log"))?;
-    // A 640-wide proxy would be read as BT.601 by mpv: tag the source's matrix.
-    let color = crate::color::proxy_tail(&plan.ffmpeg, &plan.source.resolved)
-        .map(|tail| format!(",{tail}"))
-        .unwrap_or_default();
-    let filter = format!(
-        "setpts=PTS-STARTPTS,scale=w='max(2,trunc(min(640,640*dar)/2)*2)':h='max(2,trunc(min(640,640/dar)/2)*2)',setsar=1{color}"
-    );
-    let mut child = crate::command(&plan.ffmpeg)
-        .args([
-            "-hide_banner",
-            "-nostdin",
-            "-v",
-            "error",
-            "-n",
-            "-threads",
-            "2",
-            "-ss",
-            &format!("{:.9}", plan.origin),
-            "-i",
-        ])
-        .arg(&plan.source.resolved)
-        .args([
-            "-map",
-            "0:v:0",
-            "-an",
-            "-sn",
-            "-dn",
-            "-vf",
-            &filter,
-            "-fps_mode",
-            "passthrough",
-            "-c:v",
-            "libx264",
-            "-threads",
-            "2",
-            "-preset",
-            "fast",
-            "-crf",
-            "18",
-            "-g",
-            "1",
-            "-pix_fmt",
-            "yuv420p",
-            "-fs",
-            &PROXY_BYTES.to_string(),
-        ])
-        .arg(&path)
-        .stdout(Stdio::null())
-        .stderr(stderr)
-        .spawn()?;
-    let began = Instant::now();
-    let status = loop {
-        if shared.quit.load(Ordering::Relaxed)
-            || shared.cancel.load(Ordering::Relaxed)
-            || began.elapsed() > Duration::from_secs(60)
-        {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err("Preview preparation cancelled or timed out".into());
-        }
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) => thread::sleep(Duration::from_millis(20)),
-            Err(e) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(e.into());
-            }
-        }
-    };
-    if !status.success() {
-        return Err("Preview working copy could not be prepared".into());
-    }
-    let bytes = std::fs::metadata(&path)?.len();
-    if bytes >= PROXY_BYTES - 1024 * 1024 {
-        return Err("Preview working copy exceeds its size limit".into());
-    }
-    if FileStamp::read(&plan.source.path)? != plan.source {
-        return Err("Preview input changed".into());
-    }
-    let times = proxy_times(&plan.ffmpeg, &path, &shared.cancel)?;
+    // Found by the source's signature, made if absent; if the warmer is making
+    // it, this waits for that one copy instead of encoding a second.
+    let copy = crate::copies::prepare(
+        &plan.source,
+        &plan.ffmpeg,
+        plan.origin,
+        &|| shared.quit.load(Ordering::Relaxed) || shared.cancel.load(Ordering::Relaxed),
+        &shared.cancel,
+    )?;
     let proxy = Arc::new(Proxy {
         source: plan.source.clone(),
         ffmpeg: plan.ffmpeg.clone(),
-        directory,
-        bytes,
-        times,
+        copy,
     });
     cache.push_back(proxy.clone());
     trim_proxies(cache);
     Ok(proxy)
 }
 
-fn proxy_times(
+/// The copy this session already holds for `source`, moved to the most recent
+/// place. One whose file is gone (the store emptied, or trimmed by another
+/// NOH) is forgotten, so that it is found or made again.
+fn remembered(
+    cache: &mut std::collections::VecDeque<Arc<Proxy>>,
+    source: &FileStamp,
     ffmpeg: &std::path::Path,
-    path: &std::path::Path,
-    cancel: &AtomicBool,
-) -> Result<Vec<f64>> {
-    let mut command = crate::command(ffmpeg);
-    command
-        .args(["-v", "error", "-nostdin", "-i"])
-        .arg(path)
-        .args([
-            "-map",
-            "0:v:0",
-            "-an",
-            "-c:v",
-            "copy",
-            "-f",
-            "framehash",
-            "-hash",
-            "adler32",
-            "-",
-        ]);
-    let mut time_base = None;
-    let mut times = Vec::new();
-    let (status, _) =
-        crate::process::stream_interruptible(command, Duration::from_secs(15), cancel, |line| {
-            if let Some(value) = line.strip_prefix("#tb 0: ") {
-                let (num, den) = value.split_once('/').ok_or("Invalid preview time base")?;
-                let tb = num.parse::<f64>()? / den.parse::<f64>()?;
-                if !tb.is_finite() || tb <= 0.0 {
-                    return Err("Invalid preview time base".into());
-                }
-                time_base = Some(tb);
-            } else if !line.starts_with('#') && !line.trim().is_empty() {
-                if times.len() >= 1_000_000 {
-                    return Err("Preview frame index exceeds its size limit".into());
-                }
-                let pts = line
-                    .split(',')
-                    .nth(2)
-                    .ok_or("Missing preview PTS")?
-                    .trim()
-                    .parse::<i64>()?;
-                let seconds = pts as f64 * time_base.ok_or("Missing preview time base")?;
-                if !seconds.is_finite() || times.last().is_some_and(|last| seconds <= *last) {
-                    return Err("Invalid preview frame order".into());
-                }
-                times.push(seconds);
-            }
-            Ok(())
-        })
-        .map_err(|e| e.to_string())?;
-    if !status.success() || times.is_empty() {
-        return Err("Preview frame index unavailable".into());
+) -> Option<Arc<Proxy>> {
+    let index = cache
+        .iter()
+        .position(|p| p.source == *source && p.ffmpeg == ffmpeg)?;
+    let item = cache.remove(index).unwrap();
+    if !item.path().is_file() {
+        return None;
     }
-    Ok(times)
+    cache.push_back(item.clone());
+    Some(item)
 }
 
 fn seek_position(times: &[f64], requested: f64) -> f64 {
@@ -445,21 +337,125 @@ fn seek_position(times: &[f64], requested: f64) -> f64 {
     times[index]
 }
 
+/// A picture asked of libmpv is waited for this long before a newer position
+/// may take its place. It normally arrives well within it.
+const YIELD_AFTER: Duration = Duration::from_millis(250);
 fn seek_timed_out(elapsed: Duration) -> bool {
     elapsed > Duration::from_secs(5)
 }
 fn trim_proxies(cache: &mut std::collections::VecDeque<Arc<Proxy>>) {
     // Count alone would constantly regenerate a three-clip montage. Keep small
     // sources together while bounding total disk use and metadata entries.
-    let mut bytes: u64 = cache.iter().map(|p| p.bytes).sum();
+    let mut bytes: u64 = cache.iter().map(|p| p.copy.bytes).sum();
     while cache.len() > 16 || bytes > 256 * 1024 * 1024 {
         if let Some(old) = cache.pop_front() {
-            bytes = bytes.saturating_sub(old.bytes);
+            bytes = bytes.saturating_sub(old.copy.bytes);
         } else {
             break;
         }
     }
 }
+/// The controller's own state of a montage it plays through libmpv.
+struct LiveRun {
+    generation: u64,
+    /// Pictures rendered when the file was asked for: the first later one,
+    /// after libmpv says playback restarted, ends the loading.
+    before: u64,
+    restarted: bool,
+    seek: Option<LiveSeek>,
+    /// The newest position asked while a seek was in flight: as in the paused
+    /// preview, the picture in flight arrives first, unless it is slow to come.
+    waiting: Option<(f64, u64, Instant)>,
+    /// Paused with nothing in flight: nothing to follow until the next command.
+    idle: bool,
+    /// Pictures rendered when the controller last looked.
+    seen: u64,
+    /// When the montage was asked of libmpv: one that does not start is given up.
+    asked: Instant,
+    /// libmpv has been seen with a sound output and a sound track.
+    sound: bool,
+    /// Since when it has been playing without them.
+    silent: Option<Instant>,
+    /// When the journal last noted where the playing stands.
+    noted: Instant,
+    /// The frames of the file libmpv was given: where a seek goes.
+    grid: crate::preview::PlayGrid,
+    _copies: Vec<Arc<crate::copies::Light>>,
+}
+struct LiveSeek {
+    at: Instant,
+    before: u64,
+    restarted: bool,
+    timing: crate::playback::SeekTiming,
+}
+/// The interface's handle on a montage libmpv plays: the usual player forwards
+/// to it (`playback::Player::open_live`).
+struct MpvLive {
+    api: Arc<Api>,
+    handle: usize,
+    shared: Arc<Shared>,
+    generation: u64,
+    seeks: AtomicU64,
+}
+impl MpvLive {
+    /// Wakes the controller, which reads what was asked.
+    fn wake(&self) {
+        // A player may outlive the preview it played through, whose libmpv is
+        // then closed: both are used from the interface's thread only.
+        if !self.shared.quit.load(Ordering::Relaxed) {
+            unsafe {
+                (self.api.wakeup)(self.handle as H);
+            }
+        }
+    }
+}
+impl crate::playback::Live for MpvLive {
+    fn set_playing(&self, playing: bool) {
+        self.shared.live.set_playing(self.generation, playing);
+        self.wake();
+    }
+    fn seek(&self, seconds: f64) {
+        let seconds = if seconds.is_finite() {
+            seconds.max(0.0)
+        } else {
+            0.0
+        };
+        let id = self.seeks.fetch_add(1, Ordering::Relaxed) + 1;
+        self.shared.live.seek(self.generation, seconds, id);
+        self.wake();
+    }
+    fn set_volume(&self, volume: f32) {
+        self.shared.live.set_volume(self.generation, volume);
+        self.wake();
+    }
+    fn stop(&self) {
+        self.shared.live.close(self.generation);
+        self.wake();
+    }
+    fn snapshot(&self) -> crate::playback::Snapshot {
+        self.shared.live.snapshot(self.generation)
+    }
+    fn failure(&self) -> Option<crate::playback::LiveFailure> {
+        self.shared.live.failure(self.generation)
+    }
+}
+
+/// The `volume` libmpv needs to multiply the samples by `factor`, as the usual
+/// player does. Its gain is the cube of volume / 100 (measured on its output:
+/// 70 gives -9.2 dB, 89 gives -3.0 dB).
+fn mpv_volume(factor: f32) -> String {
+    format!("{:.3}", f64::from(factor.clamp(0.0, 1.0)).cbrt() * 100.0)
+}
+/// How long libmpv may take to show the first picture of a montage. Past
+/// that the montage is given up and the usual player plays instead.
+const LIVE_START: Duration = Duration::from_secs(3);
+/// How long libmpv may play a montage without a sound output and a sound
+/// track before it is given up. The output can be a moment behind the first
+/// picture; without one libmpv would go on playing silently. The user then
+/// sees the montage start, and about a second in, the usual player take over
+/// from that position: the picture stays while it opens, and it has its own
+/// silent mode, with a warning, if it finds no output either.
+const SOUND_WAIT: Duration = Duration::from_secs(1);
 fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context) {
     let mut cache = std::collections::VecDeque::new();
     let mut source = PathBuf::new();
@@ -469,7 +465,342 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
     let mut loading_proxy = None;
     let mut captions: Option<PathBuf> = None;
     let mut caption_delay = f64::NAN;
+    let mut live: Option<LiveRun> = None;
     while !shared.quit.load(Ordering::Relaxed) {
+        // This same libmpv playing the montage. What it shares with the
+        // interface goes through `live`, which holds the lock: nothing is asked
+        // of libmpv under it.
+        for command in shared.live.commands() {
+            match command {
+                live::Command::Play {
+                    project,
+                    from,
+                    playing,
+                    volume,
+                    generation,
+                } => {
+                    shared.pending.lock().unwrap().take();
+                    shared.cancel.store(false, Ordering::Relaxed);
+                    let opened = (|| -> Result<(LiveRun, f64)> {
+                        let plan = crate::preview::play_plan(&project, &shared.cancel)?;
+                        while unsafe { (*(api.event)(handle as H, 0.0)).id } != 0 {}
+                        *shared.dimensions.lock().unwrap() = (plan.width, plan.height);
+                        if captions.is_some() {
+                            api.send(handle, &["sub-remove"])?;
+                        }
+                        api.send(handle, &["set", "vf", &format!("lavfi=[{}]", plan.filter)])?;
+                        api.send(handle, &["set", "aid", "auto"])?;
+                        api.send(handle, &["set", "volume", &mpv_volume(volume)])?;
+                        api.send(
+                            handle,
+                            &["set", "pause", if playing { "no" } else { "yes" }],
+                        )?;
+                        api.send(
+                            handle,
+                            &[
+                                "loadfile",
+                                &plan.edl,
+                                "replace",
+                                "-1",
+                                &format!("start={from:.9}"),
+                            ],
+                        )?;
+                        let rendered = shared.rendered.load(Ordering::Acquire);
+                        let run = LiveRun {
+                            generation,
+                            before: rendered,
+                            restarted: false,
+                            seek: None,
+                            waiting: None,
+                            idle: false,
+                            seen: rendered,
+                            asked: Instant::now(),
+                            sound: false,
+                            silent: None,
+                            noted: Instant::now(),
+                            grid: plan.grid,
+                            _copies: plan.copies,
+                        };
+                        Ok((run, plan.duration))
+                    })();
+                    // The paused preview loads its own file and filter afterwards.
+                    source = PathBuf::new();
+                    filter.clear();
+                    captions = None;
+                    caption_delay = f64::NAN;
+                    match opened {
+                        Ok((run, duration)) => {
+                            crate::profile!("mpv player: montage asked from {from:.3} s");
+                            shared.live.asked_of_libmpv(generation, duration);
+                            live = Some(run);
+                        }
+                        Err(error) => {
+                            crate::profile!("mpv player: REFUSED {error}");
+                            // Whatever was asked of libmpv before the refusal, it is
+                            // left as the paused preview expects it: paused, silent.
+                            live = None;
+                            let _ = api.send(handle, &["set", "pause", "yes"]);
+                            let _ = api.send(handle, &["set", "aid", "no"]);
+                            shared.live.refused(generation, error.to_string());
+                        }
+                    }
+                }
+                live::Command::Playing(playing) => {
+                    if let Some(run) = &mut live {
+                        run.idle = false;
+                        let _ = api.send(
+                            handle,
+                            &["set", "pause", if playing { "no" } else { "yes" }],
+                        );
+                    }
+                }
+                live::Command::Seek { seconds, id, at } => {
+                    if let Some(run) = &mut live {
+                        run.waiting = Some((seconds, id, at));
+                        run.idle = false;
+                    }
+                }
+                live::Command::Volume(volume) => {
+                    if live.is_some() {
+                        let _ = api.send(handle, &["set", "volume", &mpv_volume(volume)]);
+                    }
+                }
+                live::Command::Stop(generation) => {
+                    if live
+                        .as_ref()
+                        .is_some_and(|run| run.generation == generation)
+                    {
+                        live = None;
+                        crate::profile!("mpv player: stopped");
+                        let _ = api.send(handle, &["set", "pause", "yes"]);
+                        let _ = api.send(handle, &["set", "aid", "no"]);
+                    }
+                }
+            }
+        }
+        if let Some(run) = &mut live {
+            // A seek just asked is sent on at once.
+            let wait = if run.waiting.is_some() {
+                0.0
+            } else if run.idle {
+                0.1
+            } else {
+                0.008
+            };
+            let event = unsafe { &*(api.event)(handle as H, wait) };
+            if event.id == 21 {
+                run.restarted = true;
+                if let Some(seek) = &mut run.seek {
+                    seek.restarted = true;
+                }
+            }
+            // A file that ends on an error says so in the event's own data.
+            let ended_badly = (event.id == 7 && !event.data.is_null())
+                .then(|| unsafe { &*(event.data as *const EndFile) })
+                .filter(|end| end.reason == 4);
+            let mut failure =
+                shared.error.lock().unwrap().take().or_else(|| {
+                    ended_badly.map(|end| format!("Preview decoder error {}", end.error))
+                });
+            let rendered = shared.rendered.load(Ordering::Acquire);
+            let loading = !(run.restarted && rendered > run.before);
+            // A montage that shows no picture within LIVE_START is given up, with
+            // what libmpv says of itself: the usual player then plays instead.
+            if failure.is_none() && loading && run.asked.elapsed() >= LIVE_START {
+                let state: Vec<String> = [
+                    "pause",
+                    "core-idle",
+                    "idle-active",
+                    "seeking",
+                    "paused-for-cache",
+                    "eof-reached",
+                    "time-pos",
+                    "audio-pts",
+                    "aid",
+                    "vid",
+                    "current-ao",
+                    "current-vo",
+                    "video-params/w",
+                    "estimated-vf-fps",
+                ]
+                .iter()
+                .map(|name| format!("{name}={:?}", api.property(handle, name)))
+                .collect();
+                crate::profile!(
+                    "mpv player: NO PICTURE after {:.1} s | restarted {}, rendered {} since {} | {}",
+                    run.asked.elapsed().as_secs_f64(),
+                    run.restarted,
+                    rendered,
+                    run.before,
+                    state.join(", ")
+                );
+                failure = Some("The preview did not start playing".into());
+            }
+            let number = |name: &str| {
+                api.property(handle, name)
+                    .and_then(|v| v.parse::<f64>().ok())
+            };
+            let flag = |name: &str| api.property(handle, name).as_deref() == Some("yes");
+            let position = number("time-pos");
+            let was_in_flight = run
+                .seek
+                .as_ref()
+                .is_some_and(|s| s.timing.frame_ms.is_none());
+            // A seek has landed when libmpv says playback restarted and a picture
+            // has been rendered since the seek was sent. That picture is not
+            // checked against the target: `time-pos` reads the target as soon as
+            // the seek is taken, whatever is on the monitor. So a picture of the
+            // old position rendered between the command and its execution lands
+            // the seek one repaint early. That costs a measurement and the
+            // moment the next waiting seek leaves; and for that one repaint the
+            // caption layer is drawn for the target's time over the old picture.
+            let mut landed = false;
+            if let Some(seek) = &mut run.seek
+                && seek.restarted
+                && rendered > seek.before
+                && seek.timing.frame_ms.is_none()
+            {
+                landed = true;
+                let frame_ms = seek.at.elapsed().as_secs_f64() * 1000.0;
+                seek.timing.frame_ms = Some(frame_ms);
+                crate::profile!(
+                    "mpv player: seek to {:.3} s: asked of libmpv at {:.0} ms, FIRST PICTURE at {frame_ms:.0} ms",
+                    seek.timing.target,
+                    seek.timing.started_ms
+                );
+                crate::profile!(
+                    "mpv player: after that seek | sound at {:?} s, picture-sound drift {:?} s",
+                    api.property(handle, "audio-pts"),
+                    api.property(handle, "avsync")
+                );
+            }
+            // The clock of the picture now rendered, read before the next seek
+            // is asked: from then on libmpv's position is that seek's target. A
+            // picture rendered while a seek is in flight is an older one again.
+            let shown = position.filter(|_| landed || (!was_in_flight && rendered != run.seen));
+            run.seen = rendered;
+            if run
+                .seek
+                .as_ref()
+                .is_none_or(|s| s.timing.frame_ms.is_some() || s.at.elapsed() >= YIELD_AFTER)
+                && let Some((seconds, id, at)) = run.waiting.take()
+            {
+                // To the frame the playhead is in: given the time itself,
+                // libmpv shows the first picture at or after it, the next one.
+                let frame = run.grid.frame_time(seconds);
+                let _ = api.send(handle, &["seek", &format!("{frame:.9}"), "absolute+exact"]);
+                crate::profile!(
+                    "mpv player: seek to {seconds:.3} s asks for the frame at {frame:.6} s"
+                );
+                let started_ms = at.elapsed().as_secs_f64() * 1000.0;
+                run.seek = Some(LiveSeek {
+                    at,
+                    before: rendered,
+                    restarted: false,
+                    timing: crate::playback::SeekTiming {
+                        seek_id: id,
+                        target: seconds,
+                        started_ms,
+                        audio_ms: started_ms,
+                        command_ms: started_ms,
+                        spawned_ms: started_ms,
+                        frame_ms: None,
+                    },
+                });
+            }
+            let in_flight = run
+                .seek
+                .as_ref()
+                .is_some_and(|s| s.timing.frame_ms.is_none());
+            let (paused, ended) = (flag("pause"), flag("eof-reached"));
+            // The sound is there once libmpv has an output and a track. Until
+            // then it is asked again at each turn it plays; SOUND_WAIT without
+            // them gives the montage up.
+            let mut sound = None;
+            if !loading && !run.sound {
+                if paused || ended {
+                    run.silent = None;
+                } else {
+                    let output = api
+                        .property(handle, "current-ao")
+                        .is_some_and(|name| !name.is_empty());
+                    let track = api
+                        .property(handle, "aid")
+                        .is_some_and(|id| id.parse::<u32>().is_ok());
+                    if output && track {
+                        run.sound = true;
+                        sound = Some(true);
+                    } else if run.silent.get_or_insert_with(Instant::now).elapsed() >= SOUND_WAIT
+                        && failure.is_none()
+                    {
+                        crate::profile!(
+                            "mpv player: NO SOUND after {:.1} s of playing | output {output}, track {track}",
+                            SOUND_WAIT.as_secs_f64()
+                        );
+                        failure = Some("The preview has no sound output".into());
+                    }
+                }
+            }
+            if let Some(error) = &failure {
+                crate::profile!("mpv player: GIVEN UP {error}");
+            }
+            let given_up = failure.is_some();
+            // Once a second in the journal: whether libmpv goes on, and its sound.
+            if crate::profile::enabled() && run.noted.elapsed() >= Duration::from_secs(1) {
+                run.noted = Instant::now();
+                crate::profile!(
+                    "mpv player: at {:?} s, sound at {:?} s, volume {:?}, {} pictures rendered, paused {}",
+                    position,
+                    api.property(handle, "audio-pts"),
+                    api.property(handle, "volume"),
+                    rendered,
+                    paused
+                );
+            }
+            let started = shared.live.saw(
+                run.generation,
+                live::Seen {
+                    loading,
+                    shown,
+                    position,
+                    paused,
+                    ended,
+                    rendered,
+                    seek: run.seek.as_ref().map(|s| s.timing),
+                    seeking: in_flight || run.waiting.is_some(),
+                    sound,
+                    error: failure,
+                },
+            );
+            if started && crate::profile::enabled() {
+                crate::profile!(
+                    "mpv player: first picture, playing | sound: output {:?}, track {:?}, codec {:?}, {:?} Hz, volume {:?}, muted {:?}",
+                    api.property(handle, "current-ao"),
+                    api.property(handle, "aid"),
+                    api.property(handle, "audio-codec-name"),
+                    api.property(handle, "audio-params/samplerate"),
+                    api.property(handle, "volume"),
+                    api.property(handle, "mute")
+                );
+            }
+            // A montage given up is no longer followed: libmpv is left as the
+            // paused preview expects it, paused and silent, as after a refusal.
+            // The interface has the error and hands the montage to the usual
+            // player; nothing waits for it to say stop.
+            if given_up {
+                live = None;
+                let _ = api.send(handle, &["set", "pause", "yes"]);
+                let _ = api.send(handle, &["set", "aid", "no"]);
+                ctx.request_repaint();
+                continue;
+            }
+            // The interface follows the position while it moves, not a paused one.
+            run.idle = paused && !loading && !in_flight && run.waiting.is_none();
+            if !run.idle {
+                ctx.request_repaint_after(Duration::from_millis(16));
+            }
+            continue;
+        }
         // Release the mailbox before waiting for an event. A temporary guard
         // in the let-else scrutinee otherwise spans the blocking else branch.
         let pending = shared.pending.lock().unwrap().take();
@@ -504,7 +835,7 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
                 proxy(&plan, &shared, &mut cache)?
             };
             let path = working.path();
-            let seek_seconds = seek_position(&working.times, plan.seconds);
+            let seek_seconds = seek_position(&working.copy.times, plan.seconds);
             while unsafe { (*(api.event)(handle as H, 0.0)).id } != 0 {}
             let mut before = shared.rendered.load(Ordering::Acquire);
             *shared.dimensions.lock().unwrap() = (plan.width, plan.height);
@@ -584,8 +915,13 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
                 }
                 // Complete the async file/subtitle transition before yielding:
                 // the next request can then safely reuse source/captions state.
+                // And let the picture in flight arrive first: during a drag a newer
+                // position is always waiting, and giving up for it at once shows
+                // nothing until the pointer rests. Only a picture that is slow to
+                // come yields to the newer position.
                 if file_loaded
                     && subtitles_ready
+                    && began.elapsed() >= YIELD_AFTER
                     && shared
                         .pending
                         .lock()
@@ -636,10 +972,15 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
                 restarted |= event.id == 21;
                 let frame = shared.rendered.load(Ordering::Acquire);
                 if subtitles_ready && restarted && frame > before {
-                    let pts = api
+                    // Right after a change of clip libmpv may have rendered a
+                    // picture and have no position yet. That is not a failure:
+                    // a later event brings it, and this wait has its own limit.
+                    let Some(pts) = api
                         .property(handle, "time-pos")
                         .and_then(|v| v.parse::<f64>().ok())
-                        .ok_or("Missing preview timestamp")?;
+                    else {
+                        continue;
+                    };
                     if !pts.is_finite() || (pts - seek_seconds).abs() > 0.001 {
                         continue;
                     }
@@ -653,6 +994,11 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
                         source_seconds: seek_seconds,
                         fallback: false,
                     };
+                    crate::profile!(
+                        "paused: picture of {} ms in {:.0} ms",
+                        request.time_ms,
+                        request.at.elapsed().as_secs_f64() * 1000.0
+                    );
                     active_proxy = Some(working);
                     ctx.request_repaint();
                     return Ok(request.epoch);
@@ -666,6 +1012,7 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
             if epoch != shared.epoch.load(Ordering::Acquire) {
                 continue;
             }
+            crate::profile!("paused: no picture of {requested_time} ms: {error}");
             // The UI retains the exact existing renderer as a fallback.
             *shared.snapshot.lock().unwrap() = Snapshot {
                 epoch,
@@ -698,8 +1045,27 @@ fn take_generation(pending: &mut Option<Request>, epoch: u64) -> Option<Request>
         None
     }
 }
+/// Gives libmpv the OpenGL functions it asks for by name, but for one.
+///
+/// libmpv 0.40 and 0.41 ask OpenGL for a sync object after each picture drawn
+/// through the render API, keep it for a buffer swap that this API never does,
+/// and so never free it: about 8 kB a picture where it was measured, for as
+/// long as the montage plays. Nothing waits on those objects. libmpv is given
+/// a `glFenceSync` that makes none, which it takes as a refusal and goes on.
+/// Its only other use of that function guards the decoder writing straight
+/// into mapped buffers, which is turned off (`vd-lavc-dr`). libmpv 0.34 to
+/// 0.39, and 0.42, do not ask for one there: they never call it.
 unsafe extern "C" fn resolve(data: H, name: *const c_char) -> H {
-    unsafe { (&*(data as *const Resolver))(CStr::from_ptr(name)) as H }
+    let name = unsafe { CStr::from_ptr(name) };
+    let found = unsafe { (&*(data as *const Resolver))(name) as H };
+    if name == c"glFenceSync" && !found.is_null() {
+        return no_fence as *const c_void as H;
+    }
+    found
+}
+/// `glFenceSync` making no sync object: null is what OpenGL returns on failure.
+unsafe extern "system" fn no_fence(_condition: u32, _flags: u32) -> H {
+    std::ptr::null_mut()
 }
 unsafe extern "C" fn wake(data: H) {
     unsafe {
@@ -716,6 +1082,8 @@ struct Render {
     _repaint: Box<egui::Context>,
     shared: Arc<Shared>,
     probe_pixels: bool,
+    /// The seek capture compares the pictures libmpv plays.
+    probe_grid: bool,
 }
 impl Render {
     fn new(
@@ -820,16 +1188,12 @@ impl Render {
             _repaint: repaint,
             shared,
             probe_pixels: std::env::var("NOH_SCRUB_FRAME_PROBE").as_deref() == Ok("1"),
+            probe_grid: std::env::var_os("NOH_CAPTURE_SEEK_PLAYING").is_some(),
         })
     }
-    fn paint(
-        &mut self,
-        info: egui::PaintCallbackInfo,
-        painter: &egui_glow::Painter,
-        visible: bool,
-        corner_radius: f32,
-    ) {
-        let gl = painter.gl();
+    /// Lets libmpv do what it waits for the render thread to do, and render
+    /// its next picture, if it has one, into the buffer.
+    fn advance(&mut self, gl: &glow::Context) {
         unsafe {
             gl.disable(glow::SCISSOR_TEST);
             gl.disable(glow::BLEND);
@@ -882,9 +1246,54 @@ impl Render {
                         *self.shared.decoded_frame.lock().unwrap() = white(12)
                             .then(|| (0..9).fold(0, |n, bit| n | (u32::from(white(bit)) << bit)));
                     }
+                    if self.probe_grid && width >= 4 && height >= 4 {
+                        let (w, h) = (width as usize, height as usize);
+                        let mut pixels = vec![0u8; w * h * 4];
+                        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.fbo));
+                        gl.read_pixels(
+                            0,
+                            0,
+                            w as i32,
+                            h as i32,
+                            glow::RGBA,
+                            glow::UNSIGNED_BYTE,
+                            glow::PixelPackData::Slice(Some(&mut pixels)),
+                        );
+                        // Same cells and same sparse sample as the usual player's
+                        // measurement; the buffer's first row is the picture's last.
+                        let mut grid = Vec::with_capacity(48);
+                        for row in 0..4 {
+                            for column in 0..4 {
+                                let (mut sum, mut count) = ([0u64; 3], 0u64);
+                                for y in (row * h / 4..(row + 1) * h / 4).step_by(3) {
+                                    for x in (column * w / 4..(column + 1) * w / 4).step_by(3) {
+                                        let at = ((h - 1 - y) * w + x) * 4;
+                                        for (channel, total) in sum.iter_mut().enumerate() {
+                                            *total += u64::from(pixels[at + channel]);
+                                        }
+                                        count += 1;
+                                    }
+                                }
+                                grid.extend(sum.map(|total| (total / count.max(1)) as u8));
+                            }
+                        }
+                        *self.shared.grid.lock().unwrap() = grid;
+                    }
                     self.shared.rendered.fetch_add(1, Ordering::Release);
                 }
             }
+        }
+    }
+    fn paint(
+        &mut self,
+        info: egui::PaintCallbackInfo,
+        painter: &egui_glow::Painter,
+        visible: bool,
+        corner_radius: f32,
+    ) {
+        let gl = painter.gl();
+        self.advance(gl);
+        unsafe {
             if !visible {
                 gl.bind_framebuffer(glow::FRAMEBUFFER, painter.intermediate_fbo());
                 return;
@@ -993,6 +1402,10 @@ impl Scrubber {
                 // Hardware decoder setup stalls scrubbing across source files;
                 // presentation still uses the native OpenGL render context.
                 ("hwdec", "no"),
+                // The decoder does not write straight into OpenGL buffers:
+                // libmpv guards those with the sync objects it is refused
+                // (see `resolve`). Small pictures are copied at no cost.
+                ("vd-lavc-dr", "no"),
                 ("vd-lavc-threads", "2"),
                 ("demuxer-max-bytes", "16MiB"),
                 ("demuxer-max-back-bytes", "8MiB"),
@@ -1017,7 +1430,10 @@ impl Scrubber {
             let api = api.clone();
             let shared = shared.clone();
             let ctx = cc.egui_ctx.clone();
-            thread::spawn(move || control(api, handle, shared, ctx))
+            thread::Builder::new()
+                .name("noh-preview-paused".into())
+                .spawn(move || control(api, handle, shared, ctx))
+                .map_err(|e| format!("Cannot start the preview controller: {e}"))?
         };
         Ok(Self {
             api,
@@ -1044,6 +1460,31 @@ impl Scrubber {
             (self.api.wakeup)(self.handle as H);
         }
     }
+    /// Plays the montage through this libmpv, from `from` seconds of the
+    /// selection. The handle goes to `playback::Player::open_live`.
+    pub fn live(
+        &self,
+        project: ProjectRequest,
+        from: f64,
+        playing: bool,
+        volume: f32,
+    ) -> Arc<dyn crate::playback::Live> {
+        let generation = self.shared.live.open(project, from, playing, volume);
+        let live = Arc::new(MpvLive {
+            api: self.api.clone(),
+            handle: self.handle,
+            shared: self.shared.clone(),
+            generation,
+            seeks: AtomicU64::new(0),
+        });
+        live.wake();
+        live
+    }
+    /// Mean colour of the last rendered picture over a 4 by 4 grid, measured
+    /// during a seek capture only.
+    pub fn grid(&self) -> Vec<u8> {
+        self.shared.grid.lock().unwrap().clone()
+    }
     pub fn invalidate(&self) {
         self.shared.epoch.fetch_add(1, Ordering::AcqRel);
         self.shared.cancel.store(true, Ordering::Relaxed);
@@ -1060,6 +1501,21 @@ impl Scrubber {
                     .paint(info, painter, visible, corner_radius)
             })),
         });
+    }
+    /// Whether a montage open in this libmpv has pictures to give now: it
+    /// plays, loads or seeks. Kept open and paused, it asks for nothing.
+    pub fn plays(&self) -> bool {
+        self.shared.live.wants_pictures()
+    }
+    /// The window is not painted (minimised, hidden): libmpv is served all the
+    /// same. It waits for the render thread at each cut of a montage, and for
+    /// its pictures to be taken; left alone it stops playing, sound included.
+    /// Called on the thread that owns the GL context, which stays current.
+    pub fn serve_unpainted(&self, gl: &glow::Context) {
+        self.render.lock().unwrap().advance(gl);
+        unsafe {
+            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+        }
     }
     /// Service decoder presentation even when the monitor is scrolled out of
     /// view. A clipped egui callback is otherwise skipped, stalling a seek.
@@ -1096,6 +1552,48 @@ impl Scrubber {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn libmpv_is_refused_the_sync_objects_it_would_never_free() {
+        let known = 0x1000 as *const c_void;
+        let mut driver: Box<Resolver> = Box::new(Arc::new(|name: &CStr| {
+            if name == c"glMissing" {
+                std::ptr::null()
+            } else {
+                0x1000 as *const c_void
+            }
+        }));
+        let data: H = (&mut *driver as *mut Resolver).cast();
+        let ask = |name: &CStr| unsafe { resolve(data, name.as_ptr()) };
+        // Every other function is the driver's own, the two that go with the
+        // refused one included: libmpv needs all three or none.
+        assert_eq!(ask(c"glBindTexture"), known as H);
+        assert_eq!(ask(c"glClientWaitSync"), known as H);
+        assert_eq!(ask(c"glDeleteSync"), known as H);
+        assert!(ask(c"glMissing").is_null());
+        let fence = ask(c"glFenceSync");
+        assert!(!fence.is_null() && fence != known as H);
+        let fence: unsafe extern "system" fn(u32, u32) -> H = unsafe { std::mem::transmute(fence) };
+        assert!(unsafe { fence(0x9117, 0) }.is_null());
+        // A driver without the function is not given ours in its place.
+        let mut bare: Box<Resolver> = Box::new(Arc::new(|_: &CStr| std::ptr::null()));
+        let data: H = (&mut *bare as *mut Resolver).cast();
+        assert!(unsafe { resolve(data, c"glFenceSync".as_ptr()) }.is_null());
+    }
+    #[test]
+    fn libmpv_is_given_the_volume_whose_cube_is_the_factor() {
+        // Its gain is (volume / 100) cubed; the usual player multiplies by the
+        // factor. The same factor must give the same level.
+        assert_eq!(mpv_volume(1.0), "100.000");
+        assert_eq!(mpv_volume(0.0), "0.000");
+        assert_eq!(mpv_volume(0.7), "88.790");
+        for factor in [0.05f32, 0.25, 0.5, 0.7, 0.9] {
+            let volume: f64 = mpv_volume(factor).parse().unwrap();
+            assert!(((volume / 100.0).powi(3) - f64::from(factor)).abs() < 1e-4);
+        }
+        // Out of range, as the player itself clamps it.
+        assert_eq!(mpv_volume(2.0), "100.000");
+        assert_eq!(mpv_volume(-1.0), "0.000");
+    }
     #[test]
     fn exact_seek_uses_representable_pts_including_low_rate_vfr_and_eof() {
         assert_eq!(seek_position(&[0.0, 0.5, 1.0], 0.2), 0.5);
@@ -1151,16 +1649,35 @@ mod tests {
         let item = Arc::new(Proxy {
             source: FileStamp::read(input.path()).unwrap(),
             ffmpeg: "ffmpeg".into(),
-            directory: tempfile::tempdir().unwrap(),
-            bytes: 0,
-            times: vec![0.0],
+            copy: Arc::new(crate::copies::Light::temporary_for_test(0)),
         });
-        let path = item.directory.path().to_path_buf();
+        let path = item.path().parent().unwrap().to_path_buf();
         let mut cache = std::collections::VecDeque::from([item.clone()]);
         cache.pop_front();
         assert!(path.exists());
         drop(item);
         assert!(!path.exists());
+    }
+    #[test]
+    fn a_copy_whose_file_is_gone_is_forgotten_instead_of_handed_out() {
+        let input = tempfile::NamedTempFile::new().unwrap();
+        let source = FileStamp::read(input.path()).unwrap();
+        let item = Arc::new(Proxy {
+            source: source.clone(),
+            ffmpeg: "ffmpeg".into(),
+            copy: Arc::new(crate::copies::Light::temporary_for_test(0)),
+        });
+        let mut cache = std::collections::VecDeque::from([item.clone()]);
+        let ffmpeg = std::path::Path::new("ffmpeg");
+        // No file yet at its path: not handed out, and no longer remembered.
+        assert!(remembered(&mut cache, &source, ffmpeg).is_none());
+        assert!(cache.is_empty());
+        std::fs::write(item.path(), b"copy").unwrap();
+        cache.push_back(item.clone());
+        assert!(remembered(&mut cache, &source, ffmpeg).is_some());
+        assert_eq!(cache.len(), 1);
+        assert!(remembered(&mut cache, &source, std::path::Path::new("other")).is_none());
+        assert_eq!(cache.len(), 1);
     }
     #[test]
     fn cache_keeps_small_multi_clip_projects_but_enforces_count_and_bytes() {
@@ -1170,9 +1687,7 @@ mod tests {
             Arc::new(Proxy {
                 source: source.clone(),
                 ffmpeg: "ffmpeg".into(),
-                directory: tempfile::tempdir().unwrap(),
-                bytes,
-                times: vec![0.0],
+                copy: Arc::new(crate::copies::Light::temporary_for_test(bytes)),
             })
         };
         let mut cache = std::collections::VecDeque::from([

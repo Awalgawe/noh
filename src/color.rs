@@ -296,6 +296,40 @@ impl Input {
             height: info.height,
         }
     }
+
+    /// The light copy of this video as the preview makes it (`proxy_tail`, the
+    /// single-source plan): the source's pictures in the source's own matrix,
+    /// ALREADY in limited range, and tagged so. A graph fed with the copy must
+    /// be told this, not the source's properties: converting the range a second
+    /// time washes a full-range source out. The size stays the source's: it
+    /// decided the matrix of an untagged source, and the copy is smaller.
+    /// None for a BT.2020 source, whose copy keeps whatever the source had.
+    pub fn light_copy(&self) -> Option<Self> {
+        let Self::Video {
+            props,
+            width,
+            height,
+        } = self
+        else {
+            return None;
+        };
+        let name = match props.matrix(*width, *height) {
+            Matrix::Bt709 => "bt709",
+            Matrix::Bt601 => "smpte170m",
+            Matrix::Bt2020 => return None,
+        };
+        Some(Self::Video {
+            props: Props {
+                space: Some(name.into()),
+                primaries: Some(name.into()),
+                transfer: Some(name.into()),
+                full_range: false,
+                range_tagged: true,
+            },
+            width: *width,
+            height: *height,
+        })
+    }
 }
 
 impl Plan {
@@ -671,6 +705,71 @@ mod tests {
             Plan::new(&[Input::Image], (720, 480), None).matrix,
             Matrix::Bt601
         );
+    }
+
+    #[test]
+    fn a_light_copy_is_described_as_what_its_tail_made_of_the_source() {
+        let info = |description: &str, width, height| crate::media::MediaInfo {
+            description: description.into(),
+            width,
+            height,
+            ..Default::default()
+        };
+        // A full-range, untagged 640x360 source: BT.601 by its size.
+        let source = info("Video: mjpeg, yuvj420p(pc), 640x360", 640, 360);
+        let made = Plan::single_source(&source);
+        assert!(made.contains("in_range=pc:out_range=tv"), "{made}");
+        assert!(made.ends_with(
+            "setparams=colorspace=smpte170m:color_primaries=smpte170m:color_trc=smpte170m:range=tv"
+        ));
+        let input = Input::video(&source);
+        let copy = input.light_copy().unwrap();
+        let Input::Video {
+            props,
+            width,
+            height,
+        } = &copy
+        else {
+            panic!("a video");
+        };
+        // What the tail above wrote: limited range, the source's matrix, tagged.
+        assert!(!props.full_range && props.range_tagged);
+        assert_eq!(props.matrix(*width, *height), Matrix::Bt601);
+        // In a project of the same matrix the source is converted once, the
+        // copy not again.
+        let alone = Plan::new(std::slice::from_ref(&input), (640, 360), None);
+        assert!(
+            alone
+                .convert(&input)
+                .unwrap()
+                .contains("in_range=pc:out_range=tv")
+        );
+        assert_eq!(alone.convert(&copy), None);
+        // Beside an HD clip the project is BT.709: the copy changes matrix only.
+        let hd = Input::video(&info(
+            "Video: h264, yuv420p(tv, bt709), 1920x1080",
+            1920,
+            1080,
+        ));
+        let mixed = Plan::new(&[input.clone(), hd], (1920, 1080), None);
+        assert_eq!(
+            mixed.convert(&copy).unwrap(),
+            "scale=in_color_matrix=bt601:out_color_matrix=bt709:in_range=tv:out_range=tv:flags=accurate_rnd+full_chroma_int"
+        );
+        // An untagged HD source is BT.709 by ITS size, whatever the copy's.
+        let untagged = Input::video(&info("Video: h264, yuv420p, 1440x1440", 1440, 1440));
+        let Input::Video { props, .. } = untagged.light_copy().unwrap() else {
+            panic!("a video");
+        };
+        assert_eq!(props.space.as_deref(), Some("bt709"));
+        // A BT.2020 source has no such description: its copy is left as it was.
+        let wide = Input::video(&info(
+            "Video: hevc, yuv420p10le(tv, bt2020nc/bt2020/smpte2084), 3840x2160",
+            3840,
+            2160,
+        ));
+        assert!(wide.light_copy().is_none());
+        assert!(Input::Image.light_copy().is_none());
     }
 
     #[test]

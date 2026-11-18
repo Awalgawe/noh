@@ -135,6 +135,711 @@ impl NohApp {
         ctx.request_repaint_after(Duration::from_millis(8));
     }
 }
+/// Clicks on the time ruler while the live preview plays, and what each one cost
+/// (`NOH_CAPTURE_SEEK_PLAYING=1` with the `live-preview` or `live-short` action).
+#[derive(Default)]
+pub struct SeekQa {
+    started: Option<Instant>,
+    /// Since when the preview has been playing steadily.
+    steady: Option<Instant>,
+    next: usize,
+    click: Option<SeekClick>,
+    results: Vec<serde_json::Value>,
+    done: bool,
+}
+struct SeekClick {
+    target_ms: u64,
+    at: egui::Pos2,
+    /// The primary button went down: the origin of every time.
+    pressed: Instant,
+    /// The primary button went up.
+    released: Option<Instant>,
+    /// The pointer left the ruler.
+    gone: bool,
+    seek_before: Option<u64>,
+    position_before: f64,
+    luma_before: f64,
+    last_sample: f64,
+    first_frame_ms: Option<f64>,
+    /// What showed that first picture: the player, or the paused preview.
+    shown_by: &'static str,
+    /// The first picture of the new position, as a grid of mean colours.
+    picture: Vec<u8>,
+    /// The clock of that picture: the player's own, or for the paused preview
+    /// the time it asked of the source's copy.
+    picture_seconds: Option<f64>,
+    resumed_ms: Option<f64>,
+    black_ms: f64,
+    no_picture_ms: f64,
+    spinner_ms: f64,
+    loading_ms: f64,
+    samples: Vec<serde_json::Value>,
+}
+/// Steady playback before each click, so one seek does not run into the next.
+const SEEK_DWELL: Duration = Duration::from_millis(1500);
+/// A click that has not resumed playback by then is recorded as it stands.
+const SEEK_LIMIT: Duration = Duration::from_secs(20);
+/// Below this mean brightness a played frame counts as black.
+const SEEK_BLACK: f64 = 4.0;
+/// The live capture must be played by libmpv, with a sound output: it waits
+/// for the light copies before Play and fails otherwise
+/// (`NOH_CAPTURE_REQUIRE_LIVE=1`).
+pub fn require_live() -> bool {
+    std::env::var_os("NOH_CAPTURE_UI").is_some()
+        && std::env::var("NOH_CAPTURE_REQUIRE_LIVE").as_deref() == Ok("1")
+}
+/// A capture of the live preview that sends its own pointer events, or none.
+pub fn drives_pointer() -> bool {
+    seek_playing_enabled() || drag_playing_enabled() || transport_enabled()
+}
+pub fn seek_playing_enabled() -> bool {
+    std::env::var_os("NOH_CAPTURE_UI").is_some()
+        && std::env::var("NOH_CAPTURE_SEEK_PLAYING").as_deref() == Ok("1")
+}
+/// How long each click holds the button (`NOH_CAPTURE_SEEK_HOLD_MS`): none by
+/// default, the release then comes on the next frame; a hand takes about 100 ms.
+fn seek_hold() -> Duration {
+    Duration::from_millis(
+        std::env::var("NOH_CAPTURE_SEEK_HOLD_MS")
+            .ok()
+            .and_then(|text| text.trim().parse().ok())
+            .unwrap_or(0),
+    )
+}
+/// Project times to click, in order (`NOH_CAPTURE_SEEK_TARGETS_MS`, comma separated).
+fn seek_targets() -> Vec<u64> {
+    std::env::var("NOH_CAPTURE_SEEK_TARGETS_MS")
+        .ok()
+        .map(|text| {
+            text.split(',')
+                .map(|item| {
+                    item.trim()
+                        .parse()
+                        .expect("NOH_CAPTURE_SEEK_TARGETS_MS: milliseconds")
+                })
+                .collect()
+        })
+        .unwrap_or_else(|| vec![5000, 2000, 9500, 15000, 35000, 39500, 1000])
+}
+impl NohApp {
+    /// One real click on the time ruler per target: press, release on a later
+    /// frame, then the pointer leaves. Nothing else differs from a user's click.
+    pub(super) fn seek_capture_input(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
+        if !seek_playing_enabled() || self.seek_qa.done {
+            return;
+        }
+        // A click in flight goes on whatever became of the player: the press
+        // itself may have stopped it.
+        if let Some(click) = &mut self.seek_qa.click {
+            ctx.request_repaint_after(Duration::from_millis(8));
+            if click.released.is_none() {
+                if click.pressed.elapsed() >= seek_hold() {
+                    input.events.push(egui::Event::PointerButton {
+                        pos: click.at,
+                        button: egui::PointerButton::Primary,
+                        pressed: false,
+                        modifiers: egui::Modifiers::default(),
+                    });
+                    click.released = Some(Instant::now());
+                }
+            } else if !click.gone {
+                input.events.push(egui::Event::PointerGone);
+                click.gone = true;
+            }
+            return;
+        }
+        let Some(state) = self
+            .mini_preview
+            .player
+            .as_ref()
+            .filter(|_| self.mini_preview.player_stamp.is_some())
+            .map(noh::playback::Player::snapshot)
+        else {
+            return;
+        };
+        self.seek_qa.started.get_or_insert_with(Instant::now);
+        // Sample finer than the 33 ms the preview asks for while it loads.
+        ctx.request_repaint_after(Duration::from_millis(8));
+        let steady =
+            state.phase == noh::playback::Phase::Ready && state.playing && state.frame.is_some();
+        if !steady {
+            self.seek_qa.steady = None;
+            return;
+        }
+        if self
+            .seek_qa
+            .steady
+            .get_or_insert_with(Instant::now)
+            .elapsed()
+            < SEEK_DWELL
+        {
+            return;
+        }
+        let Some(&target_ms) = seek_targets().get(self.seek_qa.next) else {
+            self.seek_qa.done = true;
+            return;
+        };
+        let Some(rect) = self.project_ui.timeline.ruler_rect() else {
+            return;
+        };
+        let view = self
+            .project
+            .viewport
+            .map(|v| v.0)
+            .unwrap_or(noh::timeline::Range {
+                start_ms: 0,
+                end_ms: self.project.duration_ms,
+            });
+        let x = rect.left()
+            + rect.width()
+                * ((target_ms as f64 - view.start_ms as f64) / (view.end_ms - view.start_ms) as f64)
+                    as f32;
+        let at = egui::pos2(x, rect.center().y);
+        input.events.push(egui::Event::PointerMoved(at));
+        input.events.push(egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::default(),
+        });
+        self.seek_qa.next += 1;
+        self.seek_qa.click = Some(SeekClick {
+            target_ms,
+            at,
+            pressed: Instant::now(),
+            released: None,
+            gone: false,
+            seek_before: state.seek.map(|s| s.seek_id),
+            position_before: state.position,
+            luma_before: self.mini_preview.player_luma,
+            last_sample: 0.0,
+            first_frame_ms: None,
+            shown_by: "",
+            picture: Vec::new(),
+            picture_seconds: None,
+            resumed_ms: None,
+            black_ms: 0.0,
+            no_picture_ms: 0.0,
+            spinner_ms: 0.0,
+            loading_ms: 0.0,
+            samples: Vec::new(),
+        });
+    }
+    /// After the frame is painted: what the monitor showed since the press.
+    fn seek_capture_sample(&mut self) {
+        let (start, _) = self.mini_bounds();
+        let Some(click) = &mut self.seek_qa.click else {
+            return;
+        };
+        let Some(player) = &self.mini_preview.player else {
+            return;
+        };
+        let state = player.snapshot();
+        let open = self.mini_preview.player_stamp.is_some();
+        let live = player.is_live();
+        let t = click.pressed.elapsed().as_secs_f64() * 1000.0;
+        let span = t - click.last_sample;
+        click.last_sample = t;
+        let target = click.target_ms.saturating_sub(start) as f64 / 1000.0;
+        let (picture, spinner) = self.mini_preview.painted;
+        // The paused preview's picture is one too.
+        let picture = picture || self.mini_preview.painted_scrub;
+        let luma = self.mini_preview.player_luma;
+        let loading = open && state.phase == noh::playback::Phase::Loading;
+        // The seek this click asked for, not one still running from before.
+        let seek = state
+            .seek
+            .filter(|s| open && Some(s.seek_id) != click.seek_before);
+        // The picture of the new position is on the monitor: the player's after
+        // its seek, or the paused preview's of that very time while the press
+        // holds the player stopped.
+        let by_player = seek.is_some_and(|s| s.frame_ms.is_some())
+            && self
+                .mini_preview
+                .player_frame
+                .zip(state.frame.as_ref())
+                .is_some_and(|(shown, frame)| shown == (state.generation, frame.id));
+        let by_paused = !open
+            && self.mini_preview.painted_scrub
+            && self
+                .mini_preview
+                .scrubber
+                .as_ref()
+                .map(|s| s.snapshot())
+                .is_some_and(|s| s.error.is_none() && s.time_ms == click.target_ms);
+        // Or the first picture of a player opened again at the release, when
+        // the release came before the paused preview had answered.
+        let by_opened = open
+            && state.seek.is_none()
+            && click.released.is_some()
+            && self
+                .mini_preview
+                .player_frame
+                .zip(state.frame.as_ref())
+                .is_some_and(|(shown, frame)| {
+                    shown == (state.generation, frame.id) && (frame.position - target).abs() < 0.5
+                });
+        // Or the still of that very time, where there is no libmpv.
+        let by_still = !open && self.mini_preview.still_shown() == Some(click.target_ms);
+        let landed = by_player || by_paused || by_opened || by_still;
+        if !picture {
+            click.no_picture_ms += span;
+        } else if luma < SEEK_BLACK && click.luma_before >= SEEK_BLACK {
+            click.black_ms += span;
+        }
+        if spinner {
+            click.spinner_ms += span;
+        }
+        if loading {
+            click.loading_ms += span;
+        }
+        if landed && click.first_frame_ms.is_none() {
+            click.first_frame_ms = Some(t);
+            click.shown_by = if by_paused {
+                "paused preview"
+            } else if by_still {
+                "still"
+            } else {
+                "player"
+            };
+            click.picture_seconds = if by_paused {
+                self.mini_preview
+                    .scrubber
+                    .as_ref()
+                    .map(|s| s.snapshot().source_seconds)
+            } else {
+                state.frame.as_ref().map(|f| f.position)
+            };
+            // What libmpv draws is measured where it is drawn.
+            click.picture = match &self.mini_preview.scrubber {
+                Some(scrubber) if live || by_paused => scrubber.grid(),
+                // A still is not measured as a grid of mean colours.
+                _ if by_still => Vec::new(),
+                _ => self.mini_preview.player_grid.clone(),
+            };
+        }
+        if click.first_frame_ms.is_some()
+            && open
+            && click.resumed_ms.is_none()
+            && state.playing
+            && !loading
+            && state.position >= target + 0.2
+        {
+            click.resumed_ms = Some(t);
+        }
+        if click.samples.len() < 4000 {
+            click.samples.push(serde_json::json!([
+                (t * 10.0).round() / 10.0,
+                format!("{:?}", state.phase),
+                state.playing,
+                (state.position * 1000.0).round() / 1000.0,
+                state.frame.as_ref().map(|f| f.id),
+                state
+                    .frame
+                    .as_ref()
+                    .map(|f| (f.position * 1000.0).round() / 1000.0),
+                picture,
+                spinner,
+                luma.round(),
+            ]));
+        }
+        let failed = state.phase == noh::playback::Phase::Error;
+        if click.resumed_ms.is_none() && !failed && click.pressed.elapsed() < SEEK_LIMIT {
+            return;
+        }
+        let click = self.seek_qa.click.take().unwrap();
+        self.seek_qa.steady = None;
+        self.seek_qa.results.push(serde_json::json!({
+            "target_ms": click.target_ms,
+            "from_ms": (click.position_before * 1000.0).round() + start as f64,
+            "released_ms": click.released.map(|at| at.duration_since(click.pressed).as_secs_f64() * 1000.0),
+            "first_frame_ms": click.first_frame_ms,
+            "shown_by": click.shown_by,
+            "resumed_ms": click.resumed_ms,
+            "no_picture_ms": click.no_picture_ms,
+            "black_ms": click.black_ms,
+            "spinner_ms": click.spinner_ms,
+            "loading_ms": click.loading_ms,
+            "luma_before": click.luma_before,
+            "picture": click.picture,
+            "picture_seconds": click.picture_seconds,
+            "worker": seek.map(|s| serde_json::json!({
+                "target": s.target,
+                "started_ms": s.started_ms,
+                "audio_ms": s.audio_ms,
+                "command_ms": s.command_ms,
+                "spawned_ms": s.spawned_ms,
+                "frame_ms": s.frame_ms,
+            })),
+            "error": state.error,
+            "columns": ["ms", "phase", "playing", "position", "frame", "frame_position", "picture", "spinner", "luma"],
+            "samples": click.samples,
+        }));
+    }
+    fn seek_capture_terminal(&self) -> Option<&'static str> {
+        let failed = self
+            .mini_preview
+            .player
+            .as_ref()
+            .is_some_and(|p| p.snapshot().phase == noh::playback::Phase::Error);
+        if failed
+            || self
+                .seek_qa
+                .started
+                .is_some_and(|at| at.elapsed() > Duration::from_secs(240))
+        {
+            return Some("failed");
+        }
+        (self.seek_qa.done && self.seek_qa.click.is_none()).then_some("finished")
+    }
+}
+/// A walk through the transport while the live preview plays, and where the
+/// player stood after each step (`NOH_CAPTURE_TRANSPORT=1` with the
+/// `live-preview` action). Each step calls what its button calls.
+#[derive(Default)]
+pub struct TransportQa {
+    started: Option<Instant>,
+    /// Since when the preview has been playing steadily, before the first step.
+    steady: Option<Instant>,
+    /// The step in progress, when it was made, and whether its sample is taken.
+    step: Option<(usize, Instant, bool)>,
+    samples: Vec<serde_json::Value>,
+    done: bool,
+}
+const TRANSPORT_STEPS: &[&str] = &[
+    "pause",
+    "frame forward",
+    "frame forward",
+    "frame forward",
+    "frame back",
+    "frame back",
+    "frame back",
+    "play",
+    "volume 0.3",
+    "volume 0",
+    "volume 0.7",
+    "resize",
+    "seek to the end",
+    "play after the end",
+    "edit",
+    "play after the edit",
+    "short view",
+    "video view",
+];
+/// What a step waits for before its sample is taken.
+const TRANSPORT_SETTLE: Duration = Duration::from_millis(700);
+const TRANSPORT_LIMIT: Duration = Duration::from_secs(20);
+pub fn transport_enabled() -> bool {
+    std::env::var_os("NOH_CAPTURE_UI").is_some()
+        && std::env::var("NOH_CAPTURE_TRANSPORT").as_deref() == Ok("1")
+}
+impl NohApp {
+    fn transport_capture_step(&mut self, ctx: &egui::Context) {
+        if !transport_enabled() || self.transport_qa.done || !self.capture_project_started {
+            return;
+        }
+        ctx.request_repaint_after(Duration::from_millis(16));
+        let state = self
+            .mini_preview
+            .player
+            .as_ref()
+            .map(noh::playback::Player::snapshot)
+            .unwrap_or_default();
+        let open = self.mini_preview.player_stamp.is_some();
+        let playing_now = open
+            && state.phase == noh::playback::Phase::Ready
+            && state.playing
+            && state.frame.is_some();
+        let next = match self.transport_qa.step {
+            None => {
+                // The first step waits for steady playback.
+                if !playing_now {
+                    self.transport_qa.steady = None;
+                    return;
+                }
+                if self
+                    .transport_qa
+                    .steady
+                    .get_or_insert_with(Instant::now)
+                    .elapsed()
+                    < SEEK_DWELL
+                {
+                    return;
+                }
+                self.transport_qa.started = Some(Instant::now());
+                0
+            }
+            Some((step, _, true)) => step + 1,
+            Some((step, at, false)) => {
+                let name = TRANSPORT_STEPS[step];
+                let waited = at.elapsed();
+                let settled = match name {
+                    "seek to the end" => state.phase == noh::playback::Phase::Ended,
+                    "play after the end" | "play after the edit" | "short view" | "video view" => {
+                        playing_now && waited >= TRANSPORT_SETTLE
+                    }
+                    _ => waited >= TRANSPORT_SETTLE,
+                };
+                if !settled && waited < TRANSPORT_LIMIT {
+                    return;
+                }
+                let (start, _) = self.mini_bounds();
+                self.transport_qa.samples.push(serde_json::json!({
+                    "step": name,
+                    "ms": self.transport_qa.started.map(|s| s.elapsed().as_millis() as u64),
+                    "settled": settled,
+                    "engine": self.mini_preview.engines.last(),
+                    "plays": self.mini_preview.engines.len(),
+                    "live": self.mini_live(),
+                    "open": open,
+                    "phase": format!("{:?}", state.phase),
+                    "playing": state.playing,
+                    "position_ms": (state.position * 1000.0).round() as u64 + start,
+                    "picture_ms": state.frame.as_ref().map(|f| (f.position * 1000.0).round() as u64 + start),
+                    "pictures": state.frame.as_ref().map(|f| f.id),
+                    "cursor_ms": self.mini_preview.cursor_ms,
+                    "volume": state.volume,
+                    "sound": state.audio_available,
+                    "error": state.error.clone().or(self.mini_preview.error().cloned()),
+                }));
+                self.transport_qa.step = Some((step, at, true));
+                step + 1
+            }
+        };
+        let Some(&name) = TRANSPORT_STEPS.get(next) else {
+            self.transport_qa.done = true;
+            return;
+        };
+        // An edit clears the analysis; Play is only there again once it is back.
+        if name == "play after the edit" && !(self.ready() && self.diagnosis_current()) {
+            return;
+        }
+        let (start, end) = self.mini_bounds();
+        let frame = 42;
+        match name {
+            "pause" | "play" | "play after the end" | "play after the edit" => self.mini_play(ctx),
+            "frame forward" => self.navigate(self.mini_preview.cursor_ms + frame, true),
+            "frame back" => self.navigate(self.mini_preview.cursor_ms.saturating_sub(frame), true),
+            "volume 0.3" => self.mini_set_volume(0.3),
+            "volume 0" => self.mini_set_volume(0.0),
+            "volume 0.7" => self.mini_set_volume(0.7),
+            "resize" => {
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(1100.0, 780.0)))
+            }
+            "seek to the end" => self.navigate(end.saturating_sub(1500).max(start), false),
+            "edit" => {
+                // What a change of fade does: the montage is no longer the one
+                // being played.
+                self.fade_in = if self.fade_in > 0.0 { 0.0 } else { 1.0 };
+                self.in_enabled = self.fade_in > 0.0;
+                self.invalidated();
+            }
+            "short view" if self.project.range.is_some() => self.play_live_scope(ctx, true),
+            "video view" if self.project.range.is_some() => self.play_live_scope(ctx, false),
+            // Without an excerpt there is no short to look at.
+            _ => {}
+        }
+        self.transport_qa.step = Some((next, Instant::now(), false));
+    }
+    fn transport_capture_terminal(&self) -> Option<&'static str> {
+        if self
+            .transport_qa
+            .started
+            .is_some_and(|at| at.elapsed() > Duration::from_secs(180))
+        {
+            return Some("failed");
+        }
+        self.transport_qa.done.then_some("finished")
+    }
+}
+/// A drag on the time ruler while the live preview plays, and what the monitor
+/// showed at each frame of it (`NOH_CAPTURE_DRAG_PLAYING=1` with the
+/// `live-preview` or `live-short` action): slow inside a clip, held, fast across
+/// clips, held, released.
+#[derive(Default)]
+pub struct DragQa {
+    started: Option<Instant>,
+    /// Since when the preview has been playing steadily.
+    steady: Option<Instant>,
+    pressed: Option<Instant>,
+    released: Option<Instant>,
+    gone: bool,
+    /// The time under the pointer at the last frame of the drag.
+    target_ms: u64,
+    samples: Vec<serde_json::Value>,
+    done: bool,
+}
+/// The drag: seconds since the press, and the project time under the pointer.
+/// Between two points the pointer moves at a constant speed.
+const DRAG_PATH: [(f64, u64); 5] = [
+    (0.0, 2_000),
+    (2.0, 6_000),
+    (2.6, 6_000),
+    (3.6, 96_000),
+    (4.4, 96_000),
+];
+pub fn drag_playing_enabled() -> bool {
+    std::env::var_os("NOH_CAPTURE_UI").is_some()
+        && std::env::var("NOH_CAPTURE_DRAG_PLAYING").as_deref() == Ok("1")
+}
+fn drag_target(seconds: f64) -> u64 {
+    let mut before = DRAG_PATH[0];
+    for point in DRAG_PATH {
+        if seconds < point.0 {
+            let span = point.0 - before.0;
+            let part = if span > 0.0 {
+                (seconds - before.0) / span
+            } else {
+                1.0
+            };
+            return (before.1 as f64 + (point.1 as f64 - before.1 as f64) * part).round() as u64;
+        }
+        before = point;
+    }
+    before.1
+}
+impl NohApp {
+    /// The pointer of the drag: pressed once the preview plays steadily, moved
+    /// at every frame along `DRAG_PATH`, released at its end.
+    pub(super) fn drag_capture_input(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
+        if !drag_playing_enabled() || self.drag_qa.done {
+            return;
+        }
+        let Some(rect) = self.project_ui.timeline.ruler_rect() else {
+            return;
+        };
+        self.drag_qa.started.get_or_insert_with(Instant::now);
+        ctx.request_repaint_after(Duration::from_millis(8));
+        let view = self
+            .project
+            .viewport
+            .map(|v| v.0)
+            .unwrap_or(noh::timeline::Range {
+                start_ms: 0,
+                end_ms: self.project.duration_ms,
+            });
+        let at = |ms: u64| {
+            let x = rect.left()
+                + rect.width()
+                    * ((ms as f64 - view.start_ms as f64) / (view.end_ms - view.start_ms) as f64)
+                        as f32;
+            egui::pos2(x, rect.center().y)
+        };
+        if self.drag_qa.released.is_some() {
+            if !self.drag_qa.gone {
+                input.events.push(egui::Event::PointerGone);
+                self.drag_qa.gone = true;
+            }
+            return;
+        }
+        let Some(pressed) = self.drag_qa.pressed else {
+            let steady = self.mini_playing()
+                && self
+                    .mini_preview
+                    .player
+                    .as_ref()
+                    .is_some_and(|p| p.snapshot().frame.is_some());
+            if !steady {
+                self.drag_qa.steady = None;
+                return;
+            }
+            if self
+                .drag_qa
+                .steady
+                .get_or_insert_with(Instant::now)
+                .elapsed()
+                < SEEK_DWELL
+            {
+                return;
+            }
+            let target = drag_target(0.0);
+            input.events.push(egui::Event::PointerMoved(at(target)));
+            input.events.push(egui::Event::PointerButton {
+                pos: at(target),
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::default(),
+            });
+            self.drag_qa.pressed = Some(Instant::now());
+            self.drag_qa.target_ms = target;
+            return;
+        };
+        let seconds = pressed.elapsed().as_secs_f64();
+        let target = drag_target(seconds);
+        self.drag_qa.target_ms = target;
+        input.events.push(egui::Event::PointerMoved(at(target)));
+        if seconds >= DRAG_PATH[DRAG_PATH.len() - 1].0 {
+            input.events.push(egui::Event::PointerButton {
+                pos: at(target),
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::default(),
+            });
+            self.drag_qa.released = Some(Instant::now());
+        }
+    }
+    /// After the frame is painted: where the pointer is and what the monitor shows.
+    fn drag_capture_sample(&mut self) {
+        let Some(pressed) = self.drag_qa.pressed else {
+            return;
+        };
+        if self.drag_qa.done {
+            return;
+        }
+        let (start, _) = self.mini_bounds();
+        let player = self
+            .mini_preview
+            .player
+            .as_ref()
+            .filter(|_| self.mini_preview.player_stamp.is_some())
+            .map(noh::playback::Player::snapshot);
+        let scrub = self.mini_preview.scrubber.as_ref().map(|s| s.snapshot());
+        let (picture, spinner) = self.mini_preview.painted;
+        if self.drag_qa.samples.len() < 6000 {
+            self.drag_qa.samples.push(serde_json::json!([
+                (pressed.elapsed().as_secs_f64() * 10_000.0).round() / 10.0,
+                self.drag_qa.released.is_none(),
+                self.drag_qa.target_ms,
+                self.mini_preview.cursor_ms,
+                player.is_some(),
+                player.as_ref().map(|p| p.playing),
+                player.as_ref().and_then(|p| p.frame.as_ref().map(|f| f.id)),
+                player.as_ref().and_then(|p| p
+                    .frame
+                    .as_ref()
+                    .map(|f| (f.position * 1000.0).round() as u64 + start)),
+                scrub.as_ref().map(|s| s.time_ms),
+                scrub.as_ref().map(|s| s.frame),
+                scrub.as_ref().and_then(|s| s.error.clone()),
+                picture,
+                self.mini_preview.painted_scrub,
+                spinner,
+            ]));
+        }
+        let Some(released) = self.drag_qa.released else {
+            return;
+        };
+        // The drag is over once the preview plays again past where it ended.
+        let resumed = player.as_ref().is_some_and(|p| {
+            p.playing
+                && p.phase == noh::playback::Phase::Ready
+                && p.position * 1000.0 + start as f64 >= self.drag_qa.target_ms as f64 + 300.0
+        });
+        if resumed || released.elapsed() > SEEK_LIMIT {
+            self.drag_qa.done = true;
+        }
+    }
+    fn drag_capture_terminal(&self) -> Option<&'static str> {
+        if self
+            .drag_qa
+            .started
+            .is_some_and(|at| at.elapsed() > Duration::from_secs(120))
+        {
+            return Some("failed");
+        }
+        self.drag_qa.done.then_some("finished")
+    }
+}
 /// Requires an explicit capture output; ordinary launches never start a QA job.
 pub fn transcribe_enabled() -> bool {
     std::env::var_os("NOH_CAPTURE_UI").is_some()
@@ -1185,12 +1890,20 @@ impl NohApp {
         };
         let project_action = std::env::var("NOH_CAPTURE_PROJECT_ACTION").ok();
         self.capture_effect_switch();
+        self.seek_capture_sample();
+        self.drag_capture_sample();
+        self.transport_capture_step(ctx);
         if let Some(action) = project_action.as_deref()
             && !self.capture_project_started
             && self.ready()
             && self.diagnosis_current()
             && !self.project.track.loading()
             && !self.project.waveform_loading
+            // A capture that requires libmpv plays once the copies are there; with no
+            // libmpv preview none will be made, and it fails at once instead.
+            && (!require_live()
+                || self.mini_preview.scrubber.is_none()
+                || self.mini_copies_ready())
         {
             self.capture_project_started = true;
             match action {
@@ -1270,7 +1983,15 @@ impl NohApp {
             .as_deref()
             .is_some_and(|a| a.starts_with("live-"))
         {
-            self.mini_capture_terminal()
+            if drag_playing_enabled() {
+                self.drag_capture_terminal()
+            } else if transport_enabled() {
+                self.transport_capture_terminal()
+            } else if seek_playing_enabled() {
+                self.seek_capture_terminal()
+            } else {
+                self.mini_capture_terminal()
+            }
         } else if project_action.is_some() {
             // A preview render can also be played back to a set time (measurement).
             let play_render = std::env::var_os("NOH_CAPTURE_PLAYBACK_UNTIL_MS").is_some()
@@ -1440,6 +2161,15 @@ impl NohApp {
                 let snapshot = self.mini_preview.scrubber.as_ref().map(|s| s.snapshot());
                 report["scrub"] = serde_json::json!({"samples":self.scrub_qa.samples,"error":snapshot.and_then(|s|s.error),"runtime":self.mini_preview.scrubber.is_some()});
                 report["scrub"]["handoff"] = serde_json::json!(self.scrub_qa.handoff);
+            }
+            if seek_playing_enabled() {
+                report["seek_playing"] = serde_json::json!({"targets_ms":seek_targets(),"dwell_ms":SEEK_DWELL.as_millis() as u64,"black_below":SEEK_BLACK,"results":self.seek_qa.results});
+            }
+            if transport_enabled() {
+                report["transport"] = serde_json::json!(self.transport_qa.samples);
+            }
+            if drag_playing_enabled() {
+                report["drag_playing"] = serde_json::json!({"path":DRAG_PATH,"columns":["ms","down","target_ms","cursor_ms","player_open","playing","player_frame","player_ms","paused_ms","paused_frame","paused_error","picture","paused_picture","spinner"],"samples":self.drag_qa.samples});
             }
             report["project_terminal"] = serde_json::json!(terminal);
             report["project_range"] = serde_json::json!(self.project.range);

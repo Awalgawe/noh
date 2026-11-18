@@ -14,6 +14,8 @@ mod caption_layout;
 pub mod captions;
 pub mod cli;
 pub mod color;
+#[cfg(feature = "gui")]
+pub mod copies;
 pub mod effect_choice;
 mod encoder;
 pub mod engine;
@@ -35,6 +37,7 @@ pub mod plan;
 #[cfg(feature = "gui")]
 pub mod playback;
 pub mod preview;
+pub mod profile;
 mod progress;
 pub mod project;
 pub mod resources;

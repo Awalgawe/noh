@@ -357,6 +357,19 @@ impl NohApp {
                 );
             }
         }
+        if !unreadable && noh::copies::state(item.path()) == noh::copies::State::Preparing {
+            // The light copy of this clip is being made; its source is used meanwhile.
+            let chip =
+                Rect::from_min_size(thumb.right_bottom() - vec2(26.0, 26.0), vec2(20.0, 20.0));
+            ui.painter()
+                .rect_filled(chip, style::radius::S, egui::Color32::from_black_alpha(160));
+            ui.put(
+                chip.shrink(3.0),
+                egui::Spinner::new().size(14.0).color(egui::Color32::WHITE),
+            );
+            ui.interact(chip, tile_id.with("preparing"), Sense::hover())
+                .on_hover_text(l.text("strip.preparing"));
+        }
         if self.dragging == Some(id) {
             ui.painter()
                 .rect_filled(thumb, style::radius::L, t.bg.gamma_multiply(0.4));

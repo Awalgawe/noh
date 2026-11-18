@@ -2,7 +2,8 @@
 
 One Rust media core serves the desktop, command line and optional local MCP
 server. FFmpeg performs media inspection and rendering; libmpv supports the
-silent timeline preview. Rendering is isolated from the UI thread.
+timeline preview, paused and, where it is the default player, playing.
+Rendering is isolated from the UI thread.
 
 | Boundary | Responsibility |
 | --- | --- |
@@ -42,6 +43,37 @@ changing a view does not require decoding the soundtrack again.
 Silent timeline seeking uses indexed presentation timestamps from the preview
 copy, selects a representable frame and keeps a five-second deadline through
 frame delivery. Newer seek requests can supersede an outstanding target.
+
+Play asks the same libmpv instance to play the montage as one virtual file: the
+light copies cut as the montage cuts them, with the song as a second stream.
+It keeps that file open while paused, so a click or a drag on the time ruler is
+a seek in it. `playback::Player` forwards to that engine (`playback::Live`);
+the interface drives either player the same way. `preview::play_plan` refuses
+what the file cannot express (clip sound, a still image, captions drawn by
+libass, a copy that is not ready); a refusal, a decoder
+error, no picture within three seconds or no sound output within one second of
+playing sends the same Play to the FFmpeg player. A refusal comes at once and
+is not remembered. A montage given up after libmpv took it is: the FFmpeg
+player then plays for the rest of the session, rather than paying the same wait
+at each Play. A seek goes to the time of the frame the playhead is in, counted
+as the paused preview counts it (`preview::PlayGrid`): given the time itself,
+libmpv shows the next frame. libmpv is the default player on Windows only;
+`NOH_PLAYER` chooses otherwise.
+
+Three threads meet there: the controller, which talks to libmpv; libmpv's own;
+and the interface's, which renders libmpv's pictures. libmpv waits for the
+render thread, so nothing may be asked of libmpv while a lock the interface
+takes is held. `scrub::live` holds the state both sides share and knows
+nothing of libmpv: a call into libmpv under its lock cannot be written. While
+the window is hidden no ui runs and nothing is painted; `App::logic` then
+serves libmpv's render context, or the playing would stop at the next cut.
+
+libmpv 0.40 and 0.41 ask OpenGL for a sync object after each picture drawn
+through the render API and never free it (fixed in 0.42). NOH gives libmpv the
+OpenGL functions by name, so it gives it a `glFenceSync` that makes none, and
+turns off the decoder's direct rendering (`vd-lavc-dr`), the only other part of
+libmpv that needs real ones.
+
 `assets/ui-tokens.json` records the tested design tokens. Seven translation
 catalogs retain matching keys and placeholders.
 

@@ -106,6 +106,13 @@ Restoring the fast-preview library requires restarting NOH.
   in advanced settings.
 - **A preview takes time:** let the first preparation finish. Preview working
   copies do not replace the original export sources.
+- **The preview stutters, stops or sounds wrong while playing:** start NOH with
+  the environment variable `NOH_PLAYER=ffmpeg`. It keeps the former player,
+  which is slower to follow a click on the time ruler. Please report what you
+  saw.
+- **The preview starts, hesitates about a second in, then goes on:** the fast
+  player found no sound output and the former player took over. It keeps
+  playing until NOH is started again; connect the sound output first.
 
 For automation, see the [CLI guide](CLI.md) and [MCP server](MCP.md). Developers
 can consult the [architecture](ARCHITECTURE.md) and [known limitations](DEVELOPMENT.md#known-limitations).

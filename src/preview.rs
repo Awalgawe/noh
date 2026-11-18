@@ -584,7 +584,274 @@ fn cursor_local(project: &ProjectRequest, time_ms: u64, prepared: &Prepared) -> 
     } else {
         local - current.offset
     };
-    Ok(occurrence_start + (((local - occurrence_start) * fps + 1e-8).floor() / fps))
+    Ok(on_grid(local, occurrence_start, fps))
+}
+/// The time of the frame `local` falls in, on the grid of `fps` frames a
+/// second that starts at `origin`: the picture a paused playhead shows.
+fn on_grid(local: f64, origin: f64, fps: f64) -> f64 {
+    origin + (((local - origin) * fps + 1e-8).floor() / fps)
+}
+
+/// The montage as one virtual file libmpv can play and seek in: the sources'
+/// light copies one after another, repeated over the song, and the song
+/// beside them. It is refused, so that the usual player plays instead, for
+/// what this does not cover: clip sound mixed in, captions drawn by libass, a
+/// still image, a copy that is not ready.
+#[cfg(feature = "gui")]
+pub(crate) struct PlayPlan {
+    pub edl: String,
+    pub filter: String,
+    pub width: u32,
+    pub height: u32,
+    pub duration: f64,
+    pub grid: PlayGrid,
+    /// The copies stay in the store's hands while they play.
+    pub copies: Vec<Arc<crate::copies::Light>>,
+}
+/// The frame grids of the file given to libmpv: one for each piece, as the
+/// paused preview counts them (`cursor_local`).
+#[cfg(feature = "gui")]
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct PlayGrid {
+    fps: f64,
+    /// For each piece, where it starts in the file and where its grid does.
+    pieces: Vec<(f64, f64)>,
+}
+#[cfg(feature = "gui")]
+impl PlayGrid {
+    /// Where to seek in the file for the picture a playhead at `seconds`
+    /// shows: the time of the frame it falls in, not the time itself. libmpv
+    /// shows the first picture at or after the time it is given, which between
+    /// two frames is the next one; the paused preview and the export show the
+    /// one before.
+    pub fn frame_time(&self, seconds: f64) -> f64 {
+        let Some(&(start, origin)) = self
+            .pieces
+            .iter()
+            .rev()
+            .find(|(start, _)| *start <= seconds + 1e-9)
+        else {
+            return seconds.max(0.0);
+        };
+        if self.fps <= 0.0 {
+            return seconds;
+        }
+        on_grid(seconds, origin, self.fps).max(start)
+    }
+}
+/// Why light copies cannot stand for these sources, by their colours. Not
+/// reached today: the preview refuses a BT.2020 source at its preparation
+/// (`captions::supported_video`), whoever would play. It holds the day that
+/// rule is relaxed.
+#[cfg(feature = "gui")]
+fn play_color_refusal(inputs: &[crate::color::Input], canvas: (u32, u32)) -> Option<&'static str> {
+    // A BT.2020 project keeps every clip as decoded, which a light copy is
+    // not.
+    if crate::color::Plan::new(inputs, canvas, None).matrix == crate::color::Matrix::Bt2020 {
+        Some("the montage is in BT.2020")
+    } else if inputs.iter().any(|input| input.light_copy().is_none()) {
+        Some("a source is in BT.2020")
+    } else {
+        None
+    }
+}
+/// Why libmpv does not play this project, as far as the request alone says.
+#[cfg(feature = "gui")]
+fn play_refusal(project: &ProjectRequest) -> Option<&'static str> {
+    if project.montage.clip_audio {
+        // One sound stream beside the pictures: the song.
+        Some("the montage mixes the clips' sound")
+    } else if project.captions.is_some() && project.active_effect().is_none() {
+        // The effect layer draws over libmpv's picture; libass draws in it.
+        Some("the captions are drawn by libass")
+    } else if project.montage.items.iter().any(|item| item.is_image()) {
+        Some("the montage has a still image")
+    } else {
+        None
+    }
+}
+/// The parts of the sources to play in turn, as (item, offset, length) in
+/// seconds: the montage's pieces over the selection, the last one cut where
+/// the selection ends.
+#[cfg(feature = "gui")]
+fn play_pieces(
+    durations: &[f64],
+    start: f64,
+    span: f64,
+    restart: bool,
+) -> Result<Vec<(usize, f64, f64)>> {
+    let mut parts = Vec::new();
+    let mut at = 0.0;
+    for piece in crate::project::pieces(durations, start, span, restart).map_err(engine_error)? {
+        let length = piece.duration.min(span - at);
+        if length <= 1e-6 {
+            break;
+        }
+        parts.push((piece.item, piece.offset, length));
+        at += length;
+    }
+    Ok(parts)
+}
+/// mpv's EDL for those parts, each a (file, offset, length), with the song
+/// from `start` as a second stream. A name is given with its length in bytes,
+/// so that it may hold any character.
+#[cfg(feature = "gui")]
+fn play_edl(parts: &[(String, f64, f64)], song: &str, start: f64, span: f64) -> String {
+    let segments: Vec<_> = parts
+        .iter()
+        .map(|(file, offset, length)| {
+            format!(
+                "%{}%{file},start={offset:.6},length={length:.6}",
+                file.len()
+            )
+        })
+        .collect();
+    format!(
+        "edl://{};!new_stream;%{}%{song},start={start:.6},length={span:.6}",
+        segments.join(";"),
+        song.len()
+    )
+}
+/// The filter over that file: every copy brought to the montage's reduced
+/// frame, the fades, then the short's framing. The file's clock is the
+/// selection's and the fades are on the project's, `start` seconds later.
+#[cfg(feature = "gui")]
+fn play_filter(
+    frame: (u32, u32),
+    fade_in: f64,
+    fade_out: f64,
+    start: f64,
+    project_seconds: f64,
+    framing: Option<String>,
+) -> String {
+    let mut filter = vec![format!(
+        "scale=w='max(2,trunc(min({w},{h}*dar)/2)*2)':h='max(2,trunc(min({h},{w}/dar)/2)*2)',setsar=1,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+        w = frame.0,
+        h = frame.1,
+    )];
+    let fades = fade_in > 0.0 || fade_out > 0.0;
+    if fades {
+        filter.push(format!("setpts=PTS+{start:.9}/TB"));
+    }
+    if fade_in > 0.0 {
+        filter.push(format!("fade=t=in:st=0:d={fade_in:.9}"));
+    }
+    if fade_out > 0.0 {
+        filter.push(format!(
+            "fade=t=out:st={:.9}:d={fade_out:.9}",
+            project_seconds - fade_out
+        ));
+    }
+    if fades {
+        filter.push(format!("setpts=PTS-{start:.9}/TB"));
+    }
+    filter.extend(framing);
+    filter.join(",")
+}
+#[cfg(feature = "gui")]
+pub(crate) fn play_plan(project: &ProjectRequest, cancel: &AtomicBool) -> Result<PlayPlan> {
+    if let Some(reason) = play_refusal(project) {
+        return Err(unavailable(reason));
+    }
+    let started = Instant::now();
+    let snapshot = project.snapshot().map_err(engine_error)?;
+    let prepared = prepare_shared(project, &snapshot, cancel, started)?;
+    let montage = &project.montage;
+    let target = &prepared.target;
+    // Every item is a video here: a still image is refused above.
+    let inputs: Vec<_> = prepared
+        .info
+        .iter()
+        .map(crate::color::Input::video)
+        .collect();
+    if let Some(reason) = play_color_refusal(&inputs, (target.width, target.height)) {
+        return Err(unavailable(reason));
+    }
+    let (start, end, restart) =
+        project
+            .short
+            .as_ref()
+            .map_or((0.0, prepared.duration, false), |s| {
+                (
+                    s.start_ms as f64 / 1000.0,
+                    s.end_ms as f64 / 1000.0,
+                    s.restart_loops,
+                )
+            });
+    let span = end - start;
+    let fps = target.rate_num as f64 / target.rate_den as f64;
+    let durations: Vec<_> = prepared
+        .info
+        .iter()
+        .map(|m| (m.seconds * fps).round().max(1.0) / fps)
+        .collect();
+    let mut parts = Vec::new();
+    let mut copies = Vec::new();
+    let mut pieces = Vec::new();
+    let mut at = 0.0;
+    for (item, offset, length) in play_pieces(&durations, start, span, restart)? {
+        // The first piece counts its frames from the selection's start, the
+        // others from their source's (`cursor_local`).
+        pieces.push((at, if pieces.is_empty() { 0.0 } else { at - offset }));
+        at += length;
+        let source = &prepared.snapshot.0[item];
+        let origin = prepared
+            .origins
+            .get(&source.resolved)
+            .copied()
+            .unwrap_or(0.0);
+        let copy = crate::copies::ready(source, origin)
+            .ok_or_else(|| unavailable("a light copy is not ready"))?;
+        parts.push((copy.path.to_string_lossy().into_owned(), offset, length));
+        copies.push(copy);
+    }
+    if parts.is_empty() {
+        return Err(unavailable("the montage has no picture to play"));
+    }
+    let song = snapshot.0[montage.items.len()]
+        .resolved
+        .to_string_lossy()
+        .into_owned();
+    let (canvas_w, canvas_h) = if project.short.is_some() {
+        (1080, 1920)
+    } else {
+        (target.width, target.height)
+    };
+    let (width, height) = reduced_dimensions(canvas_w, canvas_h);
+    let framing = match &project.short {
+        Some(short) => Some(
+            crate::shorts::Geometry::new(
+                f64::from(target.width),
+                f64::from(target.height),
+                short.framing,
+            )
+            .map_err(engine_error)?
+            .monitor_filter(width, height),
+        ),
+        None => None,
+    };
+    let filter = play_filter(
+        reduced_dimensions(target.width, target.height),
+        montage.fade_in,
+        montage.fade_out,
+        start,
+        prepared.duration,
+        framing,
+    );
+    snapshot.verify().map_err(engine_error)?;
+    crate::profile!(
+        "mpv player: {} pieces over {span:.3} s, filter {filter}",
+        parts.len()
+    );
+    Ok(PlayPlan {
+        edl: play_edl(&parts, &song, start, span),
+        filter,
+        width,
+        height,
+        duration: span,
+        grid: PlayGrid { fps, pieces },
+        copies,
+    })
 }
 
 /// Source-level working copy plus composition for a persistent silent decoder.
@@ -989,9 +1256,43 @@ fn project_command(
         let origin = prepared.origins.get(source).copied().unwrap_or(0.0);
         let video_seek =
             source_seconds.min((origin + (meta.seconds - 1.0 / fps).max(0.0)).max(0.0));
+        // While playing, the source's light copy is read instead once it is
+        // ready: every frame of it is a keyframe, so a seek decodes nothing
+        // from a distant keyframe. Its pictures start at the source's origin.
+        // Without one, or until it is ready, the source is read as before.
+        // The colour tail must then describe the copy, already in limited range,
+        // not the source. A BT.2020 project keeps every clip as decoded, which
+        // the copy of another clip is not: there the sources are read.
+        #[cfg_attr(not(feature = "gui"), allow(unused_mut))]
+        let mut input = (source.clone(), video_seek);
+        #[cfg_attr(not(feature = "gui"), allow(unused_mut))]
+        let mut pictures = crate::color::Input::video(meta);
+        #[cfg(feature = "gui")]
+        if stream
+            && color.matrix != crate::color::Matrix::Bt2020
+            && let Some(copied) = pictures.light_copy()
+            && let Some(copy) = crate::copies::ready(&prepared.snapshot.0[mapped.item], origin)
+        {
+            input = (copy.path.clone(), copy.seek(video_seek - origin));
+            pictures = copied;
+        }
+        if stream {
+            crate::profile!(
+                "player: reads {} at {:.3} s for local {:.3} s of {} (project matrix {:?})",
+                if input.0 == *source {
+                    "the SOURCE"
+                } else {
+                    "the copy"
+                },
+                input.1,
+                local,
+                source.display(),
+                color.matrix
+            );
+        }
         command
-            .args(["-ss", &format!("{video_seek:.9}"), "-i"])
-            .arg(source);
+            .args(["-ss", &format!("{:.9}", input.1), "-i"])
+            .arg(&input.0);
         // A single final decoded frame can carry EOF at the same PTS inside a
         // complex graph. fps would discard it before duration-based padding.
         // Still extraction needs no cadence conversion. Streaming adds exactly
@@ -1010,7 +1311,7 @@ fn project_command(
             "[0:v]setpts=PTS-STARTPTS,scale=w='max(2,trunc(min({w},{h}*dar)/2)*2)':h='max(2,trunc(min({h},{w}/dar)/2)*2)',setsar=1,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,{cadence}{tail}[v]",
             w = target.width,
             h = target.height,
-            tail = color.video_tail(&crate::color::Input::video(meta)),
+            tail = color.video_tail(&pictures),
         )
     };
     let has_captions = workspace.has_captions;
@@ -1052,6 +1353,9 @@ fn project_command(
     }
     filter.push("format=rgba".into());
     graph.push_str(&format!(";[v]{}[out]", filter.join(",")));
+    if stream {
+        crate::profile!("player: graph {graph}");
+    }
     command.args(["-filter_complex", &graph, "-map", "[out]"]);
     Ok(PlaybackSegment {
         command,
@@ -1256,6 +1560,209 @@ fn same_request(a: &FrameRequest, b: &FrameRequest) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "gui")]
+    fn montage_request(items: Vec<crate::input::MediaItem>) -> ProjectRequest {
+        ProjectRequest {
+            montage: crate::engine::ExportRequest {
+                items,
+                wav: "song.wav".into(),
+                output: "out.mp4".into(),
+                ffmpeg: PathBuf::new(),
+                fade_in: 0.0,
+                fade_out: 0.0,
+                partial_fades: false,
+                preview: true,
+                clip_audio: false,
+                force_encode: true,
+            },
+            short: None,
+            captions: None,
+            effect: None,
+        }
+    }
+    #[test]
+    #[cfg(feature = "gui")]
+    fn a_seek_in_the_file_given_to_libmpv_goes_to_the_frame_the_playhead_is_in() {
+        // Two pieces at 24 frames a second, the second starting off the first's
+        // grid, as when a selection starts inside a clip.
+        let grid = PlayGrid {
+            fps: 24.0,
+            pieces: vec![(0.0, 0.0), (0.985, 0.985), (10.985, 10.985)],
+        };
+        let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
+        // Between two frames: the one before, where libmpv given the time
+        // itself would show the one after.
+        assert!(near(grid.frame_time(0.560), 13.0 / 24.0));
+        assert!(near(grid.frame_time(0.5), 0.5));
+        assert!(near(grid.frame_time(0.0), 0.0));
+        // On a frame's time: that frame, as its time is written in milliseconds.
+        assert!(near(grid.frame_time(13.0 / 24.0), 13.0 / 24.0));
+        assert!(near(grid.frame_time(0.542), 13.0 / 24.0));
+        assert!(near(grid.frame_time(0.541), 12.0 / 24.0));
+        // In the second piece the frames are counted from its start.
+        assert!(near(grid.frame_time(2.060), 0.985 + 25.0 / 24.0));
+        // Each piece has its own grid: past a seam the frames are counted from
+        // it, and never from before it.
+        assert!(near(grid.frame_time(0.984), 23.0 / 24.0));
+        assert!(near(grid.frame_time(0.990), 0.985));
+        assert!(near(
+            grid.frame_time(0.985 + 1.5 / 24.0),
+            0.985 + 1.0 / 24.0
+        ));
+        assert!(near(grid.frame_time(11.0), 10.985));
+        // The same rule as the paused preview's.
+        assert!(near(grid.frame_time(5.03), on_grid(5.03, 0.985, 24.0)));
+        // A piece cut inside its source counts from the source's start, and
+        // its first frame is not left for the piece before.
+        let cut = PlayGrid {
+            fps: 24.0,
+            pieces: vec![(0.0, 0.0), (4.0, 3.99)],
+        };
+        assert!(near(cut.frame_time(4.001), 4.0));
+        assert!(near(cut.frame_time(4.05), 3.99 + 1.0 / 24.0));
+        // Nothing known of the file: the time as asked.
+        assert!(near(PlayGrid::default().frame_time(3.3), 3.3));
+    }
+    #[test]
+    #[cfg(feature = "gui")]
+    fn libmpv_is_not_given_a_montage_whose_colours_its_copies_do_not_keep() {
+        let video = |line: &str, width, height| crate::color::Input::Video {
+            props: crate::color::Props::parse(line),
+            width,
+            height,
+        };
+        let hd = "  Stream #0:0: Video: h264 (High), yuv420p(tv, bt709, progressive), 1920x1080";
+        let full = "  Stream #0:0: Video: h264, yuvj420p(pc, bt709, progressive), 1920x1080";
+        let hdr =
+            "  Stream #0:0: Video: hevc, yuv420p10le(tv, bt2020nc/bt2020/smpte2084), 3840x2160";
+        let plain = [video(hd, 1920, 1080), video(full, 1920, 1080)];
+        assert_eq!(play_color_refusal(&plain, (1920, 1080)), None);
+        let mixed = [video(hd, 1920, 1080), video(hdr, 3840, 2160)];
+        assert_eq!(
+            play_color_refusal(&mixed, (3840, 2160)),
+            Some("the montage is in BT.2020")
+        );
+        assert_eq!(
+            play_color_refusal(&[video(hdr, 3840, 2160)], (3840, 2160)),
+            Some("the montage is in BT.2020")
+        );
+    }
+    #[test]
+    #[cfg(feature = "gui")]
+    fn libmpv_is_not_asked_for_what_it_does_not_play() {
+        let video = || crate::input::MediaItem::from(PathBuf::from("a.mp4"));
+        let plain = montage_request(vec![video(), video()]);
+        assert_eq!(play_refusal(&plain), None);
+
+        let mut sound = plain.clone();
+        sound.montage.clip_audio = true;
+        assert_eq!(
+            play_refusal(&sound),
+            Some("the montage mixes the clips' sound")
+        );
+
+        // Captions: drawn over the picture by an effect, or in it by libass.
+        let mut captions = plain.clone();
+        captions.captions = Some(crate::shorts::ShortCaptions {
+            subtitles: "lyrics.srt".into(),
+            style: Default::default(),
+        });
+        assert_eq!(
+            play_refusal(&captions),
+            Some("the captions are drawn by libass")
+        );
+        captions.effect = Some(crate::project::EffectChoice {
+            id: "classique".into(),
+            preset: None,
+            dir: "effects/classique".into(),
+            values: Default::default(),
+        });
+        assert_eq!(play_refusal(&captions), None);
+        // An effect without captions draws nothing and changes nothing.
+        let mut effect_only = plain.clone();
+        effect_only.effect = captions.effect.clone();
+        assert_eq!(play_refusal(&effect_only), None);
+
+        let image = montage_request(vec![
+            video(),
+            crate::input::MediaItem::Image {
+                path: "b.png".into(),
+                duration: 3.0,
+            },
+        ]);
+        assert_eq!(play_refusal(&image), Some("the montage has a still image"));
+    }
+    #[test]
+    #[cfg(feature = "gui")]
+    fn the_montage_is_cut_for_libmpv_as_it_is_for_the_export() {
+        let near = |parts: &[(usize, f64, f64)], expected: &[(usize, f64, f64)]| {
+            assert_eq!(parts.len(), expected.len(), "{parts:?}");
+            for (part, wanted) in parts.iter().zip(expected) {
+                assert_eq!(part.0, wanted.0, "{parts:?}");
+                assert!(
+                    (part.1 - wanted.1).abs() < 1e-9 && (part.2 - wanted.2).abs() < 1e-9,
+                    "{parts:?}"
+                );
+            }
+        };
+        // Two clips of 4 and 6 s repeated over 15 s of song: the last piece is
+        // cut where the song ends.
+        let whole = play_pieces(&[4.0, 6.0], 0.0, 15.0, false).unwrap();
+        near(
+            &whole,
+            &[(0, 0.0, 4.0), (1, 0.0, 6.0), (0, 0.0, 4.0), (1, 0.0, 1.0)],
+        );
+        assert!((whole.iter().map(|p| p.2).sum::<f64>() - 15.0).abs() < 1e-9);
+        // A short from 5 to 12 s: it starts inside the second clip.
+        near(
+            &play_pieces(&[4.0, 6.0], 5.0, 7.0, false).unwrap(),
+            &[(1, 1.0, 5.0), (0, 0.0, 2.0)],
+        );
+        // The same short with its loops restarted: from the first clip's start.
+        near(
+            &play_pieces(&[4.0, 6.0], 5.0, 7.0, true).unwrap(),
+            &[(0, 0.0, 4.0), (1, 0.0, 3.0)],
+        );
+    }
+    #[test]
+    #[cfg(feature = "gui")]
+    fn the_file_given_to_libmpv_names_each_piece_and_the_song() {
+        let parts = [
+            ("C:\\cache\\a.mp4".to_string(), 0.0, 4.0),
+            ("C:\\cache\\été,b;c.mp4".to_string(), 1.5, 2.25),
+        ];
+        assert_eq!(
+            play_edl(&parts, "D:\\songs\\la la.wav", 13.0, 6.25),
+            concat!(
+                "edl://%14%C:\\cache\\a.mp4,start=0.000000,length=4.000000;",
+                // The length is in bytes (two per é), so a comma or a semicolon
+                // in a name ends nothing.
+                "%22%C:\\cache\\été,b;c.mp4,start=1.500000,length=2.250000;",
+                "!new_stream;%18%D:\\songs\\la la.wav,start=13.000000,length=6.250000"
+            )
+        );
+    }
+    #[test]
+    #[cfg(feature = "gui")]
+    fn the_filter_for_libmpv_fits_the_frame_fades_on_the_projects_clock_then_frames() {
+        let fit = "scale=w='max(2,trunc(min(640,360*dar)/2)*2)':h='max(2,trunc(min(360,640/dar)/2)*2)',setsar=1,pad=640:360:(ow-iw)/2:(oh-ih)/2,format=yuv420p";
+        assert_eq!(play_filter((640, 360), 0.0, 0.0, 0.0, 180.0, None), fit);
+        // Fades are on the project's clock: the file starts at the selection,
+        // 13 s into it, so its clock is moved there and back.
+        assert_eq!(
+            play_filter((640, 360), 2.0, 3.0, 13.0, 180.0, None),
+            format!(
+                "{fit},setpts=PTS+13.000000000/TB,fade=t=in:st=0:d=2.000000000,fade=t=out:st=177.000000000:d=3.000000000,setpts=PTS-13.000000000/TB"
+            )
+        );
+        // Only a fade out, and the short's framing last.
+        assert_eq!(
+            play_filter((640, 360), 0.0, 3.0, 0.0, 60.0, Some("crop=360:640".into())),
+            format!(
+                "{fit},setpts=PTS+0.000000000/TB,fade=t=out:st=57.000000000:d=3.000000000,setpts=PTS-0.000000000/TB,crop=360:640"
+            )
+        );
+    }
     fn request(index: u64) -> FrameRequest {
         FrameRequest::Thumbnail {
             item: PathBuf::from(format!("{index}.mp4")).into(),
@@ -1419,6 +1926,122 @@ mod tests {
             (audio_edge.playback.source_seconds - 5.99).abs() < 1e-9,
             "audio mapping must not jump back to the video's last frame"
         );
+    }
+
+    #[test]
+    #[cfg(feature = "gui")]
+    fn playback_reads_a_ready_light_copy_and_a_still_never_does() {
+        use crate::{engine::ExportRequest, inspection::FileStamp};
+        let folder = tempfile::tempdir().unwrap();
+        let paths: Vec<_> = ["a.mp4", "b.mp4", "clock.wav", "ffmpeg", "copy.mp4"]
+            .into_iter()
+            .map(|name| {
+                let path = folder.path().join(name);
+                std::fs::write(&path, b"identity-only fixture").unwrap();
+                path
+            })
+            .collect();
+        let snapshot = Snapshot(
+            paths[..4]
+                .iter()
+                .map(|p| FileStamp::read(p).unwrap())
+                .collect(),
+        );
+        let project = ProjectRequest {
+            montage: ExportRequest {
+                items: vec![paths[0].clone().into(), paths[1].clone().into()],
+                wav: paths[2].clone(),
+                output: folder.path().join("unused.mp4"),
+                ffmpeg: paths[3].clone(),
+                fade_in: 0.0,
+                fade_out: 0.0,
+                partial_fades: true,
+                preview: true,
+                clip_audio: false,
+                force_encode: false,
+            },
+            short: None,
+            effect: None,
+            captions: None,
+        };
+        // The first clip is full range, as a phone or an action camera records.
+        let info = |description: &str| crate::media::MediaInfo {
+            seconds: 4.0,
+            description: description.into(),
+            width: 640,
+            height: 360,
+            ..Default::default()
+        };
+        let mut prepared = Prepared {
+            snapshot: snapshot.clone(),
+            items: project.montage.items.clone(),
+            info: vec![
+                info("Video: mjpeg, yuvj420p(pc), 640x360"),
+                info("Video: h264, yuv420p(tv, smpte170m), 640x360"),
+            ],
+            origins: HashMap::from([(snapshot.0[0].resolved.clone(), 0.25)]),
+            target: crate::plan::Target {
+                width: 640,
+                height: 360,
+                rate_num: 25,
+                rate_den: 1,
+                codec: "h264".into(),
+                pixel_format: "yuv420p".into(),
+            },
+            duration: 20.0,
+        };
+        let words = |stream: bool, prepared: &Prepared, local: f64| -> Vec<String> {
+            project_command(&project, local, &snapshot, prepared, stream)
+                .unwrap()
+                .command
+                .get_args()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect()
+        };
+        let input = |words: &[String]| {
+            let at = words.iter().position(|w| w == "-i").unwrap();
+            (words[at - 1].clone(), PathBuf::from(&words[at + 1]))
+        };
+        let graph = |words: &[String]| {
+            let at = words.iter().position(|w| w == "-filter_complex").unwrap();
+            words[at + 1].clone()
+        };
+        let source = snapshot.0[0].resolved.clone();
+        // No copy yet: the source, at its own time (origin 0.25 + 1.3 s).
+        let before = words(true, &prepared, 1.3);
+        assert_eq!(input(&before), ("1.550000000".into(), source.clone()));
+        assert!(graph(&before).contains("in_range=pc:out_range=tv"));
+        // Its copy is ready: 25 pictures a second from the source's origin.
+        let times: Vec<f64> = (0..100).map(|i| f64::from(i) / 25.0).collect();
+        let copy = crate::copies::offer_for_test(&snapshot.0[0], 0.25, paths[4].clone(), times);
+        let playing = words(true, &prepared, 1.3);
+        // Asked just before the copy's first frame at or after 1.3 s: 1.32 s.
+        assert_eq!(
+            input(&playing),
+            (format!("{:.9}", copy.seek(1.3)), paths[4].clone())
+        );
+        assert_eq!(input(&playing).0, "1.319500000");
+        // The copy is already in limited range: no second range conversion.
+        assert!(
+            !graph(&playing).contains("in_range=pc"),
+            "{}",
+            graph(&playing)
+        );
+        assert!(graph(&playing).contains("range=tv"));
+        // A still is always decoded from the source.
+        let still = words(false, &prepared, 1.3);
+        assert_eq!(input(&still), ("1.550000000".into(), source.clone()));
+        assert!(graph(&still).contains("in_range=pc:out_range=tv"));
+        // The other clip has no copy: its source.
+        let other = words(true, &prepared, 5.0);
+        assert_eq!(input(&other).1, snapshot.0[1].resolved);
+        // A copy made for another origin is not this source's copy.
+        prepared.origins.insert(source.clone(), 0.5);
+        assert_eq!(input(&words(true, &prepared, 1.3)).1, source);
+        prepared.origins.insert(source.clone(), 0.25);
+        // In a BT.2020 project every clip is kept as decoded: sources only.
+        prepared.info[1] = info("Video: hevc, yuv420p10le(tv, bt2020nc/bt2020/smpte2084), 640x360");
+        assert_eq!(input(&words(true, &prepared, 1.3)).1, source);
     }
 
     #[test]
