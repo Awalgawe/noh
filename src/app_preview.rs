@@ -112,6 +112,12 @@ pub struct State {
     pub painted_scrub: bool,
     /// Makes the light copies of the videos ahead of their first use.
     pub(super) warmer: Option<noh::copies::Warmer>,
+    /// Which player each Play of this session went to, and why when it is not
+    /// libmpv: for the journal and the capture reports.
+    pub engines: Vec<String>,
+    /// Why libmpv gave a montage up, once it has: the usual player then plays
+    /// for the rest of the session.
+    live_gave_up: Option<String>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -154,6 +160,8 @@ impl Default for State {
             painted: (false, false),
             painted_scrub: false,
             warmer: None,
+            engines: Vec::new(),
+            live_gave_up: None,
         }
     }
 }
@@ -282,6 +290,10 @@ impl State {
         self.requested
             .filter(|_| self.still.is_some() && !self.still_pending)
             .map(|(_, ms)| ms)
+    }
+    /// What the monitor says is wrong with the preview, if anything.
+    pub fn error(&self) -> Option<&String> {
+        self.error.as_ref()
     }
     /// The monitor shows a decoded frame (a cursor still or live playback).
     pub fn has_frame(&self) -> bool {
@@ -483,10 +495,16 @@ impl NohApp {
             {
                 return;
             }
-            if let Some(player) = &self.mini_preview.player {
-                player.stop();
+            // libmpv keeps the montage open and shows the playhead's picture
+            // itself, paused: it is moved below like a playing player. The
+            // usual player cannot; it is stopped and the paused preview
+            // follows the playhead.
+            if !self.mini_live() {
+                if let Some(player) = &self.mini_preview.player {
+                    player.stop();
+                }
+                self.mini_preview.player_stopped();
             }
-            self.mini_preview.player_stopped();
         }
         self.mini_preview.source = None;
         if ms != self.mini_preview.cursor_ms {
@@ -645,20 +663,27 @@ impl NohApp {
                     }
                     let key = (state.generation, frame.id);
                     if self.mini_preview.player_frame != Some(key) {
-                        let image =
-                            egui::ColorImage::from_rgb([frame.width, frame.height], &frame.rgb);
-                        if let Some(texture) = &mut self.mini_preview.player_texture {
-                            texture.set(image, egui::TextureOptions::LINEAR);
+                        if frame.width == 0 {
+                            // libmpv has drawn this picture itself, where the
+                            // paused preview draws: that is what the monitor shows.
+                            self.mini_preview.player_texture = None;
+                            self.mini_preview.scrub_active = true;
                         } else {
-                            self.mini_preview.player_texture = Some(ctx.load_texture(
-                                "mini-player",
-                                image,
-                                egui::TextureOptions::LINEAR,
-                            ));
+                            let image =
+                                egui::ColorImage::from_rgb([frame.width, frame.height], &frame.rgb);
+                            if let Some(texture) = &mut self.mini_preview.player_texture {
+                                texture.set(image, egui::TextureOptions::LINEAR);
+                            } else {
+                                self.mini_preview.player_texture = Some(ctx.load_texture(
+                                    "mini-player",
+                                    image,
+                                    egui::TextureOptions::LINEAR,
+                                ));
+                            }
                         }
                         self.mini_preview.player_frame = Some(key);
                         // Measurements of the played picture, for the seek capture only.
-                        if super::app_capture::seek_playing_enabled() {
+                        if frame.width > 0 && super::app_capture::seek_playing_enabled() {
                             self.mini_preview.player_luma = mean_luma(&frame.rgb);
                             self.mini_preview.player_grid =
                                 mean_grid(&frame.rgb, frame.width, frame.height);
@@ -666,6 +691,36 @@ impl NohApp {
                         self.mini_preview.player_position = frame.position;
                         super::app_effects::trace("video", frame.position, None, None, "");
                     }
+                }
+                if state.phase == Phase::Error && player.is_live() {
+                    // What libmpv does not play, or no longer, the usual player
+                    // plays from the same position. The monitor keeps libmpv's
+                    // last picture until the usual player has its own.
+                    let reason = state.error.as_deref().unwrap_or("");
+                    let (remember, playing) = after_live_failure(player.live_failure());
+                    let why = format!(
+                        "usual player: libmpv {}: {reason}",
+                        if remember { "gave up" } else { "refused" }
+                    );
+                    noh::profile!("app: Play goes on with the {why}");
+                    self.mini_preview.engines.push(why);
+                    if remember {
+                        self.mini_preview.live_gave_up = Some(reason.to_owned());
+                    }
+                    match self.mini_project_request() {
+                        Some(project) if playing => {
+                            player.open_project(project, state.position, true);
+                            self.mini_preview.player_frame = None;
+                        }
+                        // Paused when it failed: nothing starts playing by
+                        // itself, the paused preview shows the playhead.
+                        _ => {
+                            player.stop();
+                            self.mini_preview.player_stopped();
+                        }
+                    }
+                    ctx.request_repaint();
+                    return;
                 }
                 if state.phase == Phase::Error {
                     self.mini_preview.error = state.error;
@@ -792,6 +847,20 @@ impl NohApp {
         self.mini_preview.source = None;
         self.mini_preview.error = None;
     }
+    /// Whether every video of the montage has its light copy ready.
+    pub(super) fn mini_copies_ready(&self) -> bool {
+        self.clips.iter().all(|clip| {
+            clip.item.is_image()
+                || noh::copies::state(clip.item.path()) == noh::copies::State::Ready
+        })
+    }
+    /// Whether libmpv plays in the live player's place.
+    pub(super) fn mini_live(&self) -> bool {
+        self.mini_preview
+            .player
+            .as_ref()
+            .is_some_and(Player::is_live)
+    }
     /// Whether the live player is playing.
     pub(super) fn mini_playing(&self) -> bool {
         self.mini_preview.player_stamp.is_some()
@@ -860,7 +929,42 @@ impl NohApp {
             Player::new(move || ctx.request_repaint_after(Duration::from_millis(33)))
         });
         player.set_volume(self.mini_preview.volume);
-        player.open_project(project, (cursor - start) as f64 / 1000.0, true);
+        // The paused preview's libmpv plays the montage when it can: its seeks
+        // decode nothing. What it cannot play, and what it then refuses, the
+        // usual player plays. The journal says which one and why.
+        let refusal = live_refusal(
+            player_preference(),
+            self.mini_preview
+                .scrubber
+                .as_ref()
+                .map(|_| self.mini_preview.scrub_failed),
+            project.montage.clip_audio,
+            project.captions.is_some() && project.active_effect().is_none(),
+            self.clips
+                .iter()
+                .map(|clip| (clip.item.is_image(), noh::copies::state(clip.item.path()))),
+        );
+        let refusal = play_engine_refusal(refusal, self.mini_preview.live_gave_up.as_deref());
+        match (&self.mini_preview.scrubber, refusal) {
+            (Some(scrubber), None) => {
+                noh::profile!("app: Play goes to libmpv");
+                self.mini_preview.engines.push("libmpv".into());
+                player.open_live(scrubber.live(
+                    project,
+                    (cursor - start) as f64 / 1000.0,
+                    true,
+                    self.mini_preview.volume,
+                ));
+            }
+            (_, refusal) => {
+                let why = refusal.unwrap_or_else(|| "there is no libmpv preview".into());
+                noh::profile!("app: Play goes to the usual player: {why}");
+                self.mini_preview
+                    .engines
+                    .push(format!("usual player: {why}"));
+                player.open_project(project, (cursor - start) as f64 / 1000.0, true);
+            }
+        }
         self.mini_preview.player_stamp =
             Some(self.project.stamp(self.revision, self.mini_preview.short));
         // Until the player has a picture, the monitor keeps what it shows: the
@@ -875,7 +979,7 @@ impl NohApp {
     }
     /// Navigation moves the playhead, playing or paused; a frame step pauses
     /// first. The target becomes the cursor at once, so rapid clicks chain.
-    fn navigate(&mut self, ms: u64, pause: bool) {
+    pub(super) fn navigate(&mut self, ms: u64, pause: bool) {
         if pause
             && self.mini_preview.player_stamp.is_some()
             && let Some(player) = &self.mini_preview.player
@@ -1925,12 +2029,17 @@ impl NohApp {
                 let slider = ui.add(
                     egui::Slider::new(&mut self.mini_preview.volume, 0.0..=1.0).show_value(false),
                 );
-                if slider.changed()
-                    && let Some(player) = &self.mini_preview.player
-                {
-                    player.set_volume(self.mini_preview.volume);
+                if slider.changed() {
+                    self.mini_set_volume(self.mini_preview.volume);
                 }
             });
+    }
+    /// What the volume slider does.
+    pub(super) fn mini_set_volume(&mut self, volume: f32) {
+        self.mini_preview.volume = volume;
+        if let Some(player) = &self.mini_preview.player {
+            player.set_volume(volume);
+        }
     }
     pub(super) fn mini_capture_start(&mut self, short: bool, ctx: &egui::Context) {
         self.mini_preview.short = short;
@@ -1945,9 +2054,31 @@ impl NohApp {
         self.mini_preview.capture_first_frame_ms = None;
         self.mini_play(ctx);
     }
+    /// Why a capture that requires libmpv (`NOH_CAPTURE_REQUIRE_LIVE=1`) has
+    /// not had it so far: another player was asked, or took over, or libmpv
+    /// plays without a sound output. None while all is as required.
+    pub(super) fn mini_capture_not_live(&self) -> Option<String> {
+        if !super::app_capture::require_live() {
+            return None;
+        }
+        let state = self.mini_preview.player.as_ref()?.snapshot();
+        match self.mini_preview.engines.last().map(String::as_str) {
+            None => None,
+            Some("libmpv") if !self.mini_live() => Some("libmpv is no longer the player".into()),
+            Some("libmpv")
+                if state.phase == Phase::Ready
+                    && state.position >= 2.0
+                    && !state.audio_available =>
+            {
+                Some("libmpv plays without a sound output".into())
+            }
+            Some("libmpv") => None,
+            Some(other) => Some(other.into()),
+        }
+    }
     pub(super) fn mini_capture_terminal(&self) -> Option<&'static str> {
         let state = self.mini_preview.player.as_ref()?.snapshot();
-        if state.phase == Phase::Error {
+        if state.phase == Phase::Error || self.mini_capture_not_live().is_some() {
             return Some("failed");
         }
         let until = std::env::var("NOH_CAPTURE_PLAYBACK_UNTIL_MS")
@@ -1960,9 +2091,84 @@ impl NohApp {
     }
     pub(super) fn mini_capture_report(&self) -> serde_json::Value {
         let state = self.mini_preview.player.as_ref().map(Player::snapshot);
-        serde_json::json!({"explicit_ffmpeg":self.ffmpeg.is_some(), "first_frame_ms":self.mini_preview.capture_first_frame_ms, "thumbnails":self.mini_preview.textures.len(), "still":self.mini_preview.still.is_some(), "cursor_ms":self.mini_preview.cursor_ms, "short":self.mini_preview.short, "error":self.mini_preview.error,
+        serde_json::json!({"explicit_ffmpeg":self.ffmpeg.is_some(), "engines":self.mini_preview.engines, "not_live":self.mini_capture_not_live(), "first_frame_ms":self.mini_preview.capture_first_frame_ms, "thumbnails":self.mini_preview.textures.len(), "still":self.mini_preview.still.is_some(), "cursor_ms":self.mini_preview.cursor_ms, "short":self.mini_preview.short, "error":self.mini_preview.error,
             "player":state.map(|s| serde_json::json!({"phase":format!("{:?}", s.phase), "playing":s.playing, "position":s.position, "audio_available":s.audio_available, "warning":s.warning, "error":s.error, "frame":s.frame.as_ref().map(|f|serde_json::json!({"width":f.width,"height":f.height,"position":f.position,"id":f.id}))})), "rendered_preview":self.preview_ready || self.project.short_preview_artifact.is_some()})
     }
+}
+
+/// Which player Play asks first, from `NOH_PLAYER`, read once: `mpv` asks for
+/// libmpv, `ffmpeg` for the usual player. Anything else, or nothing, leaves
+/// the default.
+fn player_preference() -> Option<bool> {
+    static PREFERENCE: std::sync::OnceLock<Option<bool>> = std::sync::OnceLock::new();
+    *PREFERENCE.get_or_init(|| {
+        match std::env::var("NOH_PLAYER")
+            .ok()?
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "mpv" | "libmpv" => Some(true),
+            "ffmpeg" => Some(false),
+            _ => None,
+        }
+    })
+}
+/// What follows a montage libmpv stopped serving: whether that is remembered,
+/// and whether the usual player starts playing in its place. A refusal comes
+/// at once and may not last (a copy still being made): it is not remembered.
+/// A montage given up, after a wait or in the middle, is: asking libmpv again
+/// would cost the same wait at each Play. And a montage that was paused when
+/// it failed does not start playing by itself.
+fn after_live_failure(failure: Option<noh::playback::LiveFailure>) -> (bool, bool) {
+    failure.map_or((true, true), |failure| (!failure.refused, failure.playing))
+}
+/// Why Play does not go to libmpv, with what it gave up earlier in this
+/// session, if it did: from then on the usual player plays until NOH is
+/// started again.
+fn play_engine_refusal(refusal: Option<&'static str>, gave_up: Option<&str>) -> Option<String> {
+    refusal
+        .map(str::to_owned)
+        .or_else(|| gave_up.map(|reason| format!("libmpv gave up earlier: {reason}")))
+}
+/// Why Play does not go to libmpv, or None when it does. By default libmpv
+/// plays only where it has been shown to: on Windows. `preview` is whether the
+/// libmpv preview has failed, None without one; `clips` gives for each clip
+/// whether it is an image and where its light copy stands. What the request
+/// itself excludes is said here too, so that libmpv is not asked at each Play
+/// only to refuse (`preview::play_plan` refuses the same).
+fn live_refusal(
+    preference: Option<bool>,
+    preview: Option<bool>,
+    clip_sound: bool,
+    libass_captions: bool,
+    clips: impl IntoIterator<Item = (bool, noh::copies::State)>,
+) -> Option<&'static str> {
+    match preference {
+        Some(false) => return Some("NOH_PLAYER asks for it"),
+        None if !cfg!(windows) => return Some("libmpv is not the default player on this system"),
+        _ => {}
+    }
+    match preview {
+        None => return Some("there is no libmpv preview"),
+        Some(true) => return Some("the libmpv preview has failed"),
+        Some(false) => {}
+    }
+    if clip_sound {
+        return Some("the montage mixes the clips' sound");
+    }
+    if libass_captions {
+        return Some("the captions are drawn by libass");
+    }
+    for (image, copy) in clips {
+        if image {
+            return Some("the montage has a still image");
+        }
+        if copy != noh::copies::State::Ready {
+            return Some("a light copy is not ready");
+        }
+    }
+    None
 }
 
 /// Mean red, green and blue of each cell of a 4 by 4 grid over an RGB frame.
@@ -2488,6 +2694,269 @@ mod tests {
             app.mini_preview.player_stamp.is_none(),
             "a paused player hands the picture to the still preview"
         );
+    }
+    /// An engine standing for libmpv: it records what it is asked and answers
+    /// with the snapshot it was given.
+    #[derive(Default)]
+    struct FakeEngine {
+        asked: std::sync::Mutex<Vec<String>>,
+        state: std::sync::Mutex<noh::playback::Snapshot>,
+        failure: Option<noh::playback::LiveFailure>,
+    }
+    impl FakeEngine {
+        fn showing(state: noh::playback::Snapshot) -> std::sync::Arc<Self> {
+            std::sync::Arc::new(Self {
+                asked: Default::default(),
+                state: std::sync::Mutex::new(state),
+                failure: None,
+            })
+        }
+        /// Stopped serving: `refused` at once, or given up; asked to play or not.
+        fn failed(error: &str, refused: bool, playing: bool) -> std::sync::Arc<Self> {
+            std::sync::Arc::new(Self {
+                asked: Default::default(),
+                state: std::sync::Mutex::new(noh::playback::Snapshot {
+                    phase: Phase::Error,
+                    position: 4.0,
+                    error: Some(error.into()),
+                    ..drawn_by_libmpv(4.0, false)
+                }),
+                failure: Some(noh::playback::LiveFailure { refused, playing }),
+            })
+        }
+        fn asked(&self) -> Vec<String> {
+            self.asked.lock().unwrap().clone()
+        }
+    }
+    impl noh::playback::Live for FakeEngine {
+        fn set_playing(&self, playing: bool) {
+            self.asked
+                .lock()
+                .unwrap()
+                .push(format!("playing {playing}"));
+        }
+        fn seek(&self, seconds: f64) {
+            self.asked.lock().unwrap().push(format!("seek {seconds}"));
+        }
+        fn set_volume(&self, _: f32) {}
+        fn stop(&self) {
+            self.asked.lock().unwrap().push("stop".into());
+        }
+        fn snapshot(&self) -> noh::playback::Snapshot {
+            self.state.lock().unwrap().clone()
+        }
+        fn failure(&self) -> Option<noh::playback::LiveFailure> {
+            self.failure
+        }
+    }
+    /// A montage open in libmpv at `position` seconds: its frame has no pixels.
+    fn drawn_by_libmpv(position: f64, playing: bool) -> noh::playback::Snapshot {
+        noh::playback::Snapshot {
+            generation: 1 << 62,
+            phase: Phase::Ready,
+            duration: 20.0,
+            position,
+            playing,
+            audio_available: true,
+            frame: Some(std::sync::Arc::new(noh::playback::Frame {
+                id: 5,
+                width: 0,
+                height: 0,
+                rgb: Vec::new(),
+                position,
+            })),
+            ..Default::default()
+        }
+    }
+    /// The app with that engine in its player's place, as after a Play.
+    fn app_playing_through(engine: &std::sync::Arc<FakeEngine>) -> NohApp {
+        let mut app = NohApp::default();
+        app.project.duration_ms = 20_000;
+        let player = Player::new(|| {});
+        player.open_live(engine.clone());
+        app.mini_preview.player = Some(player);
+        let stamp = app.project.stamp(app.revision, false);
+        app.mini_preview.stamp = Some(stamp.clone());
+        app.mini_preview.player_stamp = Some(stamp);
+        app
+    }
+    #[test]
+    fn play_goes_to_libmpv_only_when_it_can_play_the_whole_montage() {
+        use noh::copies::State::{Absent, Preparing, Ready};
+        let ready = [(false, Ready), (false, Ready)];
+        // Asked for by NOH_PLAYER, with a preview and every copy ready.
+        assert_eq!(
+            live_refusal(Some(true), Some(false), false, false, ready),
+            None
+        );
+        // Left to the default: libmpv plays where it has been shown to.
+        assert_eq!(
+            live_refusal(None, Some(false), false, false, ready).is_none(),
+            cfg!(windows)
+        );
+        assert_eq!(
+            live_refusal(Some(false), Some(false), false, false, ready),
+            Some("NOH_PLAYER asks for it")
+        );
+        assert_eq!(
+            live_refusal(Some(true), None, false, false, ready),
+            Some("there is no libmpv preview")
+        );
+        assert_eq!(
+            live_refusal(Some(true), Some(true), false, false, ready),
+            Some("the libmpv preview has failed")
+        );
+        assert_eq!(
+            live_refusal(
+                Some(true),
+                Some(false),
+                false,
+                false,
+                [(false, Ready), (true, Ready)]
+            ),
+            Some("the montage has a still image")
+        );
+        assert_eq!(
+            live_refusal(Some(true), Some(false), true, false, ready),
+            Some("the montage mixes the clips' sound")
+        );
+        assert_eq!(
+            live_refusal(Some(true), Some(false), false, true, ready),
+            Some("the captions are drawn by libass")
+        );
+        for missing in [Absent, Preparing] {
+            assert_eq!(
+                live_refusal(
+                    Some(true),
+                    Some(false),
+                    false,
+                    false,
+                    [(false, Ready), (false, missing)]
+                ),
+                Some("a light copy is not ready")
+            );
+        }
+    }
+    #[test]
+    fn the_monitor_shows_what_libmpv_drew_and_the_playhead_follows_it() {
+        let ctx = egui::Context::default();
+        let engine = FakeEngine::showing(drawn_by_libmpv(2.5, true));
+        let mut app = app_playing_through(&engine);
+        assert!(app.mini_live());
+        app.poll_mini_preview(&ctx);
+        // No picture is uploaded: libmpv's is where the paused preview draws.
+        assert!(app.mini_preview.player_texture.is_none());
+        assert!(app.mini_preview.scrub_active && app.mini_preview.scrub_visible());
+        assert_eq!(app.mini_preview.cursor_ms, 2500);
+        assert_eq!(app.mini_preview.player_position, 2.5);
+    }
+    #[test]
+    fn a_click_while_libmpv_is_paused_seeks_in_the_open_montage() {
+        let ctx = egui::Context::default();
+        let engine = FakeEngine::showing(drawn_by_libmpv(2.5, false));
+        let mut app = app_playing_through(&engine);
+        app.mini_preview.cursor_ms = 2500;
+        app.apply_timeline(&seek_output(None, Some(6000)), &ctx);
+        // The usual player would be stopped here; libmpv keeps the montage open.
+        assert!(app.mini_live() && app.mini_preview.player_stamp.is_some());
+        assert_eq!(engine.asked(), ["seek 6"]);
+        assert_eq!(app.mini_preview.cursor_ms, 6000);
+        // Play is then a mere un-pause.
+        app.mini_play(&ctx);
+        assert_eq!(engine.asked(), ["seek 6", "playing true"]);
+    }
+    #[test]
+    fn what_libmpv_gives_up_goes_back_to_the_usual_player_with_the_reason() {
+        let ctx = egui::Context::default();
+        let engine = FakeEngine::showing(noh::playback::Snapshot {
+            phase: Phase::Error,
+            position: 4.0,
+            error: Some("The preview has no sound output".into()),
+            ..drawn_by_libmpv(4.0, false)
+        });
+        let mut app = app_playing_through(&engine);
+        app.poll_mini_preview(&ctx);
+        assert!(!app.mini_live());
+        assert_eq!(engine.asked(), ["stop"]);
+        assert_eq!(
+            app.mini_preview.engines,
+            ["usual player: libmpv gave up: The preview has no sound output"]
+        );
+        // The failure is not shown as a broken preview: the other player plays.
+        assert!(app.mini_preview.error.is_none());
+    }
+    #[test]
+    fn a_montage_libmpv_gave_up_is_remembered_and_a_refusal_is_not() {
+        let ctx = egui::Context::default();
+        // Given up after it had taken the montage: every later Play of the
+        // session goes straight to the usual player, with the reason.
+        let engine = FakeEngine::failed("The preview has no sound output", false, true);
+        let mut app = app_playing_through(&engine);
+        app.poll_mini_preview(&ctx);
+        assert!(!app.mini_live());
+        assert_eq!(
+            app.mini_preview.engines,
+            ["usual player: libmpv gave up: The preview has no sound output"]
+        );
+        assert_eq!(
+            play_engine_refusal(None, app.mini_preview.live_gave_up.as_deref()).as_deref(),
+            Some("libmpv gave up earlier: The preview has no sound output")
+        );
+        // An edit of the project does not forget it.
+        app.mini_preview.invalidate();
+        assert!(app.mini_preview.live_gave_up.is_some());
+        // What the request itself excludes is still the reason given first.
+        assert_eq!(
+            play_engine_refusal(
+                Some("the montage has a still image"),
+                app.mini_preview.live_gave_up.as_deref()
+            )
+            .as_deref(),
+            Some("the montage has a still image")
+        );
+        assert_eq!(play_engine_refusal(None, None), None);
+
+        // Refused at once: said in the journal, and libmpv is asked again at
+        // the next Play, when the copy may be ready.
+        let engine = FakeEngine::failed("a light copy is not ready", true, true);
+        let mut app = app_playing_through(&engine);
+        app.poll_mini_preview(&ctx);
+        assert!(!app.mini_live());
+        assert_eq!(
+            app.mini_preview.engines,
+            ["usual player: libmpv refused: a light copy is not ready"]
+        );
+        assert!(app.mini_preview.live_gave_up.is_none());
+
+        // An engine that says nothing of how it failed: taken as given up
+        // while playing.
+        assert_eq!(after_live_failure(None), (true, true));
+        let failure = |refused, playing| Some(noh::playback::LiveFailure { refused, playing });
+        assert_eq!(after_live_failure(failure(true, true)), (false, true));
+        // Paused when it failed: remembered, and nothing starts playing.
+        assert_eq!(after_live_failure(failure(false, false)), (true, false));
+        let engine = FakeEngine::failed("render failed -1", false, false);
+        let mut app = app_playing_through(&engine);
+        app.poll_mini_preview(&ctx);
+        assert!(!app.mini_live() && app.mini_preview.player_stamp.is_none());
+        assert_eq!(engine.asked(), ["stop"]);
+        assert!(app.mini_preview.live_gave_up.is_some());
+    }
+    #[test]
+    fn a_project_edit_and_a_rendered_preview_both_take_the_place_back_from_libmpv() {
+        let ctx = egui::Context::default();
+        let engine = FakeEngine::showing(drawn_by_libmpv(2.5, true));
+        let mut app = app_playing_through(&engine);
+        app.mini_preview.invalidate();
+        assert!(!app.mini_live() && app.mini_preview.player_stamp.is_none());
+        assert_eq!(engine.asked(), ["stop"]);
+
+        let engine = FakeEngine::showing(drawn_by_libmpv(2.5, true));
+        let mut app = app_playing_through(&engine);
+        app.open_embedded_preview(Path::new("rendered.mp4"), false, &ctx);
+        // The usual player plays the file; nothing still says libmpv does.
+        assert!(!app.mini_live() && app.mini_preview.player_stamp.is_some());
+        assert_eq!(engine.asked(), ["stop"]);
     }
     #[test]
     fn the_ruler_repositions_a_playing_player_and_keeps_it() {

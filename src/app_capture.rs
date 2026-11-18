@@ -165,6 +165,9 @@ struct SeekClick {
     shown_by: &'static str,
     /// The first picture of the new position, as a grid of mean colours.
     picture: Vec<u8>,
+    /// The clock of that picture: the player's own, or for the paused preview
+    /// the time it asked of the source's copy.
+    picture_seconds: Option<f64>,
     resumed_ms: Option<f64>,
     black_ms: f64,
     no_picture_ms: f64,
@@ -178,6 +181,17 @@ const SEEK_DWELL: Duration = Duration::from_millis(1500);
 const SEEK_LIMIT: Duration = Duration::from_secs(20);
 /// Below this mean brightness a played frame counts as black.
 const SEEK_BLACK: f64 = 4.0;
+/// The live capture must be played by libmpv, with a sound output: it waits
+/// for the light copies before Play and fails otherwise
+/// (`NOH_CAPTURE_REQUIRE_LIVE=1`).
+pub fn require_live() -> bool {
+    std::env::var_os("NOH_CAPTURE_UI").is_some()
+        && std::env::var("NOH_CAPTURE_REQUIRE_LIVE").as_deref() == Ok("1")
+}
+/// A capture of the live preview that sends its own pointer events, or none.
+pub fn drives_pointer() -> bool {
+    seek_playing_enabled() || drag_playing_enabled() || transport_enabled()
+}
 pub fn seek_playing_enabled() -> bool {
     std::env::var_os("NOH_CAPTURE_UI").is_some()
         && std::env::var("NOH_CAPTURE_SEEK_PLAYING").as_deref() == Ok("1")
@@ -302,6 +316,7 @@ impl NohApp {
             first_frame_ms: None,
             shown_by: "",
             picture: Vec::new(),
+            picture_seconds: None,
             resumed_ms: None,
             black_ms: 0.0,
             no_picture_ms: 0.0,
@@ -321,6 +336,7 @@ impl NohApp {
         };
         let state = player.snapshot();
         let open = self.mini_preview.player_stamp.is_some();
+        let live = player.is_live();
         let t = click.pressed.elapsed().as_secs_f64() * 1000.0;
         let span = t - click.last_sample;
         click.last_sample = t;
@@ -386,11 +402,20 @@ impl NohApp {
             } else {
                 "player"
             };
-            // Only the player's pictures are measured as a grid of mean colours.
-            click.picture = if by_paused || by_still {
-                Vec::new()
+            click.picture_seconds = if by_paused {
+                self.mini_preview
+                    .scrubber
+                    .as_ref()
+                    .map(|s| s.snapshot().source_seconds)
             } else {
-                self.mini_preview.player_grid.clone()
+                state.frame.as_ref().map(|f| f.position)
+            };
+            // What libmpv draws is measured where it is drawn.
+            click.picture = match &self.mini_preview.scrubber {
+                Some(scrubber) if live || by_paused => scrubber.grid(),
+                // A still is not measured as a grid of mean colours.
+                _ if by_still => Vec::new(),
+                _ => self.mini_preview.player_grid.clone(),
             };
         }
         if click.first_frame_ms.is_some()
@@ -437,6 +462,7 @@ impl NohApp {
             "loading_ms": click.loading_ms,
             "luma_before": click.luma_before,
             "picture": click.picture,
+            "picture_seconds": click.picture_seconds,
             "worker": seek.map(|s| serde_json::json!({
                 "target": s.target,
                 "started_ms": s.started_ms,
@@ -465,6 +491,165 @@ impl NohApp {
             return Some("failed");
         }
         (self.seek_qa.done && self.seek_qa.click.is_none()).then_some("finished")
+    }
+}
+/// A walk through the transport while the live preview plays, and where the
+/// player stood after each step (`NOH_CAPTURE_TRANSPORT=1` with the
+/// `live-preview` action). Each step calls what its button calls.
+#[derive(Default)]
+pub struct TransportQa {
+    started: Option<Instant>,
+    /// Since when the preview has been playing steadily, before the first step.
+    steady: Option<Instant>,
+    /// The step in progress, when it was made, and whether its sample is taken.
+    step: Option<(usize, Instant, bool)>,
+    samples: Vec<serde_json::Value>,
+    done: bool,
+}
+const TRANSPORT_STEPS: &[&str] = &[
+    "pause",
+    "frame forward",
+    "frame forward",
+    "frame forward",
+    "frame back",
+    "frame back",
+    "frame back",
+    "play",
+    "volume 0.3",
+    "volume 0",
+    "volume 0.7",
+    "resize",
+    "seek to the end",
+    "play after the end",
+    "edit",
+    "play after the edit",
+    "short view",
+    "video view",
+];
+/// What a step waits for before its sample is taken.
+const TRANSPORT_SETTLE: Duration = Duration::from_millis(700);
+const TRANSPORT_LIMIT: Duration = Duration::from_secs(20);
+pub fn transport_enabled() -> bool {
+    std::env::var_os("NOH_CAPTURE_UI").is_some()
+        && std::env::var("NOH_CAPTURE_TRANSPORT").as_deref() == Ok("1")
+}
+impl NohApp {
+    fn transport_capture_step(&mut self, ctx: &egui::Context) {
+        if !transport_enabled() || self.transport_qa.done || !self.capture_project_started {
+            return;
+        }
+        ctx.request_repaint_after(Duration::from_millis(16));
+        let state = self
+            .mini_preview
+            .player
+            .as_ref()
+            .map(noh::playback::Player::snapshot)
+            .unwrap_or_default();
+        let open = self.mini_preview.player_stamp.is_some();
+        let playing_now = open
+            && state.phase == noh::playback::Phase::Ready
+            && state.playing
+            && state.frame.is_some();
+        let next = match self.transport_qa.step {
+            None => {
+                // The first step waits for steady playback.
+                if !playing_now {
+                    self.transport_qa.steady = None;
+                    return;
+                }
+                if self
+                    .transport_qa
+                    .steady
+                    .get_or_insert_with(Instant::now)
+                    .elapsed()
+                    < SEEK_DWELL
+                {
+                    return;
+                }
+                self.transport_qa.started = Some(Instant::now());
+                0
+            }
+            Some((step, _, true)) => step + 1,
+            Some((step, at, false)) => {
+                let name = TRANSPORT_STEPS[step];
+                let waited = at.elapsed();
+                let settled = match name {
+                    "seek to the end" => state.phase == noh::playback::Phase::Ended,
+                    "play after the end" | "play after the edit" | "short view" | "video view" => {
+                        playing_now && waited >= TRANSPORT_SETTLE
+                    }
+                    _ => waited >= TRANSPORT_SETTLE,
+                };
+                if !settled && waited < TRANSPORT_LIMIT {
+                    return;
+                }
+                let (start, _) = self.mini_bounds();
+                self.transport_qa.samples.push(serde_json::json!({
+                    "step": name,
+                    "ms": self.transport_qa.started.map(|s| s.elapsed().as_millis() as u64),
+                    "settled": settled,
+                    "engine": self.mini_preview.engines.last(),
+                    "plays": self.mini_preview.engines.len(),
+                    "live": self.mini_live(),
+                    "open": open,
+                    "phase": format!("{:?}", state.phase),
+                    "playing": state.playing,
+                    "position_ms": (state.position * 1000.0).round() as u64 + start,
+                    "picture_ms": state.frame.as_ref().map(|f| (f.position * 1000.0).round() as u64 + start),
+                    "pictures": state.frame.as_ref().map(|f| f.id),
+                    "cursor_ms": self.mini_preview.cursor_ms,
+                    "volume": state.volume,
+                    "sound": state.audio_available,
+                    "error": state.error.clone().or(self.mini_preview.error().cloned()),
+                }));
+                self.transport_qa.step = Some((step, at, true));
+                step + 1
+            }
+        };
+        let Some(&name) = TRANSPORT_STEPS.get(next) else {
+            self.transport_qa.done = true;
+            return;
+        };
+        // An edit clears the analysis; Play is only there again once it is back.
+        if name == "play after the edit" && !(self.ready() && self.diagnosis_current()) {
+            return;
+        }
+        let (start, end) = self.mini_bounds();
+        let frame = 42;
+        match name {
+            "pause" | "play" | "play after the end" | "play after the edit" => self.mini_play(ctx),
+            "frame forward" => self.navigate(self.mini_preview.cursor_ms + frame, true),
+            "frame back" => self.navigate(self.mini_preview.cursor_ms.saturating_sub(frame), true),
+            "volume 0.3" => self.mini_set_volume(0.3),
+            "volume 0" => self.mini_set_volume(0.0),
+            "volume 0.7" => self.mini_set_volume(0.7),
+            "resize" => {
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(1100.0, 780.0)))
+            }
+            "seek to the end" => self.navigate(end.saturating_sub(1500).max(start), false),
+            "edit" => {
+                // What a change of fade does: the montage is no longer the one
+                // being played.
+                self.fade_in = if self.fade_in > 0.0 { 0.0 } else { 1.0 };
+                self.in_enabled = self.fade_in > 0.0;
+                self.invalidated();
+            }
+            "short view" if self.project.range.is_some() => self.play_live_scope(ctx, true),
+            "video view" if self.project.range.is_some() => self.play_live_scope(ctx, false),
+            // Without an excerpt there is no short to look at.
+            _ => {}
+        }
+        self.transport_qa.step = Some((next, Instant::now(), false));
+    }
+    fn transport_capture_terminal(&self) -> Option<&'static str> {
+        if self
+            .transport_qa
+            .started
+            .is_some_and(|at| at.elapsed() > Duration::from_secs(180))
+        {
+            return Some("failed");
+        }
+        self.transport_qa.done.then_some("finished")
     }
 }
 /// A drag on the time ruler while the live preview plays, and what the monitor
@@ -1707,12 +1892,18 @@ impl NohApp {
         self.capture_effect_switch();
         self.seek_capture_sample();
         self.drag_capture_sample();
+        self.transport_capture_step(ctx);
         if let Some(action) = project_action.as_deref()
             && !self.capture_project_started
             && self.ready()
             && self.diagnosis_current()
             && !self.project.track.loading()
             && !self.project.waveform_loading
+            // A capture that requires libmpv plays once the copies are there; with no
+            // libmpv preview none will be made, and it fails at once instead.
+            && (!require_live()
+                || self.mini_preview.scrubber.is_none()
+                || self.mini_copies_ready())
         {
             self.capture_project_started = true;
             match action {
@@ -1794,6 +1985,8 @@ impl NohApp {
         {
             if drag_playing_enabled() {
                 self.drag_capture_terminal()
+            } else if transport_enabled() {
+                self.transport_capture_terminal()
             } else if seek_playing_enabled() {
                 self.seek_capture_terminal()
             } else {
@@ -1971,6 +2164,9 @@ impl NohApp {
             }
             if seek_playing_enabled() {
                 report["seek_playing"] = serde_json::json!({"targets_ms":seek_targets(),"dwell_ms":SEEK_DWELL.as_millis() as u64,"black_below":SEEK_BLACK,"results":self.seek_qa.results});
+            }
+            if transport_enabled() {
+                report["transport"] = serde_json::json!(self.transport_qa.samples);
             }
             if drag_playing_enabled() {
                 report["drag_playing"] = serde_json::json!({"path":DRAG_PATH,"columns":["ms","down","target_ms","cursor_ms","player_open","playing","player_frame","player_ms","paused_ms","paused_frame","paused_error","picture","paused_picture","spinner"],"samples":self.drag_qa.samples});
