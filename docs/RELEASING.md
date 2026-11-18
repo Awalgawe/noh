@@ -327,11 +327,18 @@ new pin is reviewed and recorded before any build.
 7. `stage=promote`, `tag=v<version>`: when the attached report passed for the exact
    files the publishing run verified, and comes from a successful acceptance run on
    main, the same release becomes the latest version. Nothing is rebuilt.
+   From the version that introduces automatic updates, promotion also sends the
+   release to every installed Windows copy within a day: NOH reads GitHub's
+   latest release and installs its Minimal installer (`src/auto_update`). A
+   pre-release or a draft is never offered.
 
 Release files can be replaced after publication by anyone who can write to the
 repository. Acceptance and promotion therefore do not trust the release's own
 `SHA256SUMS`: they compare every file with the artifact of the publishing run, and
-the acceptance report with the artifact of the acceptance run.
+the acceptance report with the artifact of the acceptance run. The automatic
+update cannot make that comparison: it trusts the digest GitHub reports for each
+file of the latest release, so a file replaced after promotion reaches installed
+copies.
 
 Time limits come from artifact retention. Build packages and desktop results are
 kept 7 days: the installer, desktop and publish stages must follow the build within

@@ -1,5 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
+#[cfg(not(feature = "updates"))]
+mod app_autoupdate;
 mod app_captions;
 mod app_capture;
 mod app_destination;
@@ -131,6 +133,8 @@ struct NohApp {
     options: app_options::State,
     #[cfg(feature = "updates")]
     updates: app_updates::Workspace,
+    #[cfg(not(feature = "updates"))]
+    autoupdate: app_autoupdate::AutoUpdate,
     drop_error: Option<Message>,
     /// Lyrics just generated into this file until acted on.
     lyrics_ready: Option<PathBuf>,
@@ -228,6 +232,8 @@ impl Default for NohApp {
             options: app_options::State::default(),
             #[cfg(feature = "updates")]
             updates: app_updates::Workspace::default(),
+            #[cfg(not(feature = "updates"))]
+            autoupdate: app_autoupdate::AutoUpdate::default(),
             settings_open: std::env::var_os("NOH_CAPTURE_UI").is_some()
                 && std::env::var_os("NOH_CAPTURE_SETTINGS").is_some(),
             drop_error: None,

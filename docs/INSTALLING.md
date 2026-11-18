@@ -163,8 +163,8 @@ folder. In WSLg, Windows Explorer-to-Linux drag-and-drop remains unsupported
 `/mnt/c/Users/` or `/mnt/d/` to browse Windows drives. WSLg may also require an
 ALSA default-device mapping to its PulseAudio server.
 
-The Linux package is unsigned and automatic updates are disabled. To update,
-extract the new version into a new folder. To remove it, close NOH and delete
+The Linux package is unsigned and does not update itself; NOH only says when a
+new version exists. To update, extract the new version into a new folder. To remove it, close NOH and delete
 its extracted folder, first keeping any media or exports saved inside it.
 Files elsewhere and separately stored preferences are retained.
 
@@ -208,15 +208,43 @@ slowly: the menu says so. On Linux transcription always runs on the CPU.
 
 ## Update or remove NOH
 
-Automatic update installation is disabled in ordinary builds. To update a
-portable copy, close NOH and extract the complete new package into a new folder.
-Check that it opens before removing the previous copy. Keep any media or exports
-you saved inside the old folder before deleting it.
+**Installed copy on Windows.** From the version that introduces it, NOH updates
+itself. Once a day, and when you choose **Settings > Updates > Check now**, it asks
+GitHub for the latest published release. When a newer one exists, NOH downloads
+its Minimal installer and only the optional components whose files changed, and
+checks the size and SHA-256 of each file against what GitHub declares for the
+release. You can keep working meanwhile. Then either choose **Restart to update**,
+or simply close NOH: the installation runs silently and keeps your content
+profile, your settings and the files you added. Both switches in
+**Settings > Updates** can turn this off. NOH does not install while another of
+its programs runs from the installation folder (another NOH window, a
+command-line export, the MCP server, FFmpeg or Whisper): close it first.
 
-For an installed copy, close NOH and run the new release's installer. To remove
-it, open Windows **Settings > Apps**, select **NOH**, then choose **Uninstall**.
-User-created files in the installation folder are preserved; keep your media
-and exports in your own folders.
+Copies installed before that version do not look for updates: install the new
+release once by hand, as below; later versions then arrive by themselves.
+
+The downloads are kept in `%LOCALAPPDATA%\noh\updates\<version>` until NOH starts
+again in the new version. If an update fails, **Settings > Updates** says so and
+opens the installation log. If NOH no longer starts, run the installer kept in
+that folder, or the installer of the release page.
+
+NOH reaches GitHub through Windows' `curl.exe`, which ignores the Windows proxy
+settings: behind a proxy configured only there, checks fail and you update by
+hand. The Windows installers are not Authenticode-signed (see above); the update
+trusts GitHub's HTTPS and the digests it publishes.
+
+**Portable copies and Linux** are only told that a new version exists, with a
+link to its release page (on Linux, only when `/usr/bin/curl` is present). To
+update a portable copy, close NOH and extract the complete new package into a new
+folder. Check that it opens before removing the previous copy. Keep any media or
+exports you saved inside the old folder before deleting it.
+
+To update an installed copy by hand, close NOH and run the new release's
+installer. To remove it, open Windows **Settings > Apps**, select **NOH**, then
+choose **Uninstall**. User-created files in the installation folder are
+preserved; keep your media and exports in your own folders. The update
+preferences and downloads, like the language preference, are stored separately
+and are not removed with the application.
 
 To remove the portable copy, close NOH and delete its folder. Media and exports saved elsewhere remain in place.
 The small language-preference file and `startup.log` are stored separately and

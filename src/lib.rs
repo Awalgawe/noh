@@ -7,6 +7,8 @@ use std::{
     process::Command,
 };
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+#[cfg(feature = "gui")]
+pub mod auto_update;
 pub mod build_info;
 #[cfg(feature = "effects")]
 mod caption_gpu;

@@ -5,6 +5,17 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
+## Unreleased
+
+### Updates
+
+- An installed copy on Windows updates itself, the way VS Code does: once a day
+  it looks for a new release on GitHub, downloads its installer and the changed
+  components in the background, checks every file, and installs silently when
+  you restart or close NOH. Copies installed before this version must install it
+  once by hand. Portable copies and Linux are told that a new version exists.
+  Settings has two switches to turn checking and installing at close off.
+
 ## 0.2.0
 
 Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.2.0).

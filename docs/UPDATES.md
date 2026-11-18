@@ -1,5 +1,25 @@
 # Update architecture
 
+## Automatic updates in published builds
+
+Published builds update with `src/auto_update` (Settings section in
+`src/app_autoupdate.rs`), not with the prototype described below. An installed
+Windows copy reads GitHub's latest release, downloads the release's Minimal Inno
+Setup installer and the component archives whose installed files differ from
+`COMPONENTS.json`, checks each size and SHA-256 against the digests GitHub
+reports, and runs the installer silently with `/NOCLOSEAPPLICATIONS`,
+`/WAITPID=<pid>` and, after "Restart to update", `/RELAUNCH`
+(`tools/installer/public.iss`). It refuses while any program of the installation
+folder runs. Network access goes through the system `curl.exe` started with
+`--disable` (no `.curlrc`), HTTPS only. Portable copies and Linux only report a
+new version. There is no signature beyond GitHub's: see the trust note in
+[RELEASING.md](RELEASING.md). The release CI test `test_upgrade`
+(`tools/installer/public-ci.py`) exercises the refusal, the wait and the relaunch.
+The trial switch `NOH_AUTOUPDATE_TRIAL=file:///<folder>/` points an installed
+copy at a local release folder (`latest.json`, `v<version>/…`) for manual tests.
+
+## Prototype (`updates` feature, unused by published builds)
+
 The optional `updates` feature implements authenticated release metadata,
 download/verification, desktop controls and a controlled Windows guardian/repair
 prototype. **Default builds have no installation configuration.** Windows Setup
