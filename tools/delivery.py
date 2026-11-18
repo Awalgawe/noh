@@ -229,6 +229,29 @@ def inventory(folder):
     return files
 
 
+def download(command, pending, expected, name):
+    """Run one curl command, and do not lose a build to curl itself dying.
+
+    curl's own failures are exit codes below 256 and keep their meaning. Any other status
+    is the process ending abnormally: on a hosted Windows runner curl.exe has ended with
+    0xC0000005 after receiving a whole file, in two release builds out of four, each time on
+    another file among several hundred. When the bytes it left are the pinned ones they are
+    kept; otherwise the same command runs once more, and what that run gives is the result.
+    """
+    try:
+        checked(command)
+    except subprocess.CalledProcessError as error:
+        if 0 <= error.returncode <= 255:
+            raise
+        if pending.is_file() and digest(pending) == expected:
+            print(f"curl ended abnormally (status {error.returncode}) after delivering {name}: "
+                  "the bytes have the pinned SHA-256 and are kept", flush=True)
+            return
+        print(f"curl ended abnormally (status {error.returncode}) on {name}; running it once more", flush=True)
+        pending.unlink(missing_ok=True)
+        checked(command)
+
+
 def fetch(spec, cache, name):
     relative(name)
     expected = spec["sha256"]
@@ -251,9 +274,9 @@ def fetch(spec, cache, name):
         # The next address is the retry of this one. curl obeys a server's Retry-After: a site
         # down for maintenance answered 503 with "retry-after: 3600", and one retry waited an hour.
         try:
-            checked(["curl", "--fail", "--location", "--proto", "=https", "--proto-redir", "=https",
-                     "--retry", "2" if last else "0", "--connect-timeout", "30", "--max-time", "1800",
-                     "--output", pending, url])
+            download(["curl", "--fail", "--location", "--proto", "=https", "--proto-redir", "=https",
+                      "--retry", "2" if last else "0", "--connect-timeout", "30", "--max-time", "1800",
+                      "--output", pending, url], pending, expected, name)
         except subprocess.SubprocessError as error:
             if last:
                 raise
