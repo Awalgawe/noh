@@ -19,6 +19,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import delivery
+import mcp_check
 import release_publication as publication
 
 DOWNLOADS = "https://github.com/" + publication.REPOSITORY + "/releases/download/"
@@ -98,6 +99,26 @@ def burn_with_effect(cli, ffmpeg, work, environment, prefix=()):
             "The caption effect burn failed; see burn.log")
     return {"effect": EFFECT, "exit": result.returncode, "output_bytes": output.stat().st_size,
             "output_sha256": delivery.digest(output)}
+
+
+def installed_mcp_job(bin_folder, work):
+    """One MCP job through an installed noh-mcp.exe, started as an MCP client starts it.
+
+    Its environment holds only the Windows system folders on PATH, so the installed copy must find the
+    FFmpeg installed beside it. The same FFmpeg makes the media and decodes the export.
+    """
+    work.mkdir()
+    ffmpeg = bin_folder / "ffmpeg.exe"
+    clip, soundtrack, output = work / "synthetic.mp4", work / "silence.wav", work / "mcp-composition.mp4"
+    for command in ([ffmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=128x72:rate=12:duration=3",
+                     "-c:v", "libx264", "-pix_fmt", "yuv420p", "-n", clip],
+                    [ffmpeg, "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+                     "-t", "3", "-ac", "2", "-c:a", "pcm_s16le", "-n", soundtrack]):
+        subprocess.run([str(part) for part in command], check=True, timeout=120)
+    result = mcp_check.mcp_job([bin_folder / "noh-mcp.exe"], clip, soundtrack, output)
+    subprocess.run([str(ffmpeg), "-v", "error", "-i", str(output), "-f", "null", "-"], check=True, timeout=120)
+    result["export_sha256"] = delivery.digest(output)
+    return result
 
 
 def linux(args):
@@ -269,6 +290,7 @@ def windows(args):
                                 upgrade / "effect-burn", environment)
     finally:
         software_opengl.remove(opengl, [installed / "bin"])
+    mcp = installed_mcp_job(installed / "bin", upgrade / "mcp")
     ci.verify_installed(installed, records["minimal"]["profile_files"]["complete"])
     results.append(ci.remove_test_installation(upgrade, installed))
     evidence = work / "evidence"
@@ -285,7 +307,8 @@ def windows(args):
                    "portable_package_started": portable_results,
                    "upgrade_by_download": {"from": baseline["tag"], "results": results,
                                            "complete_components_retained": True, "user_data_preserved": True},
-                   "caption_effect_burn": burn},
+                   "caption_effect_burn": burn,
+                   "mcp_job_on_the_installed_copy": mcp},
         "limitations": ["Silent installation only; the interactive wizard is not exercised.",
                         "The interface and the effect burn use Mesa's software OpenGL placed beside the "
                         "executables for the test; the renderer was not read back.",

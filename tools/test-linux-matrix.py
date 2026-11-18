@@ -12,6 +12,7 @@ from unittest import mock
 
 from delivery import digest, read
 import linux_matrix as matrix
+import mcp_check
 
 spec = importlib.util.spec_from_file_location('probe', Path(__file__).with_name('probe-linux-host.py'))
 probe = importlib.util.module_from_spec(spec)
@@ -180,14 +181,9 @@ class McpProbeTests(unittest.TestCase):
             server = folder / 'server.py'
             server.write_text(FAKE_MCP_SERVER, encoding='utf-8')
             record, output = folder / 'record.json', folder / 'out.mp4'
-            reduced = probe.mcp_environment
-            def environment():
-                # A Windows Python needs SYSTEMROOT to start; Linux, where the probe runs, does not.
-                return reduced() | ({'SYSTEMROOT': os.environ['SYSTEMROOT']} if os.name == 'nt' else {})
-            with mock.patch.dict(os.environ, {'NOH_FFMPEG': '/not/for/the/server', 'HOME': str(folder)}), \
-                    mock.patch.object(probe, 'mcp_environment', environment):
-                result = probe.mcp_job([sys.executable, '-I', server, mode, record], folder / 'clip.mp4',
-                                       folder / 'song.wav', output, timeout=timeout)
+            with mock.patch.dict(os.environ, {'NOH_FFMPEG': '/not/for/the/server', 'HOME': str(folder)}):
+                result = mcp_check.mcp_job([sys.executable, '-I', server, mode, record], folder / 'clip.mp4',
+                                           folder / 'song.wav', output, timeout=timeout)
             seen = json.loads(record.read_text(encoding='utf-8'))
             return result, seen, output.read_bytes()
 
@@ -196,10 +192,17 @@ class McpProbeTests(unittest.TestCase):
         self.assertEqual(exported, b'exported')
         self.assertEqual(result['exit_code'], 0)
         self.assertEqual(result['tools'], ['noh_diagnose', 'noh_export', 'noh_inspect', 'noh_job', 'noh_preview'])
-        self.assertEqual(seen['environment']['PATH'], '/usr/bin:/bin')
         self.assertFalse([name for name in seen['environment'] if name.startswith('NOH_')])
-        self.assertLessEqual({'HOME', 'PATH', 'LANG'}, set(seen['environment']))
-        self.assertEqual(Path(seen['cwd']), Path('/').resolve())
+        if os.name == 'nt':
+            # The Windows acceptance: system folders only, so an installed copy must find its own FFmpeg.
+            root = os.environ['SYSTEMROOT']
+            self.assertEqual(seen['environment']['PATH'], root + '\\System32;' + root)
+            self.assertLessEqual({'SYSTEMROOT', 'WINDIR', 'PATH'}, set(seen['environment']))
+        else:
+            self.assertEqual(seen['environment']['PATH'], '/usr/bin:/bin')
+            self.assertLessEqual({'HOME', 'PATH', 'LANG'}, set(seen['environment']))
+        self.assertEqual(Path(seen['cwd']).resolve(), Path(os.path.abspath(os.sep)).resolve())
+        self.assertEqual(result['working_directory'], os.path.abspath(os.sep))
 
     def test_a_newer_server_with_more_tools_and_fields_still_passes(self):
         result, _, _ = self.run_fake('extra_tool')
