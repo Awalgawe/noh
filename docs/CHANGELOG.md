@@ -40,6 +40,14 @@ builds are not public releases.
   former player, or `NOH_PLAYER=mpv` to ask for the fast-preview library where
   it is not the default.
 
+### Start-up
+
+- Write each start to a small `startup.log` file beside the language
+  preference, and show a message when the window cannot open. Until now the
+  Windows interface closed without a word when it could not start. See the
+  [installation guide](INSTALLING.md#the-start-up-file) for where the file is
+  and what it holds.
+
 ## 0.1.6
 
 Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.1.6).

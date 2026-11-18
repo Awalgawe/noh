@@ -24,6 +24,7 @@ mod app_range;
 mod app_resources;
 mod app_sheet;
 mod app_shorts;
+mod app_startup;
 mod app_state;
 mod app_strip;
 mod app_style;
@@ -795,12 +796,17 @@ fn main() -> eframe::Result {
     {
         std::process::exit(noh::cli::run(std::env::args_os()));
     }
+    // From here every step is written to startup.log: a start that dies leaves its last one.
+    app_startup::begin();
+    app_startup::note("preparing the application state");
     let mut app = NohApp::default();
+    app_startup::speak(app.locale.language);
     #[cfg(feature = "updates")]
     if let Err(error) = app.load_update_capture_fixture() {
         eprintln!("noh-app: {error}");
         std::process::exit(1);
     }
+    app_startup::note("loading the bundled speech resources");
     if let Ok(executable) = std::env::current_exe()
         && let Some(folder) = executable.parent()
     {
@@ -903,6 +909,7 @@ fn main() -> eframe::Result {
     } else {
         980.0
     };
+    app_startup::note("creating the window");
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_icon(
@@ -919,10 +926,11 @@ fn main() -> eframe::Result {
         centered: true,
         ..Default::default()
     };
-    eframe::run_native(
+    let outcome = eframe::run_native(
         "NOH",
         options,
         Box::new(move |cc| {
+            app_startup::opened(cc.gl.as_deref().map(app_startup::graphics));
             if std::env::var_os("NOH_CAPTURE_UI").is_some()
                 && std::env::var_os("NOH_CAPTURE_PROJECT").is_some()
             {
@@ -1017,7 +1025,13 @@ fn main() -> eframe::Result {
             }
             Ok(Box::new(app))
         }),
-    )
+    );
+    match &outcome {
+        Ok(()) => app_startup::note("closed normally"),
+        // The window never opened, or its event loop ended on an error: say why before exiting.
+        Err(error) => app_startup::failed(&error.to_string()),
+    }
+    outcome
 }
 
 #[cfg(test)]
