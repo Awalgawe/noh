@@ -5,7 +5,7 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
-## 0.1.7 (unreleased)
+## Unreleased
 
 ### Preview and playback
 

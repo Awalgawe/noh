@@ -255,6 +255,14 @@ the language preference:
 When NOH closes at once without a message, the last line of the file is the
 step it was on.
 
+If there is no `startup.log`, or its time is that of an earlier start, NOH did
+not reach its first step: either the system did not run it, or NOH could not
+write in that folder. On Windows, the system or security software can refuse to
+run a program ("Access is denied"): look in **Windows Security > Protection
+history** for a block of `noh.exe`. NOH's files carry no Authenticode
+signature, as stated under [Portable copy](#portable-copy); do not disable
+security settings to get round a block.
+
 ## If a feature is unavailable
 
 NOH checks media tools and speech files in the background. Missing tools,
