@@ -15,7 +15,7 @@
     "assets/preview-runtime.json": "72c92e5eb5d128913798f80a06a03294db798519809201458d0b17c29a4112a4",
     "assets/rust-notices.lock.json": "905d83803fb60351458f9ba233559356f7abd1aadb8bee9660ee37b01594c2b3",
     "assets/speech-bundle.json": "4bef71e92e5f3857e6d06e3a0b95971bc60448e838a6cf822fe9045d344c089f",
-    "assets/syllable-sources.lock.json": "0fbdc49bec0cf13f206f9363aa98174201f2c658fcbaafb85f3394a37f318f5d",
+    "assets/syllable-sources.lock.json": "a1d6be0dadb87a80181df37b47c0cf49360680e49837cdce5bb86728fc646bf2",
     "assets/windows-native.lock.json": "de8481277cc2e37a70773f69dcc304eb13be44f2db65c84d6f3324d1e26331ed",
     "rust_standard_library_source": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
     "tools/build_syllable_dicts.py": "76413ca0f84eaa5fe815539ca16a0b48af34b36c3949805ba7e172c7831c0366",
@@ -23,7 +23,8 @@
     "tools/windows_runtime.py": "090d182a40c72503f982457c1b2e1225586bdcfdb378e27d5b8573e23863c860"
   },
   "changed_input_paths": [
-    "Cargo.lock"
+    "Cargo.lock",
+    "assets/syllable-sources.lock.json"
   ],
   "new_input_paths": [],
   "unchanged_input_paths": [
@@ -32,7 +33,6 @@
     "assets/preview-runtime.json",
     "assets/rust-notices.lock.json",
     "assets/speech-bundle.json",
-    "assets/syllable-sources.lock.json",
     "assets/windows-native.lock.json",
     "rust_standard_library_source",
     "tools/build_syllable_dicts.py",
@@ -42,28 +42,39 @@
   "third_party_cargo_records_unchanged": 532,
   "changed_sources": [],
   "changes": [
-    "Cargo.lock differs from the 0.1.6 file (sha256 076009bb18f2902ee4746edeebf5701a5b507c3f9da0c1f6b914745cf22ef89f) by two lines, both inside the entry of the noh package itself: its version, 0.1.6 to 0.2.0, and one more dependency, sha2 0.11.1. No third-party package is added, removed or changed; every other hashed input is byte-identical to its 0.1.6 value.",
+    "Cargo.lock differs from the 0.1.6 file (sha256 076009bb18f2902ee4746edeebf5701a5b507c3f9da0c1f6b914745cf22ef89f) by two lines, both inside the entry of the noh package itself: its version, 0.1.6 to 0.2.0, and one more dependency, sha2 0.11.1. No third-party package is added, removed or changed.",
     "sha2 0.11.1 was already a package of the 0.1.6 lock, required by rmcp; its record is unchanged. NOH now requires it directly as well, under the gui feature, to name the preview copies by the SHA-256 of a file's content.",
-    "Nothing else in the 0.2.0 source changes adds a dependency: the montage is played through the libmpv library already recorded in assets/preview-runtime.json (unchanged), loaded with libloading; the start-up log uses rfd, chrono and eframe's glow. All were locked."
+    "Nothing else in the 0.2.0 source changes adds a dependency: the montage is played through the libmpv library already recorded in assets/preview-runtime.json (unchanged), loaded with libloading; the start-up log uses rfd, chrono and eframe's glow. All were locked.",
+    "assets/syllable-sources.lock.json differs from the 0.1.6 file (sha256 0fbdc49bec0cf13f206f9363aa98174201f2c658fcbaafb85f3394a37f318f5d) in its two dataset entries; the pins of the built dictionaries (outputs: words and sha256 for en and fr) are unchanged.",
+    "Moby entry: three mirror addresses of the same archive are added (mirrors, mirrors_checked), tried in order when the first address does not answer. Its sha256, member and member_sha256 are unchanged: the pinned SHA-256 accepts the same bytes from any address.",
+    "Lexique entry: its publisher repacked the archive on 2026-11-17 (Last-Modified of the served file). The archive's sha256 moves from e181d132b3b0d3d87efc98d376968441b517353933011cebea5366321a6024e6 to 8555c3b726ae74f83a1866f3690843f2b7e609b6270189cc5b1d5bac96c7d3ac and the member's path from Lexique383.tsv to Lexique383/Lexique383.tsv; member_sha256 is unchanged.",
+    "Every other hashed input is byte-identical to its 0.1.6 value."
   ],
   "licence_reading": {
-    "method": "None: no third-party record changed, so the 0.1.6 reading stands as recorded in the prior review, with its stated limits.",
+    "method": "Rust records: none read, no third-party record changed, so the 0.1.6 reading stands as recorded in the prior review, with its stated limits. Datasets: the repacked Lexique archive was compared file by file with the reviewed one; see dataset_licences.",
     "records_read": 0
   },
   "dataset_licences": {
     "record": "assets/syllable-sources.lock.json and docs/THIRD-PARTY.md, section Syllable dictionaries",
     "moby": "Moby Hyphenation List: public domain by grant from the author, as recorded in the lock (read 2026-11-10); accepted by the project maintainer on 2026-11-10 for worldwide distribution.",
-    "lexique": "Lexique 3.83: CC BY-SA 4.0 (README-Lexique.txt in the archive, read 2026-11-09).",
-    "third_party_md_sha256": "e9ad7f26554e2e27d75f8b086c1a37bd7517c56d6ebb442ea8ac485285526632"
+    "moby_mirrors": "On 2026-11-18, while the first address answered 503 for maintenance, each of the three mirror addresses served the pinned archive (sha256 fc7e5ddc173e3150eb3f611f2ad91df63845ac9f2d9d1bc86562e57c1463c6f2).",
+    "lexique": "Lexique 3.83: CC BY-SA 4.0. README-Lexique.txt, read 2026-11-09, is byte-identical in the reviewed archive and in the repacked one (sha256 f7501cf57c88894e839d4deb233c19863b935abc60a510447747828e9fe5ddfe, compared 2026-11-18). The repacked archive adds CC.BY.SA.txt (sha256 28a9529c7d0bb4dc51f4bf5c116a3d16ef247a052f7591466768ddf563fd1cf5), byte-identical to https://creativecommons.org/licenses/by-sa/4.0/legalcode.txt as served on 2026-11-18.",
+    "lexique_repacked_archive": "The seven files of the reviewed archive are byte-identical in the repacked one, now under a Lexique383/ folder. Added: Lexique383/CC.BY.SA.txt and macOS metadata entries under __MACOSX/, which the build does not read.",
+    "third_party_md_sha256": "bfdf3e77604ab18623fae2a2f5676859b840e0494c6220c5d693d41cfaeceda6",
+    "third_party_md_change": "docs/THIRD-PARTY.md differs from its 0.1.6 text by two sentences of the section Syllable dictionaries: the mirrors, and the re-reading of the repacked Lexique archive."
   },
   "verification": {
     "cargo_lock_diff": "git diff c9610ba -- Cargo.lock shows exactly: -version = \"0.1.6\" / +version = \"0.2.0\" and + \"sha2 0.11.1\", both under the noh package.",
     "third_party_packages_in_lock": 532,
     "third_party_records_compared": "Every [[package]] block other than noh's is byte-identical in the two lock files.",
+    "dataset_lock_compared": "As JSON: outside the two dataset entries nothing differs; Moby differs by the two added mirror keys only; Lexique by sha256, member, licence and licence_read only.",
+    "datasets_acquired_and_built": "On 2026-11-18, tools/delivery.py acquire-datasets into an empty cache (first Moby address answering 503) fetched both archives with their pinned sha256, and tools/build_syllable_dicts.py --inputs rebuilt en (168001 words) and fr (116202 words) with the locked sha256.",
     "open_points_carried": "Those of the prior review are unchanged, including the objc2 0.6.5 point recorded there.",
     "not_verified": [
       "Final build materials: required after the candidate build.",
-      "Which crates are compiled into this platform's binary was not determined, as in the prior review."
+      "Which crates are compiled into this platform's binary was not determined, as in the prior review.",
+      "The __MACOSX entries of the repacked Lexique archive were listed, not read.",
+      "Why the publisher repacked the archive is not known; no notice of it was looked for."
     ]
   }
 }

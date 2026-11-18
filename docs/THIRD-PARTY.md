@@ -170,7 +170,9 @@ to this repository.
 - **French, Lexique 3.83** (http://www.lexique.org) by Boris New, Christophe
   Pallier and contributors: Creative Commons Attribution-ShareAlike 4.0
   International, https://creativecommons.org/licenses/by-sa/4.0/legalcode
-  (README-Lexique.txt in the archive, read 2026-11-09). Citation: New, B.,
+  (README-Lexique.txt in the archive, read 2026-11-09; read again 2026-11-18
+  in the archive its publisher repacked on 2026-11-17, which holds the same
+  table and the same README and adds the licence's text). Citation: New, B.,
   Pallier, C., Brysbaert, M., Ferrand, L. (2004). Lexique 2: A New French
   Lexical Database. Behavior Research Methods, Instruments, & Computers,
   36(3), 516-524. The built French dictionary is an adaptation shared under
@@ -179,6 +181,8 @@ to this repository.
 The release build downloads both archives with `tools/delivery.py
 acquire-datasets` (HTTPS, SHA-256 pinned in `assets/syllable-sources.lock.json`,
 cached), and `tools/build_syllable_dicts.py --inputs` builds the dictionaries.
+The English archive has mirrors, listed in the same lock and tried in order
+when the first address does not answer; the same SHA-256 decides.
 The archive members and the built dictionaries (SHA-256 and word counts) are
 also pinned, so a different input or build fails. The changes made to each
 dataset, the licences and the attribution are in
