@@ -47,7 +47,6 @@ jobs:
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      max-parallel: 3
       matrix:
         case: ${{ fromJSON(inputs.cases_json || (inputs.suite == 'mint' && '["mint-22.3"]' || inputs.suite == 'additional' && '["fedora-44","opensuse-tumbleweed","arch"]' || inputs.suite == 'baseline' && '["ubuntu-24.04","ubuntu-26.04","debian-13"]' || inputs.suite == 'cloud' && '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch"]' || '["ubuntu-24.04","ubuntu-26.04","debian-13","fedora-44","opensuse-tumbleweed","arch","mint-22.3"]')) }}
     steps:

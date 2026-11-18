@@ -280,6 +280,25 @@ def acquire_datasets(cache, output):
         shutil.copy2(cached, output / str(relative(spec["file"])))
 
 
+def keep_rehashed_downloads(cache):
+    """Remove from a restored download cache whatever `fetch` does not rehash.
+
+    `fetch` compares a cached file with its pinned SHA-256 before every use. A folder holds
+    extracted or compiled output, such as the Whisper build objects on Linux, that nothing
+    compares with anything: a package is not built from it."""
+    cache = Path(cache)
+    if cache.is_symlink() or (cache.exists() and not cache.is_dir()):
+        raise ValueError("The download cache is not a plain folder")
+    removed = []
+    for entry in sorted(cache.iterdir()) if cache.exists() else []:
+        if entry.is_symlink() or not (entry.is_file() or entry.is_dir()):
+            raise ValueError(f"Unexpected entry in the download cache: {entry.name}")
+        if entry.is_dir():
+            shutil.rmtree(entry)
+            removed.append(entry.name)
+    return removed
+
+
 def zip_members(archive):
     seen = set()
     for member in archive.infolist():
@@ -896,6 +915,8 @@ def main():
     acquire.add_argument("--platform", choices=PLATFORMS, required=True)
     acquire.add_argument("--cache", type=Path, required=True)
     acquire.add_argument("--output", type=Path, required=True)
+    pruning = tasks.add_parser("prune-cache")
+    pruning.add_argument("--cache", type=Path, required=True)
     datasets = tasks.add_parser("acquire-datasets")
     datasets.add_argument("--cache", type=Path, required=True)
     datasets.add_argument("--output", type=Path, required=True)
@@ -923,6 +944,10 @@ def main():
     if args.command == "acquire":
         {'windows-x64': windows_inputs, 'macos-arm64': macos_inputs,
          'linux-x64': linux_inputs}[args.platform](args.cache.resolve(), args.output.resolve())
+    elif args.command == "prune-cache":
+        # Not resolved: a cache folder that is a link is refused, not followed.
+        for name in keep_rehashed_downloads(args.cache.absolute()):
+            print(f"Removed from the restored downloads: {name}")
     elif args.command == "acquire-datasets":
         acquire_datasets(args.cache.resolve(), args.output.resolve())
     elif args.command == "sources":
