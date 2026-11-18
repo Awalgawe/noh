@@ -50,6 +50,13 @@ def validate_result(value, record, delivery_hash, desktop=False):
             raise ValueError(f'Linux container image identity is missing: {name}')
 
 
+def require_complete_probe(report):
+    """A probe report counts only with every part run: GUI preview, transcription and a job over MCP."""
+    if (report.get('scope') != 'host-runtime-smoke'
+            or not all(report.get(part) for part in ('gui', 'transcription', 'mcp'))):
+        raise ValueError('Linux probe omitted the GUI, transcription or MCP checks')
+
+
 def cases():
     value = read(MATRIX)
     rows = value['containers']
@@ -135,8 +142,7 @@ def run_case(engine, row, output, bundle, speech):
         # Only this uniquely named disposable container is eligible for cleanup.
         subprocess.run([engine, 'rm', '--force', name], capture_output=True, timeout=30)
     report = read(evidence / 'result.json')
-    if not report.get('gui') or not report.get('transcription') or report.get('scope') != 'host-runtime-smoke':
-        raise ValueError('Linux matrix probe omitted GUI or transcription checks')
+    require_complete_probe(report)
     return {'status': 'passed', 'probe_sha256': digest(evidence / 'result.json'),
             'elf_sha256': report['elf_sha256'], 'checks': {check: 'passed' for check in CHECKS}}
 

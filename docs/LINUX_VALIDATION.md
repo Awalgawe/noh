@@ -46,8 +46,13 @@ and reap only their own virtual display and audio services.
 Checks include dependency/capability installation, GUI/CLI/MCP startup identity,
 ALSA loaded before libmpv followed by default PCM output, actual GUI media import
 and video/audio preview through NOH's existing capture mode, CLI export from `/`
-without an explicit FFmpeg path, decode/no-overwrite, and real offline CPU
-transcription of a synthetic spoken fixture. Preview must produce a decoded
+without an explicit FFmpeg path, decode/no-overwrite, the same media as one
+MCP job (inspection, exact diagnosis, export, decoded output) through the packaged
+`noh-mcp`, started from `/` with a reduced environment as an MCP client starts it,
+and real offline CPU transcription of a synthetic spoken fixture. The MCP check
+requires only the protocol version and the four tools it uses, and sends only the
+methods and arguments the oldest package still in a release cycle accepts, so a
+probe from a newer main still accepts an older package. Preview must produce a decoded
 frame and an available audio stream without a warning; an application mock
 state cannot pass. GUI capture, service logs and per-case reports are retained.
 This establishes software rendering and synthetic audio, not physical devices
