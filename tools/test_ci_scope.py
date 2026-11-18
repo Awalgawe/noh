@@ -6,12 +6,105 @@ import unittest
 
 import ci_scope
 
+ROOT = Path(__file__).resolve().parent.parent
+# Files outside the list that name a release-only file: controls of the first job and release-stage tools.
+READ_RELEASE_ONLY = {
+    "tools/test-delivery.py", "tools/installer/test_public_ci.py",
+    "tools/delivery-release.py", "tools/installer/public-ci.py",
+}
+MAY_NAME_RELEASE_ONLY = READ_RELEASE_ONLY | {
+    "tools/ci_scope.py", "tools/test_ci_scope.py",  # the list and this check
+    ".github/workflows/pr.yml",  # its first job only: see the check below
+}
+# The only other file that names one of those readers: the installer stage of a release.
+MAY_NAME_THOSE_READERS = {".github/workflows/windows-installers.yml"}
+
 
 class ScopeTests(unittest.TestCase):
     def test_docs_need_no_native_build(self):
         self.assertEqual(ci_scope.select(["README.md", "docs/APP.md", "CONTRIBUTING.md",
                                               "SECURITY.md", ".github/pull_request_template.md"]),
                          {"windows": False, "unix": False})
+
+    def test_release_tooling_needs_no_native_build(self):
+        none = {"windows": False, "unix": False}
+        for path in sorted(ci_scope.RELEASE_ONLY):
+            with self.subTest(path=path):
+                self.assertEqual(ci_scope.select([path]), none)
+        self.assertEqual(ci_scope.select(sorted(ci_scope.RELEASE_ONLY) + ["docs/RELEASING.md"]), none)
+        self.assertEqual(ci_scope.select(["tools/release_publication.py", "tools/windows-qa.ps1"]),
+                         {"windows": True, "unix": False})
+        self.assertEqual(ci_scope.select(["tools/release_publication.py", "src/media.rs"]),
+                         {"windows": True, "unix": True})
+        # Neighbours of the listed files are not release-only because they look alike.
+        for path in ("tools/release_notes.py", "tools/test_release_other.py", ".github/workflows/rust-audit.yml",
+                     "assets/upgrade-baseline.lock.json.bak", "assets/linux-desktop-images.yaml",
+                     "tools/linux_matrix.py", "docs/release-evidence/linux-0.2.0-inputs.json"):
+            with self.subTest(path=path):
+                self.assertEqual(ci_scope.select([path]), {"windows": True, "unix": True})
+
+    def test_release_tooling_is_a_list_of_existing_files(self):
+        # Adding a file is a decision: it changes what the required check asks before a merge.
+        self.assertEqual(ci_scope.RELEASE_ONLY, {
+            "tools/release_publication.py", "tools/test_release_publication.py",
+            "tools/release_acceptance.py", "tools/test_release_acceptance.py",
+            "tools/linux_desktop_candidate.py", "tools/probe-linux-desktop-vm.sh",
+            "tools/test-linux-desktop.py", "assets/linux-desktop-images.json",
+            "assets/upgrade-baseline.lock.json",
+            ".github/workflows/release.yml", ".github/workflows/delivery-candidates.yml",
+            ".github/workflows/delivery-draft.yml", ".github/workflows/linux-desktop-probe.yml",
+        })
+        for path in sorted(ci_scope.RELEASE_ONLY):
+            with self.subTest(path=path):
+                self.assertTrue((ROOT / path).is_file())
+        self.assertFalse(ci_scope.RELEASE_ONLY & (ci_scope.WINDOWS_ONLY | ci_scope.UNIX_ONLY))
+
+    def test_nothing_a_native_job_reads_names_release_tooling(self):
+        tracked = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True).stdout
+        names = {path: Path(path).name.encode() for path in ci_scope.RELEASE_ONLY}
+        readers = {path: Path(path).name.encode() for path in READ_RELEASE_ONLY}
+        found = {}
+        second_level = {}
+        for item in tracked.decode("utf-8").rstrip(chr(0)).split(chr(0)):
+            # Documentation and recorded evidence are read by people, not run by a job.
+            if (item in ci_scope.RELEASE_ONLY or item in MAY_NAME_RELEASE_ONLY
+                    or item.startswith("docs/") or item.endswith(".md")):
+                continue
+            data = (ROOT / item).read_bytes()
+            named = sorted(path for path, name in names.items() if name in data)
+            if named:
+                found[item] = named
+            # One level further: a file that runs one of the readers would read the listed files through it.
+            named = sorted(path for path, name in readers.items() if name in data)
+            if named and item not in MAY_NAME_THOSE_READERS:
+                second_level[item] = named
+        self.assertEqual(found, {})
+        self.assertEqual(second_level, {})
+        # In the PR workflow, only the first job may name them: the jobs after it are the native ones.
+        workflow = (ROOT / ".github/workflows/pr.yml").read_text(encoding="utf-8")
+        first_job, separator, native_jobs = workflow.partition("\n  audit:\n")
+        self.assertTrue(separator)
+        self.assertIn("\n  scope:\n", first_job)
+        for path, name in (names | readers).items():
+            with self.subTest(path=path):
+                self.assertNotIn(name.decode(), native_jobs)
+
+    def test_synthetic_controls_run_for_every_change(self):
+        workflow = (ROOT / ".github/workflows/pr.yml").read_text(encoding="utf-8")
+        first_job = workflow.partition("\n  audit:\n")[0]
+        steps = first_job.split("\n      - ")
+        title = "name: Check build and delivery scripts with synthetic fixtures\n"
+        controls = [step for step in steps if step.startswith(title)]
+        self.assertEqual(len(controls), 1)
+        # Neither that step nor any other step of the first job is conditional or allowed to fail.
+        self.assertNotIn("\n        if:", first_job)
+        self.assertNotIn("continue-on-error", first_job)
+        # The controls that cover the release-only files.
+        for command in ("python3 tools/test-delivery.py", "python3 tools/test-linux-desktop.py",
+                        "python3 -m unittest discover -s tools/installer -p 'test_*.py'",
+                        "python3 -m unittest discover -s tools -p 'test_release_*.py'"):
+            with self.subTest(command=command):
+                self.assertIn("          " + command + "\n", controls[0] + "\n")
 
     def test_windows_tools_are_isolated(self):
         self.assertEqual(ci_scope.select(["tools/windows-qa.ps1", "docs/BUILDING.md"]),

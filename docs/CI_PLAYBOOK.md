@@ -10,12 +10,13 @@ before choosing infrastructure. Contributor checks are in [DEVELOPMENT.md](DEVEL
 `PR validation` (`.github/workflows/pr.yml`) runs on PRs, on pushes to `main`
 and by manual dispatch. It tests the PR merge checkout.
 Its first job validates the platform selector and runs synthetic script controls
-before any application compilation. The complete local Git diff includes deleted
+for every change, before any application compilation. The complete local Git diff includes deleted
 files and both sides of renames; unavailable comparisons select every platform.
 
 | Changed inputs | Native validation |
 | --- | --- |
 | Only README, AGENTS or Markdown under docs | No application build |
+| Explicitly listed release tooling: the publication, acceptance and desktop-check tools, the release workflows, the desktop image pins and the upgrade baseline | No application build: no native job reads them. The first job's controls are the only PR check that can; the desktop probe script and the release workflows that no control opens are first read at a release stage |
 | Explicitly listed Windows tools and locks | Windows QA |
 | Unix verification script or native workflow | Linux and macOS, both Mac architectures |
 | Rust, Cargo, shared tools, embedded resources, languages, routing or unknown inputs | Windows, Linux and both Mac architectures |
