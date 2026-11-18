@@ -206,12 +206,12 @@ for investigations; it does not produce a reusable public package.
 
 ## Version numbers
 
-From the version after 0.1.6, NOH follows [Semantic Versioning 2.0.0](https://semver.org/).
+From 0.2.0, NOH follows [Semantic Versioning 2.0.0](https://semver.org/).
 A version is `MAJOR.MINOR.PATCH`. While MAJOR is 0:
 
-- **PATCH** (0.1.6 → 0.1.7): corrections only. Nothing in the list below is
+- **PATCH** (0.2.0 → 0.2.1): corrections only. Nothing in the list below is
   added, removed or changed.
-- **MINOR** (0.1.x → 0.2.0): anything else — something is added to the list, or
+- **MINOR** (0.2.x → 0.3.0): anything else — something is added to the list, or
   something in it changes or goes away.
 
 What a change is measured against — the list as known on 2026-11-16, completed
@@ -238,7 +238,11 @@ The changelog's open section is headed `## Unreleased`. The release commit
 chooses the number from what that section holds — only corrections, a PATCH;
 anything else, a MINOR — and renames the heading. Versions up to 0.1.6 were
 numbered before this rule and are not renumbered; 0.1.6 added functions and
-would have been 0.2.0.
+would have been a MINOR. 0.2.0 is the first version numbered by the rule: a
+MINOR, because it adds a second player for the montage, a cache of preview
+copies on disk and documented environment variables: `NOH_PLAYER` in the
+user's guide; `NOH_PROFILE`, `NOH_CACHE_DIR` and capture switches in the
+developer's.
 
 The "pre-release" of the publication below is GitHub's flag on the final number
 while its files are tested. It is not a Semantic Versioning pre-release: a

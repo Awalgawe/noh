@@ -5,7 +5,9 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
-## Unreleased
+## 0.2.0
+
+Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.2.0).
 
 ### Preview and playback
 
@@ -47,6 +49,36 @@ builds are not public releases.
   Windows interface closed without a word when it could not start. See the
   [installation guide](INSTALLING.md#the-start-up-file) for where the file is
   and what it holds.
+
+### Known issues
+
+- Playing a montage through the fast-preview library was tried on one Windows
+  computer, with one graphics card and one sound output. On Linux it was not
+  tried: the former player is the default there.
+- A montage played through the fast-preview library stops at its next cut,
+  sound included, when NOH's window is not redrawn although the system reports
+  it visible, and goes on when the window is drawn again. A minimised window
+  and a window covered by another one did not stop it. Which situations do was
+  not established; a locked session was not tried.
+- With a project open, the memory NOH uses grew by about 2 MB a minute when
+  nothing played and about 3 MB a minute while a montage played, with either
+  player, in ten-minute measurements on one Windows computer. Without a
+  project it did not grow. The cause is not established, and 0.1.6 was not
+  measured.
+- The message shown when the window cannot open was displayed in no test: the
+  automated test is a capture run, which writes `startup.log` and never shows
+  the message.
+- On one Windows 10 tablet, Windows refused to run `noh.exe` ("Access is
+  denied"). The cause is not established. This version does not fix it, and no
+  `startup.log` is written in that case: nothing of NOH runs. See the
+  [installation guide](INSTALLING.md#the-start-up-file).
+- On Debian 13 with GNOME, the preview's picture stopped updating after about
+  one second in 3 of 23 automated test runs made while preparing 0.1.6. The
+  cause is still not established, and nothing in this version was written to
+  correct it: on Linux the montage is still played by the former player. It is
+  not known whether a real computer is affected.
+- The automated tests use software rendering and virtual audio. They test no
+  real graphics card, sound card, NVENC or CUDA device.
 
 ## 0.1.6
 
