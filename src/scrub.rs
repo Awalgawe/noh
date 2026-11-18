@@ -593,8 +593,27 @@ fn take_generation(pending: &mut Option<Request>, epoch: u64) -> Option<Request>
         None
     }
 }
+/// Gives libmpv the OpenGL functions it asks for by name, but for one.
+///
+/// libmpv 0.40 and 0.41 ask OpenGL for a sync object after each picture drawn
+/// through the render API, keep it for a buffer swap that this API never does,
+/// and so never free it: about 8 kB a picture where it was measured, for as
+/// long as the montage plays. Nothing waits on those objects. libmpv is given
+/// a `glFenceSync` that makes none, which it takes as a refusal and goes on.
+/// Its only other use of that function guards the decoder writing straight
+/// into mapped buffers, which is turned off (`vd-lavc-dr`). libmpv 0.34 to
+/// 0.39, and 0.42, do not ask for one there: they never call it.
 unsafe extern "C" fn resolve(data: H, name: *const c_char) -> H {
-    unsafe { (&*(data as *const Resolver))(CStr::from_ptr(name)) as H }
+    let name = unsafe { CStr::from_ptr(name) };
+    let found = unsafe { (&*(data as *const Resolver))(name) as H };
+    if name == c"glFenceSync" && !found.is_null() {
+        return no_fence as *const c_void as H;
+    }
+    found
+}
+/// `glFenceSync` making no sync object: null is what OpenGL returns on failure.
+unsafe extern "system" fn no_fence(_condition: u32, _flags: u32) -> H {
+    std::ptr::null_mut()
 }
 unsafe extern "C" fn wake(data: H) {
     unsafe {
@@ -888,6 +907,10 @@ impl Scrubber {
                 // Hardware decoder setup stalls scrubbing across source files;
                 // presentation still uses the native OpenGL render context.
                 ("hwdec", "no"),
+                // The decoder does not write straight into OpenGL buffers:
+                // libmpv guards those with the sync objects it is refused
+                // (see `resolve`). Small pictures are copied at no cost.
+                ("vd-lavc-dr", "no"),
                 ("vd-lavc-threads", "2"),
                 ("demuxer-max-bytes", "16MiB"),
                 ("demuxer-max-back-bytes", "8MiB"),
@@ -994,6 +1017,33 @@ impl Scrubber {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn libmpv_is_refused_the_sync_objects_it_would_never_free() {
+        let known = 0x1000 as *const c_void;
+        let mut driver: Box<Resolver> = Box::new(Arc::new(|name: &CStr| {
+            if name == c"glMissing" {
+                std::ptr::null()
+            } else {
+                0x1000 as *const c_void
+            }
+        }));
+        let data: H = (&mut *driver as *mut Resolver).cast();
+        let ask = |name: &CStr| unsafe { resolve(data, name.as_ptr()) };
+        // Every other function is the driver's own, the two that go with the
+        // refused one included: libmpv needs all three or none.
+        assert_eq!(ask(c"glBindTexture"), known as H);
+        assert_eq!(ask(c"glClientWaitSync"), known as H);
+        assert_eq!(ask(c"glDeleteSync"), known as H);
+        assert!(ask(c"glMissing").is_null());
+        let fence = ask(c"glFenceSync");
+        assert!(!fence.is_null() && fence != known as H);
+        let fence: unsafe extern "system" fn(u32, u32) -> H = unsafe { std::mem::transmute(fence) };
+        assert!(unsafe { fence(0x9117, 0) }.is_null());
+        // A driver without the function is not given ours in its place.
+        let mut bare: Box<Resolver> = Box::new(Arc::new(|_: &CStr| std::ptr::null()));
+        let data: H = (&mut *bare as *mut Resolver).cast();
+        assert!(unsafe { resolve(data, c"glFenceSync".as_ptr()) }.is_null());
+    }
     #[test]
     fn exact_seek_uses_representable_pts_including_low_rate_vfr_and_eof() {
         assert_eq!(seek_position(&[0.0, 0.5, 1.0], 0.2), 0.5);

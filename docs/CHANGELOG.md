@@ -5,6 +5,17 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
+## 0.1.7 (unreleased)
+
+### Preview and playback
+
+- Stop the preview from keeping a little more memory with each picture it
+  shows. Versions 0.40 and 0.41 of the fast-preview library never give back a
+  small object they ask the graphics driver for at each picture. Earlier
+  Windows packages, which carry version 0.40, have this in the paused preview,
+  which shows few pictures; on Linux it depends on the version the system
+  provides. A montage played through the library shows 24 to 60 a second.
+
 ## 0.1.6
 
 Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.1.6).

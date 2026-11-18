@@ -42,6 +42,13 @@ changing a view does not require decoding the soundtrack again.
 Silent timeline seeking uses indexed presentation timestamps from the preview
 copy, selects a representable frame and keeps a five-second deadline through
 frame delivery. Newer seek requests can supersede an outstanding target.
+
+libmpv 0.40 and 0.41 ask OpenGL for a sync object after each picture drawn
+through the render API and never free it (fixed in 0.42). NOH gives libmpv the
+OpenGL functions by name, so it gives it a `glFenceSync` that makes none, and
+turns off the decoder's direct rendering (`vd-lavc-dr`), the only other part of
+libmpv that needs real ones.
+
 `assets/ui-tokens.json` records the tested design tokens. Seven translation
 catalogs retain matching keys and placeholders.
 
