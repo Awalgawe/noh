@@ -129,18 +129,18 @@ class InstallerGuards(unittest.TestCase):
 
     def test_the_upgrade_baseline_is_the_recorded_published_installer(self):
         baseline = ci.upgrade_baseline()
-        self.assertEqual(baseline['tag'], 'v0.1.6')
-        self.assertEqual(baseline['name'], 'NOH-0.1.6-windows-x64-Complete-Setup.exe')
+        self.assertEqual(baseline['tag'], 'v0.2.0')
+        self.assertEqual(baseline['name'], 'NOH-0.2.0-windows-x64-Complete-Setup.exe')
         # From 0.1.6 a publication record is a file of the release (PUBLICATION.json), not of this
         # repository: the pin's digest and size were read there when the pin was moved.
-        valid = {'schema': 1, 'tag': 'v0.1.6', 'installer': baseline['name'],
+        valid = {'schema': 1, 'tag': 'v0.2.0', 'installer': baseline['name'],
                  'sha256': baseline['sha256'], 'size': baseline['size']}
         with tempfile.TemporaryDirectory() as temporary:
             lock = Path(temporary) / 'lock.json'
             lock.write_text(json.dumps(valid), encoding='utf-8')
             self.assertEqual(ci.upgrade_baseline(lock), baseline)
-            for changes in ({'tag': 'v0.1.5'}, {'installer': 'NOH-0.1.6-windows-x64-Minimal-Setup.exe'},
-                            {'sha256': 'abc'}, {'size': '1232910521'}, {'size': 0}, {'schema': 2}):
+            for changes in ({'tag': 'v0.1.6'}, {'installer': 'NOH-0.2.0-windows-x64-Minimal-Setup.exe'},
+                            {'sha256': 'abc'}, {'size': '1232998714'}, {'size': 0}, {'schema': 2}):
                 lock.write_text(json.dumps({**valid, **changes}), encoding='utf-8')
                 with self.assertRaises(ValueError, msg=str(changes)):
                     ci.upgrade_baseline(lock)
@@ -153,7 +153,7 @@ class InstallerGuards(unittest.TestCase):
             work = Path(temporary)
             github = unittest.mock.Mock()
             github.request.return_value = release
-            ci.fetch_upgrade_baseline(work, github, '0.2.0')
+            ci.fetch_upgrade_baseline(work, github, '0.2.1')
             github.request.assert_called_once_with('/releases/tags/' + pin['tag'])
             github.download.assert_called_once_with('/releases/assets/5', work / 'baseline' / pin['name'],
                                                     pin['sha256'], pin['size'])
@@ -162,7 +162,7 @@ class InstallerGuards(unittest.TestCase):
                                     ({'assets': []}, 'missing or ambiguous')):
                 github.request.return_value = {**release, **change}
                 with self.assertRaisesRegex(ValueError, message):
-                    ci.fetch_upgrade_baseline(work, github, '0.2.0')
+                    ci.fetch_upgrade_baseline(work, github, '0.2.1')
             with self.assertRaisesRegex(ValueError, 'version under test'):
                 ci.fetch_upgrade_baseline(work, github, pin['tag'][1:])
 
