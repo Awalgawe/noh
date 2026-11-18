@@ -51,6 +51,10 @@ pub enum WordSource {
 pub struct WordTime {
     pub text: String,
     pub start_ms: u64,
+    /// When the word stops being sung, if known (a held word, or a breath before
+    /// the next one). None: it lasts until the next word starts (or the cue ends).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_ms: Option<u64>,
     pub source: WordSource,
     /// A word cut into syllables (two or more), each with its own start.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -62,6 +66,9 @@ pub struct WordTime {
 pub struct SyllableTime {
     pub text: String,
     pub start_ms: u64,
+    /// As `WordTime::end_ms`, within its word.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_ms: Option<u64>,
     pub source: WordSource,
 }
 
@@ -79,11 +86,40 @@ impl SubtitleCue {
         }
     }
 
+    /// Clamp the known ends of `words` to where each unit may end: a word before
+    /// the next word's start (or the cue end), a syllable before the next
+    /// syllable (or its word's end). An end that no longer follows its start is
+    /// dropped, so the unit lasts until the next start again.
+    pub fn fit_ends(&self, words: &mut [WordTime]) {
+        let starts: Vec<u64> = words.iter().map(|w| w.start_ms).collect();
+        for (i, w) in words.iter_mut().enumerate() {
+            let bound = starts.get(i + 1).copied().unwrap_or(self.end_ms);
+            w.end_ms = w.end_ms.map(|e| e.min(bound)).filter(|e| *e > w.start_ms);
+            if let Some(syllables) = &mut w.syllables {
+                // A word end at or before its last syllable's start would hide it.
+                let last_start = syllables.last().map_or(w.start_ms, |s| s.start_ms);
+                w.end_ms = w.end_ms.filter(|e| *e > last_start);
+                let word_end = w.end_ms.unwrap_or(bound);
+                let syl_starts: Vec<u64> = syllables.iter().map(|s| s.start_ms).collect();
+                for (k, s) in syllables.iter_mut().enumerate() {
+                    let b = syl_starts.get(k + 1).copied().unwrap_or(word_end);
+                    s.end_ms = s.end_ms.map(|e| e.min(b)).filter(|e| *e > s.start_ms);
+                }
+            }
+        }
+    }
+
     /// Whether `words` belong to this cue: the same texts as the cue's
     /// whitespace split, starts inside [start, end - 50 ms] and at least 50 ms
     /// apart; syllables (two or more) spell their word, start with it and stay
-    /// before the next word, 50 ms apart.
+    /// before the next word, 50 ms apart. A known end follows its start and
+    /// stays before the next unit's start (or the cue end, or its word's end).
     pub fn words_fit(&self, words: &[WordTime]) -> bool {
+        let mut fitted = words.to_vec();
+        self.fit_ends(&mut fitted);
+        if fitted != words {
+            return false;
+        }
         let split: Vec<&str> = self.text.split_whitespace().collect();
         if words.is_empty()
             || words.len() != split.len()
@@ -193,15 +229,23 @@ impl SubtitleTrack {
                             .map(|w| {
                                 let mut w = w.clone();
                                 w.start_ms = w.start_ms.checked_sub(start_ms)?;
+                                w.end_ms = w.end_ms.map(|e| e.saturating_sub(start_ms));
                                 if let Some(syllables) = &mut w.syllables {
                                     for s in syllables.iter_mut() {
                                         s.start_ms = s.start_ms.checked_sub(start_ms)?;
+                                        s.end_ms = s.end_ms.map(|e| e.saturating_sub(start_ms));
                                     }
                                 }
                                 Some(w)
                             })
                             .collect();
-                        shifted.filter(|w| out.words_fit(w))
+                        // A cut end clamps the words' known ends to the new cue end.
+                        shifted
+                            .map(|mut w| {
+                                out.fit_ends(&mut w);
+                                w
+                            })
+                            .filter(|w| out.words_fit(w))
                     });
                     out
                 })
@@ -316,6 +360,7 @@ mod tests {
                 .map(|(w, t)| WordTime {
                     text: w.into(),
                     start_ms: *t,
+                    end_ms: None,
                     source: WordSource::Whisper,
                     syllables: None,
                 })
@@ -347,17 +392,96 @@ mod tests {
             SyllableTime {
                 text: "some".into(),
                 start_ms: 1000,
+                end_ms: None,
                 source: WordSource::Hand,
             },
             SyllableTime {
                 text: "thing".into(),
                 start_ms: 1500,
+                end_ms: None,
                 source: WordSource::Hand,
             },
         ]);
         assert!(syl.words_fit(syl.words.as_ref().unwrap()));
         syl.words.as_mut().unwrap()[0].syllables.as_mut().unwrap()[1].text = "thin".into();
         assert!(!syl.words_fit(syl.words.as_ref().unwrap()));
+    }
+
+    #[test]
+    fn known_ends_follow_their_start_and_stay_before_the_next_unit() {
+        let mut cue = worded(1000, 3000, "a b", &[1000, 2000]);
+        let mut w = cue.words.clone().unwrap();
+        w[0].end_ms = Some(1800);
+        w[1].end_ms = Some(3000);
+        assert!(cue.words_fit(&w));
+        // Past the next start, at or before its own start: refused...
+        for bad in [2001, 1000, 900] {
+            let mut x = w.clone();
+            x[0].end_ms = Some(bad);
+            assert!(!cue.words_fit(&x), "end {bad}");
+        }
+        // ...and fit_ends clamps the first and drops the others.
+        let mut x = w.clone();
+        x[0].end_ms = Some(2500);
+        x[1].end_ms = Some(3500);
+        cue.fit_ends(&mut x);
+        assert_eq!((x[0].end_ms, x[1].end_ms), (Some(2000), Some(3000)));
+        x[0].end_ms = Some(1000);
+        cue.fit_ends(&mut x);
+        assert_eq!(x[0].end_ms, None);
+        // A word's end must leave its last syllable a moment; a syllable ends
+        // before the next one, or at its word's end.
+        cue.text = "ab c".into();
+        let mut s = vec![
+            WordTime {
+                text: "ab".into(),
+                start_ms: 1000,
+                end_ms: Some(1700),
+                source: WordSource::Hand,
+                syllables: Some(vec![
+                    SyllableTime {
+                        text: "a".into(),
+                        start_ms: 1000,
+                        end_ms: Some(1300),
+                        source: WordSource::Hand,
+                    },
+                    SyllableTime {
+                        text: "b".into(),
+                        start_ms: 1500,
+                        end_ms: Some(1900),
+                        source: WordSource::Hand,
+                    },
+                ]),
+            },
+            w[1].clone(),
+        ];
+        s[1].text = "c".into();
+        assert!(!cue.words_fit(&s), "syllable past its word's end");
+        cue.fit_ends(&mut s);
+        assert_eq!(s[0].syllables.as_ref().unwrap()[1].end_ms, Some(1700));
+        assert!(cue.words_fit(&s));
+        // Serialized only when known.
+        let json = serde_json::to_string(&w[0]).unwrap();
+        assert!(json.contains("\"end_ms\":1800"));
+        let mut none = w[0].clone();
+        none.end_ms = None;
+        assert!(!serde_json::to_string(&none).unwrap().contains("end_ms"));
+        // Trimming shifts ends and clamps them to the cut.
+        cue = worded(1000, 3000, "a b", &[1000, 2000]);
+        cue.words = Some(w.clone());
+        let track = SubtitleTrack {
+            language: None,
+            duration_ms: 5000,
+            cues: vec![cue],
+        };
+        let trimmed = track.trim(500, 2600).unwrap();
+        let ends: Vec<Option<u64>> = trimmed.cues[0]
+            .words
+            .iter()
+            .flatten()
+            .map(|w| w.end_ms)
+            .collect();
+        assert_eq!(ends, [Some(1300), Some(2100)]);
     }
 
     #[test]

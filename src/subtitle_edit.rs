@@ -60,13 +60,15 @@ fn spread_before(words: &[&str], a: u64, next: u64) -> Option<Vec<u64>> {
 }
 
 /// Make a word list fit its cue: starts at least 50 ms apart and inside the cue
-/// (a moved start becomes Estimated); None when the cue cannot hold them.
+/// (a moved start becomes Estimated and loses its known end); known ends are
+/// clamped to the next start. None when the cue cannot hold them.
 fn settle(cue: &SubtitleCue, mut words: Vec<WordTime>) -> Option<Vec<WordTime>> {
     let mut previous: Option<u64> = None;
     for w in &mut words {
         let low = previous.map_or(cue.start_ms, |p| p + MIN_WORD_GAP_MS);
         if w.start_ms < low {
             w.start_ms = low;
+            w.end_ms = None;
             w.source = WordSource::Estimated;
             w.syllables = None;
         }
@@ -77,6 +79,7 @@ fn settle(cue: &SubtitleCue, mut words: Vec<WordTime>) -> Option<Vec<WordTime>> 
                 .map_or(w.start_ms, |s| s.start_ms.max(w.start_ms)),
         );
     }
+    cue.fit_ends(&mut words);
     cue.words_fit(&words).then_some(words)
 }
 
@@ -138,6 +141,7 @@ pub fn remap_words(cue: &SubtitleCue, old: &[WordTime], new_text: &str) -> Optio
             out.push(WordTime {
                 text: new[a + x].into(),
                 start_ms: t,
+                end_ms: None,
                 source: WordSource::Estimated,
                 syllables: None,
             });
@@ -226,6 +230,7 @@ pub fn set_edge(track: &mut SubtitleTrack, i: usize, edge: Edge, ms: u64) -> u64
                 for (k, t) in starts.into_iter().enumerate() {
                     out[from + k] = WordTime {
                         start_ms: t,
+                        end_ms: None,
                         source: WordSource::Estimated,
                         syllables: None,
                         ..words[from + k].clone()
@@ -273,8 +278,10 @@ pub fn move_cue(track: &mut SubtitleTrack, i: usize, delta_ms: i64) -> i64 {
     cue.end_ms = shift(cue.end_ms);
     for w in cue.words.iter_mut().flatten() {
         w.start_ms = shift(w.start_ms);
+        w.end_ms = w.end_ms.map(shift);
         for s in w.syllables.iter_mut().flatten() {
             s.start_ms = shift(s.start_ms);
+            s.end_ms = s.end_ms.map(shift);
         }
     }
     d
@@ -338,7 +345,10 @@ pub fn split_at(track: &mut SubtitleTrack, i: usize, ms: u64) -> bool {
     let mut first = SubtitleCue::new(cue.start_ms, ms, texts[..k].join(" "));
     let mut second = SubtitleCue::new(ms, cue.end_ms, texts[k..].join(" "));
     if let Some(w) = &cue.words {
-        first.words = Some(w[..k].to_vec()).filter(|x| first.words_fit(x));
+        // The first part now ends at `ms`: its last word's known end is clamped there.
+        let mut head = w[..k].to_vec();
+        first.fit_ends(&mut head);
+        first.words = Some(head).filter(|x| first.words_fit(x));
         second.words = settle(&second, w[k..].to_vec());
     }
     track.cues[i] = first;
@@ -360,8 +370,9 @@ pub fn join_next(track: &mut SubtitleTrack, i: usize) -> bool {
     let (a, b) = (track.cues[i].clone(), track.cues[i + 1].clone());
     let mut joined = SubtitleCue::new(a.start_ms, b.end_ms, format!("{}\n{}", a.text, b.text));
     if let (Some(x), Some(y)) = (&a.words, &b.words) {
-        joined.words =
-            Some(x.iter().chain(y).cloned().collect::<Vec<_>>()).filter(|w| joined.words_fit(w));
+        let mut all: Vec<WordTime> = x.iter().chain(y).cloned().collect();
+        joined.fit_ends(&mut all);
+        joined.words = Some(all).filter(|w| joined.words_fit(w));
     }
     track.cues[i] = joined;
     track.cues.remove(i + 1);
@@ -405,6 +416,7 @@ pub fn words_or_estimate(cue: &SubtitleCue) -> Vec<WordTime> {
         .map(|(t, s)| WordTime {
             text: (*t).into(),
             start_ms: s,
+            end_ms: None,
             source: WordSource::Estimated,
             syllables: None,
         })
@@ -451,6 +463,9 @@ pub fn set_unit_start(track: &mut SubtitleTrack, i: usize, unit: usize, ms: u64)
     }
     let ms = ms.clamp(low, high);
     set_unit(&mut words, (wi, si), ms);
+    // The previous unit's known end stays before this start; this unit's own end
+    // is dropped if the start passed it.
+    cue.fit_ends(&mut words);
     if !cue.words_fit(&words) {
         return None;
     }
@@ -515,6 +530,7 @@ pub fn set_syllables(track: &mut SubtitleTrack, i: usize, w: usize, parts: &[Str
             .map(|(k, (text, start_ms))| SyllableTime {
                 text: text.clone(),
                 start_ms,
+                end_ms: None,
                 source: if k == 0 {
                     word.source
                 } else {
@@ -524,6 +540,7 @@ pub fn set_syllables(track: &mut SubtitleTrack, i: usize, w: usize, parts: &[Str
             .collect();
         words[w].syllables = Some(syllables);
     }
+    cue.fit_ends(&mut words);
     if !cue.words_fit(&words) {
         return false;
     }
@@ -565,6 +582,13 @@ pub fn apply_taps(track: &mut SubtitleTrack, i: usize, taps: &[u64]) -> bool {
     for (&(wi, si, _), &ms) in list.iter().zip(&t) {
         set_unit(&mut words, (wi, si), ms);
     }
+    // Taps give starts only: every unit moved, so no old end is kept.
+    for w in &mut words {
+        w.end_ms = None;
+        for s in w.syllables.iter_mut().flatten() {
+            s.end_ms = None;
+        }
+    }
     if !cue.words_fit(&words) {
         return false;
     }
@@ -586,6 +610,7 @@ mod tests {
         WordTime {
             text: text.into(),
             start_ms,
+            end_ms: None,
             source,
             syllables: None,
         }
@@ -613,6 +638,90 @@ mod tests {
             .flatten()
             .map(|w| (w.text.clone(), w.start_ms, w.source))
             .collect()
+    }
+
+    /// Known ends (lyrics screen, held words) stay valid through every edit:
+    /// shifted with the cue, clamped to the next start, dropped when a start
+    /// moves past them or is tapped again.
+    #[test]
+    fn known_word_ends_stay_valid_through_every_edit() {
+        let ends = |t: &SubtitleTrack, i: usize| -> Vec<Option<u64>> {
+            t.cues[i].words.iter().flatten().map(|w| w.end_ms).collect()
+        };
+        let mut base = track();
+        {
+            let w = base.cues[0].words.as_mut().unwrap();
+            w[0].end_ms = Some(1600);
+            w[1].end_ms = Some(2100);
+        }
+        assert!(base.validate().is_ok());
+
+        let mut t = base.clone();
+        assert_eq!(move_cue(&mut t, 0, 500), 500);
+        assert_eq!(ends(&t, 0), [Some(2100), Some(2600), None, None]);
+
+        // A hand-placed start before the previous word's end clamps that end.
+        let mut t = base.clone();
+        assert_eq!(set_unit_start(&mut t, 0, 1, 1500), Some(1500));
+        assert_eq!(ends(&t, 0)[0], Some(1500));
+        // A start moved past its own end drops it.
+        let mut t = base.clone();
+        assert_eq!(set_unit_start(&mut t, 0, 1, 2150), Some(2150));
+        assert_eq!(ends(&t, 0)[1], None);
+
+        // A split clamps the first part's last end to the cut; a join keeps it.
+        let mut t = base.clone();
+        t.cues[0].words.as_mut().unwrap()[1].end_ms = Some(2190);
+        assert!(split_at(&mut t, 0, 2150));
+        assert_eq!(ends(&t, 0), [Some(1600), Some(2150)]);
+        assert!(join_next(&mut t, 0));
+        assert_eq!(ends(&t, 0), [Some(1600), Some(2150), None, None]);
+        assert!(t.validate().is_ok());
+
+        // A text edit keeps unchanged words' ends; a new word has none.
+        let mut t = base.clone();
+        assert!(set_text(&mut t, 0, "Something had to live"));
+        assert_eq!(ends(&t, 0), [Some(1600), Some(2100), None, None]);
+
+        // Rhythm taps give starts only: every old end goes.
+        let mut t = base.clone();
+        assert!(apply_taps(&mut t, 0, &[1000, 1700, 2200, 2500]));
+        assert_eq!(ends(&t, 0), [None, None, None, None]);
+
+        // settle: a start pushed later loses its end.
+        let cue = base.cues[0].clone();
+        let mut words = cue.words.clone().unwrap();
+        words[1].start_ms = 1020;
+        words[1].end_ms = Some(1700);
+        let settled = settle(&cue, words).unwrap();
+        assert_eq!(settled[1].start_ms, 1050);
+        assert_eq!(settled[1].end_ms, None);
+
+        // The End edge dragged left past the last word's known end clamps it to
+        // the new cue end; dragged before the word's start, the word moves and
+        // its end goes.
+        let mut t = base.clone();
+        t.cues[0].words.as_mut().unwrap()[3].end_ms = Some(2900);
+        assert_eq!(set_edge(&mut t, 0, Edge::End, 2700), 2700);
+        assert_eq!(ends(&t, 0), [Some(1600), Some(2100), None, Some(2700)]);
+        assert_eq!(set_edge(&mut t, 0, Edge::End, 2400), 2400);
+        assert_eq!(ends(&t, 0)[3], None);
+        assert!(t.validate().is_ok());
+
+        // A re-split word: its syllables lose their ends, its own end stays.
+        let mut t = base.clone();
+        let parts = |a: &str, b: &str| vec![a.to_string(), b.to_string()];
+        assert!(set_syllables(&mut t, 0, 0, &parts("Some", "thing")));
+        t.cues[0].words.as_mut().unwrap()[0]
+            .syllables
+            .as_mut()
+            .unwrap()[0]
+            .end_ms = Some(1300);
+        assert!(t.validate().is_ok());
+        assert!(set_syllables(&mut t, 0, 0, &parts("So", "mething")));
+        let w = &t.cues[0].words.as_ref().unwrap()[0];
+        assert_eq!(w.end_ms, Some(1600));
+        assert!(w.syllables.iter().flatten().all(|s| s.end_ms.is_none()));
     }
 
     #[test]

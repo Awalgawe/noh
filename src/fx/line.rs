@@ -73,7 +73,8 @@ pub fn split_words(start: f64, end: f64, words: &[String], sep: &str) -> Line {
     }
 }
 
-/// A cue's line with its known word times: each word ends where the next starts.
+/// A cue's line with its known word times: each word (or syllable) ends at its
+/// known end, otherwise where the next one starts.
 fn timed_line(
     c: &crate::subtitle_track::SubtitleCue,
     timed: &[crate::subtitle_track::WordTime],
@@ -83,7 +84,9 @@ fn timed_line(
         .iter()
         .enumerate()
         .map(|(i, w)| {
-            let end = s(timed.get(i + 1).map_or(c.end_ms, |n| n.start_ms));
+            let end = s(w
+                .end_ms
+                .unwrap_or_else(|| timed.get(i + 1).map_or(c.end_ms, |n| n.start_ms)));
             let mut first_char = 0;
             let syl = w.syllables.iter().flatten().collect::<Vec<_>>();
             let syllables = syl
@@ -93,7 +96,10 @@ fn timed_line(
                     let one = Syllable {
                         first_char,
                         start: s(y.start_ms),
-                        end: syl.get(k + 1).map_or(end, |n| s(n.start_ms)),
+                        end: y
+                            .end_ms
+                            .map(s)
+                            .unwrap_or_else(|| syl.get(k + 1).map_or(end, |n| s(n.start_ms))),
                     };
                     first_char += y.text.chars().count();
                     one
@@ -173,6 +179,7 @@ mod tests {
         let w = |text: &str, start_ms| WordTime {
             text: text.into(),
             start_ms,
+            end_ms: None,
             source: WordSource::Hand,
             syllables: None,
         };
@@ -203,18 +210,21 @@ mod tests {
         let syl = |text: &str, start_ms| SyllableTime {
             text: text.into(),
             start_ms,
+            end_ms: None,
             source: WordSource::Hand,
         };
         cue.words = Some(vec![
             WordTime {
                 text: "Something".into(),
                 start_ms: 1000,
+                end_ms: None,
                 source: WordSource::Hand,
                 syllables: Some(vec![syl("Some", 1000), syl("thing", 1700)]),
             },
             WordTime {
                 text: "had".into(),
                 start_ms: 2600,
+                end_ms: None,
                 source: WordSource::Whisper,
                 syllables: None,
             },
@@ -244,18 +254,65 @@ mod tests {
     }
 
     #[test]
+    fn known_ends_end_words_and_syllables_before_the_next_start() {
+        use crate::subtitle_track::SyllableTime;
+        let mut cue = SubtitleCue::new(1000, 3000, "Something had");
+        let syl = |text: &str, start_ms, end_ms| SyllableTime {
+            text: text.into(),
+            start_ms,
+            end_ms,
+            source: WordSource::Hand,
+        };
+        cue.words = Some(vec![
+            WordTime {
+                text: "Something".into(),
+                start_ms: 1000,
+                // A breath before « had »: the word ends at 2.2 s, not 2.6 s.
+                end_ms: Some(2200),
+                source: WordSource::Hand,
+                syllables: Some(vec![
+                    syl("Some", 1000, Some(1500)),
+                    syl("thing", 1700, None),
+                ]),
+            },
+            WordTime {
+                text: "had".into(),
+                start_ms: 2600,
+                end_ms: Some(2900),
+                source: WordSource::Hand,
+                syllables: None,
+            },
+        ]);
+        let track = SubtitleTrack {
+            language: None,
+            duration_ms: 5000,
+            cues: vec![cue],
+        };
+        let lines = super::from_track(&track);
+        let words = &lines[0].words;
+        assert_eq!((words[0].start, words[0].end), (1.0, 2.2));
+        assert_eq!((words[1].start, words[1].end), (2.6, 2.9));
+        // A held syllable ends at its own end; one without an end runs to the
+        // word's end.
+        let ends: Vec<f64> = words[0].syllables.iter().map(|s| s.end).collect();
+        assert_eq!(ends, [1.5, 2.2]);
+    }
+
+    #[test]
     fn known_word_times_replace_the_letter_split() {
         let mut cue = SubtitleCue::new(1000, 3000, "Something had");
         cue.words = Some(vec![
             WordTime {
                 text: "Something".into(),
                 start_ms: 1000,
+                end_ms: None,
                 source: WordSource::Hand,
                 syllables: None,
             },
             WordTime {
                 text: "had".into(),
                 start_ms: 2600,
+                end_ms: None,
                 source: WordSource::Whisper,
                 syllables: None,
             },
