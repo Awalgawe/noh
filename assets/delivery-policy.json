@@ -822,19 +822,19 @@
       "evidence": {
         "dataset_licences": {
           "path": "docs/release-evidence/linux-0.2.0-inputs.json",
-          "sha256": "fa633a80b09a406cac2ee6ffd6b52b43eccf4e17f71a3380d12b4f403dd49ef0"
+          "sha256": "6cae898306d495bd514358ff491e041953d1291a333f1156d299f0f4e79ac2d9"
         },
         "native_corresponding_sources": {
           "path": "docs/release-evidence/linux-0.2.0-inputs.json",
-          "sha256": "fa633a80b09a406cac2ee6ffd6b52b43eccf4e17f71a3380d12b4f403dd49ef0"
+          "sha256": "6cae898306d495bd514358ff491e041953d1291a333f1156d299f0f4e79ac2d9"
         },
         "native_notices": {
           "path": "docs/release-evidence/linux-0.2.0-inputs.json",
-          "sha256": "fa633a80b09a406cac2ee6ffd6b52b43eccf4e17f71a3380d12b4f403dd49ef0"
+          "sha256": "6cae898306d495bd514358ff491e041953d1291a333f1156d299f0f4e79ac2d9"
         },
         "rust_sources_notices": {
           "path": "docs/release-evidence/linux-0.2.0-inputs.json",
-          "sha256": "fa633a80b09a406cac2ee6ffd6b52b43eccf4e17f71a3380d12b4f403dd49ef0"
+          "sha256": "6cae898306d495bd514358ff491e041953d1291a333f1156d299f0f4e79ac2d9"
         }
       },
       "inputs": {
@@ -844,7 +844,7 @@
         "assets/linux-host.json": "727a330fa36d3d9e03f8fbb9b4181f062a79dfc6de6dcccef1286f75912cd1e8",
         "assets/rust-notices.lock.json": "905d83803fb60351458f9ba233559356f7abd1aadb8bee9660ee37b01594c2b3",
         "assets/speech-bundle.json": "4bef71e92e5f3857e6d06e3a0b95971bc60448e838a6cf822fe9045d344c089f",
-        "assets/syllable-sources.lock.json": "0fbdc49bec0cf13f206f9363aa98174201f2c658fcbaafb85f3394a37f318f5d",
+        "assets/syllable-sources.lock.json": "a1d6be0dadb87a80181df37b47c0cf49360680e49837cdce5bb86728fc646bf2",
         "rust_standard_library_source": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
         "tools/build_syllable_dicts.py": "76413ca0f84eaa5fe815539ca16a0b48af34b36c3949805ba7e172c7831c0366",
         "tools/linux_host.py": "e7e95c14e6dc97290c369fdb0d176db69c275d1e1eb7f45b21bf413a05a76183",
@@ -853,29 +853,29 @@
         "tools/rust_notices.py": "16d8215d716f1bf5b318e984f14687dad9b1a7f34dda103b13202d271da1cb44"
       },
       "platform": "linux-x64",
-      "review_basis": "Actor/Critic register section 2026-11-18 release 0.2.0: the only changed input is Cargo.lock, by two lines of the noh package's own entry (its version, and a direct dependency on sha2 0.11.1, a package already locked); no third-party record changed; the 0.1.6 review is carried with its limits and open points. Submitted for the maintainer's approval by merge. Final candidate qualification is separate."
+      "review_basis": "Actor/Critic register sections 2026-11-18 release 0.2.0 and datasets: the changed inputs are Cargo.lock, by two lines of the noh package's own entry (its version, and a direct dependency on sha2 0.11.1, a package already locked), and assets/syllable-sources.lock.json (mirror addresses for the Moby archive; the Lexique archive repacked by its publisher on 2026-11-17, same table by digest, licence text added); no third-party Cargo record changed; the 0.1.6 review is carried with its limits and open points. Submitted for the maintainer's approval by merge. Final candidate qualification is separate."
     },
     {
       "evidence": {
         "cuda_terms": {
           "path": "docs/release-evidence/windows-0.2.0-inputs.json",
-          "sha256": "5e1ba772a74b6bcd22a7d49b1d4ef5f9f357a9325b6636bf78f71d4adea4d314"
+          "sha256": "ef589c25b27ddc7ae78e6295221e75d27c4f0c6726dfa9a05b876feee1ac62b8"
         },
         "dataset_licences": {
           "path": "docs/release-evidence/windows-0.2.0-inputs.json",
-          "sha256": "5e1ba772a74b6bcd22a7d49b1d4ef5f9f357a9325b6636bf78f71d4adea4d314"
+          "sha256": "ef589c25b27ddc7ae78e6295221e75d27c4f0c6726dfa9a05b876feee1ac62b8"
         },
         "native_corresponding_sources": {
           "path": "docs/release-evidence/windows-0.2.0-inputs.json",
-          "sha256": "5e1ba772a74b6bcd22a7d49b1d4ef5f9f357a9325b6636bf78f71d4adea4d314"
+          "sha256": "ef589c25b27ddc7ae78e6295221e75d27c4f0c6726dfa9a05b876feee1ac62b8"
         },
         "native_notices": {
           "path": "docs/release-evidence/windows-0.2.0-inputs.json",
-          "sha256": "5e1ba772a74b6bcd22a7d49b1d4ef5f9f357a9325b6636bf78f71d4adea4d314"
+          "sha256": "ef589c25b27ddc7ae78e6295221e75d27c4f0c6726dfa9a05b876feee1ac62b8"
         },
         "rust_sources_notices": {
           "path": "docs/release-evidence/windows-0.2.0-inputs.json",
-          "sha256": "5e1ba772a74b6bcd22a7d49b1d4ef5f9f357a9325b6636bf78f71d4adea4d314"
+          "sha256": "ef589c25b27ddc7ae78e6295221e75d27c4f0c6726dfa9a05b876feee1ac62b8"
         }
       },
       "inputs": {
@@ -885,7 +885,7 @@
         "assets/preview-runtime.json": "72c92e5eb5d128913798f80a06a03294db798519809201458d0b17c29a4112a4",
         "assets/rust-notices.lock.json": "905d83803fb60351458f9ba233559356f7abd1aadb8bee9660ee37b01594c2b3",
         "assets/speech-bundle.json": "4bef71e92e5f3857e6d06e3a0b95971bc60448e838a6cf822fe9045d344c089f",
-        "assets/syllable-sources.lock.json": "0fbdc49bec0cf13f206f9363aa98174201f2c658fcbaafb85f3394a37f318f5d",
+        "assets/syllable-sources.lock.json": "a1d6be0dadb87a80181df37b47c0cf49360680e49837cdce5bb86728fc646bf2",
         "assets/windows-native.lock.json": "de8481277cc2e37a70773f69dcc304eb13be44f2db65c84d6f3324d1e26331ed",
         "rust_standard_library_source": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
         "tools/build_syllable_dicts.py": "76413ca0f84eaa5fe815539ca16a0b48af34b36c3949805ba7e172c7831c0366",
@@ -893,7 +893,7 @@
         "tools/windows_runtime.py": "090d182a40c72503f982457c1b2e1225586bdcfdb378e27d5b8573e23863c860"
       },
       "platform": "windows-x64",
-      "review_basis": "Actor/Critic register section 2026-11-18 release 0.2.0: the only changed input is Cargo.lock, by two lines of the noh package's own entry (its version, and a direct dependency on sha2 0.11.1, a package already locked); no third-party record changed; the 0.1.6 review is carried with its limits and open points. Submitted for the maintainer's approval by merge. Final candidate qualification is separate."
+      "review_basis": "Actor/Critic register sections 2026-11-18 release 0.2.0 and datasets: the changed inputs are Cargo.lock, by two lines of the noh package's own entry (its version, and a direct dependency on sha2 0.11.1, a package already locked), and assets/syllable-sources.lock.json (mirror addresses for the Moby archive; the Lexique archive repacked by its publisher on 2026-11-17, same table by digest, licence text added); no third-party Cargo record changed; the 0.1.6 review is carried with its limits and open points. Submitted for the maintainer's approval by merge. Final candidate qualification is separate."
     }
   ],
   "rust_source": {
