@@ -80,6 +80,31 @@ On Windows use `.exe` paths. Filters include `--states`, `--languages`, `--theme
 Use a new output directory and visually inspect screenshots as well as reports.
 Screenshot success is not a human interaction test.
 
+### The live preview
+
+`NOH_CAPTURE_PROJECT_ACTION=live-preview` (or `live-short`) presses Play and
+ends at `NOH_CAPTURE_PLAYBACK_UNTIL_MS`. On top of it, one of:
+
+- `NOH_CAPTURE_SEEK_PLAYING=1` clicks on the time ruler while playing, at
+  `NOH_CAPTURE_SEEK_TARGETS_MS`, holding the button `NOH_CAPTURE_SEEK_HOLD_MS`,
+  and reports what the monitor showed after each press;
+- `NOH_CAPTURE_DRAG_PLAYING=1` drags on the ruler while playing;
+- `NOH_CAPTURE_TRANSPORT=1` walks through pause, frame steps, volume, the end
+  of the montage, an edit and the short view.
+
+Every report lists the player each Play went to (`engines`), with the reason
+when it is not libmpv. `NOH_CAPTURE_REQUIRE_LIVE=1` waits for the light copies
+before Play and fails unless libmpv played, with a sound output: without it a
+capture passes just the same when the FFmpeg player played instead.
+`NOH_PLAYER=mpv` or `ffmpeg` chooses the player; `NOH_CACHE_DIR` keeps the
+light copies of a capture out of the user's cache.
+
+`NOH_PROFILE=<file>` appends a journal of what the preview does: each move of
+the playhead, each picture, each seek and its time, the player chosen at each
+Play and why. It is for diagnosis, in a capture or in ordinary use. The file
+holds the full paths of the media that were opened: read it before sending it
+to anyone.
+
 ## Documentation and contributions
 
 Keep the main README focused on the app and getting started. Detailed contracts
@@ -98,6 +123,13 @@ without rebuilding the whole runtime unless executable behavior also changes.
 - Automatic installation of updates is disabled in ordinary builds.
 - The desktop does not automatically restore a closed editing session.
 - HDR tone mapping and a verified end-to-end color-management contract are absent.
+- libmpv plays the live preview by default on Windows only. It has not been run
+  on Linux, where the system's libmpv is loaded, nor on macOS.
+- Once libmpv has given a montage up, the FFmpeg player plays until NOH is
+  started again, even if the cause is gone (a sound device plugged in since).
+- A window that is not redrawn while the system still reports it visible stops
+  a montage played by libmpv at its next cut, sound included, until it is drawn
+  again. A minimised or hidden window does not.
 
 These limitations must inform release readiness.
 [RELEASING.md](RELEASING.md) distinguishes source publication from a

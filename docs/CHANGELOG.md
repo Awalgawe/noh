@@ -9,12 +9,36 @@ builds are not public releases.
 
 ### Preview and playback
 
+- On Windows, play the montage through the fast-preview library. A click on
+  the time ruler while the montage plays shows the picture of the new position
+  at once, and the playing goes on from there.
+- Prepare a light copy of each video as soon as it is added. Copies are kept in
+  the user's cache folder and found again by the content of a file, not by its
+  name. A tile shows that its copy is being prepared, and the preview uses the
+  copy as soon as it is ready.
+- React to a press on the time ruler at once, instead of waiting to tell a
+  click from a drag. While the montage plays, the preview pauses for as long as
+  the button is down, shows the picture under the pointer and plays again at
+  the release.
+- Keep a picture on the monitor while playback stops, starts or is moved.
 - Stop the preview from keeping a little more memory with each picture it
   shows. Versions 0.40 and 0.41 of the fast-preview library never give back a
   small object they ask the graphics driver for at each picture. Earlier
   Windows packages, which carry version 0.40, have this in the paused preview,
   which shows few pictures; on Linux it depends on the version the system
   provides. A montage played through the library shows 24 to 60 a second.
+- The former player still plays what the fast-preview library does not: clip
+  sound mixed in, a still image in the montage, captions drawn without the
+  effect engine, a video whose copy is not ready yet. On Linux it remains the
+  default player.
+- When the library gives a montage up (it finds no sound output, or does not
+  start within three seconds), the former player takes over from the same
+  position: without a sound output, the montage starts and the other player
+  takes over about a second later. From then on the former player plays until
+  NOH is started again.
+- Start NOH with the environment variable `NOH_PLAYER=ffmpeg` to keep the
+  former player, or `NOH_PLAYER=mpv` to ask for the fast-preview library where
+  it is not the default.
 
 ## 0.1.6
 
