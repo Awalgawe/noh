@@ -20,6 +20,13 @@ MAY_NAME_RELEASE_ONLY = READ_RELEASE_ONLY | {
 MAY_NAME_THOSE_READERS = {".github/workflows/windows-installers.yml"}
 
 
+def executable_text(path, data):
+    """The part of a tracked file a job can act on: a Rust comment names a file without running it."""
+    if not path.endswith(".rs"):
+        return data
+    return b"\n".join(line for line in data.split(b"\n") if not line.lstrip().startswith(b"//"))
+
+
 class ScopeTests(unittest.TestCase):
     def test_docs_need_no_native_build(self):
         self.assertEqual(ci_scope.select(["README.md", "docs/APP.md", "CONTRIBUTING.md",
@@ -59,6 +66,15 @@ class ScopeTests(unittest.TestCase):
                 self.assertTrue((ROOT / path).is_file())
         self.assertFalse(ci_scope.RELEASE_ONLY & (ci_scope.WINDOWS_ONLY | ci_scope.UNIX_ONLY))
 
+    def test_rust_comments_do_not_count_as_naming_a_file(self):
+        source = (b"//! Tested by the installer stage (`tools/installer/public-ci.py`).\n"
+                  b"    // see assets/upgrade-baseline.lock.json\n"
+                  b"let lock = \"assets/upgrade-baseline.lock.json\"; // used\n")
+        kept = executable_text("src/auto_update/mod.rs", source)
+        self.assertNotIn(b"public-ci.py", kept)
+        self.assertIn(b"upgrade-baseline.lock.json", kept)  # code that names it still counts
+        self.assertEqual(executable_text("tools/run.py", source), source)  # only Rust is filtered
+
     def test_nothing_a_native_job_reads_names_release_tooling(self):
         tracked = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True).stdout
         names = {path: Path(path).name.encode() for path in ci_scope.RELEASE_ONLY}
@@ -70,7 +86,7 @@ class ScopeTests(unittest.TestCase):
             if (item in ci_scope.RELEASE_ONLY or item in MAY_NAME_RELEASE_ONLY
                     or item.startswith("docs/") or item.endswith(".md")):
                 continue
-            data = (ROOT / item).read_bytes()
+            data = executable_text(item, (ROOT / item).read_bytes())
             named = sorted(path for path, name in names.items() if name in data)
             if named:
                 found[item] = named
