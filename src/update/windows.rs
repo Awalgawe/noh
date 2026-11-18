@@ -830,6 +830,66 @@ mod tests {
             Ok(None) => panic!("Managed loaded image must never skip its lease"),
         }
     }
+    /// Which of the folder's files cannot be opened alone right now, with the code Windows gives.
+    /// A file somebody else holds answers 32 (sharing violation).
+    fn held_files(folder: &Path) -> Vec<(String, Option<i32>)> {
+        ["participant.exe", "sq.version", "manifest.json"]
+            .into_iter()
+            .filter_map(|name| {
+                std::fs::OpenOptions::new()
+                    .read(true)
+                    .share_mode(0)
+                    .open(folder.join(name))
+                    .err()
+                    .map(|error| (name.to_string(), error.raw_os_error()))
+            })
+            .collect()
+    }
+    /// Move the application folder aside the way the pinned engine does.
+    ///
+    /// Velopack 1.2.161 (revision 92d6a1c9, apply_windows_impl.rs) backs `current` up with
+    /// `retry_io_ex(|| fs::rename(..), 1000, 10)`: one attempt, then up to ten more a second
+    /// apart, and after that the update stops with "one or more running processes prevented
+    /// it". This waits no longer than the engine would, so a refusal that outlasts it fails
+    /// here as it would fail an update.
+    ///
+    /// On a GitHub runner the move was refused once with code 5, access denied (run
+    /// 43751830215). The participant holds no file of the folder at that point; what did was
+    /// not identified. Each refusal therefore reports which files could not be opened alone at
+    /// that instant. The move is retried for as long as the engine would retry it, so that the
+    /// failure can say how long the hold lasted and whether an update would have got through;
+    /// the test fails either way.
+    fn move_as_the_engine_does(from: &Path, to: &Path) {
+        let started = std::time::Instant::now();
+        let mut refusals = Vec::new();
+        loop {
+            match std::fs::rename(from, to) {
+                Ok(()) => break,
+                Err(error) => {
+                    refusals.push(format!(
+                        "after {:?}: code {:?}, held {:?}",
+                        started.elapsed(),
+                        error.raw_os_error(),
+                        held_files(from)
+                    ));
+                    assert!(
+                        started.elapsed() < Duration::from_secs(10),
+                        "The engine would have given up on this move: {refusals:#?}"
+                    );
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+            }
+        }
+        if !refusals.is_empty() {
+            // The same question once nothing refuses: what a running copy alone answers.
+            let baseline = held_files(to);
+            panic!(
+                "The application folder was held before it could be moved, as on run 43751830215. \
+                 An update would have waited too; this failure is the record of who held it.\n\
+                 Refusals: {refusals:#?}\nOnce moved: {baseline:?}"
+            );
+        }
+    }
     #[test]
     fn native_loaded_image_cannot_enter_application_during_or_after_replacement() {
         for during_update in [true, false] {
@@ -858,7 +918,7 @@ mod tests {
             }
             assert!(root.path().join("loaded").exists());
             let update = ExclusiveLease::acquire(root.path()).unwrap();
-            std::fs::rename(&current, root.path().join("backup")).unwrap();
+            move_as_the_engine_does(&current, &root.path().join("backup"));
             if !during_update {
                 std::fs::create_dir(&current).unwrap();
                 std::fs::write(current.join("sq.version"), b"fixture B").unwrap();
