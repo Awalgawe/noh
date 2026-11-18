@@ -231,8 +231,13 @@ def inventory(folder):
 
 def fetch(spec, cache, name):
     relative(name)
-    url, expected = spec.get("download_url", spec["url"]), spec["sha256"]
-    if urllib.parse.urlparse(url).scheme != "https" or not HEX.fullmatch(expected):
+    expected = spec["sha256"]
+    # A spec may list mirrors: other addresses of the same bytes, tried in order when an
+    # address does not answer or serves something else. The pinned SHA-256 decides which
+    # bytes are accepted, whatever the host; the last address fails as a single one does.
+    urls = [spec.get("download_url", spec["url"]), *spec.get("mirrors", [])]
+    if (not HEX.fullmatch(expected)
+            or any(not isinstance(url, str) or urllib.parse.urlparse(url).scheme != "https" for url in urls)):
         raise ValueError(f"Unpinned or insecure download: {name}")
     path = Path(cache) / name
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -241,11 +246,25 @@ def fetch(spec, cache, name):
             raise ValueError(f"Corrupt cached download: {name}; remove it deliberately before retrying")
         return path
     pending = path.with_name(path.name + ".download")
-    checked(["curl", "--fail", "--location", "--proto", "=https", "--proto-redir", "=https",
-             "--retry", "2", "--connect-timeout", "30", "--max-time", "1800",
-             "--output", pending, url])
-    if digest(pending) != expected:
-        raise ValueError(f"SHA-256 mismatch: {name}")
+    for position, url in enumerate(urls, 1):
+        last = position == len(urls)
+        # The next address is the retry of this one. curl obeys a server's Retry-After: a site
+        # down for maintenance answered 503 with "retry-after: 3600", and one retry waited an hour.
+        try:
+            checked(["curl", "--fail", "--location", "--proto", "=https", "--proto-redir", "=https",
+                     "--retry", "2" if last else "0", "--connect-timeout", "30", "--max-time", "1800",
+                     "--output", pending, url])
+        except subprocess.SubprocessError as error:
+            if last:
+                raise
+            reason = type(error).__name__ + " " + str(getattr(error, "returncode", ""))
+        else:
+            if digest(pending) == expected:
+                break
+            if last:
+                raise ValueError(f"SHA-256 mismatch: {name}")
+            reason = "SHA-256 mismatch"
+        print(f"Download of {name} failed at {url} ({reason.strip()}); trying the next address", flush=True)
     pending.replace(path)
     return path
 

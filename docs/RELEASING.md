@@ -262,6 +262,15 @@ desktop run, whatever the release commit pinned.
 Each new pin states its address and the digest its publisher gives; the probe checks
 that digest at download.
 
+Before the build, fetch the two syllable datasets as the build does, into an empty
+folder: `python tools/delivery.py acquire-datasets --cache <empty folder> --output
+<folder>`. The build stops when one of them cannot be fetched or no longer has its
+pinned digest, and both happened on 2026-11-18: the first address of the English
+archive was down for maintenance, which its mirrors in
+`assets/syllable-sources.lock.json` now cover, and the publisher of the French one had
+repacked it the day before. A changed archive is a changed redistribution input: its
+new pin is reviewed and recorded before any build.
+
 1. Merge the release commit through PR checks. It is written as if the version
    were already published: the changelog entry is `## <version>`, without
    "unreleased". The `publish` stage refuses an entry still marked unreleased.

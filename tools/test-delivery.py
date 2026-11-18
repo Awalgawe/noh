@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Meaningful delivery rejection checks, using only small synthetic fixtures."""
+import contextlib
 import copy
 import hashlib
 import importlib.util
@@ -14,6 +15,7 @@ import tarfile
 import tempfile
 import unittest
 from unittest.mock import patch
+import urllib.parse
 import zipfile
 
 import delivery
@@ -1089,6 +1091,64 @@ class DeliveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'insecure'), patch.object(delivery, 'checked') as run:
             delivery.fetch(source, cache, 'b.tar')
             run.assert_not_called()
+
+    def test_a_download_falls_back_to_its_mirrors_and_the_pin_still_decides(self):
+        cache = self.root / 'cache'
+        data = b'the pinned bytes'
+        source = {'url': 'https://first.invalid/a.zip',
+                  'mirrors': ['https://second.invalid/a.zip', 'https://third.invalid/a.zip'],
+                  'sha256': hashlib.sha256(data).hexdigest()}
+        tried, retries = [], []
+
+        def download(answers):
+            def run(command, **kwargs):
+                url = command[-1]
+                tried.append(url)
+                retries.append(command[command.index('--retry') + 1])
+                self.assertIn('--proto-redir', command)
+                answer = answers[urllib.parse.urlparse(url).hostname.split('.')[0]]
+                if answer is None:
+                    raise subprocess.CalledProcessError(22, command)
+                Path(command[command.index('--output') + 1]).write_bytes(answer)
+            return run
+
+        # The first address does not answer, the second serves other bytes: the third is taken.
+        with patch.object(delivery, 'checked', side_effect=download({'first': None, 'second': b'other', 'third': data})), \
+                contextlib.redirect_stdout(io.StringIO()) as said:
+            self.assertEqual(delivery.fetch(source, cache, 'a.zip').read_bytes(), data)
+        self.assertEqual(tried, [source['url'], *source['mirrors']])
+        # Only the last address is retried: a server that asks to wait must not hold the others back.
+        self.assertEqual(retries, ['0', '0', '2'])
+        self.assertIn('first.invalid', said.getvalue())
+        self.assertIn('SHA-256 mismatch', said.getvalue())
+        # An address that answers with the pinned bytes ends the search.
+        tried.clear()
+        with patch.object(delivery, 'checked', side_effect=download({'first': data})):
+            delivery.fetch(source, cache, 'b.zip')
+        self.assertEqual(tried, [source['url']])
+        # When every address fails, the last failure is the error and nothing enters the cache.
+        for answers, error in (({'first': None, 'second': None, 'third': None}, subprocess.CalledProcessError),
+                               ({'first': None, 'second': None, 'third': b'other'}, ValueError)):
+            tried.clear()
+            with patch.object(delivery, 'checked', side_effect=download(answers)), \
+                    contextlib.redirect_stdout(io.StringIO()), self.assertRaises(error):
+                delivery.fetch(source, cache, 'c.zip')
+            self.assertEqual(len(tried), 3)
+            self.assertFalse((cache / 'c.zip').exists())
+        # A mirror is held to the same rule as the first address: https, checked before any download.
+        for bad in ('http://second.invalid/a.zip', 5):
+            with self.assertRaisesRegex(ValueError, 'insecure'), patch.object(delivery, 'checked') as run:
+                delivery.fetch({**source, 'mirrors': [bad]}, cache, 'd.zip')
+            run.assert_not_called()
+
+    def test_the_locked_mirrors_are_other_hosts_of_the_same_archive(self):
+        moby = delivery.read(delivery.ROOT / 'assets/syllable-sources.lock.json')['datasets']['moby']
+        hosts = [urllib.parse.urlparse(url).hostname for url in (moby['url'], *moby['mirrors'])]
+        self.assertGreaterEqual(len(moby['mirrors']), 2)
+        self.assertEqual(len(set(hosts)), len(hosts))
+        for url in moby['mirrors']:
+            self.assertEqual(urllib.parse.urlparse(url).scheme, 'https')
+            self.assertTrue(url.endswith('/3/2/0/3204/files.zip'))
 
     def test_unsafe_paths_duplicates_and_symlinks_are_rejected(self):
         for name in ("../outside", "/absolute", "C:/path", "a\\b", "a/./b", "NUL.txt", "name.", "name "):

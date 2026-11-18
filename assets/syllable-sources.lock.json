@@ -5,6 +5,12 @@
     "moby": {
       "name": "Moby Hyphenation List (Grady Ward), Project Gutenberg eBook #3204",
       "url": "https://www.gutenberg.org/files/3204/files.zip",
+      "mirrors": [
+        "https://aleph.pglaf.org/3/2/0/3204/files.zip",
+        "https://www.mirrorservice.org/sites/ftp.ibiblio.org/pub/docs/books/gutenberg/3/2/0/3204/files.zip",
+        "https://mirror.csclub.uwaterloo.ca/gutenberg/3/2/0/3204/files.zip"
+      ],
+      "mirrors_checked": "2026-11-18",
       "sha256": "fc7e5ddc173e3150eb3f611f2ad91df63845ac9f2d9d1bc86562e57c1463c6f2",
       "file": "moby-files.zip",
       "member": "mhyph.txt",
@@ -15,12 +21,12 @@
     "lexique": {
       "name": "Lexique 3.83 (Boris New, Christophe Pallier and contributors)",
       "url": "https://www.lexique.org/databases/Lexique383/Lexique383.zip",
-      "sha256": "e181d132b3b0d3d87efc98d376968441b517353933011cebea5366321a6024e6",
+      "sha256": "8555c3b726ae74f83a1866f3690843f2b7e609b6270189cc5b1d5bac96c7d3ac",
       "file": "Lexique383.zip",
-      "member": "Lexique383.tsv",
+      "member": "Lexique383/Lexique383.tsv",
       "member_sha256": "637ba37a767a66679c48371d673ece50cbf541b49a4e40e598963d4f3fbce52b",
-      "licence": "CC BY-SA 4.0 (README-Lexique.txt in the archive)",
-      "licence_read": "2026-11-09"
+      "licence": "CC BY-SA 4.0 (README-Lexique.txt in the archive). The publisher repacked the archive on 2026-11-17: the same table and the same README, now inside a Lexique383/ folder, with the licence's own text added as CC.BY.SA.txt.",
+      "licence_read": "2026-11-18"
     }
   },
   "outputs": {
