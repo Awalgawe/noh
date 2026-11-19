@@ -214,6 +214,7 @@ impl NohApp {
     pub(super) fn ls_start_game(&mut self, ctx: &egui::Context) {
         if self.lyrics_screen.game.is_some()
             || self.ls_reading()
+            || self.lyrics_locked()
             || self.lyrics_question_open()
             || self.lyrics_question_pending()
             || self.project.duration_ms == 0
@@ -588,7 +589,9 @@ impl NohApp {
         let count = g.holds.len();
         if count == 0 {
             // Only the proposed splits, if any: taken back with the game.
-            if g.stepped {
+            // Not while a job locks the lyrics (taking them back would change
+            // what the job reads): they stay as the game's undo step.
+            if g.stepped && !self.lyrics_locked() {
                 self.take_back_edit();
             }
             return;
@@ -607,6 +610,16 @@ impl NohApp {
             },
             self.project.edit_revision,
         ));
+    }
+
+    /// A job locks the lyrics during a game: it stops and keeps its takes.
+    /// The unit being held is not taken (`ls_end_game` would take it).
+    pub(super) fn ls_lock_game(&mut self) {
+        let Some(g) = &mut self.lyrics_screen.game else {
+            return;
+        };
+        g.hold = None;
+        self.ls_end_game();
     }
 
     /// The game ends with nothing kept by it (its step was taken back by the

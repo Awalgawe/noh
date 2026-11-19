@@ -364,13 +364,8 @@ pub fn split_at(track: &mut SubtitleTrack, i: usize, ms: u64) -> bool {
 }
 
 /// Join a cue with the next one: one cue from the first start to the second
-/// end, texts joined by a line break; word times are kept when both have them.
-pub fn join_next(track: &mut SubtitleTrack, i: usize) -> bool {
-    join_next_with(track, i, "\n")
-}
-
-/// `join_next` with the texts joined by `sep`: a line break (the cue shows two
-/// lines) or a space (one line of text, as the lyrics screen joins, answer Q3).
+/// end, texts joined by `sep` (a space: one line of text, as the lyrics screen
+/// joins, answer Q3); word times are kept when both have them.
 pub fn join_next_with(track: &mut SubtitleTrack, i: usize, sep: &str) -> bool {
     if i + 1 >= track.cues.len() {
         return false;
@@ -553,60 +548,6 @@ pub fn set_syllables(track: &mut SubtitleTrack, i: usize, w: usize, parts: &[Str
         return false;
     }
     cue.words = Some(words);
-    true
-}
-
-/// Rhythm taps for cue `i`: one start per unit, in order. A first tap before
-/// the cue start moves the start there (not before the previous cue's end); a
-/// last tap after the end moves the end to 0.3 s after it (not past the next
-/// cue). Taps closer than 50 ms are pushed apart. All or nothing.
-pub fn apply_taps(track: &mut SubtitleTrack, i: usize, taps: &[u64]) -> bool {
-    let Some(cue) = track.cues.get(i) else {
-        return false;
-    };
-    let mut words = words_or_estimate(cue);
-    let mut probe = cue.clone();
-    probe.words = Some(words.clone());
-    let list = units(&probe);
-    if taps.len() != list.len() || taps.is_empty() {
-        return false;
-    }
-    let prev_end = i.checked_sub(1).map_or(0, |p| track.cues[p].end_ms);
-    let next_start = track
-        .cues
-        .get(i + 1)
-        .map_or(track.duration_ms, |n| n.start_ms);
-    let mut t: Vec<u64> = taps.to_vec();
-    t[0] = t[0].max(prev_end);
-    for k in 1..t.len() {
-        t[k] = t[k].max(t[k - 1] + MIN_WORD_GAP_MS);
-    }
-    let mut cue = cue.clone();
-    cue.start_ms = cue.start_ms.min(t[0]);
-    let last = *t.last().unwrap();
-    if last + MIN_WORD_GAP_MS > cue.end_ms {
-        cue.end_ms = (last + 300).min(next_start);
-    }
-    for (&(wi, si, _), &ms) in list.iter().zip(&t) {
-        set_unit(&mut words, (wi, si), ms);
-    }
-    // Taps give starts only: every unit moved, so no old end is kept.
-    for w in &mut words {
-        w.end_ms = None;
-        for s in w.syllables.iter_mut().flatten() {
-            s.end_ms = None;
-        }
-    }
-    if !cue.words_fit(&words) {
-        return false;
-    }
-    cue.words = Some(words);
-    let mut next = track.clone();
-    next.cues[i] = cue;
-    if next.validate().is_err() {
-        return false;
-    }
-    *track = next;
     true
 }
 
@@ -1049,12 +990,6 @@ mod tests {
         assert!(join_next_with(&mut t, 0, " "));
         assert_eq!(t.cues[0].text, "Something had to give");
         assert_eq!(t.cues[0].words.as_ref().map(Vec::len), Some(4));
-        let mut t = track();
-        assert!(join_next(&mut t, 0));
-        assert_eq!(
-            t.cues[0].text,
-            "Something had to give\nand nothing disappears"
-        );
     }
 
     #[test]
@@ -1308,7 +1243,7 @@ mod tests {
         t.cues[0].words.as_mut().unwrap()[1].end_ms = Some(2190);
         assert!(split_at(&mut t, 0, 2150));
         assert_eq!(ends(&t, 0), [Some(1600), Some(2150)]);
-        assert!(join_next(&mut t, 0));
+        assert!(join_next_with(&mut t, 0, " "));
         assert_eq!(ends(&t, 0), [Some(1600), Some(2150), None, None]);
         assert!(t.validate().is_ok());
 
@@ -1316,11 +1251,6 @@ mod tests {
         let mut t = base.clone();
         assert!(set_text(&mut t, 0, "Something had to live"));
         assert_eq!(ends(&t, 0), [Some(1600), Some(2100), None, None]);
-
-        // Rhythm taps give starts only: every old end goes.
-        let mut t = base.clone();
-        assert!(apply_taps(&mut t, 0, &[1000, 1700, 2200, 2500]));
-        assert_eq!(ends(&t, 0), [None, None, None, None]);
 
         // settle: a start pushed later loses its end.
         let cue = base.cues[0].clone();
@@ -1556,35 +1486,6 @@ mod tests {
     }
 
     #[test]
-    fn rhythm_taps_place_every_unit_and_may_move_the_line_edges() {
-        let mut t = track();
-        assert!(!apply_taps(&mut t, 0, &[900, 1500]), "one tap per unit");
-        assert!(apply_taps(&mut t, 0, &[900, 1500, 1520, 3100]));
-        assert_eq!(
-            t.cues[0].start_ms, 900,
-            "an early first tap moves the start"
-        );
-        assert_eq!(
-            t.cues[0].end_ms, 3400,
-            "a late last tap moves the end 0.3 s after it"
-        );
-        assert_eq!(
-            starts(&t, 0).iter().map(|w| (w.1, w.2)).collect::<Vec<_>>(),
-            [
-                (900, WordSource::Hand),
-                (1500, WordSource::Hand),
-                (1550, WordSource::Hand),
-                (3100, WordSource::Hand)
-            ]
-        );
-        assert!(t.validate().is_ok());
-        // Never past the neighbours.
-        assert!(apply_taps(&mut t, 1, &[3000, 4500, 7000]));
-        assert_eq!(t.cues[1].start_ms, 3400);
-        assert!(t.validate().is_ok());
-    }
-
-    #[test]
     fn moving_a_cue_moves_its_words_within_its_neighbours() {
         let mut t = track();
         assert_eq!(
@@ -1617,8 +1518,8 @@ mod tests {
         assert_eq!(t.cues[1].text, "to give");
         assert_eq!(starts(&t, 1)[0].1, 2200);
         assert!(t.validate().is_ok());
-        assert!(join_next(&mut t, 0));
-        assert_eq!(t.cues[0].text, "Something had\nto give");
+        assert!(join_next_with(&mut t, 0, " "));
+        assert_eq!(t.cues[0].text, "Something had to give");
         assert_eq!(starts(&t, 0).len(), 4);
         assert!(t.validate().is_ok());
         // Without word times the letters decide where the text is cut.

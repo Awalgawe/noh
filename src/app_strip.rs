@@ -28,6 +28,9 @@ pub struct State {
     /// The menu opened: its first enabled item takes the focus once shown.
     pub(super) lyrics_focus_first: bool,
     pub(super) lyrics_language_open: bool,
+    /// « Modifier » on the lyrics chip, as drawn last frame.
+    #[cfg(test)]
+    pub(super) lyrics_edit_rect: Option<Rect>,
     #[cfg(test)]
     pub tiles: Vec<(u64, Rect)>,
     #[cfg(test)]

@@ -651,20 +651,11 @@ impl NohApp {
                 self.pick_lyrics(ctx);
             }
             ContextAction::ReviewLyrics => {
-                // Review in the lane: the first line's bubble opens.
-                self.lyrics_ready = None;
-                if let Some(first) = self.lyrics_track().and_then(|t| t.cues.first().cloned()) {
-                    // Bring it into view: the bubble opens above a visible line.
-                    let duration = self.project.duration_ms;
-                    if let Some(range) = noh::timeline::Range::new(
-                        first.start_ms,
-                        first.end_ms.min(duration),
-                        duration,
-                    ) {
-                        self.project.viewport =
-                            app_timeline::focus_range(range, duration).or(self.project.viewport);
-                    }
-                    self.lyrics_edit.selected = Some(0);
+                // Review on the lyrics screen, from the first line. While a
+                // job locks the lyrics nothing opens, and the row stays.
+                if !self.lyrics_locked() {
+                    self.lyrics_ready = None;
+                    self.open_lyrics_screen(Some(0));
                 }
             }
             ContextAction::Suggest => {

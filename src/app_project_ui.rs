@@ -175,6 +175,89 @@ mod tests {
             [4.0, 2.5, 3.0]
         );
     }
+    /// The lyrics lane is an entry to the lyrics screen: a click opens it on
+    /// the clicked line, and nothing opens while a job locks the lyrics.
+    #[test]
+    fn a_click_on_the_lyrics_lane_opens_the_lyrics_screen_on_that_line() {
+        let folder = tempfile::tempdir().unwrap();
+        let ctx = egui::Context::default();
+        app_locale::install_fonts(&ctx);
+        let mut app = NohApp::default();
+        let srt = "1\n00:00:02,000 --> 00:00:05,000\nfirst line\n\n2\n00:00:09,000 --> 00:00:12,000\nsecond line\n\n";
+        let path = folder.path().join("song.srt");
+        std::fs::write(&path, srt).unwrap();
+        app.project.duration_ms = 20_000;
+        app.project.track.path = Some(path.clone());
+        app.project.track.loaded = Some(app_track::Loaded {
+            track: std::sync::Arc::new(noh::subtitle_srt::parse(srt, 20_000).unwrap()),
+            snapshot: noh::inspection::Snapshot(vec![
+                noh::inspection::FileStamp::read(&path).unwrap(),
+            ]),
+            model: None,
+            lyrics_unwritten: None,
+            srt_stamp: noh::inspection::FileStamp::read(&path).ok(),
+            lyrics_stamp: None,
+            pairing: Default::default(),
+        });
+        let frame = |app: &mut NohApp, events: Vec<egui::Event>| {
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(980.0, 400.0),
+                    )),
+                    events,
+                    ..Default::default()
+                },
+                |ui| {
+                    app_style::apply(ui.ctx());
+                    ui.add_space(40.0);
+                    app.project_timeline(ui, false);
+                },
+            );
+            output.textures_delta.clear();
+            output.shapes.iter().find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.text() == "second line" => {
+                    Some(text.galley.rect.translate(text.pos.to_vec2()).center())
+                }
+                _ => None,
+            })
+        };
+        let click = |app: &mut NohApp, at: egui::Pos2| {
+            for pressed in [true, false] {
+                frame(
+                    app,
+                    vec![
+                        egui::Event::PointerMoved(at),
+                        egui::Event::PointerButton {
+                            pos: at,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                );
+            }
+        };
+        let at = frame(&mut app, Vec::new()).expect("the second line is painted on the lane");
+        app.cancelling = true;
+        click(&mut app, at);
+        assert!(
+            !app.lyrics_screen.open,
+            "a job runs: the lane opens nothing"
+        );
+        app.cancelling = false;
+        frame(&mut app, Vec::new());
+        click(&mut app, at);
+        assert!(app.lyrics_screen.open);
+        assert_eq!(app.lyrics_screen_line(), Some(1));
+        assert_eq!(
+            *app.lyrics_track().unwrap(),
+            noh::subtitle_srt::parse(srt, 20_000).unwrap(),
+            "the lane edits nothing"
+        );
+    }
+
     /// The painted flag keeps the interface decimal in both preview views.
     #[test]
     fn short_flag_text_follows_the_language_in_video_and_short_views() {
@@ -223,6 +306,9 @@ impl NohApp {
     pub(super) fn project_timeline(&mut self, ui: &mut egui::Ui, locked: bool) {
         let visuals = self.project_visuals();
         let lyrics = self.lyrics_track();
+        let l = self.locale.language;
+        // While a job runs the lyrics cannot be edited: the lane says so.
+        let lyrics_locked = self.lyrics_locked().then(|| l.text("lyrics_screen.locked"));
         let output = app_timeline::show(
             ui,
             &self.locale,
@@ -241,37 +327,22 @@ impl NohApp {
                 fade_in_seconds: if self.in_enabled { self.fade_in } else { 0.0 },
                 fade_out_seconds: if self.out_enabled { self.fade_out } else { 0.0 },
                 restart: self.project.restart_loops,
-                selected_cue: self.lyrics_edit.selected,
-                words: self
-                    .lyrics_edit
-                    .words
-                    .as_ref()
-                    .map(|w| app_timeline::WordLane {
-                        cue: w.cue,
-                        word: w.word,
-                        taps: w.taps.as_deref(),
-                    }),
+                lyrics_hint: l.text("lyrics_screen.lane_hint"),
+                lyrics_locked,
             },
         );
         if self.mini_preview.short && self.project.range != output.range {
             self.mini_preview.invalidate();
         }
         self.project.range = output.range;
-        // Before the lane's events: entering or leaving word mode sets the view.
         self.project.viewport = output.viewport;
-        let locked = locked || self.lyrics_frozen();
-        if let Some(event) = output.cue
+        // A click on the lyrics lane opens the lyrics screen: on the clicked
+        // line, else on the one under the playhead.
+        if let Some(line) = output.lyrics_click
             && !locked
+            && !self.lyrics_locked()
         {
-            self.lane_event(event);
-        }
-        let cue_rect = self
-            .lyrics_edit
-            .selected
-            .and_then(|i| self.project_ui.timeline.cue_rect(i));
-        let lane = self.project_ui.timeline.cues_lane();
-        if !locked {
-            self.lyrics_bubble(ui, cue_rect, lane);
+            self.open_lyrics_screen(line);
         }
         // Hover only draws the guide line; the ruler alone moves the playhead.
         self.apply_timeline(&output, ui.ctx());

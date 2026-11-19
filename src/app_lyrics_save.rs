@@ -1,4 +1,4 @@
-//! Writing lane edits as they are made (lyrics plan 3; maintainer, 11 November):
+//! Writing lyrics edits as they are made (lyrics plan 3; maintainer, 11 November):
 //! about 1 s after the last change, NOH writes the lyrics file
 //! (`<name>.noh-lyrics.json`, the reference) and the subtitle file from it,
 //! nothing else. There is no Save button; Ctrl+S writes at once.
@@ -236,7 +236,7 @@ impl NohApp {
             .then(|| Instant::now() + WRITE_DELAY);
     }
 
-    /// A new lane edit (edit_track): the first edit of this source asks, and
+    /// A new lyrics edit (edit_track): the first edit of this source asks, and
     /// « Annuler » takes back that edit alone.
     pub(super) fn lyrics_edited(&mut self) {
         if self.project.edit.is_some() && !self.may_write() {

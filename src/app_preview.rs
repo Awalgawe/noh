@@ -2671,7 +2671,7 @@ mod tests {
             viewport: None,
             commit_changed: false,
             retry: false,
-            cue: None,
+            lyrics_click: None,
         }
     }
     #[test]

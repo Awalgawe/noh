@@ -7,6 +7,25 @@ builds are not public releases.
 
 ## Unreleased
 
+### Lyrics
+
+- Edit the lyrics on a screen of their own: "Edit" on the lyrics chip, or
+  a click on the lyrics lane, opens it on the line under the pointer or the
+  playhead. The text of every line is typed there like in a document (Enter
+  cuts a line at the cursor, Backspace at its start joins it to the line
+  above), beside the video, with a zoomed track under them where the lines,
+  the words and the syllables are dragged.
+- Set the times by ear with a sync game: while the song plays, hold Space for
+  as long as each line, word or syllable is sung. The song can play slower,
+  at the same pitch. A whole game is one undo step.
+- Lines, words and syllables keep their own end time, so a breath between two
+  words stays a silence in the caption effects.
+- The lyrics lane of the main screen no longer edits: its bubble, its word
+  mode and its drags are replaced by the lyrics screen. Hovering a line shows
+  its times and its text.
+- While an export or another job runs, the lyrics are read-only, on the main
+  screen and on the lyrics screen.
+
 ### Updates
 
 - An installed copy on Windows updates itself, the way VS Code does: once a day

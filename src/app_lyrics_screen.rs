@@ -170,6 +170,8 @@ struct Drawn {
     ruler: Option<Rect>,
     foot: Option<Rect>,
     foot_text: Option<Rect>,
+    /// The banner shown while a job locks the lyrics.
+    read_only: Option<Rect>,
     /// « Commencer ».
     start: Option<Rect>,
     /// The summary's « Reprendre à la ligne N » and « Tout annuler ».
@@ -483,8 +485,9 @@ fn row_gap(ui: &mut egui::Ui, width: f32) {
     }
 }
 
-/// A small button of the text list's row actions and of the footer.
-fn small_button(
+/// A small button of the text list's row actions and of the footer (and
+/// « Modifier » on the main screen's lyrics chip).
+pub(super) fn small_button(
     ui: &mut egui::Ui,
     label: &str,
     enabled: bool,
@@ -528,8 +531,7 @@ fn small_button(
 impl NohApp {
     /// Open the lyrics screen on line `cue` (None: the line under the
     /// playhead, else the first). The monitor shows the whole video there.
-    /// Nothing on the main screen opens it yet (build plan, step 6): capture
-    /// states and tests do.
+    /// « Modifier » on the lyrics chip and a click on the lyrics lane open it.
     pub(super) fn open_lyrics_screen(&mut self, cue: Option<usize>) {
         let Some(track) = self.lyrics_track() else {
             return;
@@ -543,9 +545,6 @@ impl NohApp {
                     .position(|c| c.start_ms <= ph && ph < c.end_ms)
             })
             .unwrap_or(0);
-        // The lane's own editor closes: one place edits at a time.
-        self.end_words();
-        self.lyrics_edit.selected = None;
         let s = &mut self.lyrics_screen;
         *s = State {
             open: true,
@@ -611,8 +610,16 @@ impl NohApp {
                     self.ls_end_game();
                 }
             }
+            // A job started while the screen was open: read-only.
+            "-read-only" => self.cancelling = true,
             _ => {}
         }
+    }
+
+    /// The line the open screen is on.
+    #[cfg(test)]
+    pub(super) fn lyrics_screen_line(&self) -> Option<usize> {
+        self.lyrics_screen.open.then_some(self.lyrics_screen.cur)
     }
 
     /// « Terminé »: what was typed is kept (the lyrics are written about a
@@ -667,6 +674,20 @@ impl NohApp {
             && self.project.track.loading()
     }
 
+    /// A job runs (an export, a render, lyrics generated again): the screen
+    /// is read-only until its end, as the main screen's lane is locked. A
+    /// game stops and keeps its takes, a drag or a split being typed is
+    /// dropped, and nothing here changes the lyrics the job reads. Playback
+    /// and « Terminé » stay.
+    fn ls_lock_frame(&mut self) {
+        if !self.lyrics_locked() {
+            return;
+        }
+        self.ls_lock_game();
+        let s = &mut self.lyrics_screen;
+        (s.drag, s.preview, s.syl, s.word, s.toast) = (None, None, None, None, None);
+    }
+
     fn ls_flash(&mut self, key: &str, args: &[String]) {
         let text = self.locale.language.format(key, args);
         self.lyrics_screen.flash = Some((text, Instant::now() + FLASH));
@@ -702,7 +723,12 @@ impl NohApp {
     fn ls_commit_draft(&mut self) {
         // A lyrics question waits for its answer, or the lyrics file is being
         // read again: the typed text waits too, and is tried again after.
-        if self.lyrics_question_pending() || self.lyrics_question_open() || self.ls_reading() {
+        // So does it while a job locks the lyrics.
+        if self.lyrics_question_pending()
+            || self.lyrics_question_open()
+            || self.ls_reading()
+            || self.lyrics_locked()
+        {
             return;
         }
         let Some(d) = &mut self.lyrics_screen.draft else {
@@ -1120,6 +1146,18 @@ impl NohApp {
         if self.lyrics_question_open() || self.lyrics_question_pending() || self.ls_reading() {
             return;
         }
+        // Read-only while a job runs: Échap closes, Espace plays or pauses.
+        if self.lyrics_locked() {
+            if ctx.input_mut(|i| take_key(i, Key::Escape, plain)) {
+                self.close_lyrics_screen();
+            } else if !ctx.egui_wants_keyboard_input()
+                && ctx.memory(|m| m.focused().is_none())
+                && ctx.input_mut(|i| take_key(i, Key::Space, plain))
+            {
+                self.mini_play(ctx);
+            }
+            return;
+        }
         let cur = self.lyrics_screen.cur;
         let count = track.cues.len();
         // Échap, one layer at a time: a drag, the split field, the keyboard
@@ -1254,6 +1292,7 @@ impl NohApp {
         let full = ui.available_rect_before_wrap();
         let compact = full.width() < style::COMPACT_BELOW;
         self.ls_sync(&track, compact);
+        self.ls_lock_frame();
         self.ls_game_frame(&ctx);
         self.ls_keys(&ctx, &track);
         if !self.lyrics_screen.open {
@@ -1362,8 +1401,10 @@ impl NohApp {
             Some(w) => l.format(named, &[w.clone()]),
         };
         // During a game the text, the undo arrows and « Terminé » wait.
+        // While a job runs, so do the arrows; « Terminé » stays.
         let game = self.lyrics_screen.game.is_some();
-        let (undo, redo) = (undo.filter(|_| !game), redo.filter(|_| !game));
+        let held = game || self.lyrics_locked();
+        let (undo, redo) = (undo.filter(|_| !held), redo.filter(|_| !held));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if style::button(ui, l.text("lyrics_screen.done"), !game, true, 0.0).clicked() {
                 self.close_lyrics_screen();
@@ -1416,6 +1457,10 @@ impl NohApp {
         let l = self.locale.language;
         let width = ui.available_width() - 2.0 * pad;
         let left = ui.max_rect().left() + pad;
+        #[cfg(test)]
+        {
+            self.lyrics_screen.drawn.read_only = None;
+        }
         if self
             .project
             .edit
@@ -1436,6 +1481,26 @@ impl NohApp {
                 l.text("edit.outside"),
                 true,
             );
+        }
+        if self.lyrics_locked() {
+            ui.add_space(space::S);
+            let (rect, _) =
+                ui.allocate_exact_size(vec2(ui.available_width(), 36.0), Sense::hover());
+            let mut banner = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt("lyrics-screen-read-only")
+                    .max_rect(rect.shrink2(vec2(pad, 0.0))),
+            );
+            style::message(
+                &mut banner,
+                style::Severity::Info,
+                l.text("lyrics_screen.read_only"),
+                true,
+            );
+            #[cfg(test)]
+            {
+                self.lyrics_screen.drawn.read_only = Some(rect);
+            }
         }
         let wave_h = if compact { 48.0 } else { 64.0 };
         let lanes_h = 20.0 + 18.0 + 4.0 + wave_h + 4.0 + LANE_H;
@@ -1673,6 +1738,8 @@ impl NohApp {
             Align2::LEFT_TOP,
             l.text(if self.lyrics_screen.game.is_some() {
                 "lyrics_screen.text_waits"
+            } else if self.lyrics_locked() {
+                "lyrics_screen.text_locked"
             } else {
                 "lyrics_screen.text_hint"
             }),
@@ -1696,7 +1763,9 @@ impl NohApp {
             .iter()
             .position(|c| c.start_ms <= ph && ph < c.end_ms);
         let cur = self.lyrics_screen.cur;
-        let game = self.lyrics_screen.game.is_some();
+        // During a game, and while a job locks the lyrics, the lines are read
+        // and not written: no field, no row buttons.
+        let game = self.lyrics_screen.game.is_some() || self.lyrics_locked();
         // What the rows ask for, applied after they are drawn.
         enum Ask {
             Choose(usize, usize),
@@ -2097,7 +2166,8 @@ impl NohApp {
         // « Commencer à la ligne N »: the game goes from the current line on.
         let ready = self.project.duration_ms > 0
             && self.ls_track().is_some_and(|t| !t.cues.is_empty())
-            && !self.ls_reading();
+            && !self.ls_reading()
+            && !self.lyrics_locked();
         let label = if compact {
             l.text("lyrics_screen.start").to_string()
         } else {
@@ -2176,8 +2246,10 @@ impl NohApp {
         {
             self.navigate(time_at(view, ruler, p.x), false);
         }
-        // During a game the lane only shows the guides and the takes.
-        let event = if game {
+        // During a game the lane only shows the guides and the takes; while a
+        // job locks the lyrics it shows them and takes no gesture.
+        let locked = self.lyrics_locked();
+        let event = if game || locked {
             self.lyrics_screen.drag = None;
             self.lyrics_screen.preview = None;
             None
@@ -2323,7 +2395,7 @@ impl NohApp {
             }
         }
         // « + » in each gap of half a second or more, wide enough to hit.
-        for (a, b) in gaps(shown).into_iter().filter(|_| !game) {
+        for (a, b) in gaps(shown).into_iter().filter(|_| !game && !locked) {
             let (x0, x1) = (x_at(view, lane, a), x_at(view, lane, b));
             let centre = (x0 + x1) / 2.0;
             if x1 - x0 >= 32.0 && centre > lane.left() && centre < lane.right() {
@@ -2767,6 +2839,14 @@ impl NohApp {
     }
 
     fn ls_footer_text(&mut self, ui: &mut egui::Ui, track: &SubtitleTrack) {
+        if self.lyrics_locked() {
+            // Read-only while a job runs: what still works here.
+            key_caps(
+                ui,
+                self.locale.language.text("lyrics_screen.read_only_keys"),
+            );
+            return;
+        }
         if self.lyrics_screen.game.is_some() {
             self.ls_game_footer(ui);
             return;
@@ -3840,6 +3920,116 @@ mod tests {
     }
 
     #[test]
+    fn a_job_that_starts_makes_the_screen_read_only_and_the_game_keeps_its_takes() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = app(folder.path());
+        let ctx = context();
+        game(&mut app, &ctx, Level::Word, 0);
+        hold(&mut app, &ctx, 1100, 1600);
+        // « had » is being held when a job starts.
+        at(&mut app, &ctx, Some(1900), vec![space(true, false)]);
+        assert!(app.lyrics_screen.drawn.read_only.is_none());
+        app.cancelling = true;
+        assert!(app.lyrics_locked());
+        at(&mut app, &ctx, Some(2000), Vec::new());
+        assert!(app.lyrics_screen.game.is_none() && app.lyrics_screen.open);
+        assert_eq!(word(&app, 0, 0), (1100, Some(1600), WordSource::Hand));
+        assert_ne!(
+            word(&app, 0, 1).2,
+            WordSource::Hand,
+            "the word being held is not taken under the job"
+        );
+        assert!(
+            app.lyrics_screen.drawn.read_only.is_some(),
+            "a banner says why"
+        );
+        let kept = app.lyrics_track().unwrap();
+        // Typing, Entrée, Ctrl+Z, a press on the lane, « Commencer »: nothing.
+        let lane = app.lyrics_screen.drawn.lane.unwrap().center();
+        at(
+            &mut app,
+            &ctx,
+            None,
+            vec![
+                space(false, false),
+                egui::Event::Text("x".into()),
+                key(Key::Enter, Modifiers::NONE),
+                key(Key::Z, Modifiers::COMMAND),
+                egui::Event::PointerMoved(lane),
+            ],
+        );
+        at(
+            &mut app,
+            &ctx,
+            None,
+            vec![egui::Event::PointerButton {
+                pos: lane,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            }],
+        );
+        assert!(app.lyrics_screen.drag.is_none());
+        app.ls_start_game(&ctx);
+        assert!(app.lyrics_screen.game.is_none());
+        assert!(
+            !app.edit_track(|t| edit::set_text(t, 0, "x")),
+            "no edit reaches the lyrics a job reads, whatever asks for it"
+        );
+        assert_eq!(*app.lyrics_track().unwrap(), *kept);
+        // Échap still closes the screen; once the job is over, edits are back.
+        at(
+            &mut app,
+            &ctx,
+            None,
+            vec![
+                egui::Event::PointerButton {
+                    pos: lane,
+                    button: egui::PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Modifiers::NONE,
+                },
+                key(Key::Escape, Modifiers::NONE),
+            ],
+        );
+        assert!(!app.lyrics_screen.open);
+        assert_eq!(*app.lyrics_track().unwrap(), *kept);
+        app.cancelling = false;
+        assert!(app.edit_track(|t| edit::set_text(t, 0, "x")));
+    }
+
+    #[test]
+    fn closing_under_a_job_takes_nothing_back_from_a_game_left_without_a_take() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = app(folder.path());
+        let ctx = context();
+        game(&mut app, &ctx, Level::Word, 0);
+        // One take, taken again: the game has its undo step and no take.
+        hold(&mut app, &ctx, 1100, 1600);
+        at(
+            &mut app,
+            &ctx,
+            Some(1700),
+            vec![key(Key::Backspace, Modifiers::NONE)],
+        );
+        let g = app.lyrics_screen.game.as_ref().unwrap();
+        assert!(g.holds.is_empty());
+        let copy = app.project.edit.as_ref().map(|s| s.file.clone());
+        let steps = app.history_labels().0.map(str::to_string);
+        assert!(steps.is_some(), "the game left its undo step");
+        // A job starts, and the screen is closed before it draws again.
+        app.cancelling = true;
+        app.close_lyrics_screen();
+        assert!(!app.lyrics_screen.open);
+        assert_eq!(
+            app.project.edit.as_ref().map(|s| s.file.clone()),
+            copy,
+            "the copy the job reads is untouched"
+        );
+        assert_eq!(app.history_labels().0.map(str::to_string), steps);
+    }
+
+    #[test]
     fn during_a_game_the_text_the_undo_keys_and_the_track_wait() {
         let folder = tempfile::tempdir().unwrap();
         let mut app = app(folder.path());
@@ -4192,12 +4382,15 @@ mod tests {
         app.capture_state = Some("frame-cost".into());
         // Last, a game at the Words level with Espace held all along: the
         // prompt, the guides, the takes and the growing hold are drawn.
-        for (level, playing) in [
-            (None, false),
-            (Some(Level::Line), false),
-            (Some(Level::Syllable), false),
-            (Some(Level::Word), true),
+        // And the screen read-only, while a job locks the lyrics.
+        for (level, playing, locked) in [
+            (None, false, false),
+            (Some(Level::Line), false, false),
+            (Some(Level::Syllable), false, false),
+            (Some(Level::Word), true, false),
+            (Some(Level::Line), false, true),
         ] {
+            app.cancelling = locked;
             match level {
                 Some(level) => {
                     if !app.lyrics_screen.open {
@@ -4261,6 +4454,7 @@ mod tests {
                 match level {
                     None => "MAIN_SCREEN".to_string(),
                     Some(level) if playing => format!("LYRICS_SCREEN game level={level:?}"),
+                    Some(level) if locked => format!("LYRICS_SCREEN read-only level={level:?}"),
                     Some(level) => format!("LYRICS_SCREEN level={level:?}"),
                 },
                 samples.len(),
