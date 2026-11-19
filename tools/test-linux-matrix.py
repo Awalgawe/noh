@@ -1,10 +1,13 @@
-"""Reject incomplete matrix evidence and falsely successful GUI preview checks."""
+"""Reject incomplete matrix evidence, falsely successful GUI preview checks and MCP jobs."""
 import copy
 import importlib.util
+import json
+import os
 from pathlib import Path
 import unittest
 import tempfile
 import sys
+import time
 from unittest import mock
 
 from delivery import digest, read
@@ -117,6 +120,112 @@ class MatrixTests(unittest.TestCase):
             changed['mini_preview']['player'][field] = replacement
             with self.subTest(field=field), self.assertRaises(ValueError):
                 probe.check_gui_report(changed)
+
+
+# A stand-in MCP server: newline-delimited JSON-RPC on stdio, with one way to misbehave per mode.
+FAKE_MCP_SERVER = r'''
+import json, os, sys, time
+mode, record = sys.argv[1], sys.argv[2]
+tools = ['noh_inspect', 'noh_diagnose', 'noh_job', 'noh_export', 'noh_preview']
+if mode == 'extra_tool':
+    tools.append('noh_added_later')
+if mode == 'missing_tool':
+    tools.remove('noh_diagnose')
+jobs = {}
+def reply(message_id, result):
+    print(json.dumps({'jsonrpc': '2.0', 'id': message_id, 'result': result}), flush=True)
+for line in sys.stdin:
+    message = json.loads(line)
+    method, params = message.get('method'), message.get('params', {})
+    if 'id' not in message:
+        continue
+    if mode == 'silent':
+        continue
+    if method == 'initialize':
+        with open(record, 'w') as output:
+            json.dump({'environment': dict(os.environ), 'cwd': os.getcwd()}, output)
+        version = '2024-11-05' if mode == 'old_protocol' else params['protocolVersion']
+        print(json.dumps({'jsonrpc': '2.0', 'method': 'notifications/message', 'params': {}}), flush=True)
+        reply(message['id'], {'protocolVersion': version, 'serverInfo': {'name': 'fake', 'version': '1'},
+                              'capabilities': {'tools': {}}})
+    elif method == 'tools/list':
+        reply(message['id'], {'tools': [{'name': name} for name in tools]})
+    elif method == 'tools/call':
+        name, arguments = params['name'], params['arguments']
+        if name == 'noh_job':
+            job = jobs[arguments['job_id']]
+            reply(message['id'], {'structuredContent': job, 'isError': False})
+            continue
+        job_id = name + '-' + str(len(jobs))
+        state = 'failed' if mode == 'job_fails' and name == 'noh_diagnose' else 'succeeded'
+        result = None
+        if name == 'noh_export':
+            if mode != 'no_output':
+                open(arguments['request']['output'], 'wb').write(b'exported')
+            result = {'kind': 'export', 'output': arguments['request']['output'], 'duration': 3.0}
+        jobs[job_id] = {'version': 1, 'job_id': job_id, 'state': state, 'revision': 2, 'changed': True,
+                        'result': result, 'extra_field_added_later': True,
+                        'error': {'code': 'fake'} if state == 'failed' else None}
+        reply(message['id'], {'structuredContent': {'version': 1, 'job_id': job_id, 'state': 'running',
+                                                    'revision': 1}, 'isError': False})
+if mode == 'no_exit':
+    time.sleep(60)
+'''
+
+
+class McpProbeTests(unittest.TestCase):
+    def run_fake(self, mode, timeout=20):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            server = folder / 'server.py'
+            server.write_text(FAKE_MCP_SERVER, encoding='utf-8')
+            record, output = folder / 'record.json', folder / 'out.mp4'
+            reduced = probe.mcp_environment
+            def environment():
+                # A Windows Python needs SYSTEMROOT to start; Linux, where the probe runs, does not.
+                return reduced() | ({'SYSTEMROOT': os.environ['SYSTEMROOT']} if os.name == 'nt' else {})
+            with mock.patch.dict(os.environ, {'NOH_FFMPEG': '/not/for/the/server', 'HOME': str(folder)}), \
+                    mock.patch.object(probe, 'mcp_environment', environment):
+                result = probe.mcp_job([sys.executable, '-I', server, mode, record], folder / 'clip.mp4',
+                                       folder / 'song.wav', output, timeout=timeout)
+            seen = json.loads(record.read_text(encoding='utf-8'))
+            return result, seen, output.read_bytes()
+
+    def test_a_real_job_succeeds_in_the_client_environment(self):
+        result, seen, exported = self.run_fake('ok')
+        self.assertEqual(exported, b'exported')
+        self.assertEqual(result['exit_code'], 0)
+        self.assertEqual(result['tools'], ['noh_diagnose', 'noh_export', 'noh_inspect', 'noh_job', 'noh_preview'])
+        self.assertEqual(seen['environment']['PATH'], '/usr/bin:/bin')
+        self.assertFalse([name for name in seen['environment'] if name.startswith('NOH_')])
+        self.assertLessEqual({'HOME', 'PATH', 'LANG'}, set(seen['environment']))
+        self.assertEqual(Path(seen['cwd']), Path('/').resolve())
+
+    def test_a_newer_server_with_more_tools_and_fields_still_passes(self):
+        result, _, _ = self.run_fake('extra_tool')
+        self.assertIn('noh_added_later', result['tools'])
+
+    def test_a_missing_tool_a_failed_job_or_a_missing_output_fails(self):
+        for mode, message in (('missing_tool', 'does not list noh_diagnose'), ('job_fails', 'job ended failed'),
+                              ('old_protocol', 'answered protocol'), ('no_output', 'without its output file')):
+            with self.subTest(mode=mode), self.assertRaisesRegex(ValueError, message):
+                self.run_fake(mode)
+
+    def test_a_silent_or_lingering_server_is_bounded_and_stopped(self):
+        for mode, message in (('silent', 'did not answer initialize'), ('no_exit', 'did not stop')):
+            started = time.monotonic()
+            with self.subTest(mode=mode), self.assertRaisesRegex(TimeoutError, message):
+                self.run_fake(mode, timeout=3)
+            self.assertLess(time.monotonic() - started, 20)
+
+    def test_a_probe_report_needs_gui_transcription_and_mcp(self):
+        report = {'scope': 'host-runtime-smoke', 'gui': {'a': 1}, 'transcription': {'cues': 1}, 'mcp': {'tools': []}}
+        matrix.require_complete_probe(report)
+        for part in ('gui', 'transcription', 'mcp'):
+            with self.subTest(part=part), self.assertRaisesRegex(ValueError, 'omitted'):
+                matrix.require_complete_probe({key: value for key, value in report.items() if key != part})
+        with self.assertRaisesRegex(ValueError, 'omitted'):
+            matrix.require_complete_probe(report | {'scope': 'loader-only'})
 
 
 if __name__ == '__main__':

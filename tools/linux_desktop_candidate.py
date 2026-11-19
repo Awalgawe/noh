@@ -27,7 +27,7 @@ import wave
 import zipfile
 
 from delivery import ROOT, COMMIT, LIMIT, digest, inventory, read, write, zip_members
-from linux_matrix import CHECKS, MATRIX, unpack_candidate
+from linux_matrix import CHECKS, MATRIX, require_complete_probe, unpack_candidate
 
 APT_RUNTIME_PACKAGES = ['pulseaudio-utils', 'alsa-utils', 'pciutils', 'python3',
                         'ffmpeg', 'libmpv2', 'libasound2-plugins', 'libgl1-mesa-dri', 'libegl1',
@@ -651,9 +651,9 @@ def guest(args):
     expected_elf = {k.removeprefix('NOH.AppDir/'): v['sha256'] for k, v in identity['bundle_files'].items()
                     if k in ('NOH.AppDir/usr/lib/noh/noh-app', 'NOH.AppDir/usr/lib/noh/bin/noh-cli',
                              'NOH.AppDir/usr/lib/noh/bin/noh-mcp', 'NOH.AppDir/usr/lib/noh/bin/speech/whisper-cli')}
-    if (report['elf_sha256'] != expected_elf or not report.get('gui') or not report.get('transcription')
-            or report['scope'] != 'host-runtime-smoke'):
-        raise ValueError('Native runtime evidence lacks the exact candidate or required checks')
+    if report['elf_sha256'] != expected_elf:
+        raise ValueError('Native runtime evidence lacks the exact candidate')
+    require_complete_probe(report)
     # Leave a normal, uninjected application window for independent QMP scanout inspection.
     with (args.output / 'startup.log').open('w') as log:
         app = subprocess.Popen([str(ROOT / 'NOH.AppDir/AppRun')], stdin=subprocess.DEVNULL,

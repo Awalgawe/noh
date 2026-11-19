@@ -1,6 +1,7 @@
 """Check candidate immutability, native-case setup and real preview-audio evidence."""
 import argparse
 import contextlib
+import inspect
 import io
 import json
 import math
@@ -15,6 +16,7 @@ from unittest.mock import patch
 import wave
 
 import linux_desktop_candidate as desktop
+import linux_matrix
 from delivery import inventory
 
 
@@ -375,6 +377,14 @@ class DesktopEvidenceTests(unittest.TestCase):
                     else:
                         with self.assertRaisesRegex(ValueError, 'preview tone'):
                             desktop.audio_report(args)
+
+    def test_a_desktop_refuses_a_probe_report_without_mcp(self):
+        # The guest applies the matrix's rule to its own probe report, MCP job included.
+        self.assertIs(desktop.require_complete_probe, linux_matrix.require_complete_probe)
+        self.assertIn('    require_complete_probe(report)\n', inspect.getsource(desktop.guest))
+        report = {'scope': 'host-runtime-smoke', 'gui': {'a': 1}, 'transcription': {'cues': 1}}
+        with self.assertRaisesRegex(ValueError, 'MCP'):
+            desktop.require_complete_probe(report)
 
 
 # openSUSE's published checksum and signature for its 2026-11-17 Tumbleweed cloud image.
