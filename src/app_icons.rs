@@ -48,10 +48,12 @@ pub enum Icon {
     Video,
     Generate,
     ClipSound,
+    Undo,
+    Redo,
 }
 
 impl Icon {
-    pub const ALL: [Icon; 36] = [
+    pub const ALL: [Icon; 38] = [
         Icon::Settings,
         Icon::Plus,
         Icon::Minus,
@@ -88,6 +90,8 @@ impl Icon {
         Icon::Video,
         Icon::Generate,
         Icon::ClipSound,
+        Icon::Undo,
+        Icon::Redo,
     ];
 }
 
@@ -267,6 +271,19 @@ fn parts(icon: Icon) -> &'static [Part] {
         Icon::Restart => &[
             Arc(12.0, 12.0, 7.0, 180.0, -135.6),
             Line(&[(5.0, 4.5), (5.0, 8.0), (8.5, 8.0)]),
+        ],
+        // "M5 3 2 6l3 3" + "M2.5 6H10a4 4 0 0 1 0 8H7" on a 16 px grid.
+        Icon::Undo => &[
+            Line(&[(7.5, 4.5), (3.0, 9.0), (7.5, 13.5)]),
+            Line(&[(3.75, 9.0), (15.0, 9.0)]),
+            Arc(15.0, 15.0, 6.0, -90.0, 90.0),
+            Line(&[(15.0, 21.0), (10.5, 21.0)]),
+        ],
+        Icon::Redo => &[
+            Line(&[(16.5, 4.5), (21.0, 9.0), (16.5, 13.5)]),
+            Line(&[(20.25, 9.0), (9.0, 9.0)]),
+            Arc(9.0, 15.0, 6.0, -90.0, -270.0),
+            Line(&[(9.0, 21.0), (13.5, 21.0)]),
         ],
         Icon::Drop => &[
             Line(&[(12.0, 4.0), (12.0, 14.0)]),

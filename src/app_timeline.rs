@@ -1067,74 +1067,15 @@ fn paint_lanes(
     painter.rect_filled(geometry.wav, lane_radius, colors.wav);
     paint_pictures(ui, geometry.pictures, view, input, colors);
     paint_ruler(ui, geometry.ruler, view, input.duration_ms, compact, l);
-    if let Some(waveform) = input.waveform {
-        let key = WavePaintKey {
-            rect: geometry.wav,
-            view,
-            range,
-            scale: ui.ctx().pixels_per_point(),
-            wave: colors.wave,
-            selection: colors.selection,
-        };
-        if state.wave.as_ref().is_none_or(|cache| {
-            cache.key != key || cache.source != waveform.source || cache.decoder != waveform.decoder
-        }) {
-            let center = geometry.wav.center().y;
-            let columns = (geometry.wav.width() * key.scale)
-                .ceil()
-                .clamp(1.0, 16_384.0) as usize;
-            let dx = geometry.wav.width() / columns as f32;
-            let start = view.0.start_ms as f64 / 1000.0;
-            let dt = view.0.duration_ms() as f64 / 1000.0 / columns as f64;
-            let mut shapes = Vec::with_capacity(columns);
-            for column in 0..columns {
-                let t0 = start + column as f64 * dt;
-                let t1 = start + (column + 1) as f64 * dt;
-                let peak = waveform.peak_at(t0, t1);
-                let height = peak * (geometry.wav.height() * 0.5 - 4.0);
-                let x = geometry.wav.left() + (column as f32 + 0.5) * dx;
-                // Bars inside the short range take the accent: the product's signature.
-                let color = if range.is_some_and(|r| {
-                    (t0 * 1000.0) as u64 >= r.start_ms && (t1 * 1000.0) as u64 <= r.end_ms
-                }) {
-                    colors.selection
-                } else {
-                    colors.wave
-                };
-                shapes.push(egui::epaint::ClippedShape {
-                    clip_rect: geometry.wav,
-                    shape: egui::Shape::line_segment(
-                        [
-                            pos2(x, center - height.max(0.3)),
-                            pos2(x, center + height.max(0.3)),
-                        ],
-                        Stroke::new(dx, color),
-                    ),
-                });
-            }
-            let meshes = ui
-                .ctx()
-                .tessellate(shapes, key.scale)
-                .into_iter()
-                .filter_map(|p| match p.primitive {
-                    egui::epaint::Primitive::Mesh(mesh) => Some(std::sync::Arc::new(mesh)),
-                    _ => None,
-                })
-                .collect();
-            state.wave = Some(WavePaint {
-                source: waveform.source.clone(),
-                decoder: waveform.decoder.clone(),
-                key,
-                meshes,
-            });
-        }
-        for mesh in &state.wave.as_ref().unwrap().meshes {
-            ui.painter_at(geometry.wav)
-                .add(egui::Shape::Mesh(mesh.clone()));
-        }
-    } else {
-        state.wave = None;
-    }
+    paint_wave(
+        ui,
+        &mut state.wave,
+        geometry.wav,
+        view,
+        range,
+        colors,
+        input.waveform,
+    );
     if let (Some(input_track), Some(lane)) = (input.track, geometry.cues) {
         let track = state.cue_preview.clone();
         let track = track.as_ref().unwrap_or(input_track);
@@ -1268,6 +1209,130 @@ fn paint_lanes(
             }
         }
     }
+}
+
+/// The waveform of `view` in `rect`, as one mesh kept in `cache` until the
+/// view, the size or the colours change.
+fn paint_wave(
+    ui: &egui::Ui,
+    cache: &mut Option<WavePaint>,
+    rect: Rect,
+    view: Viewport,
+    range: Option<Range>,
+    colors: Palette,
+    waveform: Option<&Waveform>,
+) {
+    let Some(waveform) = waveform else {
+        *cache = None;
+        return;
+    };
+    let key = WavePaintKey {
+        rect,
+        view,
+        range,
+        scale: ui.ctx().pixels_per_point(),
+        wave: colors.wave,
+        selection: colors.selection,
+    };
+    if cache.as_ref().is_none_or(|cache| {
+        cache.key != key || cache.source != waveform.source || cache.decoder != waveform.decoder
+    }) {
+        let center = rect.center().y;
+        let columns = (rect.width() * key.scale).ceil().clamp(1.0, 16_384.0) as usize;
+        let dx = rect.width() / columns as f32;
+        let start = view.0.start_ms as f64 / 1000.0;
+        let dt = view.0.duration_ms() as f64 / 1000.0 / columns as f64;
+        let mut shapes = Vec::with_capacity(columns);
+        for column in 0..columns {
+            let t0 = start + column as f64 * dt;
+            let t1 = start + (column + 1) as f64 * dt;
+            let peak = waveform.peak_at(t0, t1);
+            let height = peak * (rect.height() * 0.5 - 4.0);
+            let x = rect.left() + (column as f32 + 0.5) * dx;
+            // Bars inside the short range take the accent: the product's signature.
+            let color = if range.is_some_and(|r| {
+                (t0 * 1000.0) as u64 >= r.start_ms && (t1 * 1000.0) as u64 <= r.end_ms
+            }) {
+                colors.selection
+            } else {
+                colors.wave
+            };
+            shapes.push(egui::epaint::ClippedShape {
+                clip_rect: rect,
+                shape: egui::Shape::line_segment(
+                    [
+                        pos2(x, center - height.max(0.3)),
+                        pos2(x, center + height.max(0.3)),
+                    ],
+                    Stroke::new(dx, color),
+                ),
+            });
+        }
+        let meshes = ui
+            .ctx()
+            .tessellate(shapes, key.scale)
+            .into_iter()
+            .filter_map(|p| match p.primitive {
+                egui::epaint::Primitive::Mesh(mesh) => Some(std::sync::Arc::new(mesh)),
+                _ => None,
+            })
+            .collect();
+        *cache = Some(WavePaint {
+            source: waveform.source.clone(),
+            decoder: waveform.decoder.clone(),
+            key,
+            meshes,
+        });
+    }
+    for mesh in &cache.as_ref().unwrap().meshes {
+        ui.painter_at(rect).add(egui::Shape::Mesh(mesh.clone()));
+    }
+}
+
+/// The waveform mesh of the lyrics screen's zoomed track.
+#[derive(Default)]
+pub struct WaveCache(Option<WavePaint>);
+
+/// The lanes of the lyrics screen's zoomed track, painted as the timeline
+/// paints its own, with that screen's view: the ruler, the pictures (thin) and
+/// the waveform on its lane.
+pub fn paint_zoom_lanes(
+    ui: &egui::Ui,
+    cache: &mut WaveCache,
+    [ruler, pictures, wave]: [Rect; 3],
+    view: Viewport,
+    duration_ms: u64,
+    visuals: &[Visual],
+    waveform: Option<&Waveform>,
+    compact: bool,
+    l: Language,
+) {
+    let colors = Palette::new(ui.visuals().dark_mode);
+    let input = Input {
+        cursor_ms: None,
+        duration_ms,
+        range: None,
+        viewport: Some(view),
+        waveform,
+        track: None,
+        visuals,
+        waveform_loading: false,
+        waveform_error: None,
+        enabled: true,
+        fade_in_seconds: 0.0,
+        fade_out_seconds: 0.0,
+        restart: false,
+        selected_cue: None,
+        words: None,
+    };
+    paint_ruler(ui, ruler, view, duration_ms, compact, l);
+    ui.painter()
+        .rect_filled(pictures, style::radius::S, colors.wav);
+    if !visuals.is_empty() {
+        paint_pictures(ui, pictures, view, &input, colors);
+    }
+    ui.painter().rect_filled(wave, style::radius::S, colors.wav);
+    paint_wave(ui, &mut cache.0, wave, view, None, colors, waveform);
 }
 
 /// A cue's words (or syllables), each with its start: the word times, or the

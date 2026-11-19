@@ -282,7 +282,14 @@ impl NohApp {
         };
         let now = Instant::now();
         let held = ctx.input(|i| i.pointer.any_down());
-        if now < at || self.lyrics_save.asking || self.lyrics_frozen() || held {
+        // Not during a sync game either: its takes are one edit, written when
+        // it ends, and nothing reads the disk while a key is being timed.
+        if now < at
+            || self.lyrics_save.asking
+            || self.lyrics_frozen()
+            || held
+            || self.lyrics_game_running()
+        {
             ctx.request_repaint_after(at.saturating_duration_since(now).max(WRITE_DELAY / 4));
             return;
         }
@@ -306,7 +313,7 @@ impl NohApp {
 
     /// « Modifier le .srt »: remembered for this file (a write that fails then
     /// retries on the next change without asking again), and written now.
-    fn consent_first_edit(&mut self, source: PathBuf) {
+    pub(super) fn consent_first_edit(&mut self, source: PathBuf) {
         self.lyrics_save.asking = false;
         self.lyrics_save.cancel_edit = false;
         self.lyrics_save.remembered = Some(source.clone());
@@ -315,7 +322,7 @@ impl NohApp {
 
     /// « Annuler » in the first-edit question: nothing is written, and the edit
     /// that asked is taken back.
-    fn cancel_first_edit(&mut self) {
+    pub(super) fn cancel_first_edit(&mut self) {
         let take_back = self.lyrics_save.cancel_edit;
         let s = &mut self.lyrics_save;
         s.asking = false;

@@ -38,6 +38,9 @@ struct StyleSnap {
 struct Snap {
     track: Option<Arc<SubtitleTrack>>,
     style: StyleSnap,
+    /// What the step did, in the interface's language (« Annuler : … »); empty
+    /// for steps that never named themselves.
+    label: String,
 }
 
 #[derive(Default)]
@@ -48,6 +51,10 @@ pub struct State {
     draft: Option<(usize, String)>,
     history: Vec<Snap>,
     redo: Vec<Snap>,
+    /// The last step may still grow: (its key, the history length and the
+    /// edit revision it left). The lyrics screen types a line, or plays a sync
+    /// game, as one undo step.
+    run: Option<(u64, usize, u64)>,
     last_style: Option<StyleSnap>,
     style_pushed: Option<Instant>,
     /// "Subtitle deleted · Undo" until this time.
@@ -375,11 +382,17 @@ impl NohApp {
         Snap {
             track: self.project.edit.as_ref().map(|s| s.track.clone()),
             style: self.style_snap(),
+            label: String::new(),
         }
     }
 
     fn push_history(&mut self) {
-        let snap = self.snap();
+        self.push_history_as(String::new());
+    }
+
+    fn push_history_as(&mut self, label: String) {
+        let mut snap = self.snap();
+        snap.label = label;
         let h = &mut self.lyrics_edit.history;
         h.push(snap);
         if h.len() > HISTORY {
@@ -391,6 +404,15 @@ impl NohApp {
 
     /// Apply `f` to a copy of the shown track; a change becomes one undo step.
     pub(super) fn edit_track(&mut self, f: impl FnOnce(&mut SubtitleTrack) -> bool) -> bool {
+        self.edit_track_as(String::new(), f)
+    }
+
+    /// `edit_track`, the undo step named `label` (« Annuler : … »).
+    pub(super) fn edit_track_as(
+        &mut self,
+        label: String,
+        f: impl FnOnce(&mut SubtitleTrack) -> bool,
+    ) -> bool {
         // An unanswered difference: no edit until it is answered.
         if self.lyrics_question_pending() {
             return false;
@@ -402,10 +424,95 @@ impl NohApp {
         if !f(&mut next) || next == *current {
             return false;
         }
-        self.push_history();
+        self.push_history_as(label);
         self.set_edited(Some(Arc::new(next)));
         self.lyrics_edited();
         true
+    }
+
+    /// `edit_track_as` for an edit that comes in pieces (a line being typed, a
+    /// sync game's holds): the pieces with the same `key` are one undo step,
+    /// which takes the last piece's label, as long as nothing else changed the
+    /// lyrics or the history in between.
+    pub(super) fn edit_track_run(
+        &mut self,
+        key: u64,
+        label: String,
+        f: impl FnOnce(&mut SubtitleTrack) -> bool,
+    ) -> bool {
+        let live = self.lyrics_edit.run
+            == Some((
+                key,
+                self.lyrics_edit.history.len(),
+                self.project.edit_revision,
+            ));
+        if !live {
+            let done = self.edit_track_as(label, f);
+            // Not while the first-edit question may still take the step back.
+            self.lyrics_edit.run = (done && !self.lyrics_question_open()).then_some((
+                key,
+                self.lyrics_edit.history.len(),
+                self.project.edit_revision,
+            ));
+            return done;
+        }
+        // As `edit_track_as`: an unanswered difference lets no edit through.
+        if self.lyrics_question_pending() {
+            return false;
+        }
+        let Some(current) = self.lyrics_track() else {
+            return false;
+        };
+        let mut next = (*current).clone();
+        if !f(&mut next) || next == *current {
+            return false;
+        }
+        if let Some(step) = self.lyrics_edit.history.last_mut() {
+            step.label = label;
+        }
+        self.set_edited(Some(Arc::new(next)));
+        self.lyrics_edit.run = Some((
+            key,
+            self.lyrics_edit.history.len(),
+            self.project.edit_revision,
+        ));
+        true
+    }
+
+    /// Name the step just made (an edit that learns its name while it applies).
+    pub(super) fn name_last_step(&mut self, label: String) {
+        if let Some(step) = self.lyrics_edit.history.last_mut() {
+            step.label = label;
+        }
+    }
+
+    /// The step `key` made was left unarmed (a question was open on it): its
+    /// next pieces grow it again.
+    pub(super) fn rearm_edit_run(&mut self, key: u64) {
+        if !self.lyrics_edit.history.is_empty() {
+            self.lyrics_edit.run = Some((
+                key,
+                self.lyrics_edit.history.len(),
+                self.project.edit_revision,
+            ));
+        }
+    }
+
+    /// The step in progress is over: the next piece starts a new undo step.
+    pub(super) fn end_edit_run(&mut self) {
+        self.lyrics_edit.run = None;
+    }
+
+    /// What Ctrl+Z and Ctrl+Y would do: None when there is nothing, else the
+    /// step's label (empty for a step that has none).
+    pub(super) fn history_labels(&self) -> (Option<&str>, Option<&str>) {
+        fn label(s: Option<&Snap>) -> Option<&str> {
+            s.map(|s| s.label.as_str())
+        }
+        (
+            label(self.lyrics_edit.history.last()),
+            label(self.lyrics_edit.redo.last()),
+        )
     }
 
     fn set_edited(&mut self, track: Option<Arc<SubtitleTrack>>) {
@@ -478,7 +585,8 @@ impl NohApp {
         let Some(snap) = self.lyrics_edit.history.pop() else {
             return false;
         };
-        let now = self.snap();
+        let mut now = self.snap();
+        now.label = snap.label.clone();
         self.lyrics_edit.redo.push(now);
         self.restore(snap);
         true
@@ -525,7 +633,8 @@ impl NohApp {
         let Some(snap) = self.lyrics_edit.redo.pop() else {
             return false;
         };
-        let now = self.snap();
+        let mut now = self.snap();
+        now.label = snap.label.clone();
         self.lyrics_edit.history.push(now);
         self.restore(snap);
         true
@@ -546,6 +655,7 @@ impl NohApp {
                     let snap = Snap {
                         track: self.project.edit.as_ref().map(|s| s.track.clone()),
                         style: previous.clone(),
+                        label: String::new(),
                     };
                     self.lyrics_edit.history.push(snap);
                     self.lyrics_edit.redo.clear();
@@ -582,9 +692,11 @@ impl NohApp {
         // Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z), Suppr on the chosen cue, unless typing.
         let focus_free = ctx.memory(|m| m.focused().is_none());
         // A lyrics question open: no key edits behind it.
+        // During a sync game every key is the game's (app_lyrics_screen/game.rs).
         let keys = !ctx.egui_wants_keyboard_input()
             && !self.lyrics_frozen()
-            && !self.lyrics_question_open();
+            && !self.lyrics_question_open()
+            && !self.lyrics_game_running();
         if keys {
             self.word_keys(ctx, focus_free || self.lyrics_edit.bubble_focus);
         }
@@ -866,7 +978,13 @@ impl NohApp {
     /// The split typed for word `wi` of cue `i` ("" joins it back). A split
     /// that drops or adds letters, or has no room, changes nothing and says why.
     /// The language packs, read from languages/ beside NOH on first use.
-    fn language_packs(&mut self) -> Arc<noh::languages::Packs> {
+    /// Tests give the packs instead of reading languages/ beside NOH.
+    #[cfg(test)]
+    pub(super) fn set_language_packs(&mut self, packs: noh::languages::Packs) {
+        self.lyrics_edit.packs = Some(Arc::new(packs));
+    }
+
+    pub(super) fn language_packs(&mut self) -> Arc<noh::languages::Packs> {
         self.lyrics_edit
             .packs
             .get_or_insert_with(|| {
@@ -882,7 +1000,7 @@ impl NohApp {
     /// The language the lyrics are sung in: the track's (from the
     /// transcription), else « Langue chantée » when it is not automatic. An
     /// imported .srt has no language of its own.
-    fn sung_language(&self) -> Option<String> {
+    pub(super) fn sung_language(&self) -> Option<String> {
         self.lyrics_track()
             .and_then(|t| t.language.clone())
             .filter(|l| !l.is_empty() && l != "auto")

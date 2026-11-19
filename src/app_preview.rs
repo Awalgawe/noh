@@ -424,6 +424,14 @@ impl State {
     }
 }
 
+/// What `paint_monitor` found while painting: the transport needs it.
+pub(super) struct MonitorPaint {
+    pub playing: bool,
+    /// The player or a still is loading.
+    pub loading: bool,
+    pub snapshot: Option<noh::playback::Snapshot>,
+}
+
 impl NohApp {
     fn mini_project_request(&self) -> Option<ProjectRequest> {
         let mut montage = self.diagnostic_request()?;
@@ -1025,7 +1033,7 @@ impl NohApp {
         noh::plan::export_canvas(&items, &info).filter(|(w, h)| *w > 0 && *h > 0)
     }
     /// Width / height of the full-video frame: the export canvas when known.
-    fn canvas_aspect(&self) -> f32 {
+    pub(super) fn canvas_aspect(&self) -> f32 {
         let from_plan = self
             .diagnosis
             .as_ref()
@@ -1085,9 +1093,7 @@ impl NohApp {
         locked: bool,
         split: Option<super::app_style_panel::Split>,
     ) -> Option<TransportLayout> {
-        let l = self.locale.language;
         let ctx = ui.ctx().clone();
-        let t = style::tokens(ui);
         let compact = ui.available_width() < style::COMPACT_BELOW;
         if self.project.range.is_none() && self.mini_preview.short {
             self.mini_preview.short = false;
@@ -1133,6 +1139,49 @@ impl NohApp {
             ui.scroll_to_rect(monitor, Some(egui::Align::Min));
             self.mini_preview.reveal = false;
         }
+        let MonitorPaint {
+            playing,
+            loading,
+            snapshot,
+        } = self.paint_monitor(ui, monitor);
+        if let Some(split) = split {
+            let rect = egui::Rect::from_min_size(
+                egui::pos2(row.left() + split.column + 16.0, row.top()),
+                egui::vec2(split.panel, height),
+            );
+            let mut panel = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt("style-panel-area")
+                    .max_rect(rect)
+                    .layout(Layout::top_down(Align::Min)),
+            );
+            self.style_panel(&mut panel, height);
+        }
+        if !has_transport {
+            return None;
+        }
+        // Transport 8 below the monitor: undo the body's zone spacing (20, or
+        // 12 compact) that followed the monitor's allocation.
+        ui.add_space(space::S - ui.spacing().item_spacing.y);
+        Some(self.transport_ui(
+            ui,
+            &ctx,
+            mode,
+            transport_width,
+            playing,
+            loading,
+            locked,
+            snapshot,
+        ))
+    }
+
+    /// The monitor's picture in `monitor`: the montage (or the first readable
+    /// visual), the caption effect, the safe area, a failure or the spinner.
+    /// The stage and the lyrics screen both show it.
+    pub(super) fn paint_monitor(&mut self, ui: &mut egui::Ui, monitor: egui::Rect) -> MonitorPaint {
+        let l = self.locale.language;
+        let ctx = ui.ctx().clone();
+        let t = style::tokens(ui);
         ui.painter()
             .rect_filled(monitor, style::radius::L, t.monitor);
         // Without a song, or while a file is unreadable or still being read,
@@ -1239,35 +1288,11 @@ impl NohApp {
                 egui::Color32::WHITE,
             );
         }
-        if let Some(split) = split {
-            let rect = egui::Rect::from_min_size(
-                egui::pos2(row.left() + split.column + 16.0, row.top()),
-                egui::vec2(split.panel, height),
-            );
-            let mut panel = ui.new_child(
-                egui::UiBuilder::new()
-                    .id_salt("style-panel-area")
-                    .max_rect(rect)
-                    .layout(Layout::top_down(Align::Min)),
-            );
-            self.style_panel(&mut panel, height);
-        }
-        if !has_transport {
-            return None;
-        }
-        // Transport 8 below the monitor: undo the body's zone spacing (20, or
-        // 12 compact) that followed the monitor's allocation.
-        ui.add_space(space::S - ui.spacing().item_spacing.y);
-        Some(self.transport_ui(
-            ui,
-            &ctx,
-            mode,
-            transport_width,
+        MonitorPaint {
             playing,
-            loading || still_loading,
-            locked,
+            loading: loading || still_loading,
             snapshot,
-        ))
+        }
     }
 
     /// Widths of the transport's zones in the current language. They do not

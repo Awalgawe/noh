@@ -955,6 +955,14 @@ const OVERLAY_STATES: &[&str] = &[
     "lyrics-tap",
     "lyrics-syllables",
     "lyrics-propose",
+    "lyrics-screen",
+    "lyrics-screen-cut",
+    "lyrics-screen-word",
+    "lyrics-screen-syllables",
+    "lyrics-screen-game",
+    "lyrics-screen-game-hold",
+    "lyrics-screen-game-missed",
+    "lyrics-screen-summary",
     "lyrics-first-edit",
     "lyrics-unsaved",
     "lyrics-srt-stale",
@@ -979,6 +987,14 @@ const LYRICS_STATES: &[&str] = &[
     "lyrics-tap",
     "lyrics-syllables",
     "lyrics-propose",
+    "lyrics-screen",
+    "lyrics-screen-cut",
+    "lyrics-screen-word",
+    "lyrics-screen-syllables",
+    "lyrics-screen-game",
+    "lyrics-screen-game-hold",
+    "lyrics-screen-game-missed",
+    "lyrics-screen-summary",
     "lyrics-first-edit",
     "lyrics-unsaved",
     "lyrics-srt-stale",
@@ -1267,6 +1283,18 @@ impl NohApp {
                             w.tap_clock = starts.get(1).copied();
                         }
                     }
+                }
+                // The lyrics screen on a line, as it opens; with the text
+                // cursor between two words; a word chosen in the track; a
+                // word's split at the Syllables level. On the eleventh line
+                // when the lyrics have one, as the mockup shows it.
+                if let Some(scene) = state.strip_prefix("lyrics-screen")
+                    && let Some(i) = self
+                        .lyrics_track()
+                        .and_then(|t| t.cues.len().checked_sub(1))
+                        .map(|last| last.min(10))
+                {
+                    self.stage_lyrics_screen(i, scene);
                 }
                 if state == "details" {
                     self.open_sheet(false, None);
