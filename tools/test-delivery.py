@@ -1204,6 +1204,63 @@ class DeliveryTests(unittest.TestCase):
                 delivery.fetch({**source, 'mirrors': [bad]}, cache, 'd.zip')
             run.assert_not_called()
 
+    def test_a_curl_that_dies_does_not_lose_the_download(self):
+        cache = self.root / 'cache'
+        data = b'the pinned bytes'
+        source = {'url': 'https://only.invalid/a.crate', 'sha256': hashlib.sha256(data).hexdigest()}
+        crash = 0xC0000005  # what curl.exe ended with on the hosted Windows runner
+
+        def curl(script):
+            calls = []
+
+            def run(command, **kwargs):
+                written, status = script[len(calls)]
+                calls.append(command)
+                if written is not None:
+                    Path(command[command.index('--output') + 1]).write_bytes(written)
+                if status:
+                    raise subprocess.CalledProcessError(status, command)
+            return calls, run
+
+        def fetch(name, script):
+            calls, run = curl(script)
+            with patch.object(delivery, 'checked', side_effect=run), \
+                    contextlib.redirect_stdout(io.StringIO()) as said:
+                try:
+                    return delivery.fetch(source, cache, name), calls, said.getvalue()
+                except Exception as error:
+                    return error, calls, said.getvalue()
+
+        # It died after writing the whole file: the pinned bytes are kept, and the log says so.
+        result, calls, said = fetch('a.crate', [(data, crash)])
+        self.assertEqual(result.read_bytes(), data)
+        self.assertEqual(len(calls), 1)
+        self.assertIn(f'status {crash}', said)
+        self.assertIn('kept', said)
+        # It died before the file was whole, or before writing anything: one more run, which is taken.
+        for name, first in (('b.crate', b'the pinned'), ('c.crate', None)):
+            result, calls, said = fetch(name, [(first, crash), (data, 0)])
+            self.assertEqual(result.read_bytes(), data)
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(calls[0], calls[1])
+            self.assertIn('once more', said)
+        # Killed by a signal counts as dying; two deaths in a row are the error, and nothing is cached.
+        result, calls, _ = fetch('d.crate', [(None, -11), (None, crash)])
+        self.assertIsInstance(result, subprocess.CalledProcessError)
+        self.assertEqual(len(calls), 2)
+        self.assertFalse((cache / 'd.crate').exists())
+        # The second run is judged like any run: other bytes are a mismatch.
+        result, calls, _ = fetch('e.crate', [(None, crash), (b'other', 0)])
+        self.assertIsInstance(result, ValueError)
+        self.assertIn('SHA-256 mismatch', str(result))
+        # curl's own failures keep their meaning: no second run, whatever it left behind.
+        for status in (22, 28, 255):
+            result, calls, said = fetch('f.crate', [(data, status)])
+            self.assertIsInstance(result, subprocess.CalledProcessError)
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(said, '')
+            self.assertFalse((cache / 'f.crate').exists())
+
     def test_the_locked_mirrors_are_other_hosts_of_the_same_archive(self):
         moby = delivery.read(delivery.ROOT / 'assets/syllable-sources.lock.json')['datasets']['moby']
         hosts = [urllib.parse.urlparse(url).hostname for url in (moby['url'], *moby['mirrors'])]
