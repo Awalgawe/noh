@@ -1,10 +1,10 @@
 //! The lyrics file beside a subtitle file.
 //!
 //! Version 2, `<name>.noh-lyrics.json`, holds every cue (start, end, text, word
-//! and syllable times when known), the language and the Whisper model: the
-//! lyrics themselves, which the .srt only mirrors. No style, no media, no
-//! project. Unknown fields are ignored within a version; a higher version is
-//! « newer » and never read as lyrics.
+//! and syllable starts when known, and their ends when known), the language and
+//! the Whisper model: the lyrics themselves, which the .srt only mirrors. No
+//! style, no media, no project. Unknown fields are ignored within a version; a
+//! higher version is « newer » and never read as lyrics.
 //!
 //! Version 1, `<name>.noh-words.json`, held only the cues with word times and
 //! is still read: its words go to the identical cues of the .srt.
@@ -109,6 +109,10 @@ struct LyricsCue {
 struct LyricsWord {
     text: String,
     start_ms: u64,
+    // Added within version 2: a reader that predates it ignores it (and loses it
+    // when it writes the file back), so no version change is needed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    end_ms: Option<u64>,
     source: WordSource,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     syllables: Option<Vec<LyricsSyllable>>,
@@ -118,6 +122,8 @@ struct LyricsWord {
 struct LyricsSyllable {
     text: String,
     start_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    end_ms: Option<u64>,
     source: WordSource,
 }
 
@@ -126,12 +132,14 @@ impl From<&WordTime> for LyricsWord {
         Self {
             text: w.text.clone(),
             start_ms: w.start_ms,
+            end_ms: w.end_ms,
             source: w.source,
             syllables: w.syllables.as_ref().map(|s| {
                 s.iter()
                     .map(|s| LyricsSyllable {
                         text: s.text.clone(),
                         start_ms: s.start_ms,
+                        end_ms: s.end_ms,
                         source: s.source,
                     })
                     .collect()
@@ -145,12 +153,14 @@ impl From<LyricsWord> for WordTime {
         Self {
             text: w.text,
             start_ms: w.start_ms,
+            end_ms: w.end_ms,
             source: w.source,
             syllables: w.syllables.map(|s| {
                 s.into_iter()
                     .map(|s| SyllableTime {
                         text: s.text,
                         start_ms: s.start_ms,
+                        end_ms: s.end_ms,
                         source: s.source,
                     })
                     .collect()
@@ -205,13 +215,23 @@ pub fn parse_lyrics(bytes: &[u8]) -> Result<Lyrics, LyricsError> {
     let cues: Vec<SubtitleCue> = file
         .cues
         .into_iter()
-        .map(|c| SubtitleCue {
-            start_ms: c.start_ms,
-            end_ms: c.end_ms,
-            // One form after loading, as the SRT parser gives (merge compares
-            // texts as they are).
-            text: c.text.replace("\r\n", "\n"),
-            words: c.words.map(|w| w.into_iter().map(WordTime::from).collect()),
+        .map(|c| {
+            let mut cue = SubtitleCue {
+                start_ms: c.start_ms,
+                end_ms: c.end_ms,
+                // One form after loading, as the SRT parser gives (merge compares
+                // texts as they are).
+                text: c.text.replace("\r\n", "\n"),
+                words: None,
+            };
+            // Ends are a hint: one that does not fit is dropped, never a reason
+            // to call the file damaged.
+            cue.words = c.words.map(|w| {
+                let mut w: Vec<WordTime> = w.into_iter().map(WordTime::from).collect();
+                cue.fit_ends(&mut w);
+                w
+            });
+            cue
         })
         .collect();
     let track = unbound(SubtitleTrack {
@@ -612,6 +632,7 @@ mod tests {
                 .map(|(t, w)| WordTime {
                     text: (*w).into(),
                     start_ms: *t,
+                    end_ms: None,
                     source: WordSource::Whisper,
                     syllables: None,
                 })
@@ -770,11 +791,13 @@ mod tests {
             SyllableTime {
                 text: "l".into(),
                 start_ms: 1400,
+                end_ms: None,
                 source: WordSource::Hand,
             },
             SyllableTime {
                 text: "a".into(),
                 start_ms: 1700,
+                end_ms: None,
                 source: WordSource::Hand,
             },
         ]);
@@ -808,6 +831,116 @@ mod tests {
         stale.cues[1].words = stale.cues[0].words.clone();
         let read = parse_lyrics(&to_lyrics_json(&stale, None)).unwrap();
         assert!(read.track.cues[1].words.is_none());
+    }
+
+    /// Word and syllable ends live inside version 2. A NOH that predates them
+    /// (0.2.0's mirror shape, no end field) reads such a file, and its rewrite
+    /// reads back here without the ends, with no error and no « damaged ».
+    #[test]
+    fn word_ends_stay_in_version_2_and_older_readers_ignore_them() {
+        #[derive(Serialize, Deserialize)]
+        struct OldFile {
+            version: u32,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            language: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            model: Option<String>,
+            cues: Vec<OldCue>,
+        }
+        #[derive(Serialize, Deserialize)]
+        struct OldCue {
+            start_ms: u64,
+            end_ms: u64,
+            text: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            words: Option<Vec<OldWord>>,
+        }
+        #[derive(Serialize, Deserialize)]
+        struct OldWord {
+            text: String,
+            start_ms: u64,
+            source: WordSource,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            syllables: Option<Vec<OldSyllable>>,
+        }
+        #[derive(Serialize, Deserialize)]
+        struct OldSyllable {
+            text: String,
+            start_ms: u64,
+            source: WordSource,
+        }
+
+        // Without ends, the file is byte for byte what 0.2.0's shape writes.
+        let plain = lyrics_track();
+        let old_shape = OldFile {
+            version: LYRICS_VERSION,
+            language: plain.language.clone(),
+            model: None,
+            cues: plain
+                .cues
+                .iter()
+                .map(|c| OldCue {
+                    start_ms: c.start_ms,
+                    end_ms: c.end_ms,
+                    text: c.text.clone(),
+                    words: c.words.as_ref().map(|w| {
+                        w.iter()
+                            .map(|w| OldWord {
+                                text: w.text.clone(),
+                                start_ms: w.start_ms,
+                                source: w.source,
+                                syllables: w.syllables.as_ref().map(|s| {
+                                    s.iter()
+                                        .map(|s| OldSyllable {
+                                            text: s.text.clone(),
+                                            start_ms: s.start_ms,
+                                            source: s.source,
+                                        })
+                                        .collect()
+                                }),
+                            })
+                            .collect()
+                    }),
+                })
+                .collect(),
+        };
+        assert_eq!(
+            to_lyrics_json(&plain, None),
+            serde_json::to_vec_pretty(&old_shape).unwrap()
+        );
+
+        let mut t = lyrics_track();
+        {
+            let w = t.cues[0].words.as_mut().unwrap();
+            w[0].end_ms = Some(1300);
+            w[1].syllables.as_mut().unwrap()[0].end_ms = Some(1600);
+        }
+        assert!(t.validate().is_ok());
+        let json = to_lyrics_json(&t, None);
+        assert!(String::from_utf8_lossy(&json).contains("\"version\": 2"));
+        assert_eq!(parse_lyrics(&json).unwrap().track, t, "ends round-trip");
+
+        // 0.2.0 reads it (the ends ignored) and writes it back without them.
+        let old: OldFile = serde_json::from_slice(&json).expect("0.2.0 reads it");
+        let rewritten = serde_json::to_vec_pretty(&old).unwrap();
+        let back = parse_lyrics(&rewritten)
+            .expect("no error, not damaged")
+            .track;
+        assert_eq!(back, plain, "the ends are gone, the starts are kept");
+
+        // An end that does not fit is dropped, never a reason to call the file
+        // damaged.
+        let mut value: serde_json::Value = serde_json::from_slice(&json).unwrap();
+        value["cues"][0]["words"][0]["end_ms"] = 9_000.into();
+        let read = parse_lyrics(&serde_json::to_vec(&value).unwrap())
+            .unwrap()
+            .track;
+        assert_eq!(read.cues[0].words.as_ref().unwrap()[0].end_ms, Some(1400));
+        value["cues"][0]["words"][0]["end_ms"] = 900.into();
+        let read = parse_lyrics(&serde_json::to_vec(&value).unwrap())
+            .unwrap()
+            .track;
+        assert_eq!(read.cues[0].words.as_ref().unwrap()[0].end_ms, None);
     }
 
     #[test]

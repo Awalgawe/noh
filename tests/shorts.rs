@@ -434,6 +434,7 @@ fn words_beside(srt: &Path) {
     .map(|(text, start_ms)| WordTime {
         text: text.into(),
         start_ms,
+        end_ms: None,
         source: WordSource::Hand,
         syllables: None,
     })

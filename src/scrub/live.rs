@@ -40,6 +40,8 @@ pub(super) enum Command {
         at: Instant,
     },
     Volume(f32),
+    /// Playback speed, 1.0 normal (the lyrics screen's sync game slows it).
+    Speed(f64),
     /// Stops the montage of that generation: not one opened since.
     Stop(u64),
 }
@@ -146,6 +148,9 @@ impl Exchange {
         self.ask(generation, Command::Volume(volume), |state| {
             state.volume = volume;
         });
+    }
+    pub fn set_speed(&self, generation: u64, speed: f64) {
+        self.ask(generation, Command::Speed(speed), |_| {});
     }
     /// Private, so that no caller's code runs under the lock. What is asked
     /// of a montage that is not the open one is dropped: the controller applies
@@ -386,6 +391,18 @@ mod tests {
             (state.position, state.frame.unwrap().position),
             (40.5, 40.5)
         );
+    }
+
+    /// A speed is asked of the open montage only; an older one asks nothing.
+    #[test]
+    fn a_speed_is_queued_for_the_open_montage_only() {
+        let live = Exchange::default();
+        let old = playing(&live, 3.0);
+        let generation = playing(&live, 5.0);
+        live.set_speed(old, 0.5);
+        assert!(live.commands().is_empty());
+        live.set_speed(generation, 0.75);
+        assert!(matches!(live.commands()[..], [Command::Speed(s)] if s == 0.75));
     }
 
     #[test]

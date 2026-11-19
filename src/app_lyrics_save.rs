@@ -814,12 +814,14 @@ mod tests {
             noh::subtitle_track::WordTime {
                 text: "la".into(),
                 start_ms: 0,
+                end_ms: None,
                 source: noh::subtitle_track::WordSource::Hand,
                 syllables: None,
             },
             noh::subtitle_track::WordTime {
                 text: "la".into(),
                 start_ms: 900,
+                end_ms: None,
                 source: noh::subtitle_track::WordSource::Hand,
                 syllables: None,
             },

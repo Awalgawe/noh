@@ -167,6 +167,11 @@ pub trait Live: Send + Sync {
     fn set_playing(&self, playing: bool);
     fn seek(&self, seconds: f64);
     fn set_volume(&self, volume: f32);
+    /// Play at `speed` times normal (1.0 is normal), keeping the voice's pitch.
+    /// False when the engine cannot: the interface then offers no speeds.
+    fn set_speed(&self, _speed: f64) -> bool {
+        false
+    }
     fn stop(&self);
     fn snapshot(&self) -> Snapshot;
     /// How the engine stopped serving its montage, once its snapshot reads an
@@ -351,6 +356,19 @@ impl Player {
             live.set_volume(volume);
         }
         self.shared.changed.notify_one();
+    }
+
+    /// Slows (or speeds) playback, for the lyrics screen's sync game. Only an
+    /// engine playing in the player's place can (libmpv keeps the pitch); the
+    /// usual player cannot and returns false, so the speeds stay hidden. A new
+    /// montage always starts at normal speed.
+    pub fn set_speed(&self, speed: f64) -> bool {
+        let speed = if speed.is_finite() {
+            speed.clamp(0.25, 2.0)
+        } else {
+            1.0
+        };
+        self.live().is_some_and(|live| live.set_speed(speed))
     }
 
     pub fn stop(&self) {
@@ -1897,6 +1915,10 @@ mod tests {
         fn set_volume(&self, volume: f32) {
             self.asked.lock().unwrap().push(format!("volume {volume}"));
         }
+        fn set_speed(&self, speed: f64) -> bool {
+            self.asked.lock().unwrap().push(format!("speed {speed}"));
+            true
+        }
         fn stop(&self) {
             self.asked.lock().unwrap().push("stop".into());
         }
@@ -1939,6 +1961,21 @@ mod tests {
             4,
             "a stopped engine is asked nothing more"
         );
+    }
+
+    /// The lyrics screen's slowed playback: only an engine in the player's
+    /// place can; the usual player answers false, so no speed is offered.
+    #[test]
+    fn a_speed_goes_to_the_engine_in_the_players_place_and_is_refused_without_one() {
+        let player = Player::new(|| {});
+        assert!(!player.set_speed(0.75));
+        let live = Arc::new(FakeLive::default());
+        player.open_live(live.clone());
+        assert!(player.set_speed(0.75));
+        // Out of range or not a number: clamped, or normal speed.
+        assert!(player.set_speed(9.0));
+        assert!(player.set_speed(f64::NAN));
+        assert_eq!(live.asked(), ["speed 0.75", "speed 2", "speed 1"]);
     }
 
     #[test]

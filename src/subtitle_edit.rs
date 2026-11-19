@@ -3,6 +3,8 @@
 //! rules of the mockup's note: a text edit keeps unchanged words' times; moving a
 //! cue moves its words; an edge stops at its neighbour (and at hand-placed
 //! words), and words it leaves outside are spread by letters ("estimated").
+//! The lyrics screen adds cuts at a word, joins with a space, syllable
+//! proposals for whole lines, and the sync game's holds and « passed » rules.
 use crate::subtitle_track::{
     MIN_WORD_GAP_MS, SubtitleCue, SubtitleTrack, SyllableTime, WordSource, WordTime,
 };
@@ -60,13 +62,15 @@ fn spread_before(words: &[&str], a: u64, next: u64) -> Option<Vec<u64>> {
 }
 
 /// Make a word list fit its cue: starts at least 50 ms apart and inside the cue
-/// (a moved start becomes Estimated); None when the cue cannot hold them.
+/// (a moved start becomes Estimated and loses its known end); known ends are
+/// clamped to the next start. None when the cue cannot hold them.
 fn settle(cue: &SubtitleCue, mut words: Vec<WordTime>) -> Option<Vec<WordTime>> {
     let mut previous: Option<u64> = None;
     for w in &mut words {
         let low = previous.map_or(cue.start_ms, |p| p + MIN_WORD_GAP_MS);
         if w.start_ms < low {
             w.start_ms = low;
+            w.end_ms = None;
             w.source = WordSource::Estimated;
             w.syllables = None;
         }
@@ -77,6 +81,7 @@ fn settle(cue: &SubtitleCue, mut words: Vec<WordTime>) -> Option<Vec<WordTime>> 
                 .map_or(w.start_ms, |s| s.start_ms.max(w.start_ms)),
         );
     }
+    cue.fit_ends(&mut words);
     cue.words_fit(&words).then_some(words)
 }
 
@@ -138,6 +143,7 @@ pub fn remap_words(cue: &SubtitleCue, old: &[WordTime], new_text: &str) -> Optio
             out.push(WordTime {
                 text: new[a + x].into(),
                 start_ms: t,
+                end_ms: None,
                 source: WordSource::Estimated,
                 syllables: None,
             });
@@ -226,6 +232,7 @@ pub fn set_edge(track: &mut SubtitleTrack, i: usize, edge: Edge, ms: u64) -> u64
                 for (k, t) in starts.into_iter().enumerate() {
                     out[from + k] = WordTime {
                         start_ms: t,
+                        end_ms: None,
                         source: WordSource::Estimated,
                         syllables: None,
                         ..words[from + k].clone()
@@ -273,8 +280,10 @@ pub fn move_cue(track: &mut SubtitleTrack, i: usize, delta_ms: i64) -> i64 {
     cue.end_ms = shift(cue.end_ms);
     for w in cue.words.iter_mut().flatten() {
         w.start_ms = shift(w.start_ms);
+        w.end_ms = w.end_ms.map(shift);
         for s in w.syllables.iter_mut().flatten() {
             s.start_ms = shift(s.start_ms);
+            s.end_ms = s.end_ms.map(shift);
         }
     }
     d
@@ -338,7 +347,10 @@ pub fn split_at(track: &mut SubtitleTrack, i: usize, ms: u64) -> bool {
     let mut first = SubtitleCue::new(cue.start_ms, ms, texts[..k].join(" "));
     let mut second = SubtitleCue::new(ms, cue.end_ms, texts[k..].join(" "));
     if let Some(w) = &cue.words {
-        first.words = Some(w[..k].to_vec()).filter(|x| first.words_fit(x));
+        // The first part now ends at `ms`: its last word's known end is clamped there.
+        let mut head = w[..k].to_vec();
+        first.fit_ends(&mut head);
+        first.words = Some(head).filter(|x| first.words_fit(x));
         second.words = settle(&second, w[k..].to_vec());
     }
     track.cues[i] = first;
@@ -354,14 +366,21 @@ pub fn split_at(track: &mut SubtitleTrack, i: usize, ms: u64) -> bool {
 /// Join a cue with the next one: one cue from the first start to the second
 /// end, texts joined by a line break; word times are kept when both have them.
 pub fn join_next(track: &mut SubtitleTrack, i: usize) -> bool {
+    join_next_with(track, i, "\n")
+}
+
+/// `join_next` with the texts joined by `sep`: a line break (the cue shows two
+/// lines) or a space (one line of text, as the lyrics screen joins, answer Q3).
+pub fn join_next_with(track: &mut SubtitleTrack, i: usize, sep: &str) -> bool {
     if i + 1 >= track.cues.len() {
         return false;
     }
     let (a, b) = (track.cues[i].clone(), track.cues[i + 1].clone());
-    let mut joined = SubtitleCue::new(a.start_ms, b.end_ms, format!("{}\n{}", a.text, b.text));
+    let mut joined = SubtitleCue::new(a.start_ms, b.end_ms, format!("{}{sep}{}", a.text, b.text));
     if let (Some(x), Some(y)) = (&a.words, &b.words) {
-        joined.words =
-            Some(x.iter().chain(y).cloned().collect::<Vec<_>>()).filter(|w| joined.words_fit(w));
+        let mut all: Vec<WordTime> = x.iter().chain(y).cloned().collect();
+        joined.fit_ends(&mut all);
+        joined.words = Some(all).filter(|w| joined.words_fit(w));
     }
     track.cues[i] = joined;
     track.cues.remove(i + 1);
@@ -405,6 +424,7 @@ pub fn words_or_estimate(cue: &SubtitleCue) -> Vec<WordTime> {
         .map(|(t, s)| WordTime {
             text: (*t).into(),
             start_ms: s,
+            end_ms: None,
             source: WordSource::Estimated,
             syllables: None,
         })
@@ -451,6 +471,9 @@ pub fn set_unit_start(track: &mut SubtitleTrack, i: usize, unit: usize, ms: u64)
     }
     let ms = ms.clamp(low, high);
     set_unit(&mut words, (wi, si), ms);
+    // The previous unit's known end stays before this start; this unit's own end
+    // is dropped if the start passed it.
+    cue.fit_ends(&mut words);
     if !cue.words_fit(&words) {
         return None;
     }
@@ -515,6 +538,7 @@ pub fn set_syllables(track: &mut SubtitleTrack, i: usize, w: usize, parts: &[Str
             .map(|(k, (text, start_ms))| SyllableTime {
                 text: text.clone(),
                 start_ms,
+                end_ms: None,
                 source: if k == 0 {
                     word.source
                 } else {
@@ -524,6 +548,7 @@ pub fn set_syllables(track: &mut SubtitleTrack, i: usize, w: usize, parts: &[Str
             .collect();
         words[w].syllables = Some(syllables);
     }
+    cue.fit_ends(&mut words);
     if !cue.words_fit(&words) {
         return false;
     }
@@ -565,6 +590,13 @@ pub fn apply_taps(track: &mut SubtitleTrack, i: usize, taps: &[u64]) -> bool {
     for (&(wi, si, _), &ms) in list.iter().zip(&t) {
         set_unit(&mut words, (wi, si), ms);
     }
+    // Taps give starts only: every unit moved, so no old end is kept.
+    for w in &mut words {
+        w.end_ms = None;
+        for s in w.syllables.iter_mut().flatten() {
+            s.end_ms = None;
+        }
+    }
     if !cue.words_fit(&words) {
         return false;
     }
@@ -578,6 +610,379 @@ pub fn apply_taps(track: &mut SubtitleTrack, i: usize, taps: &[u64]) -> bool {
     true
 }
 
+/// Cut cue `i` before its word `k` (1 ≤ k < word count), at that word's start:
+/// its known time, or the letter estimate when the cue has no word times (the
+/// cut `split_at` makes). The lyrics screen cuts at the text cursor with it.
+pub fn split_at_word(track: &mut SubtitleTrack, i: usize, k: usize) -> bool {
+    let Some(cue) = track.cues.get(i) else {
+        return false;
+    };
+    let texts: Vec<&str> = cue.text.split_whitespace().collect();
+    if k == 0 || k >= texts.len() {
+        return false;
+    }
+    let starts: Vec<u64> = match &cue.words {
+        Some(w) => w.iter().map(|w| w.start_ms).collect(),
+        None => spread(&texts, cue.start_ms, cue.end_ms),
+    };
+    // Equal estimated starts (a very short cue) would move the cut to another word.
+    if starts.iter().filter(|t| **t < starts[k]).count() != k {
+        return false;
+    }
+    split_at(track, i, starts[k])
+}
+
+/// Give each word of the cues in `range` that is not cut yet the split
+/// `propose` returns for its text, when it has two parts or more and fits (a
+/// cue without word times gets its letter-estimated words first). The
+/// Syllables level of the sync game asks this for the lines it will play.
+/// Returns how many words were cut.
+pub fn propose_syllables(
+    track: &mut SubtitleTrack,
+    range: std::ops::Range<usize>,
+    propose: impl Fn(&str) -> Vec<String>,
+) -> usize {
+    let mut cut = 0;
+    let count = track.cues.len();
+    for i in range.filter(|i| *i < count) {
+        let words = words_or_estimate(&track.cues[i]);
+        for (w, word) in words.iter().enumerate() {
+            if word.syllables.is_some() {
+                continue;
+            }
+            let parts = propose(&word.text);
+            if parts.len() >= 2 && set_syllables(track, i, w, &parts) {
+                cut += 1;
+            }
+        }
+    }
+    cut
+}
+
+/// What a sync game takes: a whole cue, a word, or a syllable.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Level {
+    Line,
+    Word,
+    Syllable,
+}
+
+/// One held key in the sync game: pressed at `start_ms`, released at `end_ms`
+/// (song times), for cue `cue`, its word `word` and that word's syllable
+/// `syllable` (the indices below the game's level are ignored).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Hold {
+    pub cue: usize,
+    pub word: usize,
+    pub syllable: usize,
+    pub start_ms: u64,
+    pub end_ms: u64,
+}
+
+/// Two holds closer than this are one sung stretch (legato): the first ends
+/// where the second starts.
+pub const LEGATO_MS: u64 = 120;
+
+/// The track after a sync game's holds, as one new track (one undo step), or
+/// None when they cannot all apply.
+///
+/// `holds` are in the order they were held: song time rising, cue index never
+/// going back (a Refaire drops the holds it rewinds over before new ones come).
+/// The screen applies the holds after each release; on None it drops only the
+/// last hold, says so, and keeps the others.
+///
+/// - Lines: the cue takes the hold's start and end (at least MIN_CUE_MS long);
+///   its words keep their places in proportion.
+/// - Words and syllables: each taken unit gets its start, its end and the Hand
+///   source. A word's syllables are spread again inside a taken word; a taken
+///   syllable 0 moves its word's start, a taken last syllable sets its word's
+///   end. At the Syllables level a word that is not cut is one unit (syllable
+///   0); a later syllable of an uncut word cannot be taken. Untaken units that
+///   a taken end now covers move to that end (Estimated, no end), so a held end
+///   is never cut short by a neighbour nobody took. The cue grows to hold them.
+/// - A take that starts before the previous cue's end pulls that end back, as
+///   far as the previous cue's own last unit allows: a stale end (a recognizer
+///   segment that ran on) never pushes the take later.
+/// - A cue that now ends after the next cue's start pushes that start, never
+///   past the cue after it (the next hold usually retakes it).
+pub fn apply_holds(track: &SubtitleTrack, level: Level, holds: &[Hold]) -> Option<SubtitleTrack> {
+    debug_assert!(
+        holds
+            .windows(2)
+            .all(|p| p[0].start_ms <= p[1].start_ms && p[0].cue <= p[1].cue),
+        "holds must come in the order they were held"
+    );
+    let mut holds = holds.to_vec();
+    for n in 1..holds.len() {
+        let (prev_start, prev_end, start) = (
+            holds[n - 1].start_ms,
+            holds[n - 1].end_ms,
+            holds[n].start_ms,
+        );
+        if start > prev_start && (prev_end > start || start - prev_end < LEGATO_MS) {
+            holds[n - 1].end_ms = start;
+        }
+    }
+    let mut t = track.clone();
+    let mut n = 0;
+    while n < holds.len() {
+        let c = holds[n].cue;
+        let group: Vec<Hold> = holds[n..]
+            .iter()
+            .take_while(|h| h.cue == c)
+            .copied()
+            .collect();
+        n += group.len();
+        if c >= t.cues.len() {
+            return None;
+        }
+        pull_previous_end(&mut t, c, group[0].start_ms);
+        let prev_end = c.checked_sub(1).map_or(0, |p| t.cues[p].end_ms);
+        let cue = t.cues[c].clone();
+        let mut next = cue.clone();
+        match level {
+            Level::Line => {
+                let h = group.last()?;
+                next.start_ms = h.start_ms.max(prev_end);
+                next.end_ms = h.end_ms.max(next.start_ms + MIN_CUE_MS);
+                next.words = cue.words.as_ref().and_then(|w| {
+                    let (a, b) = (cue.start_ms, cue.end_ms.max(cue.start_ms + 1));
+                    let (na, nb) = (next.start_ms, next.end_ms);
+                    let f = |ms: u64| na + (ms.saturating_sub(a)) * (nb - na) / (b - a);
+                    let moved = w
+                        .iter()
+                        .map(|w| WordTime {
+                            start_ms: f(w.start_ms),
+                            end_ms: w.end_ms.map(f),
+                            syllables: w.syllables.as_ref().map(|s| {
+                                s.iter()
+                                    .map(|s| SyllableTime {
+                                        start_ms: f(s.start_ms),
+                                        end_ms: s.end_ms.map(f),
+                                        ..s.clone()
+                                    })
+                                    .collect()
+                            }),
+                            ..w.clone()
+                        })
+                        .collect();
+                    settle(&next, moved)
+                });
+            }
+            Level::Word | Level::Syllable => {
+                let mut words = words_or_estimate(&cue);
+                // (word, syllable) of every taken unit; a whole word is syllable 0.
+                let mut taken: Vec<(usize, usize)> = Vec::new();
+                for h in &group {
+                    let w = words.get_mut(h.word)?;
+                    let end = h.end_ms.max(h.start_ms + 1);
+                    let whole = level == Level::Word || w.syllables.is_none();
+                    if whole {
+                        if level == Level::Syllable && h.syllable != 0 {
+                            return None;
+                        }
+                        w.start_ms = h.start_ms;
+                        w.end_ms = Some(end);
+                        w.source = WordSource::Hand;
+                        if let Some(syl) = &w.syllables {
+                            let texts: Vec<&str> = syl.iter().map(|s| s.text.as_str()).collect();
+                            // Spread inside the held word; a hold too short for them
+                            // keeps the word whole rather than refusing the game.
+                            w.syllables = spread_before(&texts, h.start_ms, end).map(|starts| {
+                                syl.iter()
+                                    .zip(starts)
+                                    .enumerate()
+                                    .map(|(k, (s, start_ms))| SyllableTime {
+                                        start_ms,
+                                        end_ms: None,
+                                        source: if k == 0 {
+                                            WordSource::Hand
+                                        } else {
+                                            WordSource::Estimated
+                                        },
+                                        ..s.clone()
+                                    })
+                                    .collect()
+                            });
+                        }
+                        taken.push((h.word, 0));
+                    } else {
+                        let count = w.syllables.as_ref()?.len();
+                        let s = w.syllables.as_mut()?.get_mut(h.syllable)?;
+                        s.start_ms = h.start_ms;
+                        s.end_ms = Some(end);
+                        s.source = WordSource::Hand;
+                        if h.syllable == 0 {
+                            w.start_ms = h.start_ms;
+                            w.source = WordSource::Hand;
+                        }
+                        if h.syllable + 1 == count {
+                            w.end_ms = Some(end);
+                        }
+                        taken.push((h.word, h.syllable));
+                    }
+                }
+                push_covered(&mut words, &taken, level);
+                let first = words.first()?.start_ms;
+                let last_end = words
+                    .iter()
+                    .map(|w| {
+                        let last = w
+                            .syllables
+                            .as_ref()
+                            .and_then(|s| s.last())
+                            .map_or(w.start_ms, |s| s.start_ms);
+                        w.end_ms.unwrap_or(0).max(last + MIN_WORD_GAP_MS)
+                    })
+                    .max()?;
+                next.start_ms = cue.start_ms.min(first).max(prev_end);
+                next.end_ms = cue.end_ms.max(last_end);
+                next.words = Some(settle(&next, words)?);
+            }
+        }
+        let cap = t.cues.get(c + 2).map_or(t.duration_ms, |x| x.start_ms);
+        if let Some(following) = t.cues.get_mut(c + 1)
+            && following.start_ms < next.end_ms
+        {
+            let len = following.end_ms - following.start_ms;
+            following.start_ms = next.end_ms;
+            following.end_ms = following
+                .end_ms
+                .max(next.end_ms + MIN_CUE_MS.min(len))
+                .min(cap);
+            if let Some(mut w) = following.words.take() {
+                let probe = following.clone();
+                following.words = settle(&probe, std::mem::take(&mut w));
+            }
+        }
+        t.cues[c] = next;
+    }
+    t.validate().is_ok().then_some(t)
+}
+
+/// A take for cue `c` starting at `start` before the previous cue's end pulls
+/// that end back to the take, but not before the previous cue's last unit (its
+/// known end, or 50 ms after its last start) nor under MIN_CUE_MS.
+fn pull_previous_end(t: &mut SubtitleTrack, c: usize, start: u64) {
+    let Some(p) = c.checked_sub(1) else {
+        return;
+    };
+    let prev = &mut t.cues[p];
+    if prev.end_ms <= start {
+        return;
+    }
+    let last_unit = prev.words.as_ref().map_or(0, |w| {
+        w.iter()
+            .map(|w| {
+                let last = w
+                    .syllables
+                    .as_ref()
+                    .and_then(|s| s.last())
+                    .map_or(w.start_ms, |s| s.start_ms);
+                w.end_ms.unwrap_or(0).max(last + MIN_WORD_GAP_MS)
+            })
+            .max()
+            .unwrap_or(0)
+    });
+    let end = start
+        .max(last_unit)
+        .max(prev.start_ms + MIN_CUE_MS)
+        .min(prev.end_ms);
+    prev.end_ms = end;
+    if let Some(mut w) = prev.words.take() {
+        prev.fit_ends(&mut w);
+        let fits = prev.words_fit(&w);
+        prev.words = fits.then_some(w);
+    }
+}
+
+/// Untaken units that a taken unit's end now covers move to that end
+/// (Estimated, no end), each 50 ms after the one before: a word whole at the
+/// Words level (its syllables shifted with it), a syllable at the Syllables
+/// level (its word's start following its syllable 0).
+fn push_covered(words: &mut [WordTime], taken: &[(usize, usize)], level: Level) {
+    let mut floor = 0u64;
+    for (wi, w) in words.iter_mut().enumerate() {
+        match (level, w.syllables.as_mut()) {
+            (Level::Syllable, Some(syl)) => {
+                for (si, s) in syl.iter_mut().enumerate() {
+                    if taken.contains(&(wi, si)) {
+                        floor = floor.max(s.end_ms.unwrap_or(s.start_ms + MIN_WORD_GAP_MS));
+                    } else if s.start_ms < floor {
+                        s.start_ms = floor;
+                        s.end_ms = None;
+                        s.source = WordSource::Estimated;
+                        floor += MIN_WORD_GAP_MS;
+                    }
+                }
+                if w.start_ms != syl[0].start_ms {
+                    w.start_ms = syl[0].start_ms;
+                    w.source = syl[0].source;
+                }
+            }
+            _ => {
+                if taken.contains(&(wi, 0)) {
+                    floor = floor.max(w.end_ms.unwrap_or(w.start_ms + MIN_WORD_GAP_MS));
+                } else if w.start_ms < floor {
+                    let d = floor - w.start_ms;
+                    w.start_ms = floor;
+                    w.end_ms = None;
+                    w.source = WordSource::Estimated;
+                    for s in w.syllables.iter_mut().flatten() {
+                        s.start_ms += d;
+                        s.end_ms = None;
+                        s.source = WordSource::Estimated;
+                    }
+                    floor = w
+                        .syllables
+                        .as_ref()
+                        .and_then(|s| s.last())
+                        .map_or(w.start_ms, |s| s.start_ms)
+                        + MIN_WORD_GAP_MS;
+                }
+            }
+        }
+    }
+}
+
+/// A unit the sync game expects next, with its guide: the known time (Whisper,
+/// by hand) or the letter estimate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Guide {
+    pub cue: usize,
+    pub start_ms: u64,
+    pub end_ms: u64,
+}
+
+/// Playback this far past the expected unit's guide end with no press: the
+/// game waits (the unit was passed).
+pub const MISS_AFTER_MS: u64 = 1500;
+/// A press this far after the next line's guide start, while units of the
+/// current line are left, means they were passed.
+pub const NEXT_LINE_MARGIN_MS: u64 = 300;
+
+/// The game's two « passed » rules for the expected unit `idx` at song time
+/// `now`. With `pressing` false: no key held and playback MISS_AFTER_MS past its
+/// guide end. With `pressing` true (a key just went down): at Words or
+/// Syllables level, the next line's first unit started more than
+/// NEXT_LINE_MARGIN_MS ago, so this press is not used and the game waits; a
+/// slip inside a line is not detected, and never spreads past it.
+pub fn passed(now: u64, guides: &[Guide], idx: usize, level: Level, pressing: bool) -> bool {
+    let Some(g) = guides.get(idx) else {
+        return false;
+    };
+    if !pressing {
+        return now > g.end_ms + MISS_AFTER_MS;
+    }
+    if level == Level::Line {
+        return false;
+    }
+    guides[idx..]
+        .iter()
+        .find(|x| x.cue != g.cue)
+        .is_some_and(|n| now > n.start_ms + NEXT_LINE_MARGIN_MS)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -586,6 +991,7 @@ mod tests {
         WordTime {
             text: text.into(),
             start_ms,
+            end_ms: None,
             source,
             syllables: None,
         }
@@ -613,6 +1019,343 @@ mod tests {
             .flatten()
             .map(|w| (w.text.clone(), w.start_ms, w.source))
             .collect()
+    }
+
+    #[test]
+    fn a_cut_at_a_word_uses_its_start_or_the_letter_estimate() {
+        let mut t = track();
+        assert!(split_at_word(&mut t, 0, 2));
+        assert_eq!(t.cues[0].text, "Something had");
+        assert_eq!((t.cues[0].end_ms, t.cues[1].start_ms), (2200, 2200));
+        // No word times: the cut falls where the letters put « disappears ».
+        let mut t = track();
+        assert!(split_at_word(&mut t, 1, 2));
+        assert_eq!(
+            (t.cues[1].text.as_str(), t.cues[2].text.as_str()),
+            ("and nothing", "disappears")
+        );
+        let letters = spread(&["and", "nothing", "disappears"], 4000, 6000);
+        assert_eq!(t.cues[2].start_ms, letters[2]);
+        // Not before the first word, not past the last.
+        let mut t = track();
+        assert!(!split_at_word(&mut t, 0, 0));
+        assert!(!split_at_word(&mut t, 0, 4));
+    }
+
+    #[test]
+    fn a_join_with_a_space_gives_one_line_of_text() {
+        let mut t = track();
+        assert!(split_at_word(&mut t, 0, 2));
+        assert!(join_next_with(&mut t, 0, " "));
+        assert_eq!(t.cues[0].text, "Something had to give");
+        assert_eq!(t.cues[0].words.as_ref().map(Vec::len), Some(4));
+        let mut t = track();
+        assert!(join_next(&mut t, 0));
+        assert_eq!(
+            t.cues[0].text,
+            "Something had to give\nand nothing disappears"
+        );
+    }
+
+    #[test]
+    fn syllables_are_proposed_for_every_whole_word_of_the_lines() {
+        let mut t = track();
+        let cut = propose_syllables(&mut t, 0..2, |w| match w {
+            "Something" => vec!["Some".into(), "thing".into()],
+            "nothing" => vec!["no".into(), "thing".into()],
+            _ => vec![w.into()],
+        });
+        assert_eq!(cut, 2);
+        let syl = |t: &SubtitleTrack, i: usize, w: usize| {
+            t.cues[i].words.as_ref().unwrap()[w]
+                .syllables
+                .as_ref()
+                .map(|s| s.iter().map(|s| s.text.clone()).collect::<Vec<_>>())
+        };
+        assert_eq!(syl(&t, 0, 0), Some(vec!["Some".into(), "thing".into()]));
+        // A cue without word times got its estimated words first.
+        assert_eq!(syl(&t, 1, 1), Some(vec!["no".into(), "thing".into()]));
+        assert_eq!(syl(&t, 1, 0), None);
+        // Already cut: left alone.
+        assert_eq!(
+            propose_syllables(&mut t, 0..2, |w| vec![w.into(), "x".into()]),
+            0
+        );
+    }
+
+    #[test]
+    fn line_holds_set_start_and_end_and_push_the_next_line() {
+        let t = track();
+        let hold = |cue, start_ms, end_ms| Hold {
+            cue,
+            word: 0,
+            syllable: 0,
+            start_ms,
+            end_ms,
+        };
+        let out = apply_holds(&t, Level::Line, &[hold(0, 1200, 4300)]).unwrap();
+        assert_eq!((out.cues[0].start_ms, out.cues[0].end_ms), (1200, 4300));
+        // Words keep their places in proportion: « had » was 40 % in.
+        assert_eq!(
+            out.cues[0].words.as_ref().unwrap()[1].start_ms,
+            1200 + 3100 * 800 / 2000
+        );
+        // The next line started at 4000: pushed to 4300.
+        assert_eq!(out.cues[1].start_ms, 4300);
+        assert!(out.validate().is_ok());
+        // Legato: a second hold starting 80 ms after the first ended closes the gap.
+        let out =
+            apply_holds(&t, Level::Line, &[hold(0, 1000, 3000), hold(1, 3080, 5900)]).unwrap();
+        assert_eq!((out.cues[0].end_ms, out.cues[1].start_ms), (3080, 3080));
+    }
+
+    #[test]
+    fn word_holds_keep_their_end_and_the_line_grows_to_hold_them() {
+        let t = track();
+        let hold = |word, start_ms, end_ms| Hold {
+            cue: 0,
+            word,
+            syllable: 0,
+            start_ms,
+            end_ms,
+        };
+        let out = apply_holds(
+            &t,
+            Level::Word,
+            &[
+                hold(0, 900, 1500),
+                hold(1, 1800, 2000),
+                hold(2, 2300, 2400),
+                hold(3, 2600, 3400),
+            ],
+        )
+        .unwrap();
+        let words = out.cues[0].words.as_ref().unwrap();
+        let got: Vec<(u64, Option<u64>, WordSource)> = words
+            .iter()
+            .map(|w| (w.start_ms, w.end_ms, w.source))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                (900, Some(1500), WordSource::Hand),
+                (1800, Some(2000), WordSource::Hand),
+                (2300, Some(2400), WordSource::Hand),
+                (2600, Some(3400), WordSource::Hand),
+            ]
+        );
+        assert_eq!((out.cues[0].start_ms, out.cues[0].end_ms), (900, 3400));
+        assert!(out.validate().is_ok());
+        // Syllables level: an uncut word is one unit (syllable 0), nothing more.
+        let whole = apply_holds(&t, Level::Syllable, &[hold(0, 900, 1500)]).unwrap();
+        assert_eq!(whole.cues[0].words.as_ref().unwrap()[0].end_ms, Some(1500));
+        let later = Hold {
+            syllable: 1,
+            ..hold(0, 900, 1500)
+        };
+        assert!(apply_holds(&t, Level::Syllable, &[later]).is_none());
+    }
+
+    /// A game stopped mid-line: a held end is never cut short by a neighbour
+    /// nobody took; that neighbour moves to the end, Estimated.
+    #[test]
+    fn a_held_end_pushes_the_untaken_units_it_covers() {
+        let t = track();
+        let hold = |word, syllable, start_ms, end_ms| Hold {
+            cue: 0,
+            word,
+            syllable,
+            start_ms,
+            end_ms,
+        };
+        let out = apply_holds(&t, Level::Word, &[hold(0, 0, 1000, 1900)]).unwrap();
+        let w = out.cues[0].words.as_ref().unwrap();
+        assert_eq!((w[0].end_ms, w[0].source), (Some(1900), WordSource::Hand));
+        assert_eq!(
+            (w[1].start_ms, w[1].end_ms, w[1].source),
+            (1900, None, WordSource::Estimated)
+        );
+        assert_eq!(w[2].start_ms, 2200, "a word the end does not reach stays");
+        assert!(out.validate().is_ok());
+
+        let mut t = track();
+        propose_syllables(&mut t, 0..1, |w| match w {
+            "Something" => vec!["Some".into(), "thing".into()],
+            _ => vec![w.into()],
+        });
+        let out = apply_holds(&t, Level::Syllable, &[hold(0, 0, 1000, 1500)]).unwrap();
+        let s = out.cues[0].words.as_ref().unwrap()[0]
+            .syllables
+            .clone()
+            .unwrap();
+        assert_eq!((s[0].start_ms, s[0].end_ms), (1000, Some(1500)));
+        assert_eq!(
+            (s[1].start_ms, s[1].end_ms, s[1].source),
+            (1500, None, WordSource::Estimated)
+        );
+        assert!(out.validate().is_ok());
+    }
+
+    /// A previous line whose end ran on (a recognizer segment) never pushes the
+    /// next line's first take later: its end is pulled back to the take.
+    #[test]
+    fn a_stale_previous_end_is_pulled_back_to_the_take() {
+        let t = track();
+        // Line 1 ends at 3000; its last word « give » starts at 2500.
+        let hold = |start_ms, end_ms| Hold {
+            cue: 1,
+            word: 0,
+            syllable: 0,
+            start_ms,
+            end_ms,
+        };
+        let out = apply_holds(&t, Level::Word, &[hold(2800, 3300)]).unwrap();
+        assert_eq!(out.cues[0].end_ms, 2800);
+        let first = &out.cues[1].words.as_ref().unwrap()[0];
+        assert_eq!(
+            (out.cues[1].start_ms, first.start_ms, first.source),
+            (2800, 2800, WordSource::Hand)
+        );
+        assert_eq!(first.end_ms, Some(3300));
+        // Not before the previous line's own last word (50 ms after « give »).
+        let out = apply_holds(&t, Level::Word, &[hold(2400, 3300)]).unwrap();
+        assert_eq!((out.cues[0].end_ms, out.cues[1].start_ms), (2550, 2550));
+        // The Lines level pulls the same way.
+        let out = apply_holds(&t, Level::Line, &[hold(2800, 4500)]).unwrap();
+        assert_eq!((out.cues[0].end_ms, out.cues[1].start_ms), (2800, 2800));
+        assert!(out.validate().is_ok());
+    }
+
+    #[test]
+    fn syllable_holds_set_their_word_start_and_end() {
+        let mut t = track();
+        propose_syllables(&mut t, 0..1, |w| match w {
+            "Something" => vec!["Some".into(), "thing".into()],
+            _ => vec![w.into()],
+        });
+        let hold = |syllable, start_ms, end_ms| Hold {
+            cue: 0,
+            word: 0,
+            syllable,
+            start_ms,
+            end_ms,
+        };
+        let out = apply_holds(
+            &t,
+            Level::Syllable,
+            &[hold(0, 1000, 1300), hold(1, 1350, 1700)],
+        )
+        .unwrap();
+        let w = &out.cues[0].words.as_ref().unwrap()[0];
+        let s = w.syllables.as_ref().unwrap();
+        // 50 ms apart: legato closes « Some » onto « thing ».
+        assert_eq!((s[0].start_ms, s[0].end_ms), (1000, Some(1350)));
+        assert_eq!((s[1].start_ms, s[1].end_ms), (1350, Some(1700)));
+        assert_eq!((w.start_ms, w.end_ms), (1000, Some(1700)));
+    }
+
+    #[test]
+    fn the_game_waits_on_a_passed_unit_and_never_past_one_line() {
+        let g = |cue, start_ms, end_ms| Guide {
+            cue,
+            start_ms,
+            end_ms,
+        };
+        let guides = [g(0, 1000, 1400), g(0, 1400, 2000), g(1, 3000, 3500)];
+        // No press: 1.5 s after the expected unit's guide end.
+        assert!(!passed(2900, &guides, 0, Level::Word, false));
+        assert!(passed(2901, &guides, 0, Level::Word, false));
+        // A press after the next line started (+0.3 s) while this line has units left.
+        assert!(!passed(3300, &guides, 1, Level::Word, true));
+        assert!(passed(3301, &guides, 1, Level::Word, true));
+        // Line level: every unit is a line, the press rule never applies.
+        assert!(!passed(9000, &guides, 1, Level::Line, true));
+        // A slip inside a line is not detected.
+        assert!(!passed(1900, &guides, 0, Level::Word, true));
+    }
+
+    /// Known ends (lyrics screen, held words) stay valid through every edit:
+    /// shifted with the cue, clamped to the next start, dropped when a start
+    /// moves past them or is tapped again.
+    #[test]
+    fn known_word_ends_stay_valid_through_every_edit() {
+        let ends = |t: &SubtitleTrack, i: usize| -> Vec<Option<u64>> {
+            t.cues[i].words.iter().flatten().map(|w| w.end_ms).collect()
+        };
+        let mut base = track();
+        {
+            let w = base.cues[0].words.as_mut().unwrap();
+            w[0].end_ms = Some(1600);
+            w[1].end_ms = Some(2100);
+        }
+        assert!(base.validate().is_ok());
+
+        let mut t = base.clone();
+        assert_eq!(move_cue(&mut t, 0, 500), 500);
+        assert_eq!(ends(&t, 0), [Some(2100), Some(2600), None, None]);
+
+        // A hand-placed start before the previous word's end clamps that end.
+        let mut t = base.clone();
+        assert_eq!(set_unit_start(&mut t, 0, 1, 1500), Some(1500));
+        assert_eq!(ends(&t, 0)[0], Some(1500));
+        // A start moved past its own end drops it.
+        let mut t = base.clone();
+        assert_eq!(set_unit_start(&mut t, 0, 1, 2150), Some(2150));
+        assert_eq!(ends(&t, 0)[1], None);
+
+        // A split clamps the first part's last end to the cut; a join keeps it.
+        let mut t = base.clone();
+        t.cues[0].words.as_mut().unwrap()[1].end_ms = Some(2190);
+        assert!(split_at(&mut t, 0, 2150));
+        assert_eq!(ends(&t, 0), [Some(1600), Some(2150)]);
+        assert!(join_next(&mut t, 0));
+        assert_eq!(ends(&t, 0), [Some(1600), Some(2150), None, None]);
+        assert!(t.validate().is_ok());
+
+        // A text edit keeps unchanged words' ends; a new word has none.
+        let mut t = base.clone();
+        assert!(set_text(&mut t, 0, "Something had to live"));
+        assert_eq!(ends(&t, 0), [Some(1600), Some(2100), None, None]);
+
+        // Rhythm taps give starts only: every old end goes.
+        let mut t = base.clone();
+        assert!(apply_taps(&mut t, 0, &[1000, 1700, 2200, 2500]));
+        assert_eq!(ends(&t, 0), [None, None, None, None]);
+
+        // settle: a start pushed later loses its end.
+        let cue = base.cues[0].clone();
+        let mut words = cue.words.clone().unwrap();
+        words[1].start_ms = 1020;
+        words[1].end_ms = Some(1700);
+        let settled = settle(&cue, words).unwrap();
+        assert_eq!(settled[1].start_ms, 1050);
+        assert_eq!(settled[1].end_ms, None);
+
+        // The End edge dragged left past the last word's known end clamps it to
+        // the new cue end; dragged before the word's start, the word moves and
+        // its end goes.
+        let mut t = base.clone();
+        t.cues[0].words.as_mut().unwrap()[3].end_ms = Some(2900);
+        assert_eq!(set_edge(&mut t, 0, Edge::End, 2700), 2700);
+        assert_eq!(ends(&t, 0), [Some(1600), Some(2100), None, Some(2700)]);
+        assert_eq!(set_edge(&mut t, 0, Edge::End, 2400), 2400);
+        assert_eq!(ends(&t, 0)[3], None);
+        assert!(t.validate().is_ok());
+
+        // A re-split word: its syllables lose their ends, its own end stays.
+        let mut t = base.clone();
+        let parts = |a: &str, b: &str| vec![a.to_string(), b.to_string()];
+        assert!(set_syllables(&mut t, 0, 0, &parts("Some", "thing")));
+        t.cues[0].words.as_mut().unwrap()[0]
+            .syllables
+            .as_mut()
+            .unwrap()[0]
+            .end_ms = Some(1300);
+        assert!(t.validate().is_ok());
+        assert!(set_syllables(&mut t, 0, 0, &parts("So", "mething")));
+        let w = &t.cues[0].words.as_ref().unwrap()[0];
+        assert_eq!(w.end_ms, Some(1600));
+        assert!(w.syllables.iter().flatten().all(|s| s.end_ms.is_none()));
     }
 
     #[test]

@@ -863,6 +863,7 @@ fn repaired_words(
         out.push(WordTime {
             text,
             start_ms,
+            end_ms: None,
             source,
             syllables: None,
         });
