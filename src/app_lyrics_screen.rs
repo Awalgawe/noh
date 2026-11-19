@@ -3299,7 +3299,7 @@ mod tests {
         // over the window, and with one dropped.
         let shapes = |app: &mut NohApp, hovered: bool, dropped: bool| {
             let file = |path: &std::path::Path| Some(path.to_path_buf());
-            let output = ctx.run_ui(
+            let mut output = ctx.run_ui(
                 egui::RawInput {
                     screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(980.0, 850.0))),
                     hovered_files: if hovered {
@@ -3321,6 +3321,9 @@ mod tests {
                     app.draw(ui);
                 },
             );
+            // No renderer takes the texture updates in a test: dropped unread,
+            // they are an error wherever the frame produced one.
+            output.textures_delta.clear();
             output.shapes.len()
         };
         shapes(&mut app, false, false);
@@ -4226,7 +4229,7 @@ mod tests {
                 }
                 let height = if level.is_some() { 802.0 } else { 850.0 };
                 let started = Instant::now();
-                let output = ctx.run_ui(
+                let mut output = ctx.run_ui(
                     egui::RawInput {
                         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(980.0, height))),
                         events: vec![egui::Event::PointerMoved(pos2(
@@ -4244,6 +4247,8 @@ mod tests {
                         }
                     },
                 );
+                // No renderer takes the texture updates here.
+                output.textures_delta.clear();
                 std::hint::black_box(ctx.tessellate(output.shapes, output.pixels_per_point));
                 if n >= 20 {
                     samples.push(started.elapsed().as_secs_f64() * 1000.0);
