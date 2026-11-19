@@ -216,7 +216,13 @@ jobs:
     needs: preflight
     if: inputs.stage == 'acceptance'
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # One runner per distribution of assets/linux-validation-matrix.json, and one for the effect burn;
+        # tools/test_release_acceptance.py keeps this list equal to release_acceptance.linux_runners().
+        runner: [ubuntu-24.04, ubuntu-26.04, debian-13, fedora-44, opensuse-tumbleweed, arch, effect-burn]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -229,16 +235,17 @@ jobs:
       - name: Download the published Linux files as a user would and test them
         env:
           RELEASE_TAG: ${{ inputs.tag }}
+          ACCEPTANCE_RUNNER: ${{ matrix.runner }}
         run: |
           mkdir -p logs
           espeak-ng -v en-us -s 140 -w logs/synthetic-speech.wav 'This is a synthetic speech sample. The video and audio tools work together.'
-          python3 tools/release_acceptance.py linux --tag "$RELEASE_TAG" \
+          python3 tools/release_acceptance.py linux --tag "$RELEASE_TAG" --runner "$ACCEPTANCE_RUNNER" \
             --speech-fixture logs/synthetic-speech.wav --output "$RUNNER_TEMP/acceptance-linux"
       - name: Keep what was observed
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: acceptance-part-linux-x64
+          name: acceptance-part-linux-x64-${{ matrix.runner }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/acceptance-linux/evidence/
           if-no-files-found: error
           retention-days: 30
@@ -268,7 +275,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: acceptance-part-windows-x64
+          name: acceptance-part-windows-x64-${{ github.run_attempt }}
           path: ${{ runner.temp }}/acceptance-windows/evidence/
           if-no-files-found: error
           retention-days: 30
