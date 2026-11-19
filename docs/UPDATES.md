@@ -15,6 +15,10 @@ folder runs. Network access goes through the system `curl.exe` started with
 new version. There is no signature beyond GitHub's: see the trust note in
 [RELEASING.md](RELEASING.md). The release CI test `test_upgrade`
 (`tools/installer/public-ci.py`) exercises the refusal, the wait and the relaunch.
+The installer side lives in `tools/installer/public-update.iss`; the native test
+`tools/installer/update-native.py` compiles it into a synthetic silent setup and
+checks the measured wait, the 60 s refusal (with its log), an invalid value and
+the relaunch with the inherited environment, without installing anything.
 The trial switch `NOH_AUTOUPDATE_TRIAL=file:///<folder>/` points an installed
 copy at a local release folder (`latest.json`, `v<version>/…`) for manual tests.
 

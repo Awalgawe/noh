@@ -95,7 +95,7 @@ def prepare(work):
     # workflow may fix the wrapper without rebuilding the qualified application.
     for name in ('tools/public-installer.py', 'tools/installer/public.iss',
                  'tools/installer/public-messages.iss', 'tools/installer/public-profile.iss',
-                 'tools/installer/public-verify.iss',
+                 'tools/installer/public-verify.iss', 'tools/installer/public-update.iss',
                  'tools/installer/public-ci.py', 'tools/installer/public-content.iss',
                  'tools/public_components.py', 'assets/installer-extraction.lock.json',
                  'tools/software_opengl.py', 'assets/software-opengl.lock.json',
@@ -135,6 +135,8 @@ def run(work, name, args, timeout=600, env=None, expect_failure=False):
 def build(work):
     run(work, 'native-verification', [sys.executable, ROOT / 'tools/installer/verify-native.py',
         '--compiler', os.environ['NOH_ISCC_DIRECTORY'], '--output', work / 'test-verification'], 180)
+    run(work, 'native-update', [sys.executable, ROOT / 'tools/installer/update-native.py',
+        '--compiler', os.environ['NOH_ISCC_DIRECTORY'], '--output', work / 'test-update'], 300)
     run(work, 'native-acquisition', [sys.executable, ROOT / 'tools/installer/acquisition-native.py',
         '--compiler', os.environ['NOH_ISCC_DIRECTORY'], '--output', work / 'test-acquisition'], 600)
     source = delivery.read(work / 'SOURCE.json')['source_commit']
