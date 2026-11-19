@@ -1447,18 +1447,9 @@ impl NohApp {
             // Nothing scrolls while Espace is held: the line to sing, the
             // track and the footer must fit at once, so the monitor and the
             // text go (the prompt shows the words, and the text cannot be
-            // edited meanwhile). libmpv draws its pictures only when the
-            // monitor is painted: two pixels of it stay, under the title's
-            // rule, so playback never waits for a picture nobody takes.
-            let dot = Rect::from_min_size(ui.max_rect().left_top(), vec2(2.0, 2.0));
-            let mut tiny = ui.new_child(
-                egui::UiBuilder::new()
-                    .id_salt("lyrics-screen-monitor-kept")
-                    .max_rect(dot),
-            );
-            // Nothing of it shows outside those two pixels (its spinner would).
-            tiny.set_clip_rect(dot);
-            self.paint_monitor(&mut tiny, dot);
+            // edited meanwhile). Playback does not need the monitor painted:
+            // measured with libmpv over 100 s of a game, no picture taken, the
+            // song's clock never stopped.
         } else if compact {
             let aspect = self.canvas_aspect();
             let monitor_h = (width / aspect.max(16.0 / 9.0)).min(218.0);

@@ -1260,13 +1260,7 @@ impl NohApp {
             if style::button(&mut inside, l.text("preview.retry"), true, false, 0.0).clicked() {
                 self.mini_preview.invalidate();
             }
-        } else if !has_texture
-            && !scrub_visible
-            && (loading || still_loading || self.ready())
-            // A monitor kept for the player's sake only (a few pixels) has no
-            // room for it.
-            && monitor.width() >= 24.0
-        {
+        } else if !has_texture && !scrub_visible && (loading || still_loading || self.ready()) {
             self.mini_preview.painted.1 = true;
             let spinner = egui::Rect::from_center_size(monitor.center(), egui::vec2(24.0, 24.0));
             // This overlay must not advance the layout cursor inside the monitor.
