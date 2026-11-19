@@ -5,7 +5,9 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
-## Unreleased
+## 0.3.0
+
+Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.3.0).
 
 ### Lyrics
 
@@ -19,7 +21,8 @@ builds are not public releases.
   as long as each line, word or syllable is sung. The song can play slower,
   at the same pitch. A whole game is one undo step.
 - Lines, words and syllables keep their own end time, so a breath between two
-  words stays a silence in the caption effects.
+  words stays a silence in the caption effects. Lyrics files keep these ends;
+  0.2.0 opens such a file without them and drops them if it saves it.
 - The lyrics lane of the main screen no longer edits: its bubble, its word
   mode and its drags are replaced by the lyrics screen. Hovering a line shows
   its times and its text.
@@ -33,7 +36,38 @@ builds are not public releases.
   components in the background, checks every file, and installs silently when
   you restart or close NOH. Copies installed before this version must install it
   once by hand. Portable copies and Linux are told that a new version exists.
-  Settings has two switches to turn checking and installing at close off.
+  Settings has two switches to turn checking and installing at close off. See
+  the [installation guide](https://github.com/Awalgawe/noh/blob/v0.3.0/docs/INSTALLING.md#update-or-remove-noh).
+
+### Known issues
+
+- Automatic updates start with this version: an installed 0.2.0 or older copy
+  never looks for one, so 0.3.0 is installed over it once by hand. The first
+  automatic update a copy can receive is the version after 0.3.0.
+- No installed copy has yet updated itself from a published release. The
+  download and the checks were tested against stand-in releases, and the
+  release's installer tests upgrade an installed 0.2.0 with the silent command
+  NOH starts, but without NOH's own download before it.
+- Updates carry no signature of their own. NOH trusts GitHub's HTTPS and the
+  digests GitHub reports for the files of the latest release: a file replaced
+  on the release page after publication would reach installed copies. The
+  Windows installers are not Authenticode-signed.
+- Update checks use Windows' `curl.exe`, which ignores the Windows proxy
+  settings: behind a proxy configured only there, checks fail.
+- Nobody has yet listened to whether the voice keeps its pitch when the song
+  plays slower on the lyrics screen; the player is asked to keep it. Slower
+  playback is offered only while the fast-preview library plays the montage,
+  so not by default on Linux.
+- The sync game reads a clock that moves by one picture of the montage: 40 ms
+  on a 25 pictures per second montage. There, a time was taken within about
+  30 ms of the key 95 times in 100, and up to 50 ms off, measured against the
+  application's clock, not against physical key presses.
+- The takes of a sync game are written to disk when the game ends: a crash
+  during a game loses them.
+- The known issues of [0.2.0](https://github.com/Awalgawe/noh/releases/tag/v0.2.0)
+  remain: nothing in this version was written to correct them.
+- The automated tests use software rendering and virtual audio. They test no
+  real graphics card, sound card, NVENC or CUDA device.
 
 ## 0.2.0
 

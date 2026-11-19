@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "platform": "linux-x64",
+  "version": "0.3.0",
+  "scope": "Dependency and dataset input materials only; the final candidate and its qualification are separate.",
+  "baseline_source_commit": "aa71672a3cdebe2d428130d813dd51846116ce4b",
+  "prior_input_review": {
+    "path": "docs/release-evidence/linux-0.2.0-inputs.json",
+    "sha256": "6cae898306d495bd514358ff491e041953d1291a333f1156d299f0f4e79ac2d9"
+  },
+  "inputs": {
+    "Cargo.lock": "f739d9756ca4c6b3d14659b7ff456bd3e269036e9943465a7c5da0cc02e20a02",
+    "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "assets/linux-README.md": "b072c23869e1bfc3c0d871a05036032a5c21d9a53b310136a99cd94feee34395",
+    "assets/linux-host.json": "727a330fa36d3d9e03f8fbb9b4181f062a79dfc6de6dcccef1286f75912cd1e8",
+    "assets/rust-notices.lock.json": "905d83803fb60351458f9ba233559356f7abd1aadb8bee9660ee37b01594c2b3",
+    "assets/speech-bundle.json": "4bef71e92e5f3857e6d06e3a0b95971bc60448e838a6cf822fe9045d344c089f",
+    "assets/syllable-sources.lock.json": "a1d6be0dadb87a80181df37b47c0cf49360680e49837cdce5bb86728fc646bf2",
+    "rust_standard_library_source": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
+    "tools/build_syllable_dicts.py": "76413ca0f84eaa5fe815539ca16a0b48af34b36c3949805ba7e172c7831c0366",
+    "tools/linux_host.py": "e7e95c14e6dc97290c369fdb0d176db69c275d1e1eb7f45b21bf413a05a76183",
+    "tools/linux_package.py": "0df6dcf98d10b268f9907d57456f20b0c0c746b067a759c9e6db676e029332be",
+    "tools/prepare-linux-speech.py": "0653a5371832f06d9aa6b80ce8c65617e333fbd2d994e4d1d4d13b6783c08623",
+    "tools/rust_notices.py": "16d8215d716f1bf5b318e984f14687dad9b1a7f34dda103b13202d271da1cb44"
+  },
+  "changed_input_paths": [
+    "Cargo.lock"
+  ],
+  "new_input_paths": [],
+  "unchanged_input_paths": [
+    "LICENSE",
+    "assets/linux-README.md",
+    "assets/linux-host.json",
+    "assets/rust-notices.lock.json",
+    "assets/speech-bundle.json",
+    "assets/syllable-sources.lock.json",
+    "rust_standard_library_source",
+    "tools/build_syllable_dicts.py",
+    "tools/linux_host.py",
+    "tools/linux_package.py",
+    "tools/prepare-linux-speech.py",
+    "tools/rust_notices.py"
+  ],
+  "third_party_cargo_records_unchanged": 532,
+  "changed_sources": [],
+  "changes": [
+    "Cargo.lock differs from the 0.2.0 file (sha256 35e636350d1382e4fe6844e01d0af6721998486adabe7e26d9868b33fd6d2f50) by one line, inside the entry of the noh package itself: its version, 0.2.0 to 0.3.0. No third-party package is added, removed or changed, and no dependency of the noh package is added or removed.",
+    "Nothing in the 0.3.0 source changes adds a dependency: the lyrics screen, its sync game and slowed playback use crates already locked and the libmpv library the host provides, as assets/linux-host.json (unchanged) already states; the update notice starts the host's /usr/bin/curl, when present, only to say that a new version exists; nothing is downloaded or installed on Linux, and no crate is added.",
+    "Every other hashed input is byte-identical to its 0.2.0 value."
+  ],
+  "licence_reading": {
+    "method": "None: no third-party record and no dataset changed, so the 0.2.0 reading stands as recorded in the prior review, with its stated limits.",
+    "records_read": 0
+  },
+  "dataset_licences": {
+    "record": "assets/syllable-sources.lock.json and docs/THIRD-PARTY.md, section Syllable dictionaries",
+    "moby": "Moby Hyphenation List: public domain by grant from the author, as recorded in the lock (read 2026-11-10); accepted by the project maintainer on 2026-11-10 for worldwide distribution.",
+    "lexique": "Lexique 3.83: CC BY-SA 4.0. README-Lexique.txt, read 2026-11-09, is byte-identical in the reviewed archive and in the repacked one (sha256 f7501cf57c88894e839d4deb233c19863b935abc60a510447747828e9fe5ddfe, compared 2026-11-18). The repacked archive adds CC.BY.SA.txt (sha256 28a9529c7d0bb4dc51f4bf5c116a3d16ef247a052f7591466768ddf563fd1cf5), byte-identical to https://creativecommons.org/licenses/by-sa/4.0/legalcode.txt as served on 2026-11-18.",
+    "unchanged": "assets/syllable-sources.lock.json and docs/THIRD-PARTY.md are byte-identical to their 0.2.0 files; the dataset review of 0.2.0, its mirrors and the repacked Lexique archive included, is carried unchanged.",
+    "third_party_md_sha256": "bfdf3e77604ab18623fae2a2f5676859b840e0494c6220c5d693d41cfaeceda6"
+  },
+  "verification": {
+    "cargo_lock_diff": "git diff aa71672 -- Cargo.lock shows exactly: -version = \"0.2.0\" / +version = \"0.3.0\", under the noh package.",
+    "third_party_packages_in_lock": 532,
+    "third_party_records_compared": "Every [[package]] block other than noh's is byte-identical in the two lock files.",
+    "other_inputs_compared": "Each other hashed input was hashed in the release commit's tree and equals the value of the 0.2.0 record.",
+    "open_points_carried": "Those of the prior reviews are unchanged, including the objc2 0.6.5 point recorded in the 0.1.6 review.",
+    "not_verified": [
+      "Final build materials: required after the candidate build.",
+      "Which crates are compiled into this platform's binary was not determined, as in the prior reviews.",
+      "The datasets were not fetched again for this record; the release's pre-build check fetches them into an empty cache."
+    ]
+  }
+}

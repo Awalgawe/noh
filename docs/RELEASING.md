@@ -30,7 +30,8 @@ dispatched independently and do not start additional push or PR runs.
 
 The five Windows measurement workflows and the private `windows-setup.yml` and
 `update-release.yml` prototypes have been retired. Their sources and past runs
-remain in Git/Actions history; public automatic updates remain disabled. The
+remain in Git/Actions history. Public automatic updates, from 0.3.0, come from
+`src/auto_update`, not from them (step 7 of the publication below). The
 current Windows installer workflow preserves the three content profiles and web
 selection in ordinary per-user public installers. It does not enable the private
 updater/controller protocol. Minimal includes the application, CLI and MCP but
@@ -235,8 +236,8 @@ when something else is found to be relied on:
 - the installers as people meet them: profiles and download file names;
 - the supported systems and what must be installed on them.
 
-When automatic updates are switched on, what an installed version reads from a
-newer release joins the list. A file written only to help diagnose a problem,
+From 0.3.0, which switches automatic updates on, what an installed version reads
+from a newer release is in the list. A file written only to help diagnose a problem,
 such as `startup.log`, is not in it: its place is documented, its content may
 change.
 
@@ -347,7 +348,7 @@ new pin is reviewed and recorded before any build.
 7. `stage=promote`, `tag=v<version>`: when the attached report passed for the exact
    files the publishing run verified, and comes from a successful acceptance run on
    main, the same release becomes the latest version. Nothing is rebuilt.
-   From the version that introduces automatic updates, promotion also sends the
+   From 0.3.0, which introduces automatic updates, promotion also sends the
    release to every installed Windows copy within a day: NOH reads GitHub's
    latest release and installs its Minimal installer (`src/auto_update`). A
    pre-release or a draft is never offered.
