@@ -66,6 +66,10 @@ def acquire(args):
         return result
 
     delivery.fetch = tracked_fetch
+    # Fetch one file at a time, as before delivery.prefetch: the baseline must request exactly the
+    # objects the candidate reads from its cache, in the same order, and prefetch's threads would
+    # add every file once more, in no fixed order. Its gain is measured on its own.
+    delivery.prefetch = lambda downloads, connections=None: None
     started = time.perf_counter()
     try:
         # Match windows_test_runtime.main, including the containing lock check.

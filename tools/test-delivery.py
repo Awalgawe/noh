@@ -4,6 +4,7 @@ import contextlib
 import copy
 import hashlib
 import importlib.util
+import inspect
 import io
 import json
 from pathlib import Path
@@ -13,6 +14,8 @@ import struct
 import subprocess
 import tarfile
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import patch
 import urllib.parse
@@ -1260,6 +1263,108 @@ class DeliveryTests(unittest.TestCase):
             self.assertEqual(len(calls), 1)
             self.assertEqual(said, '')
             self.assertFalse((cache / 'f.crate').exists())
+
+    def test_prefetch_downloads_a_few_at_a_time_through_the_pinned_fetch(self):
+        cache = self.root / 'cache'
+        blobs = {f'{n}.crate': f'bytes {n}'.encode() for n in range(12)}
+        specs = {name: {'url': f'https://only.invalid/{name}', 'sha256': hashlib.sha256(data).hexdigest()}
+                 for name, data in blobs.items()}
+        cache.mkdir()
+        (cache / '0.crate').write_bytes(blobs['0.crate'])  # already cached: left to the build's own fetch
+        lock = threading.Lock()
+        state = {'now': 0, 'most': 0, 'commands': []}
+
+        def run(command, **kwargs):
+            with lock:
+                state['now'] += 1
+                state['most'] = max(state['most'], state['now'])
+                state['commands'].append(command)
+            time.sleep(0.05)
+            Path(command[command.index('--output') + 1]).write_bytes(blobs[command[-1].rsplit('/', 1)[1]])
+            with lock:
+                state['now'] -= 1
+
+        downloads = [(spec, cache, name) for name, spec in specs.items()]
+        with patch.object(delivery, 'checked', side_effect=run), contextlib.redirect_stdout(io.StringIO()) as said:
+            delivery.prefetch(downloads + downloads[3:5], connections=4)
+        self.assertEqual(len(state['commands']), 11)  # once each, the cached one and the repeats skipped
+        self.assertEqual(state['most'], 4)
+        self.assertTrue(all('--silent' in command and '--show-error' in command for command in state['commands']))
+        self.assertTrue(all((cache / name).read_bytes() == data for name, data in blobs.items()))
+        self.assertIn('Downloaded 11 files', said.getvalue())
+        # The build's own fetch then finds every file, rehashed, and runs no curl.
+        with patch.object(delivery, 'checked') as again:
+            for spec, folder, name in downloads:
+                delivery.fetch(spec, folder, name)
+        again.assert_not_called()
+        # The ordinary fetch keeps curl's progress output.
+        with patch.object(delivery, 'checked', side_effect=run):
+            delivery.fetch({**specs['5.crate']}, self.root / 'other', '5.crate')
+        self.assertNotIn('--silent', state['commands'][-1])
+
+    def test_prefetch_stops_at_the_first_failure_and_caches_nothing_wrong(self):
+        cache = self.root / 'cache'
+        good = b'the pinned bytes'
+        specs = [({'url': f'https://only.invalid/{n}.crate', 'sha256': hashlib.sha256(good).hexdigest()}, cache, f'{n}.crate')
+                 for n in range(40)]
+        started = []
+
+        def run(command, **kwargs):
+            name = command[-1].rsplit('/', 1)[1]
+            started.append(name)
+            Path(command[command.index('--output') + 1]).write_bytes(b'other bytes' if name == '1.crate' else good)
+            time.sleep(0.02)
+
+        with patch.object(delivery, 'checked', side_effect=run), contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(ValueError, 'SHA-256 mismatch: 1.crate'):
+                delivery.prefetch(specs, connections=2)
+        self.assertLess(len(started), 40)  # what had not started did not start
+        self.assertFalse((cache / '1.crate').exists())
+        self.assertTrue(all(delivery.digest(cache / name) == specs[0][0]['sha256'] for name in started if name != '1.crate'))
+        # Two pins for one name are refused before anything is downloaded.
+        with patch.object(delivery, 'checked') as run:
+            with self.assertRaisesRegex(ValueError, 'Two pinned digests for one download: x.crate'):
+                delivery.prefetch([({'url': 'https://a.invalid/x', 'sha256': 'a' * 64}, self.root / 'c2', 'x.crate'),
+                                   ({'url': 'https://b.invalid/x', 'sha256': 'b' * 64}, self.root / 'c2', 'x.crate')])
+            run.assert_not_called()
+        # An unsafe name is refused as fetch refuses it.
+        with self.assertRaisesRegex(ValueError, 'Unsafe relative path'):
+            delivery.prefetch([({'url': 'https://a.invalid/x', 'sha256': 'a' * 64}, cache, '../x')])
+
+    def test_the_windows_prefetch_plan_covers_every_download_of_the_native_lock(self):
+        lock = delivery.read(delivery.ROOT / 'assets/windows-native.lock.json')
+        pinned = []
+
+        def walk(value):
+            if isinstance(value, dict):
+                if 'url' in value and 'sha256' in value:
+                    pinned.append(id(value))
+                for item in value.values():
+                    walk(item)
+            elif isinstance(value, list):
+                for item in value:
+                    walk(item)
+        walk(lock)
+        # A toolchain's recipe source is recorded, not fetched: acquire takes its binary and its
+        # standard library source.
+        recorded = {id(spec['source']) for spec in lock['native_rust_toolchains']}
+        plan = delivery.windows_runtime_downloads(lock, 'cache', crate_cache='crates')
+        self.assertEqual(sorted(id(spec) for spec, _, _ in plan), sorted(x for x in pinned if x not in recorded))
+        self.assertTrue(recorded <= set(pinned))
+        self.assertNotIn('"source"', inspect.getsource(windows_runtime.native_toolchain_materials))
+        self.assertEqual({folder for spec, folder, name in plan if name.endswith('.crate')
+                          and spec in lock['native_cargo']['crates'].values()}, {'crates'})
+        # A name listed twice (the toolchain's rust-src package also holds its standard library's
+        # dependency lock) has one pin, so prefetch downloads it once.
+        pins = {}
+        for spec, folder, name in plan:
+            pins.setdefault((folder, name), set()).add(spec['sha256'])
+        self.assertTrue(all(len(digests) == 1 for digests in pins.values()))
+
+    def test_the_windows_inputs_are_prefetched_once_the_native_lock_is_checked(self):
+        source = inspect.getsource(delivery.windows_inputs)
+        self.assertLess(source.index('Native runtime lock checksum mismatch'), source.index('prefetch('))
+        self.assertLess(source.index('prefetch('), source.index('common_sources('))
 
     def test_the_locked_mirrors_are_other_hosts_of_the_same_archive(self):
         moby = delivery.read(delivery.ROOT / 'assets/syllable-sources.lock.json')['datasets']['moby']
