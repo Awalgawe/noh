@@ -33,7 +33,7 @@ jobs:
         id: scope
         run: python3 tools/ci_scope.py
       - name: Check build and delivery scripts with synthetic fixtures
-        if: steps.scope.outputs.windows == 'true' || steps.scope.outputs.unix == 'true'
+        # Always: a change to release tooling selects no native build, and no other PR check can read those files.
         run: |
           python3 tools/test-delivery.py
           python3 tools/test-linux-elf.py
