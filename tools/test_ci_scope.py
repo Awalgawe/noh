@@ -55,6 +55,7 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(ci_scope.RELEASE_ONLY, {
             "tools/release_publication.py", "tools/test_release_publication.py",
             "tools/release_acceptance.py", "tools/test_release_acceptance.py",
+            "tools/release_next.py", "tools/test_release_next.py",
             "tools/linux_desktop_candidate.py", "tools/probe-linux-desktop-vm.sh",
             "tools/test-linux-desktop.py", "assets/linux-desktop-images.json",
             "assets/opensuse-signing-key.asc", "assets/upgrade-baseline.lock.json",

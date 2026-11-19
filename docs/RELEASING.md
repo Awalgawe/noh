@@ -295,6 +295,9 @@ new pin is reviewed and recorded before any build.
    ID, attempt and commit. When one platform fails, the run stops the other one:
    publication takes both packages from the same attempt, so the build is
    dispatched again. `stage=verify` lets every platform finish.
+   `python tools/release_next.py after-build <build run>` prints the dispatches of
+   steps 3 and 4 with that run, its latest attempt and its commit, once it has
+   checked the run is a successful build on main; it dispatches nothing.
 3. `stage=installer`, `target=windows-x64`, with that run, attempt and commit: the
    Windows installers wrap the same application bytes and are tested, including an
    upgrade from the last published version.
@@ -312,7 +315,9 @@ new pin is reviewed and recorded before any build.
    the dialog). The release notes then name the desktop and the attempt that
    passed. Any other failure stops the release.
 5. `stage=publish`, with the build run, attempt and commit, plus `installer_run_id`,
-   `installer_attempt` and `desktop_run_id`: every file is checked against a digest
+   `installer_attempt` and `desktop_run_id` (`python tools/release_next.py
+   before-publish <build run> <installer run> <desktop run>` prints this dispatch and
+   its rehearsal with them filled in): every file is checked against a digest
    recorded by those runs, then published unchanged under the final tag `v<version>`
    as a **pre-release** that is not the latest release. The stage creates a draft
    first; if anything fails while it is being filled, the stage deletes that draft,
