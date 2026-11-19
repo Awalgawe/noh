@@ -63,6 +63,8 @@ Name: "{autodesktop}\NOH"; Filename: "{app}\noh.exe"; WorkingDir: "{app}"; Tasks
 
 [Run]
 Filename: "{app}\noh.exe"; Description: "{cm:LaunchProgram,NOH}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
+; A silent update NOH started from "Restart to update" opens it again.
+Filename: "{app}\noh.exe"; WorkingDir: "{app}"; Flags: nowait; Check: RelaunchRequested
 #endif
 
 [Code]
@@ -85,6 +87,7 @@ var
 #include "public-profile.iss"
 #include "public-verify.iss"
 #include "public-content.iss"
+#include "public-update.iss"
 
 function RuntimeReady: Boolean;
 var

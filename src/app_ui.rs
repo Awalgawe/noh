@@ -1566,6 +1566,8 @@ impl NohApp {
                         if r.clicked() {
                             self.settings_open = !self.settings_open;
                         }
+                        #[cfg(not(feature = "updates"))]
+                        self.autoupdate_badge(ui);
                         if self.resources.unavailable() {
                             let warning = style::icon_button(
                                 ui,
@@ -1596,6 +1598,8 @@ impl NohApp {
         self.retry_generation(&ui.ctx().clone());
         #[cfg(feature = "updates")]
         self.poll_updates(&ctx);
+        #[cfg(not(feature = "updates"))]
+        self.autoupdate_frame(&ctx);
         #[cfg(feature = "updates")]
         if self.update_blocks_session()
             || (self.updates.capture_fixture && self.updates.confirm_install)
@@ -1836,6 +1840,8 @@ impl eframe::App for NohApp {
         self.mini_preview.warmer.take();
         #[cfg(feature = "updates")]
         self.updates.worker.take();
+        #[cfg(not(feature = "updates"))]
+        self.autoupdate_exit();
         if let Some(scrubber) = &mut self.mini_preview.scrubber {
             scrubber.close(gl);
         }

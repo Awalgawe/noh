@@ -289,7 +289,7 @@ impl NohApp {
             #[cfg(feature = "updates")]
             self.update_controls(ui, ctx);
             #[cfg(not(feature = "updates"))]
-            ui.label(l.text("updates.unconfigured"));
+            self.autoupdate_section(ui, ctx);
         });
         #[cfg(feature = "updates")]
         if self.updates.capture_fixture {

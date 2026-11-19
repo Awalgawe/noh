@@ -23,7 +23,8 @@ COMPILER = {
     "is7z-x64.dll": "822206aa54b53516c336300329f87236b83bf55562e63bc9a25b1ebf064e903b",
 }
 PROFILES = ('minimal', 'standard', 'complete')
-WRAPPERS = ('public.iss', 'public-messages.iss', 'public-profile.iss', 'public-content.iss', 'public-verify.iss')
+WRAPPERS = ('public.iss', 'public-messages.iss', 'public-profile.iss', 'public-content.iss', 'public-verify.iss',
+            'public-update.iss')
 
 
 def includes(profile, name):

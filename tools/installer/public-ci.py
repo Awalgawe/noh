@@ -95,7 +95,7 @@ def prepare(work):
     # workflow may fix the wrapper without rebuilding the qualified application.
     for name in ('tools/public-installer.py', 'tools/installer/public.iss',
                  'tools/installer/public-messages.iss', 'tools/installer/public-profile.iss',
-                 'tools/installer/public-verify.iss',
+                 'tools/installer/public-verify.iss', 'tools/installer/public-update.iss',
                  'tools/installer/public-ci.py', 'tools/installer/public-content.iss',
                  'tools/public_components.py', 'assets/installer-extraction.lock.json',
                  'tools/software_opengl.py', 'assets/software-opengl.lock.json',
@@ -135,6 +135,8 @@ def run(work, name, args, timeout=600, env=None, expect_failure=False):
 def build(work):
     run(work, 'native-verification', [sys.executable, ROOT / 'tools/installer/verify-native.py',
         '--compiler', os.environ['NOH_ISCC_DIRECTORY'], '--output', work / 'test-verification'], 180)
+    run(work, 'native-update', [sys.executable, ROOT / 'tools/installer/update-native.py',
+        '--compiler', os.environ['NOH_ISCC_DIRECTORY'], '--output', work / 'test-update'], 300)
     run(work, 'native-acquisition', [sys.executable, ROOT / 'tools/installer/acquisition-native.py',
         '--compiler', os.environ['NOH_ISCC_DIRECTORY'], '--output', work / 'test-acquisition'], 600)
     source = delivery.read(work / 'SOURCE.json')['source_commit']
@@ -269,19 +271,37 @@ def fetch_upgrade_baseline(work, github, version):
                     baseline['sha256'], baseline['size'])
 
 
-def start_installed(work, installed, opengl):
-    """Start the installed interface and command line; returns their two results."""
+def capture_env(work, name):
+    """An isolated profile in which the installed interface captures itself and exits."""
     env = {k: v for k, v in os.environ.items() if not k.startswith("NOH_")}
     env["PATH"] = os.environ["SystemRoot"] + "/System32;" + os.environ["SystemRoot"]
     env["APPDATA"] = str(work / "profile/roaming")
     env["LOCALAPPDATA"] = str(work / "profile/local")
     for key in ("APPDATA", "LOCALAPPDATA"):
-        Path(env[key]).mkdir(parents=True)
-    env["NOH_CAPTURE_UI"] = str(work / "installed-gui.ppm")
+        Path(env[key]).mkdir(parents=True, exist_ok=True)
+    env["NOH_CAPTURE_UI"] = str(work / (name + ".ppm"))
     env["NOH_LANGUAGE"] = "fr"
     # The hosted runner has no OpenGL 2.0. Mesa's software renderer is test material:
     # it arrives after the installed payload was verified and leaves before the uninstall.
     env["GALLIUM_DRIVER"] = "llvmpipe"
+    return env
+
+
+def running_from(folder):
+    """Whether a process runs a program from inside `folder`."""
+    script = ("$f = [IO.Path]::GetFullPath($env:NOH_TEST_FOLDER).TrimEnd('\\') + '\\'; "
+              "@(Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($f, "
+              "[StringComparison]::OrdinalIgnoreCase) }).Count")
+    env = {**os.environ, 'NOH_TEST_FOLDER': str(folder)}
+    result = subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-Command', script],
+                            env=env, capture_output=True, text=True, timeout=60)
+    require(result.returncode == 0, 'Process list unavailable: ' + result.stderr)
+    return int(result.stdout.strip() or '0') > 0
+
+
+def start_installed(work, installed, opengl):
+    """Start the installed interface and command line; returns their two results."""
+    env = capture_env(work, "installed-gui")
     software_opengl.deploy(opengl, [installed])
     try:
         gui = run(work, "installed-gui", [installed / "noh.exe"], 90, env)
@@ -311,8 +331,31 @@ def test_upgrade(work, setup, record, components, previous, opengl):
             'The previous version registered another folder')
     marker = installed / 'user-data.txt'
     marker.write_text('User data must survive an upgrade.\n', encoding='utf-8')
+    previous_app = delivery.digest(installed / 'noh.exe')
     catalog = delivery.read(components / 'COMPONENTS.json')
+    # The silent update NOH itself starts (src/auto_update): it never closes other
+    # programs, waits for the NOH that launched it, and opens NOH again.
+    update = [setup, '/PROFILE=minimal', *common, '/NOCLOSEAPPLICATIONS']
+
+    def sleeper(seconds):
+        return subprocess.Popen([sys.executable, '-c', f'import time; time.sleep({seconds})'])
+
+    # A NOH that does not exit within 60 s: Setup gives up and changes nothing.
+    stuck = sleeper(120)
+    try:
+        results.append(run(work, 'update-refused-while-noh-runs',
+                           [*update, '/WAITPID=' + str(stuck.pid),
+                            '/LOG=' + str(work / 'update-refused-inno.log')], 180, expect_failure=True))
+    finally:
+        stuck.kill()
+        stuck.wait()
+    require(delivery.digest(installed / 'noh.exe') == previous_app, 'A refused update changed the application')
     caches = []
+    env = capture_env(work, 'relaunched-gui')
+    capture = work / 'relaunched-gui.json'
+    # The relaunched interface needs the software renderer before Setup opens it.
+    # The upgrade keeps files it does not own; they leave before verification.
+    software_opengl.deploy(opengl, [installed])
     try:
         # Before publication the new components exist only beside the installer.
         for item in catalog['groups'].values():
@@ -320,11 +363,34 @@ def test_upgrade(work, setup, record, components, previous, opengl):
             require(not cache.exists(), 'Test cache path is already occupied')
             os.link(components / item['name'], cache)
             caches.append(cache)
-        results.append(run(work, 'upgrade-with-minimal', [setup, '/PROFILE=minimal', *common,
-                                                          '/LOG=' + str(work / 'upgrade-with-minimal-inno.log')], 1200))
+        # The NOH that started the update exits some seconds later. Setup logs how
+        # long it waited (tools/installer/public.iss): the wait is measured there,
+        # not inferred from the total duration.
+        leaving = sleeper(15)
+        log = work / 'upgrade-with-minimal-inno.log'
+        results.append(run(work, 'upgrade-with-minimal',
+                           [*update, '/WAITPID=' + str(leaving.pid), '/RELAUNCH', '/LOG=' + str(log)], 1200, env))
+        require(leaving.poll() is not None, 'Setup finished while the launching process still ran')
+        waited = re.search(r'WAITPID ' + str(leaving.pid) + r' exited after (\d+) ms',
+                           log.read_text(encoding='utf-8-sig'))
+        require(waited and int(waited.group(1)) >= 3000,
+                'Setup did not wait for the process that launched it')
+        results[-1]['waited_ms'] = int(waited.group(1))
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline and not capture.exists():
+            time.sleep(0.5)
+        require(capture.exists(), 'The updated interface was not opened again')
+        # The capture is written before the interface exits; let it go.
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline and running_from(installed):
+            time.sleep(0.5)
+        require(not running_from(installed), 'The relaunched interface did not exit')
+        relaunched = delivery.read(capture)
+        require(relaunched['capture_ready'] and not relaunched['timed_out'], 'Relaunched GUI capture failed')
     finally:
         for cache in caches:
             cache.unlink()
+        software_opengl.remove(opengl, [installed])
     require(registration() and Path(registration()).resolve() == installed.resolve(),
             'The upgrade registered another folder')
     verify_installed(installed, record['profile_files']['complete'])
@@ -333,7 +399,8 @@ def test_upgrade(work, setup, record, components, previous, opengl):
     results.append(remove_test_installation(work, installed))
     return {'status': 'passed', 'from': baseline['tag'], 'from_installer_sha256': baseline['sha256'],
             'results': results, 'complete_components_retained': True, 'upgraded_interface_started': True,
-            'user_data_preserved': True}
+            'user_data_preserved': True, 'refused_while_noh_runs': True, 'waited_for_launcher': True,
+            'relaunched_after_update': True}
 
 
 def test_profile(work, profile, records, web, opengl):
