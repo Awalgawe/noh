@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Acquire locked candidate inputs, preserve materials and verify inert delivery assets."""
 import argparse
+from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 import hashlib
 import json
 import os
@@ -13,6 +14,7 @@ import struct
 import subprocess
 import tarfile
 import tempfile
+import time
 import urllib.parse
 import xml.etree.ElementTree as ET
 import zipfile
@@ -252,7 +254,7 @@ def download(command, pending, expected, name):
         checked(command)
 
 
-def fetch(spec, cache, name):
+def fetch(spec, cache, name, quiet=False):
     relative(name)
     expected = spec["sha256"]
     # A spec may list mirrors: other addresses of the same bytes, tried in order when an
@@ -275,6 +277,7 @@ def fetch(spec, cache, name):
         # down for maintenance answered 503 with "retry-after: 3600", and one retry waited an hour.
         try:
             download(["curl", "--fail", "--location", "--proto", "=https", "--proto-redir", "=https",
+                      *(["--silent", "--show-error"] if quiet else []),
                       "--retry", "2" if last else "0", "--connect-timeout", "30", "--max-time", "1800",
                       "--output", pending, url], pending, expected, name)
         except subprocess.SubprocessError as error:
@@ -290,6 +293,63 @@ def fetch(spec, cache, name):
         print(f"Download of {name} failed at {url} ({reason.strip()}); trying the next address", flush=True)
     pending.replace(path)
     return path
+
+
+# Four connections at a time: a cold Windows build fetches about 980 files, most of them small
+# (745 crates, 236 MSYS2 packages), and spent 250 to 350 s in curl one file after another.
+DOWNLOAD_CONNECTIONS = 4
+
+
+def prefetch(downloads, connections=DOWNLOAD_CONNECTIONS):
+    """Download, a few at a time, the files a build is about to fetch one by one.
+
+    Each (spec, cache, name) goes through `fetch` as it is: pinned https addresses and
+    mirrors, SHA-256, curl ending abnormally. The build then fetches every file again in its
+    own order and finds it in the cache, rehashed before use. A file already in the cache is
+    left to that fetch, and so is a file this list misses. The first failure stops what has
+    not started, waits for what has, and is raised: the build stops as it would have on that
+    file.
+    """
+    planned = {}
+    for spec, cache, name in downloads:
+        path = Path(cache) / str(relative(name))
+        if path in planned and planned[path][0]["sha256"] != spec["sha256"]:
+            raise ValueError(f"Two pinned digests for one download: {name}")
+        if not path.is_file():
+            planned.setdefault(path, (spec, cache, name))
+    if not planned:
+        return
+    started = time.monotonic()
+    pool = ThreadPoolExecutor(max_workers=connections)
+    try:
+        futures = [pool.submit(fetch, spec, cache, name, quiet=True) for spec, cache, name in planned.values()]
+        done, _ = wait(futures, return_when=FIRST_EXCEPTION)
+        for future in futures:
+            if future in done and future.exception() is not None:
+                raise future.exception()
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
+    size = sum(path.stat().st_size for path in planned)
+    print(f"Downloaded {len(planned)} files ({size / 2**30:.2f} GiB) in {time.monotonic() - started:.0f} s, "
+          f"{connections} at a time", flush=True)
+
+
+def windows_runtime_downloads(lock, cache, crate_cache=None):
+    """Every file windows_runtime.acquire fetches, as (spec, cache, name), in its order.
+
+    It lives here because tools/windows_runtime.py is a hashed redistribution input
+    (authorize_redistribution): a change to it needs a new reviewed record."""
+    planned = []
+    for record in lock["packages"].values():
+        planned += [(record[kind], cache, PurePosixPath(record[kind]["url"]).name) for kind in ("binary", "source")]
+    planned += [(spec, crate_cache or cache, identity + ".crate") for identity, spec in lock["native_cargo"]["crates"].items()]
+    for spec in lock["native_rust_toolchains"]:
+        planned += [(spec[kind], cache, PurePosixPath(spec[kind]["url"]).name) for kind in ("binary", "standard_library_source")]
+    planned += [(graph["source"], cache, PurePosixPath(graph["source"]["url"]).name)
+                for graph in lock["standard_library_dependency_locks"]]
+    planned += [(spec, cache, str(relative(identity)) + ".crate")
+                for identity, spec in lock["standard_library_crates"].items()]
+    return planned
 
 
 def acquire_datasets(cache, output):
@@ -412,16 +472,24 @@ def windows_inputs(cache, destination):
     runtime, materials = destination / "speech", destination / "materials"
     runtime.mkdir()
     materials.mkdir()
-    # Microsoft supplies the runtime directly to the end user. Do not acquire or
-    # put its installer, CAB payloads or DLLs in either distributed archive.
-    common_sources(cache, materials)
-    for item in lock["sources"]:
-        shutil.copy2(fetch(item, cache, item["name"]), materials / item["name"])
     native_spec = lock["native_runtime"]
     native_lock = ROOT / str(relative(native_spec["lock"]))
     if digest(native_lock) != native_spec["sha256"]:
         raise ValueError("Native runtime lock checksum mismatch")
     from windows_runtime import acquire
+    licenses = {x["name"]: x for x in lock["licenses"]}
+    prefetch([*((item, cache, item["name"]) for item in lock["sources"]),
+              ({"url": speech["runtime"], "sha256": speech["runtime_sha256"]}, cache, "whisper-b5130.zip"),
+              ({"url": speech["cuda_cublas"], "sha256": speech["cuda_cublas_sha256"]}, cache, "cublas-11.11.3.6.zip"),
+              ({"url": speech["model"], "sha256": speech["sha256"]["ggml-small.bin"]}, cache, "ggml-small.bin"),
+              ({"url": speech["vad"], "sha256": speech["sha256"]["ggml-silero-v6.2.0.bin"]}, cache, "ggml-silero-v6.2.0.bin"),
+              *((licenses[name], cache, name) for name in ("WHISPER-MODEL-LICENSE.txt", "SILERO-LICENSE.txt")),
+              *windows_runtime_downloads(read(native_lock), cache)])
+    # Microsoft supplies the runtime directly to the end user. Do not acquire or
+    # put its installer, CAB payloads or DLLs in either distributed archive.
+    common_sources(cache, materials)
+    for item in lock["sources"]:
+        shutil.copy2(fetch(item, cache, item["name"]), materials / item["name"])
     acquire(read(native_lock), cache, destination, materials)
     with tarfile.open(materials / "whisper-b5130.tar.gz") as tar:
         names = [m for m in tar.getmembers() if m.name.endswith("/LICENSE") and m.name.count("/") == 1]

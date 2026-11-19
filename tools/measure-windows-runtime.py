@@ -42,12 +42,12 @@ def acquire(args):
               "fetch_bytes": 0, "fetch_seconds": 0, "success": False}
     fetch = delivery.fetch
     notices = windows_runtime.native_rust_notices
-    def cached_fetch(spec, requested_cache, name):
+    def cached_fetch(spec, requested_cache, name, **options):
         path = Path(requested_cache) / str(delivery.relative(name))
         if not path.is_file():
             raise FileNotFoundError("Required cached input missing; download refused: " + name)
         started = time.perf_counter()
-        result = fetch(spec, requested_cache, name)
+        result = fetch(spec, requested_cache, name, **options)
         record["fetch_seconds"] += time.perf_counter() - started
         record["fetch_calls"] += 1
         record["fetch_bytes"] += path.stat().st_size
