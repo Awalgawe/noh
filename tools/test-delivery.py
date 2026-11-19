@@ -1075,6 +1075,69 @@ class DeliveryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Corrupt cached"):
                 delivery.fetch(source, cache, "a.bin")
 
+    def test_restored_downloads_keep_files_and_lose_folders(self):
+        cache = self.root / "restored"
+        self.assertEqual(delivery.keep_rehashed_downloads(cache), [])
+        self.assertFalse(cache.exists())
+        (cache / "whisper-1-linux-x86_64-build/bin").mkdir(parents=True)
+        (cache / "whisper-1-linux-x86_64-build/bin/whisper-cli").write_bytes(b"compiled elsewhere")
+        (cache / "whisper-1-source").mkdir()
+        (cache / "whisper-1.tar.gz").write_bytes(b"archive")
+        (cache / "a.bin.download").write_bytes(b"partial")
+        self.assertEqual(delivery.keep_rehashed_downloads(cache),
+                         ["whisper-1-linux-x86_64-build", "whisper-1-source"])
+        self.assertEqual(sorted(p.name for p in cache.iterdir()), ["a.bin.download", "whisper-1.tar.gz"])
+        self.assertEqual((cache / "whisper-1.tar.gz").read_bytes(), b"archive")
+        self.assertEqual(delivery.keep_rehashed_downloads(cache), [])
+        not_a_folder = self.root / "cache-file"
+        not_a_folder.write_bytes(b"")
+        with self.assertRaisesRegex(ValueError, "plain folder"):
+            delivery.keep_rehashed_downloads(not_a_folder)
+
+    def test_restored_downloads_refuse_a_link(self):
+        cache = self.root / "restored"
+        cache.mkdir()
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "kept").write_bytes(b"not ours to remove")
+        try:
+            (cache / "link").symlink_to(outside, target_is_directory=True)
+        except OSError:
+            self.skipTest("This account cannot create symbolic links")
+        with self.assertRaisesRegex(ValueError, "Unexpected entry"):
+            delivery.keep_rehashed_downloads(cache)
+        self.assertTrue((outside / "kept").is_file())
+
+    def test_release_build_workflow_rules(self):
+        workflows = delivery.ROOT / ".github/workflows"
+        build = (workflows / "delivery-candidates.yml").read_text(encoding="utf-8")
+        # One failed platform ends a build whose packages are kept; a verification build runs to the end.
+        self.assertEqual(build.count("fail-fast:"), 1)
+        self.assertIn("      fail-fast: ${{ inputs.upload_candidate }}\n", build)
+        # The Linux download cache is keyed by what pins its files, never by the version number.
+        keys = [line.strip() for line in build.splitlines() if line.strip().startswith("key: noh-linux-inputs-")]
+        self.assertEqual(keys, ["key: noh-linux-inputs-v3-${{ steps.compiler.outputs.rust_source }}-${{ hashFiles("
+                                "'assets/speech-bundle.json', 'assets/syllable-sources.lock.json', "
+                                "'tools/prepare-linux-speech.py') }}"])
+        # The pin is read in an assignment, where a failure stops the step, and only then written out.
+        read_pin = ("""rust_source="$(python3 -c 'import json; print(json.load(open("assets/delivery-policy.json"))"""
+                    """["rust_source"]["sha256"])')\"""")
+        self.assertIn("          " + read_pin + '\n          echo "rust_source=$rust_source" >> "$GITHUB_OUTPUT"\n', build)
+        # Restored folders are dropped after the restore and before the build, and that step may fail the job.
+        steps = build.split("\n      - ")
+        names = [step.splitlines()[0] for step in steps]
+        restore = names.index("name: Restore verified Linux downloads")
+        prune = names.index("name: Keep only the files that are rehashed from the restored downloads")
+        compile_step = names.index("name: Compile and verify the Linux AppDir from locked inputs")
+        self.assertEqual((prune, compile_step), (restore + 1, restore + 2))
+        self.assertIn("if: matrix.platform == 'linux-x64'", steps[prune])
+        self.assertIn('run: python3 tools/delivery.py prune-cache --cache "$RUNNER_TEMP/noh-downloads"', steps[prune])
+        self.assertNotIn("continue-on-error: true", steps[prune])
+        self.assertIn("path: ${{ runner.temp }}/noh-downloads\n", steps[restore])
+        # Every desktop has its own runner: none waits for another.
+        desktops = (workflows / "linux-desktop-probe.yml").read_text(encoding="utf-8")
+        self.assertNotIn("max-parallel", desktops)
+
     def test_explicit_source_download_url_stays_https_and_checksum_pinned(self):
         cache = self.root / 'cache'
         data = b'original pinned bytes'

@@ -128,11 +128,20 @@ manifest are checked before packaging; the shared packager rechecks that hash.
 This is original notice material, not a redistribution attestation. Native Mac
 component correspondence and complete compiler/native notices remain unreviewed.
 
-Artifacts expire after seven days (independent staging after three). Caches are
-not uploaded. Compression is disabled for artifact uploads of already compressed
-ZIPs. There is no persistent Cargo/download cache, large-runtime PR upload or
-automatic publication. Source/bottle/vendor staging can consume substantial
-runner disk space; actual hosted-runner capacity/time must be measured.
+Artifacts expire after seven days (independent staging after three). Compression
+is disabled for artifact uploads of already compressed ZIPs. There is no
+large-runtime PR upload or automatic publication. Source/bottle/vendor staging can
+consume substantial runner disk space; actual hosted-runner capacity/time must be
+measured.
+
+The Linux build restores two caches. Only a Release run on main writes them, a
+`verify` run included. GitHub drops a cache that nothing has read for seven days,
+and the least recently read ones once the repository holds more than 10 GB: they
+usually serve the builds of one release, not the first build of the next. The first
+holds downloads: each file is compared with its pinned SHA-256 before every use, and
+the folders restored beside them are removed before the build, so Whisper is compiled
+again each time. The second holds compiled Rust dependencies, which are used as
+restored: nothing compares them with anything. The Windows build restores no cache.
 
 ## Current review boundary
 
@@ -279,7 +288,9 @@ new pin is reviewed and recorded before any build.
    build reaches the release notes without building again. The notes then name the
    commit the text was read from; the tree under the tag keeps the older text.
 2. `stage=build`, `target=windows-linux`: one build of that commit. Note the run
-   ID, attempt and commit.
+   ID, attempt and commit. When one platform fails, the run stops the other one:
+   publication takes both packages from the same attempt, so the build is
+   dispatched again. `stage=verify` lets every platform finish.
 3. `stage=installer`, `target=windows-x64`, with that run, attempt and commit: the
    Windows installers wrap the same application bytes and are tested, including an
    upgrade from the last published version.
