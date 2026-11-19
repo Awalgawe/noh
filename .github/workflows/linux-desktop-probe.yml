@@ -9,6 +9,7 @@ on:
       - tools/linux_desktop_candidate.py
       - tools/test-linux-desktop.py
       - assets/linux-desktop-images.json
+      - assets/opensuse-signing-key.asc
   workflow_dispatch:
     inputs:
       suite:
@@ -72,17 +73,25 @@ jobs:
             --commit "$SOURCE_COMMIT" --output "$RUNNER_TEMP/noh-native-candidate"
           mkdir -p logs/linux-desktop-probe
           cp "$RUNNER_TEMP/noh-native-candidate/"{CANDIDATE,source-run,source-artifact}.json logs/linux-desktop-probe/
-      - name: Restore pinned distribution image
+      - name: Resolve the distribution image, pinned or signed by its publisher
+        id: desktop-image-spec
+        env:
+          DESKTOP_CASE: ${{ matrix.case }}
+        run: |
+          python3 tools/linux_desktop_candidate.py resolve-image --case "$DESKTOP_CASE" \
+            --output "$RUNNER_TEMP/noh-desktop-image.json" >> "$GITHUB_OUTPUT"
+      - name: Restore verified distribution image
         id: desktop-image
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ${{ runner.temp }}/noh-desktop-image
-          key: linux-desktop-image-v1-${{ matrix.case }}-${{ hashFiles('assets/linux-desktop-images.json') }}
+          key: linux-desktop-image-v2-${{ matrix.case }}-${{ steps.desktop-image-spec.outputs.digest }}
       - name: Test actual desktop with virtual graphics and audio
         env:
           NOH_DESKTOP_CASE: ${{ matrix.case }}
           NOH_CANDIDATE_PAYLOAD: ${{ runner.temp }}/noh-native-candidate/payload.tar
           NOH_DESKTOP_IMAGE_CACHE: ${{ runner.temp }}/noh-desktop-image
+          NOH_DESKTOP_IMAGE_SPEC: ${{ runner.temp }}/noh-desktop-image.json
         run: timeout --signal=TERM --kill-after=30s 35m bash tools/probe-linux-desktop-vm.sh
       - name: Retain native observations separately from the sealed candidate
         if: always()

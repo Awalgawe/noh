@@ -39,7 +39,8 @@ before and after execution; no overwrite, rebuild or repackaging of the delivery
 archive occurs. Package prerequisites are installed from distribution repositories;
 their exact versions, dated base-image identities and kernel/device records are
 retained. `assets/linux-desktop-images.json` pins official images by SHA-256 or
-SHA-512. No VM disk, cloud seed or private SSH key is uploaded.
+SHA-512, except openSUSE Tumbleweed (see rolling releases below). No VM disk, cloud
+seed or private SSH key is uploaded.
 After authenticated acquisition, owned download/unpack intermediates are removed
 to leave space for the VM; the verified payload and source provenance remain.
 Caller-supplied local envelopes are preserved.
@@ -70,11 +71,23 @@ stops on its first failing command, with full cloud-init diagnostics retained.
 Rolling releases retain their actual OS metadata,
 package versions and kernel in addition to the immutable base-image identity;
 their evolving version string is not compared to a fixed release number. The
-dated Arch and openSUSE filenames are pinned beneath rotating official mirror
-directories: if an image expires, resolve and review a new available image
-identity before retrying. Do not substitute an unpinned rolling alias. The
-openSUSE 20261013 image expired during preparation; the reviewed replacement is
-20261014 with its own checksum and matching base-package inventory.
+dated Arch filename is pinned beneath a rotating official mirror directory: if it
+expires, resolve and review a new available image identity before retrying.
+openSUSE keeps a single Tumbleweed snapshot in its appliance folder and no older
+image anywhere (its `history/` keeps repositories only), so a pin lasts one to three
+days: the 2026-11-16 snapshot, pinned on 2026-11-18, was gone on 2026-11-19.
+Tumbleweed therefore pins its publisher's signing key instead of an image. Each run
+reads the folder's JSON listing, takes the single cloud image matching the dated
+snapshot pattern (none or several stops the case), and accepts the digest only from
+a `.sha256` file that `gpgv` finds signed by the pinned primary key fingerprint;
+the key is `assets/opensuse-signing-key.asc`, as openSUSE publishes it with its
+repositories and build service. The dated snapshot name, not the undated alias, is
+downloaded, so a mirror can only serve that snapshot or fail. The workflow resolves
+once, before restoring the image cache, and the evidence's `image-identity.json`
+records the snapshot, digest, checksum and signature hashes and the time. The same
+resolved entry enters the guest, which checks it is a resolution of its case's entry
+and records it as the case's `os_image_identity`, for pinned images too. The image
+tested is thus the current snapshot, which differs from run to run.
 
 Mint uses the official Cinnamon ISO and its Ubiquity installer, with a standard
 preseed served only on runner loopback to the private QEMU network. It partitions
@@ -118,8 +131,8 @@ URLs, producing 404 errors even though the existing Mint and Ubuntu repositories
 work. Package update failures remain fatal; no repository authentication is disabled.
 
 Downloads allow fifteen minutes per attempt within the existing job deadline.
-GitHub Actions caches only the verified original image, keyed by case and pinned
-image configuration, even if later desktop testing fails. Restored bytes are
+GitHub Actions caches only the verified original image, keyed by case and the
+image's digest, even if later desktop testing fails. Restored bytes are
 always rehashed. Guest disks, credentials and partial downloads are never cached.
 Mint run 38821337784 measured a cache restore of 30 seconds; this is a download
 saving, not a measurement of the full test duration.
