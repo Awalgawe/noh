@@ -1343,6 +1343,20 @@ class DeliveryTests(unittest.TestCase):
                         [job | {"name": job["name"].removeprefix("build / ")} for job in jobs]]:
             with self.assertRaises(ValueError):
                 validate(changed)
+        # The Linux acceptance runs as a matrix: skipped entries may carry their runner in the name.
+        matrix = [{"name": "acceptance-linux (" + runner + ")", "conclusion": "skipped"}
+                  for runner in ("ubuntu-24.04", "opensuse-tumbleweed", "effect-burn")]
+        validate(jobs + matrix)
+        for changed in [jobs + [matrix[0] | {"conclusion": "success"}],
+                        jobs + [{"name": "acceptance-linux (x) extra", "conclusion": "skipped"}],
+                        jobs + [{"name": "acceptance-windows (x)", "conclusion": "skipped"}]]:
+            with self.assertRaises(ValueError):
+                validate(changed)
+        # A plain build run, not wrapped by Release, accepts no acceptance job at all.
+        plain = [job | {"name": job["name"].removeprefix("build / ")} for job in jobs[1:]]
+        with self.assertRaises(ValueError):
+            release.validate_jobs({"total_count": len(plain) + 1, "jobs": plain + matrix[:1]}, ["windows-x64"],
+                                  ".github/workflows/delivery-candidates.yml")
 
     def test_optional_audit_artifact_is_exact_and_never_staged_as_a_package(self):
         artifact = {"name": "delivery-windows-x64", "expired": False, "digest": "sha256:" + "a" * 64}

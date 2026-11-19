@@ -101,38 +101,83 @@ def burn_with_effect(cli, ffmpeg, work, environment, prefix=()):
 
 
 def linux(args):
+    """Accept the published Linux files: the whole of it on one machine, or one runner's share with --runner."""
     require((REHEARSAL_TAG if args.rehearsal else TAG).fullmatch(args.tag), "A final version tag is required")
+    require(args.runner is None or args.runner in linux_runners(), "Unknown Linux acceptance runner")
     version = REHEARSAL_TAG.fullmatch(args.tag).group(1)
     work = args.output
     names = [f"NOH-{version}-linux-x64.zip", f"NOH-{version}-linux-x64-materials.zip", "linux-x64-DELIVERY.json"]
     downloaded = download_release_files(args.tag, names, work / "downloads", rehearsal=args.rehearsal)
     record = linux_envelope(work / "downloads", version, work / "envelope")
     evidence = work / "evidence"
-    subprocess.run([sys.executable, str(ROOT / "tools/linux_matrix.py"), "--engine", "docker",
-                    "--envelope", str(work / "envelope"), "--speech-fixture", str(args.speech_fixture),
-                    "--output", str(evidence / "linux-matrix")], check=True, timeout=3 * 3600)
-    extracted = work / "package"
-    extracted.mkdir()
-    with zipfile.ZipFile(work / "downloads" / names[0]) as archive:
-        members = delivery.zip_members(archive)
-        archive.extractall(extracted, members=members)
-        for member in members:
-            if not member.is_dir():
-                (extracted / member.filename).chmod((member.external_attr >> 16) & 0o777)
-    home = extracted / "NOH.AppDir/usr/lib/noh"
-    environment = dict(os.environ, LIBGL_ALWAYS_SOFTWARE="1")
-    burn = burn_with_effect(home / "bin/noh-cli", shutil.which("ffmpeg"), evidence / "effect-burn",
-                            environment, prefix=("xvfb-run", "-a"))
-    delivery.write(evidence / "part.json", {
-        "platform": "linux-x64", "status": "passed", "tag": args.tag, "rehearsal": args.rehearsal,
-        "downloads": downloaded, "exercised": [names[0]],
-        "delivery_sha256": delivery.digest(work / "envelope/DELIVERY.json"),
-        "source_commit": record["source_commit"],
-        "checks": {"distribution_matrix": "passed; results under linux-matrix/",
-                   "caption_effect_burn": burn},
-        "limitations": ["The distribution matrix and the effect burn use software rendering and virtual audio.",
-                        "The effect burn uses the runner's FFmpeg and libmpv packages, as the package expects "
-                        "the host to provide them."]})
+    evidence.mkdir(parents=True)
+    checks = {}
+    if args.runner != EFFECT_BURN_RUNNER:
+        command = [sys.executable, str(ROOT / "tools/linux_matrix.py"), "--engine", "docker",
+                   "--envelope", str(work / "envelope"), "--speech-fixture", str(args.speech_fixture),
+                   "--output", str(evidence / "linux-matrix")]
+        if args.runner:
+            command += ["--cases", args.runner]
+        subprocess.run(command, check=True, timeout=3 * 3600)
+        checks["distribution_matrix"] = ({args.runner: "passed; results under linux-matrix/"} if args.runner
+                                         else "passed; results under linux-matrix/")
+    if args.runner in (None, EFFECT_BURN_RUNNER):
+        extracted = work / "package"
+        extracted.mkdir()
+        with zipfile.ZipFile(work / "downloads" / names[0]) as archive:
+            members = delivery.zip_members(archive)
+            archive.extractall(extracted, members=members)
+            for member in members:
+                if not member.is_dir():
+                    (extracted / member.filename).chmod((member.external_attr >> 16) & 0o777)
+        home = extracted / "NOH.AppDir/usr/lib/noh"
+        environment = dict(os.environ, LIBGL_ALWAYS_SOFTWARE="1")
+        checks["caption_effect_burn"] = burn_with_effect(home / "bin/noh-cli", shutil.which("ffmpeg"),
+                                                         evidence / "effect-burn", environment,
+                                                         prefix=("xvfb-run", "-a"))
+    part = {"platform": "linux-x64", "status": "passed", "tag": args.tag, "rehearsal": args.rehearsal,
+            "downloads": downloaded, "exercised": [names[0]],
+            "delivery_sha256": delivery.digest(work / "envelope/DELIVERY.json"),
+            "source_commit": record["source_commit"], "checks": checks, "limitations": LINUX_LIMITATIONS,
+            "run_attempt": run_attempt()}
+    if args.runner:
+        part["runner"] = args.runner
+    delivery.write(evidence / "part.json", part)
+
+
+def merge_linux_runners(runners):
+    """One Linux part from the runners' parts: every runner present, all of them on the same published files."""
+    require(set(runners) == set(linux_runners()), "Linux acceptance lacks a runner, or has an unknown one")
+    first = runners[EFFECT_BURN_RUNNER]
+    same = ("platform", "status", "tag", "rehearsal", "downloads", "exercised", "delivery_sha256", "source_commit")
+    for name, part in runners.items():
+        require(all(part.get(key) == first.get(key) for key in same),
+                "Linux acceptance runners tested different files: " + name)
+    matrix = {}
+    for name, part in runners.items():
+        if name != EFFECT_BURN_RUNNER:
+            require(set(part["checks"]) == {"distribution_matrix"} and set(part["checks"]["distribution_matrix"]) == {name},
+                    "A distribution runner reported another case: " + name)
+            matrix.update(part["checks"]["distribution_matrix"])
+    require(set(first["checks"]) == {"caption_effect_burn"}, "The effect burn runner reported other checks")
+    merged = {key: first[key] for key in same}
+    merged["checks"] = {"distribution_matrix": matrix, "caption_effect_burn": first["checks"]["caption_effect_burn"]}
+    merged["runners"] = sorted(runners)
+    merged["limitations"] = LINUX_LIMITATIONS + ["Each distribution and the effect burn ran on its own runner, "
+                                                 "each downloading and checking the published files itself."]
+    return merged
+
+
+EFFECT_BURN_RUNNER = "effect-burn"
+LINUX_LIMITATIONS = ["The distribution matrix and the effect burn use software rendering and virtual audio.",
+                     "The effect burn uses the runner's FFmpeg and libmpv packages, as the package expects "
+                     "the host to provide them."]
+
+
+def linux_runners():
+    """The Linux acceptance split across runners: one per distribution of the matrix, one for the effect burn."""
+    from linux_matrix import cases
+    return [case["id"] for case in cases()] + [EFFECT_BURN_RUNNER]
 
 
 def installer_layout(report, downloads, base):
@@ -233,6 +278,7 @@ def windows(args):
             archive.write(path, path.relative_to(base).as_posix())
     delivery.write(evidence / "part.json", {
         "platform": "windows-x64", "status": "passed", "tag": args.tag, "rehearsal": False, "downloads": downloaded,
+        "run_attempt": run_attempt(),
         "fetched_by_installer": fetched_by_installer,
         "exercised": names + [portable_name] + sorted(fetched_by_installer),
         "checks": {"profiles_from_the_web_installer": profiles,
@@ -249,6 +295,35 @@ def windows(args):
                         "Microsoft prerequisite download is not executed in silent mode."]})
 
 
+def run_attempt():
+    """The attempt of the workflow run writing a part; 1 outside GitHub Actions."""
+    value = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+    require(re.fullmatch(r"[1-9][0-9]*", value) is not None, "Unexpected run attempt: " + value)
+    return int(value)
+
+
+def latest_parts(folder):
+    """Each platform's part, or each Linux runner's part, from the latest attempt that wrote one.
+
+    After "re-run failed jobs", a job keeps the artifact of the attempt that ran it, and the
+    collecting job of a later attempt also sees the artifacts of earlier ones: a runner may thus
+    appear in several attempts, and its latest part is the one that counts. The same part twice
+    in one attempt is refused. That download-artifact's pattern returns earlier attempts'
+    artifacts in a re-run is how GitHub keeps artifacts per run; it is not exercised by a test here.
+    """
+    chosen, seen = {}, set()
+    for path in sorted(folder.glob("*/part.json")):
+        part = delivery.read(path)
+        key, attempt = (part.get("platform"), part.get("runner")), part.get("run_attempt", 1)
+        require(isinstance(attempt, int) and not isinstance(attempt, bool) and attempt >= 1,
+                "Unusable run attempt in " + str(path))
+        require((key, attempt) not in seen, "The same acceptance part twice in one attempt: " + str(path))
+        seen.add((key, attempt))
+        if key not in chosen or attempt > chosen[key][0]:
+            chosen[key] = (attempt, path, part)
+    return [(path, part) for _, path, part in sorted(chosen.values(), key=lambda item: str(item[1]))]
+
+
 def collect(args):
     """Bind the platform parts to the files the publishing run verified, and write ACCEPTANCE.json."""
     from setup_delivery import GitHub
@@ -260,9 +335,8 @@ def collect(args):
     scratch.mkdir(exist_ok=False)
     verified = publication.verified_publication(github, release, int(os.environ["NOH_DELIVERY_WORKFLOW_ID"]),
                                                 scratch)["assets"]
-    parts, exercised = {}, {}
-    for path in sorted(args.parts.glob("*/part.json")):
-        part = delivery.read(path)
+    parts, exercised, linux_runners = {}, {}, {}
+    for path, part in latest_parts(args.parts):
         require(part.get("platform") in publication.PLATFORMS and part["platform"] not in parts
                 and part.get("status") == "passed" and part.get("tag") == args.tag and not part.get("rehearsal"),
                 "Unusable acceptance part: " + str(path))
@@ -272,7 +346,14 @@ def collect(args):
         for name in part["exercised"]:
             require(name in tested, "A part claims a file it did not check: " + name)
             exercised[name] = "sha256:" + tested[name]
-        parts[part["platform"]] = part
+        if part["platform"] == "linux-x64" and "runner" in part:
+            require(part["runner"] not in linux_runners, "Duplicate Linux acceptance runner: " + str(path))
+            linux_runners[part["runner"]] = part
+        else:
+            parts[part["platform"]] = part
+    if linux_runners:
+        require("linux-x64" not in parts, "Linux was accepted both whole and by runner")
+        parts["linux-x64"] = merge_linux_runners(linux_runners)
     require(set(parts) == set(publication.PLATFORMS), "Both platforms must have been accepted")
     delivery.write(args.output, {
         "schema_version": 1, "status": "passed", "tag": args.tag, "release_id": release["id"],
@@ -322,6 +403,7 @@ def main():
     on_linux.add_argument("--output", type=Path, required=True)
     on_linux.add_argument("--rehearsal", action="store_true",
                           help="Accept a suffixed pre-release tag; the part is marked and cannot be collected")
+    on_linux.add_argument("--runner", help="One runner's share: a distribution of the matrix, or effect-burn")
     on_windows = commands.add_parser("windows")
     on_windows.add_argument("--tag", required=True)
     on_windows.add_argument("--output", type=Path, required=True)

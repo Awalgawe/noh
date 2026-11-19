@@ -51,7 +51,9 @@ def validate_jobs(data, platforms, workflow_path):
     # its skipped child jobs. None of those jobs may have executed in a build run.
     allowed_skips = {"draft", "draft / verify", "draft / draft", "installer", "installer / public-installer",
                      "publish", "acceptance-windows", "acceptance-linux", "acceptance", "promote"} if wrapped else set()
-    if any(name not in allowed_skips or result != "skipped"
+    # The Linux acceptance is a matrix: a skipped entry may also carry its runner in the name.
+    linux_runner = re.compile(r"acceptance-linux \([a-z0-9.-]+\)") if wrapped else None
+    if any(not (name in allowed_skips or (linux_runner and linux_runner.fullmatch(name))) or result != "skipped"
            for name, result in results.items() if name not in expected):
         raise ValueError("Unexpected source job or release stage")
 
