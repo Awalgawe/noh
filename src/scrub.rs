@@ -428,6 +428,12 @@ impl crate::playback::Live for MpvLive {
         self.shared.live.set_volume(self.generation, volume);
         self.wake();
     }
+    /// The pitch stays: each montage is played with audio-pitch-correction on.
+    fn set_speed(&self, speed: f64) -> bool {
+        self.shared.live.set_speed(self.generation, speed);
+        self.wake();
+        true
+    }
     fn stop(&self) {
         self.shared.live.close(self.generation);
         self.wake();
@@ -491,6 +497,11 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
                         api.send(handle, &["set", "vf", &format!("lavfi=[{}]", plan.filter)])?;
                         api.send(handle, &["set", "aid", "auto"])?;
                         api.send(handle, &["set", "volume", &mpv_volume(volume)])?;
+                        // A new montage never inherits a sync game's speed, and a
+                        // slowed one keeps the voice's pitch whatever the build's
+                        // defaults.
+                        api.send(handle, &["set", "speed", "1"])?;
+                        api.send(handle, &["set", "audio-pitch-correction", "yes"])?;
                         api.send(
                             handle,
                             &["set", "pause", if playing { "no" } else { "yes" }],
@@ -565,6 +576,11 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
                         let _ = api.send(handle, &["set", "volume", &mpv_volume(volume)]);
                     }
                 }
+                live::Command::Speed(speed) => {
+                    if live.is_some() {
+                        let _ = api.send(handle, &["set", "speed", &format!("{speed:.3}")]);
+                    }
+                }
                 live::Command::Stop(generation) => {
                     if live
                         .as_ref()
@@ -574,6 +590,7 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
                         crate::profile!("mpv player: stopped");
                         let _ = api.send(handle, &["set", "pause", "yes"]);
                         let _ = api.send(handle, &["set", "aid", "no"]);
+                        let _ = api.send(handle, &["set", "speed", "1"]);
                     }
                 }
             }
