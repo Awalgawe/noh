@@ -119,6 +119,14 @@ jobs:
                   print('Checking pinned Linux test image: ' + case['id'], flush=True)
                   subprocess.run(['docker', 'buildx', 'imagetools', 'inspect', '--raw', case['image']],
                                  stdout=subprocess.DEVNULL, check=True, timeout=45)
+              # The desktop images of step 4: a removed one stops the build here, not after it.
+              from linux_desktop_candidate import missing_desktop_images
+              gone, unsure = missing_desktop_images()
+              for name, reason in unsure.items():
+                  print(f'::warning::Linux desktop image not confirmed, {name}: {reason}', flush=True)
+              if gone:
+                  raise SystemExit('Linux desktop images removed by their publisher; pin them again first: '
+                                   + '; '.join(f'{name}: {reason}' for name, reason in gone.items()))
           print('Release preflight passed; verify mode retains no application artifacts')
           PY
 

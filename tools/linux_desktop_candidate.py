@@ -3,6 +3,7 @@
 import argparse
 import array
 import base64
+from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime, timezone
 import hashlib
 import importlib
@@ -19,6 +20,8 @@ import subprocess
 import tarfile
 import tempfile
 import time
+import urllib.error
+import urllib.parse
 import urllib.request
 import wave
 import zipfile
@@ -63,8 +66,8 @@ def rolling_inputs(image):
     re.compile(rolling['name_pattern'])
 
 
-def fetch_small(url, limit=1 << 20):
-    with urllib.request.urlopen(url, timeout=60) as response:
+def fetch_small(url, limit=1 << 20, timeout=60):
+    with urllib.request.urlopen(url, timeout=timeout) as response:
         data = response.read(limit + 1)
     if len(data) > limit:
         raise ValueError('Unexpectedly large response from ' + url)
@@ -156,6 +159,66 @@ def resolve_image_command(args):
     image = resolve_image(case_inputs(args.case)[1])
     write(args.output, image)
     print('digest=' + image['digest'])
+
+
+def missing_desktop_images(opener=urllib.request.urlopen, timeout=10, budget=60, resolve=None):
+    """Desktop images whose publisher answers that they are gone: 404 or 410 to a HEAD request.
+
+    Rolling distributions remove an image within days, and the desktop run, after a 30-minute
+    build, was where that showed. Only the pinned URL's own host can say an image is gone: a 404
+    after a redirect to another host is a mirror that has not synced the pin, or has already
+    dropped it. That, any other answer, a refused HEAD or a network error is only reported: a bad
+    minute must not stop a build whose desktops run much later. The requests run together, each
+    bounded by `timeout`, and whatever has not answered after `budget` seconds is reported too,
+    so the check stays well inside the preflight job's five minutes.
+
+    A rolling entry has no pinned address: it is resolved as the desktop run resolves it, then
+    its current address is asked. Failing to resolve it, and a 404 or 410 for the address just
+    resolved, are only reported: the publisher may be between two snapshots, there is nothing to
+    pin again, and the desktop run resolves again.
+    """
+    images = read(ROOT / 'assets/linux-desktop-images.json')['images']
+    resolve = resolve or (lambda image: resolve_image(
+        image, fetch=lambda url, limit=1 << 20: fetch_small(url, limit, timeout)))
+
+    def where(image):
+        return image['rolling']['listing'] if 'rolling' in image else image['url']
+
+    def ask(image):
+        url = image.get('url')
+        if 'rolling' in image:
+            try:
+                url = resolve(image)['url']
+            except Exception as error:  # whatever stops the resolution is a warning here
+                return 'unsure', f'{type(error).__name__} resolving the current image from {where(image)}: {error}'
+        try:
+            with opener(urllib.request.Request(url, method='HEAD'), timeout=timeout):
+                return None, None
+        except urllib.error.HTTPError as error:
+            final = error.geturl() or url
+            own_host = urllib.parse.urlsplit(final).hostname == urllib.parse.urlsplit(url).hostname
+            if error.code in (404, 410) and own_host and 'rolling' in image:
+                # Nothing to pin again: the publisher replaced the snapshot since it was listed.
+                return 'unsure', f'HTTP {error.code} for {url}: replaced since it was listed; the desktop run resolves again'
+            if error.code in (404, 410) and own_host:
+                return 'gone', f'HTTP {error.code} for {url}'
+            return 'unsure', f'HTTP {error.code} for {url}' + ('' if final == url else f' (answered by {final})')
+        except (urllib.error.URLError, OSError) as error:
+            return 'unsure', f'{type(error).__name__} for {url}: {error}'
+
+    found = {'gone': {}, 'unsure': {}}
+    workers = ThreadPoolExecutor(max_workers=max(1, len(images)))
+    futures = {workers.submit(ask, image): name for name, image in images.items()}
+    done, pending = wait(futures, timeout=budget)
+    for future in done:
+        verdict, reason = future.result()
+        if verdict:
+            found[verdict][futures[future]] = reason
+    for future in pending:
+        found['unsure'][futures[future]] = f'no answer within {budget} s for {where(images[futures[future]])}'
+    workers.shutdown(wait=False, cancel_futures=True)
+    return dict(sorted(found['gone'].items())), dict(sorted(found['unsure'].items()))
+
 
 def build_platforms(inventory):
     """Linux first, then every other platform whose package the run retained."""
