@@ -950,11 +950,6 @@ const OVERLAY_STATES: &[&str] = &[
     "lyrics-menu",
     "lyrics-generating",
     "lyrics-track-menu",
-    "lyrics-bubble",
-    "lyrics-words",
-    "lyrics-tap",
-    "lyrics-syllables",
-    "lyrics-propose",
     "lyrics-screen",
     "lyrics-screen-cut",
     "lyrics-screen-word",
@@ -963,6 +958,7 @@ const OVERLAY_STATES: &[&str] = &[
     "lyrics-screen-game-hold",
     "lyrics-screen-game-missed",
     "lyrics-screen-summary",
+    "lyrics-screen-read-only",
     "lyrics-first-edit",
     "lyrics-unsaved",
     "lyrics-srt-stale",
@@ -982,11 +978,6 @@ const OVERLAY_STATES: &[&str] = &[
 const LYRICS_STATES: &[&str] = &[
     "unreadable",
     "lyrics-track-menu",
-    "lyrics-bubble",
-    "lyrics-words",
-    "lyrics-tap",
-    "lyrics-syllables",
-    "lyrics-propose",
     "lyrics-screen",
     "lyrics-screen-cut",
     "lyrics-screen-word",
@@ -995,6 +986,7 @@ const LYRICS_STATES: &[&str] = &[
     "lyrics-screen-game-hold",
     "lyrics-screen-game-missed",
     "lyrics-screen-summary",
+    "lyrics-screen-read-only",
     "lyrics-first-edit",
     "lyrics-unsaved",
     "lyrics-srt-stale",
@@ -1225,64 +1217,6 @@ impl NohApp {
                 }
                 if state == "lyrics-save-failed" {
                     self.lyrics_save.failed = Some("Access is denied. (os error 5)".to_owned());
-                }
-                if matches!(
-                    state,
-                    "lyrics-bubble"
-                        | "lyrics-words"
-                        | "lyrics-tap"
-                        | "lyrics-syllables"
-                        | "lyrics-propose"
-                ) && let Some(i) = self
-                    .lyrics_track()
-                    .and_then(|t| t.cues.iter().position(|c| c.start_ms >= 1_000))
-                {
-                    // The editor bubble on a cue; word mode with its details; tapping
-                    // with two taps made (staged, nothing plays).
-                    self.lyrics_edit.selected = Some(i);
-                    if state != "lyrics-bubble" {
-                        self.start_words(i);
-                    }
-                    if state == "lyrics-syllables" {
-                        // The first word cut in two, by hand.
-                        let word = self
-                            .lyrics_track()
-                            .and_then(|t| {
-                                t.cues[i].text.split_whitespace().next().map(str::to_string)
-                            })
-                            .unwrap_or_default();
-                        let cut = word
-                            .char_indices()
-                            .nth(word.chars().count() / 2)
-                            .map_or(word.clone(), |(b, _)| {
-                                format!("{}-{}", &word[..b], &word[b..])
-                            });
-                        self.apply_syllables(i, 0, &cut);
-                    }
-                    if state == "lyrics-propose" {
-                        // « Couper en syllabes » on the first word, sung in English.
-                        self.subtitles.language = "en".into();
-                        self.propose_syllables(i, 0);
-                    }
-                    let starts: Vec<u64> = self
-                        .lyrics_track()
-                        .map(|t| super::app_lyrics_edit::unit_starts(&t.cues[i]))
-                        .unwrap_or_default();
-                    if let Some(w) = &mut self.lyrics_edit.words {
-                        w.details = matches!(
-                            state,
-                            "lyrics-words" | "lyrics-syllables" | "lyrics-propose"
-                        );
-                        w.word = if matches!(state, "lyrics-syllables" | "lyrics-propose") {
-                            0
-                        } else {
-                            1.min(starts.len().saturating_sub(1))
-                        };
-                        if state == "lyrics-tap" {
-                            w.taps = Some(starts.iter().take(2).copied().collect());
-                            w.tap_clock = starts.get(1).copied();
-                        }
-                    }
                 }
                 // The lyrics screen on a line, as it opens; with the text
                 // cursor between two words; a word chosen in the track; a

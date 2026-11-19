@@ -29,7 +29,7 @@ enum Action {
     Settings,
 }
 
-/// A lyrics action that drops unsaved lane edits, asked first.
+/// A lyrics action that drops unsaved lyrics edits, asked first.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum PendingLyrics {
     Generate,
@@ -213,7 +213,52 @@ impl NohApp {
             t.text,
         );
         let text_left = rect.left() + 40.0;
-        let text_right = trailing.left() - space::S;
+        // « Modifier » opens the lyrics screen: a button of its own before
+        // the ⋯, over the chip (whose click opens the menu). While a job runs
+        // it waits, and says why on hover.
+        let mut edit = false;
+        let mut text_right = trailing.left() - space::S;
+        if matches!(state, Chip::Ready { .. }) && !self.lyrics_question_pending() {
+            let label = l.text("lyrics_screen.edit");
+            let label_w = ui
+                .painter()
+                .layout_no_wrap(
+                    label.into(),
+                    FontId::proportional(style::text::SMALL),
+                    t.text,
+                )
+                .size()
+                .x;
+            let button = Rect::from_min_max(
+                pos2(trailing.left() - space::XS - label_w - 18.0, rect.top()),
+                pos2(trailing.left() - space::XS, rect.bottom()),
+            );
+            let job = self.lyrics_locked();
+            let mut child = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt("lyrics-chip-edit")
+                    .max_rect(button)
+                    .layout(egui::Layout::right_to_left(egui::Align::Center)),
+            );
+            let response = super::app_lyrics_screen::small_button(
+                &mut child,
+                label,
+                !locked && !job,
+                style::Kind::Secondary,
+            );
+            #[cfg(test)]
+            {
+                self.strip.lyrics_edit_rect = Some(response.rect);
+            }
+            edit = if job {
+                response
+                    .on_disabled_hover_text(l.text("lyrics_screen.locked"))
+                    .clicked()
+            } else {
+                response.clicked()
+            };
+            text_right = button.left() - space::S;
+        }
         let title_w = title.size().x;
         ui.painter().galley(
             pos2(text_left, rect.center().y - title.size().y / 2.0),
@@ -235,7 +280,12 @@ impl NohApp {
                 t.warn,
             )
         });
-        if x + status_galley.size().x <= text_right {
+        // Beside « Modifier » the room is short: the check-again tag, which
+        // warns, goes before the count of lines when both do not fit.
+        let tag_w = tag.as_ref().map_or(0.0, |t| t.size().x + 12.0 + space::S);
+        let both = x + status_galley.size().x + tag_w <= text_right;
+        let tag_alone = tag.is_some() && x + tag_w - space::S <= text_right;
+        if x + status_galley.size().x <= text_right && (both || !tag_alone) {
             let status_w = status_galley.size().x;
             ui.painter().galley(
                 pos2(x, rect.center().y - status_galley.size().y / 2.0),
@@ -290,6 +340,13 @@ impl NohApp {
         } else {
             chip
         };
+        if edit {
+            egui::Popup::close_id(ctx, menu_id);
+            self.strip.lyrics_menu_open = false;
+            self.lyrics_ready = None;
+            self.open_lyrics_screen(None);
+            return;
+        }
         if interactive && self.lyrics_question_pending() && chip.clicked() {
             self.reopen_lyrics_question();
             return;
@@ -381,7 +438,7 @@ impl NohApp {
         }
     }
 
-    /// A Paroles menu action. One that would drop unsaved lane edits asks first.
+    /// A Paroles menu action. One that would drop unsaved lyrics edits asks first.
     fn lyrics_action(&mut self, action: Action, ctx: &egui::Context) {
         // Import asks once the file is chosen (drop_files): cancelling the
         // file dialog then loses nothing.
@@ -1036,7 +1093,7 @@ mod tests {
     }
 
     /// Retirer (like Générer à nouveau and Remplacer) asks before dropping unsaved
-    /// lane edits; « Continuer » runs it, « Annuler » keeps everything.
+    /// lyrics edits; « Continuer » runs it, « Annuler » keeps everything.
     #[test]
     fn remove_asks_before_dropping_unsaved_edits() {
         let folder = tempfile::tempdir().unwrap();
@@ -1216,6 +1273,43 @@ x
 
     /// The chip names its state and flags lyrics made from another song.
     #[test]
+    fn modifier_on_the_chip_opens_the_lyrics_screen_and_waits_while_a_job_runs() {
+        let folder = tempfile::tempdir().unwrap();
+        let (ctx, mut app) = app(Language::Fr);
+        app.wav = Some(folder.path().join("new.wav"));
+        let texts = frame(&ctx, &mut app, 980.0, vec![]);
+        assert!(
+            !texts.iter().any(|(t, _)| t == "Modifier"),
+            "no lyrics, nothing to edit"
+        );
+        attach_track(&mut app, folder.path());
+        let texts = frame(&ctx, &mut app, 980.0, vec![]);
+        let at = find(&texts, "Modifier").center();
+        assert!(app.strip.lyrics_edit_rect.unwrap().contains(at));
+        // While a job runs the button waits: nothing opens, not even the menu.
+        app.cancelling = true;
+        assert!(app.lyrics_locked());
+        click(&ctx, &mut app, 980.0, at);
+        assert!(!app.lyrics_screen.open && !open(&ctx));
+        app.cancelling = false;
+        frame(&ctx, &mut app, 980.0, vec![]);
+        // The playhead is in the third line: the screen opens there.
+        app.mini_preview.cursor_ms = 2_200;
+        click(&ctx, &mut app, 980.0, at);
+        assert!(
+            app.lyrics_screen.open,
+            "« Modifier » opens the lyrics screen"
+        );
+        assert!(!open(&ctx), "and not the chip's menu");
+        assert_eq!(app.lyrics_screen_line(), Some(2));
+        // Elsewhere on the chip the menu still opens.
+        app.close_lyrics_screen();
+        let texts = frame(&ctx, &mut app, 980.0, vec![]);
+        click(&ctx, &mut app, 980.0, find(&texts, "Paroles").center());
+        assert!(open(&ctx) && !app.lyrics_screen.open);
+    }
+
+    #[test]
     fn chip_states_and_the_check_again_tag() {
         let folder = tempfile::tempdir().unwrap();
         let (ctx, mut app) = app(Language::Fr);
@@ -1229,11 +1323,15 @@ x
             cues: 39,
         });
         app.subtitles.source = folder.path().join("old.wav").display().to_string();
+        // Beside « Modifier » the chip has no room for both: the tag, which
+        // warns, is shown and the count of lines waits.
         let texts = frame(&ctx, &mut app, 980.0, vec![]);
-        find(&texts, "39 lignes");
         find(&texts, "à revérifier");
+        find(&texts, "Modifier");
+        assert!(!texts.iter().any(|(t, _)| t == "39 lignes"));
         app.subtitles.source = folder.path().join("new.wav").display().to_string();
         let texts = frame(&ctx, &mut app, 980.0, vec![]);
+        find(&texts, "39 lignes");
         assert!(!texts.iter().any(|(t, _)| t == "à revérifier"));
         app.project.track.loaded = None;
         app.project.track.error = Some(noh::engine::EngineError::new(

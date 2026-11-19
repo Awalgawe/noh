@@ -93,7 +93,7 @@ pub struct State {
     pub(super) seen_track_revision: u64,
     /// Lane edits of the attached subtitles, in memory until saved.
     pub(super) edit: Option<super::app_lyrics_edit::Session>,
-    /// Bumped by every lane edit and undo: part of the captions' identity.
+    /// Bumped by every lyrics edit and undo: part of the captions' identity.
     pub(super) edit_revision: u64,
     pub(super) input_changed: bool,
     input: Option<(u64, Option<PathBuf>, Option<PathBuf>)>,

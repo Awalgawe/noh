@@ -13,10 +13,8 @@ const MIN_VIEW: u64 = 2_000;
 const MAX_PIECES: usize = 1024;
 // Lane heights from the design system (`lane-*-h`); the waveform is 64, 48 compact.
 const PICTURES_H: f32 = 28.0;
-// The lyrics lane is the subtitle editor (answer 4 of 8 November: 40 px).
+// The lyrics lane shows the lines and opens the lyrics screen (40 px).
 const LYRICS_H: f32 = 40.0;
-/// Half the hit width of a chosen cue's edge handles.
-const EDGE_HIT: f32 = 6.0;
 const GAP: f32 = 4.0;
 
 pub struct Visual {
@@ -41,63 +39,11 @@ pub struct Input<'a> {
     pub fade_out_seconds: f64,
     /// "Pictures from the start": the ↺ mark at the range start.
     pub restart: bool,
-    /// The cue whose bubble is open (its edges can be dragged).
-    pub selected_cue: Option<usize>,
-    /// Word mode on the chosen cue (app_lyrics_edit.rs).
-    pub words: Option<WordLane<'a>>,
-}
-
-/// Word mode: the chosen cue drawn as its words (or syllables), each start a
-/// handle; while tapping in rhythm, the taps so far and no handles.
-#[derive(Clone, Copy, Debug)]
-pub struct WordLane<'a> {
-    pub cue: usize,
-    /// The chosen word (its index in the cue).
-    pub word: usize,
-    pub taps: Option<&'a [u64]>,
-}
-
-/// A part of a cue on the lyrics lane.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CuePart {
-    Start,
-    End,
-    Body,
-}
-
-/// A lyrics-lane gesture, applied by the editor (app_lyrics_edit.rs).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CueEvent {
-    Select(usize),
-    Clear,
-    /// Released after moving: an edge to `to_ms`, or the whole cue by `delta_ms`.
-    Drag {
-        cue: usize,
-        part: CuePart,
-        delta_ms: i64,
-        to_ms: u64,
-    },
-    /// "+" in a gap of half a second or more.
-    Add(u64),
-    /// Word mode: a word chosen on the lane.
-    Word(usize),
-    /// Word mode: a word's (or syllable's) start dragged to `to_ms`.
-    UnitStart {
-        cue: usize,
-        unit: usize,
-        to_ms: u64,
-    },
-}
-
-#[derive(Clone, Copy)]
-struct CueDrag {
-    cue: usize,
-    part: CuePart,
-    /// Word mode: the unit whose start is dragged.
-    unit: Option<usize>,
-    anchor_ms: u64,
-    anchor_x: f32,
-    moved: bool,
+    /// What a click on the lyrics lane does, said under the hovered line.
+    pub lyrics_hint: &'a str,
+    /// Why the lyrics cannot be edited now (a job runs): the lane then opens
+    /// nothing and says this on hover.
+    pub lyrics_locked: Option<&'a str>,
 }
 
 /// Assign range and viewport every frame. Bump the short revision only when
@@ -112,7 +58,8 @@ pub struct Output {
     pub viewport: Option<Viewport>,
     pub commit_changed: bool,
     pub retry: bool,
-    pub cue: Option<CueEvent>,
+    /// A click on the lyrics lane: on a line (its index), or between two.
+    pub lyrics_click: Option<Option<usize>>,
 }
 
 #[derive(Default)]
@@ -125,11 +72,6 @@ pub struct TimelineState {
     geometry: Option<Geometry>,
     /// The ruler's button was down last frame: its release asks nothing more.
     ruler_down: bool,
-    cue_drag: Option<CueDrag>,
-    /// The track as a cue drag would leave it, drawn instead of the input's.
-    cue_preview: Option<SubtitleTrack>,
-    /// Each visible cue's block, drawn last frame.
-    cue_rects: Vec<(usize, Rect)>,
     /// The ↺ mark painted last frame, for tests.
     #[cfg(test)]
     pub restart_mark: Option<Rect>,
@@ -168,18 +110,7 @@ impl TimelineState {
     }
     /// Zoom controls wait while a range drag is in progress.
     pub fn dragging(&self) -> bool {
-        self.drag.is_some() || self.cue_drag.is_some()
-    }
-    /// A cue's block on the lyrics lane, last frame (for its bubble).
-    pub fn cue_rect(&self, cue: usize) -> Option<Rect> {
-        self.cue_rects
-            .iter()
-            .find(|(i, _)| *i == cue)
-            .map(|(_, r)| *r)
-    }
-    /// The lyrics lane, last frame.
-    pub fn cues_lane(&self) -> Option<Rect> {
-        self.geometry.and_then(|g| g.cues)
+        self.drag.is_some()
     }
 }
 
@@ -545,7 +476,7 @@ fn show_inner(
         viewport: input.viewport,
         commit_changed: false,
         retry: false,
-        cue: None,
+        lyrics_click: None,
     };
     let duration = input.duration_ms;
     if state.duration_ms != duration {
@@ -902,10 +833,9 @@ fn show_inner(
         }
     }
 
-    output.cue = cue_lane(
+    output.lyrics_click = cue_lane(
         ui,
         id,
-        state,
         geometry,
         view,
         &input,
@@ -1076,21 +1006,17 @@ fn paint_lanes(
         colors,
         input.waveform,
     );
-    if let (Some(input_track), Some(lane)) = (input.track, geometry.cues) {
-        let track = state.cue_preview.clone();
-        let track = track.as_ref().unwrap_or(input_track);
+    if let (Some(track), Some(lane)) = (input.track, geometry.cues) {
         let t = style::tokens(ui);
         painter.rect_filled(lane, lane_radius, colors.wav);
-        state.cue_rects.clear();
         let first = track
             .cues
             .partition_point(|cue| cue.end_ms <= view.0.start_ms);
-        for (i, cue) in track
+        for cue in track
             .cues
             .iter()
-            .enumerate()
             .skip(first)
-            .take_while(|(_, c)| c.start_ms < view.0.end_ms)
+            .take_while(|c| c.start_ms < view.0.end_ms)
         {
             let left = x_at(view, lane, cue.start_ms).max(lane.left());
             let right = x_at(view, lane, cue.end_ms)
@@ -1100,23 +1026,11 @@ fn paint_lanes(
                 pos2(left, lane.top() + 6.0),
                 pos2((right - 1.0).max(left + 2.0), lane.bottom() - 6.0),
             );
-            state.cue_rects.push((i, block));
-            if let Some(w) = input.words.filter(|w| w.cue == i) {
-                paint_units(&painter, lane, view, cue, w, &t);
-                continue;
-            }
             // Cues within the short (half a second of tolerance) use `accent-text`.
             let near = range
                 .is_some_and(|r| cue.start_ms + 500 >= r.start_ms && cue.end_ms <= r.end_ms + 500);
-            let selected = input.selected_cue == Some(i);
-            painter.rect_filled(block, 4, if selected { t.seg_on } else { t.surface_2 });
-            let ink = if selected {
-                t.text
-            } else if near {
-                colors.cue_in
-            } else {
-                t.text_2
-            };
+            painter.rect_filled(block, 4, t.surface_2);
+            let ink = if near { colors.cue_in } else { t.text_2 };
             if block.width() > 14.0 {
                 let line = cue.text.replace('\n', " / ");
                 let mut job = egui::text::LayoutJob::simple_singleline(
@@ -1156,59 +1070,98 @@ fn paint_lanes(
                     }
                 }
             }
-            if selected {
-                painter.rect_stroke(block, 4, Stroke::new(2.0, t.text), egui::StrokeKind::Inside);
-                for x in [block.left(), block.right()] {
-                    painter.rect_filled(
-                        Rect::from_center_size(
-                            pos2(x, block.center().y),
-                            vec2(6.0, block.height() - 6.0),
-                        ),
-                        3,
-                        t.text,
-                    );
-                }
-            }
-        }
-        if input.words.is_some() {
-            // The view was zoomed onto the line: say so at the ruler's end.
-            let galley = painter.layout_no_wrap(
-                l.text("words.zoom").to_string(),
-                FontId::proportional(style::text::SMALL),
-                t.text_2,
-            );
-            let r = Rect::from_min_size(
-                pos2(
-                    geometry.ruler.right() - galley.size().x - 12.0,
-                    geometry.ruler.top(),
-                ),
-                galley.size() + vec2(12.0, 2.0),
-            );
-            painter.rect_filled(r, 4, t.surface);
-            painter.rect_stroke(r, 4, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
-            painter.galley(r.min + vec2(6.0, 1.0), galley, t.text_2);
-        }
-        // "+" in each visible gap of half a second or more, wide enough to hit.
-        for (a, b) in cue_gaps(track)
-            .into_iter()
-            .filter(|_| input.words.is_none())
-        {
-            let (x0, x1) = (x_at(view, lane, a), x_at(view, lane, b));
-            let centre = (x0 + x1) / 2.0;
-            if x1 - x0 >= 28.0 && centre > lane.left() && centre < lane.right() {
-                let c = pos2(centre, lane.center().y);
-                painter.circle_filled(c, 10.0, t.bg);
-                painter.circle_stroke(c, 10.0, Stroke::new(1.0, t.border_strong));
-                painter.text(
-                    c,
-                    Align2::CENTER_CENTER,
-                    "+",
-                    FontId::proportional(14.0),
-                    t.text_2,
-                );
-            }
         }
     }
+}
+
+/// The lyrics lane: a click opens the lyrics screen, on the line under the
+/// pointer when there is one; hovering a line shows its times and its text.
+/// Nothing is edited here, and the playhead never moves here.
+fn cue_lane(
+    ui: &mut egui::Ui,
+    id: Id,
+    geometry: Geometry,
+    view: Viewport,
+    input: &Input<'_>,
+    enabled: bool,
+    l: Language,
+) -> Option<Option<usize>> {
+    let (Some(track), Some(lane)) = (input.track, geometry.cues) else {
+        return None;
+    };
+    let open = enabled && input.lyrics_locked.is_none();
+    let response = ui.interact(
+        lane,
+        id.with("cues"),
+        if open { Sense::click() } else { Sense::hover() },
+    );
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, open, input.lyrics_hint)
+    });
+    let line_at = |x: f32| {
+        let ms = time_at(view, lane, x);
+        track
+            .cues
+            .iter()
+            .position(|c| c.start_ms <= ms && ms < c.end_ms)
+    };
+    if response.has_focus() {
+        ui.painter().rect_stroke(
+            lane.expand(2.0),
+            style::radius::M,
+            Stroke::new(2.0, style::tokens(ui).focus),
+            egui::StrokeKind::Outside,
+        );
+    }
+    if let Some(p) = response.hover_pos() {
+        let line = line_at(p.x).map(|i| &track.cues[i]);
+        if open {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+        let hours = input.duration_ms >= 3_600_000;
+        if let Some(tip) = lane_tip(
+            line,
+            input.lyrics_hint,
+            input.lyrics_locked,
+            enabled,
+            hours,
+            l,
+        ) {
+            response.clone().on_hover_text_at_pointer(tip);
+        }
+    }
+    (open && response.clicked()).then(|| response.interact_pointer_pos().and_then(|p| line_at(p.x)))
+}
+
+/// What hovering the lyrics lane says: the line under the pointer (its times,
+/// its text) and what a click does; while a job locks the lyrics, why
+/// nothing opens; nothing while the whole timeline waits.
+fn lane_tip(
+    line: Option<&noh::subtitle_track::SubtitleCue>,
+    hint: &str,
+    locked: Option<&str>,
+    enabled: bool,
+    hours: bool,
+    l: Language,
+) -> Option<String> {
+    if let Some(reason) = locked {
+        return Some(reason.to_string());
+    }
+    if !enabled {
+        return None;
+    }
+    let clock = |ms| time_label(ms, true, hours, l);
+    let tip = match line {
+        Some(c) => format!(
+            "{} – {}\n{}\n{}",
+            clock(c.start_ms),
+            clock(c.end_ms),
+            c.text,
+            hint
+        ),
+        None => hint.to_string(),
+    };
+    Some(tip.trim().to_string()).filter(|t| !t.is_empty())
 }
 
 /// The waveform of `view` in `rect`, as one mesh kept in `cache` until the
@@ -1322,8 +1275,8 @@ pub fn paint_zoom_lanes(
         fade_in_seconds: 0.0,
         fade_out_seconds: 0.0,
         restart: false,
-        selected_cue: None,
-        words: None,
+        lyrics_hint: "",
+        lyrics_locked: None,
     };
     paint_ruler(ui, ruler, view, duration_ms, compact, l);
     ui.painter()
@@ -1333,351 +1286,6 @@ pub fn paint_zoom_lanes(
     }
     ui.painter().rect_filled(wave, style::radius::S, colors.wav);
     paint_wave(ui, &mut cache.0, wave, view, None, colors, waveform);
-}
-
-/// A cue's words (or syllables), each with its start: the word times, or the
-/// letter split when it has none.
-fn cue_units(cue: &noh::subtitle_track::SubtitleCue) -> Vec<(usize, String, u64, bool)> {
-    let words = noh::subtitle_edit::words_or_estimate(cue);
-    let mut probe = cue.clone();
-    probe.words = Some(words.clone());
-    noh::subtitle_edit::units(&probe)
-        .into_iter()
-        .map(|(wi, si, ms)| match si {
-            Some(k) => (
-                wi,
-                words[wi]
-                    .syllables
-                    .as_ref()
-                    .map_or(String::new(), |s| s[k].text.clone()),
-                ms,
-                k > 0,
-            ),
-            None => (wi, words[wi].text.clone(), ms, false),
-        })
-        .collect()
-}
-
-/// Word mode: one block per word (or syllable), the chosen word on `seg-on`;
-/// a handle at each start after the first. While tapping: placed units on
-/// `accent-soft`, the next one outlined, the rest dimmed.
-fn paint_units(
-    painter: &egui::Painter,
-    lane: Rect,
-    view: Viewport,
-    cue: &noh::subtitle_track::SubtitleCue,
-    w: WordLane<'_>,
-    t: &style::Tokens,
-) {
-    let units = cue_units(cue);
-    let starts: Vec<u64> = units
-        .iter()
-        .enumerate()
-        .map(|(k, u)| w.taps.and_then(|taps| taps.get(k).copied()).unwrap_or(u.2))
-        .collect();
-    for (k, (wi, text, _, syllable)) in units.iter().enumerate() {
-        let a = starts[k];
-        let b = starts.get(k + 1).copied().unwrap_or(cue.end_ms).max(a);
-        let left = x_at(view, lane, a).max(lane.left());
-        let right = x_at(view, lane, b).min(lane.right()).max(left + 2.0);
-        let block = Rect::from_min_max(
-            pos2(left, lane.top() + 6.0),
-            pos2((right - 1.0).max(left + 2.0), lane.bottom() - 6.0),
-        );
-        let (fill, ink) = match w.taps.map(|taps| taps.len()) {
-            Some(done) if k < done => (t.accent_soft, t.text),
-            Some(done) if k == done => (t.seg_on, t.text),
-            Some(_) => (t.surface_2, t.text_3),
-            None if *wi == w.word => (t.seg_on, t.text),
-            None => (t.surface_2, t.text_2),
-        };
-        painter.rect_filled(block, 3, fill);
-        if w.taps.is_some_and(|taps| taps.len() == k) {
-            painter.rect_stroke(block, 3, Stroke::new(2.0, t.text), egui::StrokeKind::Inside);
-        }
-        if block.width() > 12.0 {
-            let mut job = egui::text::LayoutJob::simple_singleline(
-                text.clone(),
-                FontId::proportional(style::text::SMALL),
-                ink,
-            );
-            job.wrap.max_width = block.width() - 6.0;
-            job.wrap.max_rows = 1;
-            job.wrap.break_anywhere = true;
-            let galley = painter.layout_job(job);
-            painter.with_clip_rect(block.shrink(1.0)).galley(
-                pos2(block.left() + 3.0, block.center().y - galley.size().y / 2.0),
-                galley,
-                ink,
-            );
-        }
-        if k > 0 && w.taps.is_none() {
-            let x = x_at(view, lane, a);
-            if x > lane.left() && x < lane.right() {
-                let h = if *syllable {
-                    block.height() * 0.5
-                } else {
-                    block.height() - 2.0
-                };
-                painter.rect_filled(
-                    Rect::from_center_size(pos2(x, block.center().y), vec2(4.0, h)),
-                    2,
-                    t.text,
-                );
-            }
-        }
-    }
-}
-
-/// Gaps of half a second or more between cues (and at both ends).
-fn cue_gaps(track: &SubtitleTrack) -> Vec<(u64, u64)> {
-    let mut out = Vec::new();
-    let mut previous = 0;
-    for cue in &track.cues {
-        if cue.start_ms >= previous + noh::subtitle_edit::MIN_ADD_GAP_MS {
-            out.push((previous, cue.start_ms));
-        }
-        previous = cue.end_ms;
-    }
-    if track.duration_ms >= previous + noh::subtitle_edit::MIN_ADD_GAP_MS {
-        out.push((previous, track.duration_ms));
-    }
-    out
-}
-
-enum CueHit {
-    /// Word mode: the start handle of a unit.
-    Unit(usize),
-    /// Word mode: a word's block.
-    Word(usize),
-    Edge(usize, CuePart),
-    Cue(usize),
-    Gap(u64),
-    Lane,
-}
-
-/// The lyrics lane: a press chooses a cue (or "+", or nothing); a drag moves a
-/// chosen cue's edge or a whole cue, drawn as it would be, applied on release.
-/// The playhead never moves here (0c2d9c4); Échap cancels a drag.
-#[allow(clippy::too_many_arguments)]
-fn cue_lane(
-    ui: &mut egui::Ui,
-    id: Id,
-    state: &mut TimelineState,
-    geometry: Geometry,
-    view: Viewport,
-    input: &Input<'_>,
-    enabled: bool,
-    l: Language,
-) -> Option<CueEvent> {
-    state.cue_preview = None;
-    let (Some(track), Some(lane)) = (input.track, geometry.cues) else {
-        state.cue_drag = None;
-        return None;
-    };
-    // While tapping in rhythm the lane only shows the taps.
-    let words = input.words.filter(|w| w.cue < track.cues.len());
-    if !enabled || words.is_some_and(|w| w.taps.is_some()) {
-        state.cue_drag = None;
-        return None;
-    }
-    let units = words.map(|w| cue_units(&track.cues[w.cue]));
-    let response = ui.interact(lane, id.with("cues"), Sense::click_and_drag());
-    let hit = |x: f32| {
-        if let (Some(w), Some(units)) = (words, &units) {
-            if let Some(k) =
-                (1..units.len()).find(|&k| (x - x_at(view, lane, units[k].2)).abs() <= EDGE_HIT)
-            {
-                return CueHit::Unit(k);
-            }
-            let c = &track.cues[w.cue];
-            let ms = time_at(view, lane, x);
-            if c.start_ms <= ms && ms < c.end_ms {
-                let k = units.iter().rposition(|u| u.2 <= ms).unwrap_or(0);
-                return CueHit::Word(units[k].0);
-            }
-        }
-        if let Some(i) = input.selected_cue.filter(|_| words.is_none())
-            && let Some(c) = track.cues.get(i)
-        {
-            let (a, b) = (x_at(view, lane, c.start_ms), x_at(view, lane, c.end_ms));
-            if (x - a).abs() <= EDGE_HIT {
-                return CueHit::Edge(i, CuePart::Start);
-            }
-            if (x - b).abs() <= EDGE_HIT {
-                return CueHit::Edge(i, CuePart::End);
-            }
-        }
-        let ms = time_at(view, lane, x);
-        if let Some(i) = track
-            .cues
-            .iter()
-            .position(|c| c.start_ms <= ms && ms < c.end_ms)
-        {
-            return CueHit::Cue(i);
-        }
-        for (a, b) in cue_gaps(track).into_iter().filter(|_| words.is_none()) {
-            let (x0, x1) = (x_at(view, lane, a), x_at(view, lane, b));
-            if x1 - x0 >= 28.0 && (x - (x0 + x1) / 2.0).abs() <= 10.0 {
-                return CueHit::Gap(a + (b - a) / 2);
-            }
-        }
-        CueHit::Lane
-    };
-    if let Some(p) = response.hover_pos() {
-        ui.ctx().set_cursor_icon(match hit(p.x) {
-            CueHit::Edge(..) | CueHit::Unit(_) => egui::CursorIcon::ResizeHorizontal,
-            CueHit::Word(_) => egui::CursorIcon::PointingHand,
-            CueHit::Cue(_) if state.cue_drag.is_some() => egui::CursorIcon::Grabbing,
-            CueHit::Cue(_) => egui::CursorIcon::Grab,
-            CueHit::Gap(_) => egui::CursorIcon::PointingHand,
-            CueHit::Lane => egui::CursorIcon::Default,
-        });
-    }
-    let mut event = None;
-    let pointer = ui.input(|i| i.pointer.interact_pos());
-    if ui.input(|i| i.pointer.primary_pressed())
-        && response.is_pointer_button_down_on()
-        && let Some(p) = pointer
-    {
-        let drag = |cue, part| CueDrag {
-            cue,
-            part,
-            unit: None,
-            anchor_ms: time_at(view, lane, p.x),
-            anchor_x: p.x,
-            moved: false,
-        };
-        match hit(p.x) {
-            CueHit::Unit(k) => {
-                if let Some(w) = words {
-                    state.cue_drag = Some(CueDrag {
-                        unit: Some(k),
-                        ..drag(w.cue, CuePart::Start)
-                    });
-                }
-            }
-            CueHit::Word(wi) => event = Some(CueEvent::Word(wi)),
-            CueHit::Edge(i, part) => state.cue_drag = Some(drag(i, part)),
-            CueHit::Cue(i) => {
-                event = Some(CueEvent::Select(i));
-                state.cue_drag = Some(drag(i, CuePart::Body));
-            }
-            CueHit::Gap(ms) => event = Some(CueEvent::Add(ms)),
-            CueHit::Lane => event = Some(CueEvent::Clear),
-        }
-    }
-    if let Some(mut d) = state.cue_drag {
-        let (down, escape) = ui.input_mut(|i| {
-            (
-                i.pointer.primary_down(),
-                i.consume_key(egui::Modifiers::NONE, Key::Escape),
-            )
-        });
-        let x = pointer.map_or(d.anchor_x, |p| p.x);
-        d.moved |= (x - d.anchor_x).abs() > 3.0;
-        let to_ms = time_at(view, lane, x);
-        let delta_ms = to_ms as i64 - d.anchor_ms as i64;
-        let mut preview = track.clone();
-        if d.moved
-            && let Some(k) = d.unit
-            && d.cue < preview.cues.len()
-        {
-            // A word's start: its text and where it would go, above the lane.
-            let at = noh::subtitle_edit::set_unit_start(&mut preview, d.cue, k, to_ms);
-            let text = cue_units(&preview.cues[d.cue])
-                .get(k)
-                .map(|u| u.1.clone())
-                .unwrap_or_default();
-            let clock = clock_cs(at.unwrap_or(to_ms), l);
-            let tip = l.format("words.drag_tip", &[text, clock]);
-            let t = style::tokens(ui);
-            let painter = ui.painter_at(geometry.stage.expand(40.0));
-            let galley =
-                painter.layout_no_wrap(tip, FontId::proportional(style::text::SMALL), t.text);
-            let r = Rect::from_center_size(
-                pos2(x, lane.top() - 4.0) - vec2(0.0, galley.size().y / 2.0 + 4.0),
-                galley.size() + vec2(12.0, 6.0),
-            );
-            painter.rect_filled(r, 6, t.surface);
-            painter.rect_stroke(r, 6, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
-            painter.galley(r.min + vec2(6.0, 3.0), galley, t.text);
-            state.cue_preview = Some(preview);
-        } else if d.moved && d.cue < preview.cues.len() {
-            let (start, end) = match d.part {
-                CuePart::Start => (
-                    noh::subtitle_edit::set_edge(
-                        &mut preview,
-                        d.cue,
-                        noh::subtitle_edit::Edge::Start,
-                        to_ms,
-                    ),
-                    preview.cues[d.cue].end_ms,
-                ),
-                CuePart::End => (
-                    preview.cues[d.cue].start_ms,
-                    noh::subtitle_edit::set_edge(
-                        &mut preview,
-                        d.cue,
-                        noh::subtitle_edit::Edge::End,
-                        to_ms,
-                    ),
-                ),
-                CuePart::Body => {
-                    noh::subtitle_edit::move_cue(&mut preview, d.cue, delta_ms);
-                    (preview.cues[d.cue].start_ms, preview.cues[d.cue].end_ms)
-                }
-            };
-            // The value being changed, above the lane.
-            let duration = l.decimal((end - start) as f64 / 1000.0, 2);
-            let clock = |ms| time_label(ms, true, input.duration_ms >= 3_600_000, l);
-            let tip = match d.part {
-                CuePart::Start => {
-                    format!("{} {} · {duration} s", l.text("edit.start"), clock(start))
-                }
-                CuePart::End => format!("{} {} · {duration} s", l.text("edit.end"), clock(end)),
-                CuePart::Body => format!("{} – {}", clock(start), clock(end)),
-            };
-            let t = style::tokens(ui);
-            let at = pos2(x, lane.top() - 4.0);
-            let painter = ui.painter_at(geometry.stage.expand(40.0));
-            let galley =
-                painter.layout_no_wrap(tip, FontId::proportional(style::text::SMALL), t.text);
-            let r = Rect::from_center_size(
-                at - vec2(0.0, galley.size().y / 2.0 + 4.0),
-                galley.size() + vec2(12.0, 6.0),
-            );
-            painter.rect_filled(r, 6, t.surface);
-            painter.rect_stroke(r, 6, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
-            painter.galley(r.min + vec2(6.0, 3.0), galley, t.text);
-            state.cue_preview = Some(preview);
-        }
-        if escape {
-            state.cue_drag = None;
-            state.cue_preview = None;
-        } else if !down {
-            if d.moved {
-                event = Some(match d.unit {
-                    Some(unit) => CueEvent::UnitStart {
-                        cue: d.cue,
-                        unit,
-                        to_ms,
-                    },
-                    None => CueEvent::Drag {
-                        cue: d.cue,
-                        part: d.part,
-                        delta_ms,
-                        to_ms,
-                    },
-                });
-            }
-            state.cue_drag = None;
-            state.cue_preview = None;
-        } else {
-            state.cue_drag = Some(d);
-        }
-    }
-    event
 }
 
 fn paint_ruler(
@@ -2260,8 +1868,8 @@ mod tests {
                                 fade_in_seconds: 1.0,
                                 fade_out_seconds: 2.0,
                                 restart: false,
-                                selected_cue: None,
-                                words: None,
+                                lyrics_hint: "",
+                                lyrics_locked: None,
                             },
                         );
                     },
@@ -2292,8 +1900,7 @@ mod tests {
         enabled: bool,
         clip: Option<Rect>,
         track: Option<SubtitleTrack>,
-        selected: Option<usize>,
-        words: Option<(usize, usize)>,
+        locked_lyrics: Option<&'static str>,
     }
     impl Harness {
         fn new(range: Option<Range>) -> Self {
@@ -2309,8 +1916,7 @@ mod tests {
                 enabled: true,
                 clip: None,
                 track: None,
-                selected: None,
-                words: None,
+                locked_lyrics: None,
             };
             // The range flag uses the SemiBold family: install the app's fonts.
             crate::app_locale::install_fonts(&result.ctx);
@@ -2369,12 +1975,8 @@ mod tests {
                             fade_in_seconds: 1.0,
                             fade_out_seconds: 2.0,
                             restart: false,
-                            selected_cue: self.selected,
-                            words: self.words.map(|(cue, word)| WordLane {
-                                cue,
-                                word,
-                                taps: None,
-                            }),
+                            lyrics_hint: "Click to edit the lyrics",
+                            lyrics_locked: self.locked_lyrics,
                         },
                     ));
                 },
@@ -2516,55 +2118,68 @@ mod tests {
     }
 
     #[test]
-    fn the_lyrics_lane_edits_cues_and_never_draws_the_excerpt() {
+    fn a_click_on_the_lyrics_lane_opens_the_lyrics_screen_and_edits_nothing() {
         let mut ui = lyrics_harness();
         assert_eq!(ui.state.geometry.unwrap().cues.unwrap().height(), 40.0);
-        // A press on a cue chooses it; dragging it moves the cue, not a range.
+        // On a line: that line. A drag across it moves nothing and picks no excerpt.
         let at = cue_point(&ui, 3000);
-        assert_eq!(ui.press(at).cue, Some(CueEvent::Select(0)));
-        ui.selected = Some(0);
-        ui.frame(vec![egui::Event::PointerMoved(cue_point(&ui, 4000))]);
-        assert!(
-            ui.range.is_none(),
-            "the excerpt is picked on the pictures and sound lanes"
+        assert_eq!(
+            ui.press(at).lyrics_click,
+            None,
+            "a press alone opens nothing"
         );
-        let released = ui.release(cue_point(&ui, 4000));
-        assert!(
-            matches!(released.cue, Some(CueEvent::Drag { cue: 0, part: CuePart::Body, delta_ms, .. }) if (delta_ms - 1000).abs() < 60),
-            "{:?}",
-            released.cue
-        );
+        ui.frame(vec![egui::Event::PointerMoved(cue_point(&ui, 3020))]);
+        let released = ui.release(cue_point(&ui, 3020));
+        assert_eq!(released.lyrics_click, Some(Some(0)));
         assert!(
             released.range.is_none() && released.seek_ms.is_none(),
-            "the playhead only moves from the ruler"
+            "no excerpt, and the playhead only moves from the ruler"
         );
+        let second = cue_point(&ui, 10_000);
+        ui.press(second);
+        assert_eq!(ui.release(second).lyrics_click, Some(Some(1)));
+        // Between two lines: the screen opens all the same, on no line of its own.
+        let gap = cue_point(&ui, 7000);
+        ui.press(gap);
+        assert_eq!(ui.release(gap).lyrics_click, Some(None));
+        // While a job runs the lane opens nothing.
+        ui.locked_lyrics = Some("An export is running.");
+        ui.frame(Vec::new());
+        ui.press(at);
+        assert_eq!(ui.release(at).lyrics_click, None);
     }
 
     #[test]
-    fn a_chosen_cue_edge_drags_and_plus_adds_in_a_gap() {
-        let mut ui = lyrics_harness();
-        ui.selected = Some(0);
-        ui.frame(Vec::new());
-        let edge = cue_point(&ui, 5000);
-        assert_eq!(ui.press(edge).cue, None, "an edge press waits for a drag");
+    fn hovering_the_lyrics_lane_names_the_line_and_what_a_click_does() {
+        let ui = lyrics_harness();
+        let line = &ui.track.as_ref().unwrap().cues[0];
+        let hint = "Click to edit the lyrics";
         assert_eq!(
-            ui.frame(vec![egui::Event::PointerMoved(cue_point(&ui, 7000))])
-                .cue,
-            None,
-            "applied on release only"
+            lane_tip(Some(line), hint, None, true, false, Language::En).as_deref(),
+            Some(
+                "0:02.0 – 0:05.0
+Something had to give
+Click to edit the lyrics"
+            )
         );
-        let released = ui.release(cue_point(&ui, 7000));
-        assert!(
-            matches!(released.cue, Some(CueEvent::Drag { cue: 0, part: CuePart::End, to_ms, .. }) if to_ms.abs_diff(7000) < 60),
-            "{:?}",
-            released.cue
+        // Between two lines: what a click does.
+        assert_eq!(
+            lane_tip(None, hint, None, true, false, Language::En).as_deref(),
+            Some(hint)
         );
-        // "+" sits in the middle of the 5 s – 9 s gap.
-        let plus = cue_point(&ui, 7000);
-        assert_eq!(ui.press(plus).cue, Some(CueEvent::Add(7000)));
-        ui.release(plus);
-        // A press on the empty lane closes the bubble.
-        assert_eq!(ui.press(cue_point(&ui, 15_000)).cue, Some(CueEvent::Clear));
+        // While a job runs: why nothing opens, on a line or not.
+        let reason = "The lyrics cannot be edited while processing is in progress.";
+        for line in [Some(line), None] {
+            assert_eq!(
+                lane_tip(line, hint, Some(reason), true, false, Language::En).as_deref(),
+                Some(reason)
+            );
+        }
+        // The whole timeline waits: its own reason is said elsewhere.
+        assert_eq!(
+            lane_tip(Some(line), hint, None, false, false, Language::En),
+            None
+        );
     }
 
     #[test]
@@ -2572,41 +2187,6 @@ mod tests {
         assert_eq!(clock_cs(3_850, Language::Fr), "0:03,85");
         assert_eq!(clock_cs(91_864, Language::En), "1:31.86");
         assert_eq!(clock_cs(3_723_995, Language::En), "1:02:04.00");
-    }
-
-    #[test]
-    fn word_mode_chooses_words_and_drags_their_starts() {
-        let mut ui = lyrics_harness();
-        ui.selected = Some(0);
-        ui.words = Some((0, 0));
-        ui.frame(Vec::new());
-        // "Something had to give" over 2 s – 5 s,, its words spread by letters.
-        let had =
-            noh::subtitle_edit::words_or_estimate(&ui.track.as_ref().unwrap().cues[0])[1].start_ms;
-        assert_eq!(
-            ui.press(cue_point(&ui, had + 300)).cue,
-            Some(CueEvent::Word(1))
-        );
-        ui.release(cue_point(&ui, had + 300));
-        assert_eq!(
-            ui.press(cue_point(&ui, had)).cue,
-            None,
-            "a start handle waits for a drag"
-        );
-        ui.frame(vec![egui::Event::PointerMoved(cue_point(&ui, had + 200))]);
-        let released = ui.release(cue_point(&ui, had + 200));
-        assert!(
-            matches!(released.cue, Some(CueEvent::UnitStart { cue: 0, unit: 1, to_ms }) if to_ms.abs_diff(had + 200) < 40),
-            "{:?}",
-            released.cue
-        );
-        // No "+" in word mode, and the other cue is still chosen with a press.
-        assert_eq!(ui.press(cue_point(&ui, 7000)).cue, Some(CueEvent::Clear));
-        ui.release(cue_point(&ui, 7000));
-        assert_eq!(
-            ui.press(cue_point(&ui, 10_000)).cue,
-            Some(CueEvent::Select(1))
-        );
     }
 
     #[test]
@@ -2741,8 +2321,8 @@ mod tests {
                         fade_in_seconds: 1.0,
                         fade_out_seconds: 2.0,
                         restart: true,
-                        selected_cue: None,
-                        words: None,
+                        lyrics_hint: "",
+                        lyrics_locked: None,
                     },
                 );
             },
@@ -2823,8 +2403,8 @@ mod tests {
                             fade_in_seconds: 1.0,
                             fade_out_seconds: 2.0,
                             restart: false,
-                            selected_cue: None,
-                            words: None,
+                            lyrics_hint: "",
+                            lyrics_locked: None,
                         },
                     ));
                 },
@@ -2930,8 +2510,8 @@ mod tests {
                         fade_in_seconds: 1.0,
                         fade_out_seconds: 2.0,
                         restart: false,
-                        selected_cue: None,
-                        words: None,
+                        lyrics_hint: "",
+                        lyrics_locked: None,
                     },
                 );
             },

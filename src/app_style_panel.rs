@@ -425,7 +425,6 @@ impl super::NohApp {
     /// Échap cancels a try-on, unless a text field or a popup has the keyboard.
     fn escape_cancels_try(&mut self, ui: &egui::Ui) {
         if self.style_panel.trying.is_some()
-            && self.lyrics_edit.selected.is_none()
             && !ui.ctx().egui_wants_keyboard_input()
             && !egui::Popup::is_any_open(ui.ctx())
             && !self.style_panel.sheet
