@@ -262,14 +262,14 @@ number never carries a suffix.
 Releases are built, published, tested and promoted on GitHub. No step runs on a
 maintainer's machine, and each stage is one manual dispatch of **Release** on main.
 
-Before a release, refresh the rolling-release pins of `assets/linux-desktop-images.json`
-(Arch, openSUSE Tumbleweed) in a pull request: their publishers remove an image, and
-the desktop run of step 4 fails on an address that no longer exists. Arch keeps an
-image for some weeks. openSUSE offers one Tumbleweed snapshot at a time: the image
-pinned on 2026-11-15 was gone on 2026-11-18. Check both addresses on the day of the
-desktop run, whatever the release commit pinned.
-Each new pin states its address and the digest its publisher gives; the probe checks
-that digest at download.
+Before a release, refresh the Arch pin of `assets/linux-desktop-images.json` in a pull
+request if its address no longer answers: Arch keeps an image for some weeks, and the
+desktop run of step 4 fails on an address that no longer exists. Check it on the day
+of the desktop run, whatever the release commit pinned. A new pin states its address
+and the digest its publisher gives; the probe checks that digest at download.
+openSUSE Tumbleweed needs no refresh: its publisher keeps one snapshot at a time, so
+each run takes the current one and checks the digest openSUSE signed
+([LINUX_DESKTOP_PROBE.md](LINUX_DESKTOP_PROBE.md)).
 
 Before the build, fetch the two syllable datasets as the build does, into an empty
 folder: `python tools/delivery.py acquire-datasets --cache <empty folder> --output

@@ -57,7 +57,7 @@ class ScopeTests(unittest.TestCase):
             "tools/release_acceptance.py", "tools/test_release_acceptance.py",
             "tools/linux_desktop_candidate.py", "tools/probe-linux-desktop-vm.sh",
             "tools/test-linux-desktop.py", "assets/linux-desktop-images.json",
-            "assets/upgrade-baseline.lock.json",
+            "assets/opensuse-signing-key.asc", "assets/upgrade-baseline.lock.json",
             ".github/workflows/release.yml", ".github/workflows/delivery-candidates.yml",
             ".github/workflows/delivery-draft.yml", ".github/workflows/linux-desktop-probe.yml",
         })

@@ -31,9 +31,13 @@
       "reboot_after_provisioning": true
     },
     "opensuse-tumbleweed": {
-      "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261116.qcow2",
+      "rolling": {
+        "listing": "https://download.opensuse.org/tumbleweed/appliances/",
+        "name_pattern": "openSUSE-Tumbleweed-Minimal-VM\\.x86_64-[0-9.]+-Cloud-Snapshot[0-9]{8}\\.qcow2",
+        "signing_key": "assets/opensuse-signing-key.asc",
+        "signing_key_fingerprint": "AD485664E901B867051AB15F35A2F86E29B700A4"
+      },
       "algorithm": "sha256",
-      "digest": "73607d37ed5fa1ce10877a9dcc0ae420241f2f3cffdf4d643256aa7c127a0fa7",
       "os_id": "opensuse-tumbleweed", "version_id": null, "session": "plasmawayland.desktop",
       "reboot_after_provisioning": true
     },

@@ -113,11 +113,102 @@ class DesktopEvidenceTests(unittest.TestCase):
             self.assertEqual(row['id'], name)
             expected = 'KDE' if name in ('arch', 'opensuse-tumbleweed') else ('Cinnamon' if name == 'mint-22.3' else 'GNOME')
             self.assertEqual(row['desktop'], expected)
-            self.assertTrue(image['url'].startswith('https://'))
+            self.assertEqual('rolling' in image, name == 'opensuse-tumbleweed')
+            self.assertTrue((image['rolling']['listing'] if 'rolling' in image else image['url']).startswith('https://'))
             self.assertEqual(image['version_id'] is None, name in ('arch', 'opensuse-tumbleweed'))
         for name in ('not-a-case',):
             with self.assertRaises(ValueError):
                 desktop.case_inputs(name)
+
+    def test_a_rolling_image_is_the_single_listed_one_with_its_signed_digest(self):
+        image = desktop.case_inputs('opensuse-tumbleweed')[1]
+        listing = image['rolling']['listing']
+        current = 'openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261117.qcow2'
+        def served(names, checksum=None):
+            files = {listing + '?jsontable': json.dumps({'data': [{'name': n} for n in names]}).encode(),
+                     listing + current + '.sha256': checksum or ('f' * 64 + '  ' + current + '\n').encode(),
+                     listing + current + '.sha256.asc': b'signature'}
+            return lambda url, limit=1 << 20: files[url]
+        signed = []
+        def verify(data, signature, key, fingerprint):
+            signed.append((data, signature, fingerprint))
+            self.assertIn('BEGIN PGP PUBLIC KEY BLOCK', key)
+        others = [current + '.sha256', current + '.sha256.asc', 'openSUSE-Tumbleweed-Minimal-VM.x86_64-Cloud.qcow2',
+                  'openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-kvm-and-xen-Snapshot20261117.qcow2']
+        resolved = desktop.resolve_image(image, served([current] + others), verify)
+        self.assertEqual(resolved['url'], listing + current)
+        self.assertEqual(resolved['digest'], 'f' * 64)
+        self.assertEqual(resolved['resolved']['image'], current)
+        self.assertEqual(resolved['resolved']['signed_by'], image['rolling']['signing_key_fingerprint'])
+        self.assertEqual(signed, [(('f' * 64 + '  ' + current + '\n').encode(), b'signature',
+                                   image['rolling']['signing_key_fingerprint'])])
+        older = current.replace('20261117', '20261116')
+        for names, checksum, message in (([], None, 'lists 0 images'), ([current, older], None, 'lists 2 images'),
+                                         ([current], ('f' * 64 + '  ' + older + '\n').encode(), 'does not name'),
+                                         ([current], ('f' * 63 + '  ' + current + '\n').encode(), 'does not name')):
+            with self.subTest(message), self.assertRaisesRegex(ValueError, message):
+                desktop.resolve_image(image, served(names, checksum), verify)
+        def refused(*arguments):
+            raise ValueError('not signed')
+        with self.assertRaisesRegex(ValueError, 'not signed'):
+            desktop.resolve_image(image, served([current]), refused)
+        pinned = desktop.case_inputs('arch')[1]
+        self.assertEqual(desktop.resolve_image(pinned, fetch=None, verify=None), pinned)
+
+    def test_the_guest_records_the_image_the_runner_resolved(self):
+        rolling, pinned = desktop.case_inputs('opensuse-tumbleweed')[1], desktop.case_inputs('arch')[1]
+        listing = rolling['rolling']['listing']
+        resolved = rolling | {'url': listing + 'openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261117.qcow2',
+                              'digest': 'f' * 64, 'resolved': {'image': 'x'}}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'IMAGE.json'
+            for name, image in (('opensuse-tumbleweed', resolved), ('arch', pinned)):
+                path.write_text(json.dumps(image))
+                self.assertEqual(desktop.tested_image(name, path), image)
+            for name, image in (('opensuse-tumbleweed', rolling), ('opensuse-tumbleweed', resolved | {'digest': 'F' * 64}),
+                                ('opensuse-tumbleweed', resolved | {'url': 'https://example.org/x.qcow2'}),
+                                ('opensuse-tumbleweed', resolved | {'session': 'other.desktop'}),
+                                ('opensuse-tumbleweed', {k: v for k, v in resolved.items() if k != 'resolved'}),
+                                ('arch', pinned | {'digest': 'f' * 64}), ('fedora-44', pinned)):
+                path.write_text(json.dumps(image))
+                with self.subTest(name=name, image=image), self.assertRaises(ValueError):
+                    desktop.tested_image(name, path)
+
+    def test_a_rolling_image_needs_a_listing_a_pattern_and_a_pinned_key(self):
+        image = desktop.case_inputs('opensuse-tumbleweed')[1]
+        for change in ({'url': 'https://example.com/x.qcow2'}, {'digest': 'f' * 64}, {'algorithm': 'sha512'},
+                       {'rolling': image['rolling'] | {'listing': 'http://example.com/'}},
+                       {'rolling': image['rolling'] | {'signing_key': '../key.asc'}},
+                       {'rolling': image['rolling'] | {'signing_key_fingerprint': 'ad48'}},
+                       {'rolling': image['rolling'] | {'extra': True}}):
+            with self.subTest(change), self.assertRaises(ValueError):
+                desktop.rolling_inputs(image | change)
+
+    def test_only_a_good_signature_by_the_pinned_primary_key_is_accepted(self):
+        key = (desktop.ROOT / 'assets/opensuse-signing-key.asc').read_text(encoding='ascii')
+        self.assertEqual(desktop.dearmor_public_key(key)[0], 0x99)  # a public key packet
+        with self.assertRaisesRegex(ValueError, 'checksum'):
+            desktop.dearmor_public_key(key.replace('=is8v', '=AAAA'))
+        fingerprint = 'AD485664E901B867051AB15F35A2F86E29B700A4'
+        def gpgv(code, stdout):
+            def run(arguments, **options):
+                self.assertEqual(arguments[:4], ['gpgv', '--status-fd', '1', '--keyring'])
+                return subprocess.CompletedProcess(arguments, code, stdout, '')
+            return run
+        good = ('[GNUPG:] GOODSIG 35A2F86E29B700A4 x\n[GNUPG:] VALIDSIG ' + 'F' * 40
+                + ' 2026-11-18 1 0 4 0 1 10 00 ' + fingerprint + '\n')
+        desktop.verify_signature(b'data', b'sig', key, fingerprint, gpgv(0, good))
+        for code, stdout in ((1, good), (0, good.replace(fingerprint, 'E' * 40)), (0, '')):
+            with self.subTest(code=code, stdout=stdout), self.assertRaisesRegex(ValueError, 'not signed'):
+                desktop.verify_signature(b'data', b'sig', key, fingerprint, gpgv(code, stdout))
+
+    @unittest.skipUnless(shutil.which('gpgv'), 'Requires gpgv, as the desktop runner has')
+    def test_the_published_signature_of_a_real_snapshot_verifies_with_the_pinned_key(self):
+        key = (desktop.ROOT / 'assets/opensuse-signing-key.asc').read_text(encoding='ascii')
+        fingerprint = desktop.case_inputs('opensuse-tumbleweed')[1]['rolling']['signing_key_fingerprint']
+        desktop.verify_signature(SNAPSHOT_CHECKSUM, SNAPSHOT_SIGNATURE, key, fingerprint)
+        with self.assertRaisesRegex(ValueError, 'not signed'):
+            desktop.verify_signature(SNAPSHOT_CHECKSUM.replace(b'fbdb', b'fbdc'), SNAPSHOT_SIGNATURE, key, fingerprint)
 
     def test_mint_rejects_live_boot_and_requires_installer_success(self):
         for mount, marker in (('overlay overlay', True), ('squashfs /dev/loop0', True),
@@ -221,6 +312,28 @@ class DesktopEvidenceTests(unittest.TestCase):
                     else:
                         with self.assertRaisesRegex(ValueError, 'preview tone'):
                             desktop.audio_report(args)
+
+
+# openSUSE's published checksum and signature for its 2026-11-17 Tumbleweed cloud image.
+SNAPSHOT_CHECKSUM = b'fbdb555222faea0b07116c5af50e6dfa564afce2719ff3cfc458d585f9b9342b  openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261117.qcow2\n'
+SNAPSHOT_SIGNATURE = b'''-----BEGIN PGP SIGNATURE-----
+Version: GnuPG v2.4.4 (GNU/Linux)
+
+iQIVAwUAav1bqzWi+G4ptwCkAQptKRAAkVdSR7YlvzOy86oggkDRW90cIDtBJgR5
+BH/+a0vz2CfXIM8WkvwK3SS447cZuKssFE6z6TtJfFgCqfZTCC4NI30Xll7u+6ag
+vOWcSu+ZlWf0PkHHuv91+fQkwST4YkzHtQlnkwip1GpNSv8XSaNQv7nTZLON6xCy
+R4ktPQUPlOEeTXNM1AwVWmV7T3pR4Pt53XbJ6j6BPaCTmzHUxPlW1WPBJTEwdtI9
+YRbeVk7WTow45enoab4N0oUAzPQfnvCo7CkM+3asNdQ0Ky07+IMxvphPjVzKRME8
+dfTrhGtDfUxN4p/888I5BWI+Gr4SNHRkgP/YzAPAI9S1zb24ev3C3f/wEDlzHr9R
+OJ1tBf99xYHyG2Jm+27hLf1W7sMqQEd1LJRORXF9zbuzc8RmyJqR+bV9WtDWPG+g
+C2B+UgMLYnkO0FYMr2Ok/xRfyhcw7GNexTk0/+Y05w6I+/vxWnWFyP49bpv9On3T
+qBOe3mUhkrsCxE5yEUF6d4Qc7ZMxvQ1IkfoZJYjdqLDHNTGXUn2P3DxVWB7pkBt3
+4zrXaQy3UKfqi6RrQlFpjBX7zgbJPE2QTDM3V7piqX7Uds3rKO8flrU1E67xOd1M
+GNZLcXaDyNRruFKyfOLbTzg8Qi05mRZDI5HekCXwGXli/oJKx9Dkc6F78rCAT+VH
+5RPT0ULocNE=
+=ZeOX
+-----END PGP SIGNATURE-----
+'''
 
 
 if __name__ == '__main__':

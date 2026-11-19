@@ -2,7 +2,9 @@
 """Bind native desktop observations to one verified CI candidate, without rebuilding."""
 import argparse
 import array
+import base64
 from datetime import datetime, timezone
+import hashlib
 import importlib
 import json
 import math
@@ -15,7 +17,9 @@ import shlex
 import shutil
 import subprocess
 import tarfile
+import tempfile
 import time
+import urllib.request
 import wave
 import zipfile
 
@@ -33,13 +37,125 @@ def case_inputs(name):
     image = read(ROOT / 'assets/linux-desktop-images.json')['images'].get(name)
     if not row or not image or row['desktop'] not in ('GNOME', 'KDE', 'Cinnamon'):
         raise ValueError('This provisioning adapter supports only configured desktop cases')
-    if (image['algorithm'] not in ('sha256', 'sha512') or not image['url'].startswith('https://')
+    if 'rolling' in image:
+        rolling_inputs(image)
+    elif (image['algorithm'] not in ('sha256', 'sha512') or not image['url'].startswith('https://')
             or not re.fullmatch('[0-9a-f]{' + str(64 if image['algorithm'] == 'sha256' else 128) + '}', image['digest'])):
         raise ValueError('Desktop image must have a pinned HTTPS URL and supported digest')
     if image.get('format', 'qcow2') not in ('qcow2', 'iso'):
         raise ValueError('Unsupported desktop image format')
     return row, image
 
+
+
+ROLLING_FIELDS = {'listing', 'name_pattern', 'signing_key', 'signing_key_fingerprint'}
+
+
+def rolling_inputs(image):
+    """A rolling distribution keeps only its latest image, so no address can be pinned: its
+    publisher's signing key is pinned instead, and each run resolves and verifies the current image."""
+    rolling = image['rolling']
+    if (set(rolling) != ROLLING_FIELDS or image['algorithm'] != 'sha256' or 'url' in image or 'digest' in image
+            or not re.fullmatch(r'https://[^?#]+/', rolling['listing'])
+            or not re.fullmatch(r'assets/[a-z0-9-]+\.asc', rolling['signing_key'])
+            or not re.fullmatch('[0-9A-F]{40}', rolling['signing_key_fingerprint'])):
+        raise ValueError('A rolling desktop image needs an HTTPS listing, a name pattern and a pinned signing key')
+    re.compile(rolling['name_pattern'])
+
+
+def fetch_small(url, limit=1 << 20):
+    with urllib.request.urlopen(url, timeout=60) as response:
+        data = response.read(limit + 1)
+    if len(data) > limit:
+        raise ValueError('Unexpectedly large response from ' + url)
+    return data
+
+
+def crc24(data):
+    crc = 0xB704CE
+    for byte in data:
+        crc ^= byte << 16
+        for _ in range(8):
+            crc <<= 1
+            if crc & 0x1000000:
+                crc ^= 0x1864CFB
+    return crc & 0xFFFFFF
+
+
+def dearmor_public_key(text):
+    """The binary key gpgv reads, from the ASCII-armored key kept in the repository."""
+    lines = text.strip().splitlines()
+    if (len(lines) < 4 or lines[0] != '-----BEGIN PGP PUBLIC KEY BLOCK-----'
+            or lines[-1] != '-----END PGP PUBLIC KEY BLOCK-----' or '' not in lines):
+        raise ValueError('Not an ASCII-armored public key')
+    body = lines[lines.index('') + 1:-1]
+    if not body or not body[-1].startswith('='):
+        raise ValueError('The armored key has no checksum line')
+    data = base64.b64decode(''.join(body[:-1]), validate=True)
+    if base64.b64decode(body[-1][1:], validate=True) != crc24(data).to_bytes(3, 'big'):
+        raise ValueError('The armored key does not match its checksum')
+    return data
+
+
+def verify_signature(data, signature, key_text, fingerprint, run=subprocess.run):
+    """Accept the data only when the pinned primary key made a good signature over it."""
+    with tempfile.TemporaryDirectory() as folder:
+        folder = Path(folder)
+        (folder / 'key.gpg').write_bytes(dearmor_public_key(key_text))
+        (folder / 'data').write_bytes(data)
+        (folder / 'data.asc').write_bytes(signature)
+        # Relative names: gpgv reads "C:\..." as a URL, and a keyring name without a slash
+        # as a file in its home folder.
+        result = run(['gpgv', '--status-fd', '1', '--keyring', './key.gpg', 'data.asc', 'data'],
+                     cwd=folder, capture_output=True, text=True, timeout=60)
+    signers = [line.split()[-1] for line in result.stdout.splitlines() if line.startswith('[GNUPG:] VALIDSIG ')]
+    if result.returncode != 0 or fingerprint not in signers:
+        raise ValueError('The checksum is not signed by the pinned key ' + fingerprint)
+
+
+def resolve_image(image, fetch=fetch_small, verify=verify_signature):
+    """The image a run downloads: the pinned one, or the single current image of a rolling
+    distribution with the digest its publisher signed. The result names what was resolved."""
+    if 'rolling' not in image:
+        return dict(image)
+    rolling = image['rolling']
+    listing = json.loads(fetch(rolling['listing'] + '?jsontable', limit=16 << 20))
+    names = sorted({entry['name'] for entry in listing['data'] if re.fullmatch(rolling['name_pattern'], entry['name'])})
+    if len(names) != 1:
+        raise ValueError(f'The publisher lists {len(names)} images matching {rolling["name_pattern"]}, not one')
+    name, = names
+    url = rolling['listing'] + name
+    checksum, signature = fetch(url + '.sha256'), fetch(url + '.sha256.asc')
+    verify(checksum, signature, (ROOT / rolling['signing_key']).read_text(encoding='ascii'),
+           rolling['signing_key_fingerprint'])
+    match = re.fullmatch('([0-9a-f]{64})  ' + re.escape(name) + r'\n?', checksum.decode('ascii'))
+    if not match:
+        raise ValueError('The signed checksum does not name the listed image ' + name)
+    return image | {'url': url, 'digest': match.group(1), 'resolved': {
+        'image': name, 'checksum_sha256': hashlib.sha256(checksum).hexdigest(),
+        'signature_sha256': hashlib.sha256(signature).hexdigest(),
+        'signed_by': rolling['signing_key_fingerprint'],
+        'resolved_at': datetime.now(timezone.utc).isoformat(timespec='seconds')}}
+
+
+def tested_image(name, path):
+    """The entry the runner resolved, downloaded and checked, which the guest records as its image
+    identity: the case's own entry, with the address and digest a rolling one resolved to."""
+    spec, image = case_inputs(name)[1], read(path)
+    if 'rolling' in spec:
+        if ({key: value for key, value in image.items() if key not in ('url', 'digest', 'resolved')} != spec
+                or not str(image.get('url', '')).startswith(spec['rolling']['listing'])
+                or not re.fullmatch('[0-9a-f]{64}', str(image.get('digest', ''))) or 'resolved' not in image):
+            raise ValueError("The tested image is not a resolution of this case's rolling entry")
+    elif image != spec:
+        raise ValueError("The tested image is not this case's pinned entry")
+    return image
+
+
+def resolve_image_command(args):
+    image = resolve_image(case_inputs(args.case)[1])
+    write(args.output, image)
+    print('digest=' + image['digest'])
 
 def build_platforms(inventory):
     """Linux first, then every other platform whose package the run retained."""
@@ -365,7 +481,8 @@ def verify_bundle(root, identity):
 
 
 def guest(args):
-    row, image = case_inputs(args.case)
+    row = case_inputs(args.case)[0]
+    image = tested_image(args.case, args.image)
     args.output.mkdir(parents=True, exist_ok=False)
     identity = read(ROOT / 'CANDIDATE.json')
     verify_bundle(ROOT, identity)
@@ -639,12 +756,17 @@ def main():
     p.add_argument('--public-key', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.set_defaults(fn=cloud_config)
+    p = sub.add_parser('resolve-image', help='Write the image a case downloads, its digest checked or signed')
+    p.add_argument('--case', required=True)
+    p.add_argument('--output', type=Path, required=True)
+    p.set_defaults(fn=resolve_image_command)
     p = sub.add_parser('mint-preseed')
     p.add_argument('--public-key', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.set_defaults(fn=mint_preseed)
     p = sub.add_parser('guest')
     p.add_argument('--case', required=True)
+    p.add_argument('--image', type=Path, required=True, help='The resolved image entry the runner checked')
     p.add_argument('--output', type=Path, required=True)
     p.set_defaults(fn=guest)
     p = sub.add_parser('open-output')

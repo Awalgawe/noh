@@ -45,8 +45,15 @@ ssh-keygen -q -t ed25519 -N '' -f "$work/key"
 python3 "$root/tools/linux_desktop_candidate.py" cloud-config --case "$case_id" \
     --public-key "$work/key.pub" --output "$work/user-data"
 cloud-init schema --config-file "$work/user-data" > "$evidence/cloud-config-schema.txt" 2>&1
-cp "$work/user-data.image.json" "$evidence/image-identity.json"
-mapfile -t image_spec < <(python3 - "$work/user-data.image.json" <<'PY'
+# The workflow resolves the image once, before restoring its cache: a rolling distribution
+# may publish a new image during the run. Without it, resolve here.
+image_json=${NOH_DESKTOP_IMAGE_SPEC:-}
+if [[ -z "$image_json" ]]; then
+    image_json="$work/image.json"
+    python3 "$root/tools/linux_desktop_candidate.py" resolve-image --case "$case_id" --output "$image_json"
+fi
+cp "$image_json" "$evidence/image-identity.json"
+mapfile -t image_spec < <(python3 - "$image_json" <<'PY'
 import json, sys
 image = json.load(open(sys.argv[1]))
 for name in ('url', 'algorithm', 'digest'):
@@ -59,14 +66,14 @@ test "${#image_spec[@]}" = 5
 image_cache=${NOH_DESKTOP_IMAGE_CACHE:-$work/image-cache}
 base_image="$image_cache/base.img"
 if [[ ! -f "$base_image" ]]; then
-    echo "Downloading pinned desktop image: ${image_spec[0]}"
+    echo "Downloading desktop image: ${image_spec[0]}"
     curl --fail --location --silent --show-error --retry 2 --retry-max-time 900 --max-time 900 \
         "${image_spec[0]}" -o "$work/base.img"
     printf '%s  %s\n' "${image_spec[2]}" "$work/base.img" | "${image_spec[1]}sum" --check
     mkdir -p "$image_cache"
     mv -- "$work/base.img" "$base_image"
 else
-    # Cache hits are untrusted bytes until they match the pinned distribution hash.
+    # Cache hits are untrusted bytes until they match the pinned or signed distribution hash.
     printf '%s  %s\n' "${image_spec[2]}" "$base_image" | "${image_spec[1]}sum" --check
 fi
 printf '%s\n' "${image_spec[2]}" > "$evidence/image-verified.txt"
@@ -217,8 +224,9 @@ fi
 guest_status=0
 scp -P 2222 "${transport_args[@]}" "$payload" noh@127.0.0.1:payload.tar
 ssh "${ssh_args[@]}" noh@127.0.0.1 'mkdir noh-candidate && tar -xf payload.tar -C noh-candidate'
+scp -P 2222 "${transport_args[@]}" "$image_json" noh@127.0.0.1:noh-candidate/IMAGE.json
 timeout 12m ssh "${ssh_args[@]}" noh@127.0.0.1 \
-    "python3 /home/noh/noh-candidate/tools/linux_desktop_candidate.py guest --case '$case_id' --output /home/noh/noh-evidence" \
+    "python3 /home/noh/noh-candidate/tools/linux_desktop_candidate.py guest --case '$case_id' --image /home/noh/noh-candidate/IMAGE.json --output /home/noh/noh-evidence" \
     > "$evidence/guest.log" 2>&1 || guest_status=$?
 ssh "${ssh_args[@]}" noh@127.0.0.1 'sudo journalctl -b --no-pager -u display-manager.service' \
     > "$evidence/display-manager.log" || guest_status=1

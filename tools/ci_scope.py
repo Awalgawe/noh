@@ -23,7 +23,7 @@ WINDOWS_ONLY = {
 UNIX_ONLY = {"tools/verify-unix.sh", ".github/workflows/native.yml"}
 # No native job reads these files: no application build can tell whether one of them changed.
 # The controls of the first job are the only PR check that can read them. They read the tools,
-# the desktop image pins and the upgrade baseline; the desktop probe script and the release
+# the desktop image pins, their signing key and the upgrade baseline; the desktop probe script and the release
 # workflows that no control opens are first read at a release stage. Each file is named, never
 # a pattern; test_ci_scope.py lists what names them, and what names the tools that read them.
 RELEASE_ONLY = {
@@ -31,7 +31,7 @@ RELEASE_ONLY = {
     "tools/release_acceptance.py", "tools/test_release_acceptance.py",
     "tools/linux_desktop_candidate.py", "tools/probe-linux-desktop-vm.sh",
     "tools/test-linux-desktop.py", "assets/linux-desktop-images.json",
-    "assets/upgrade-baseline.lock.json",
+    "assets/opensuse-signing-key.asc", "assets/upgrade-baseline.lock.json",
     ".github/workflows/release.yml", ".github/workflows/delivery-candidates.yml",
     ".github/workflows/delivery-draft.yml", ".github/workflows/linux-desktop-probe.yml",
 }
