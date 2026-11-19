@@ -208,8 +208,8 @@ slowly: the menu says so. On Linux transcription always runs on the CPU.
 
 ## Update or remove NOH
 
-**Installed copy on Windows.** From the version that introduces it, NOH updates
-itself. Once a day, and when you choose **Settings > Updates > Check now**, it asks
+**Installed copy on Windows.** From 0.3.0, NOH updates itself. Once a day, and
+when you choose **Settings > Updates > Check now**, it asks
 GitHub for the latest published release. When a newer one exists, NOH downloads
 its Minimal installer and only the optional components whose files changed, and
 checks the size and SHA-256 of each file against what GitHub declares for the
@@ -220,7 +220,7 @@ profile, your settings and the files you added. Both switches in
 its programs runs from the installation folder (another NOH window, a
 command-line export, the MCP server, FFmpeg or Whisper): close it first.
 
-Copies installed before that version do not look for updates: install the new
+Copies installed before 0.3.0 do not look for updates: install the new
 release once by hand, as below; later versions then arrive by themselves.
 
 The downloads are kept in `%LOCALAPPDATA%\noh\updates\<version>` until NOH starts
