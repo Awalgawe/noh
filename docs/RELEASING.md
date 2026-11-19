@@ -270,6 +270,10 @@ and the digest its publisher gives; the probe checks that digest at download.
 openSUSE Tumbleweed needs no refresh: its publisher keeps one snapshot at a time, so
 each run takes the current one and checks the digest openSUSE signed
 ([LINUX_DESKTOP_PROBE.md](LINUX_DESKTOP_PROBE.md)).
+The `verify` and `build` stages stop at preflight when a publisher answers that a
+pinned desktop image is gone (404 or 410); any other answer, and a Tumbleweed image
+that cannot be resolved at that moment or is gone just after, is only a warning, and
+the desktop run remains the check.
 
 Before the build, fetch the two syllable datasets as the build does, into an empty
 folder: `python tools/delivery.py acquire-datasets --cache <empty folder> --output

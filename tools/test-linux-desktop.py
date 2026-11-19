@@ -209,6 +209,69 @@ class DesktopEvidenceTests(unittest.TestCase):
         desktop.verify_signature(SNAPSHOT_CHECKSUM, SNAPSHOT_SIGNATURE, key, fingerprint)
         with self.assertRaisesRegex(ValueError, 'not signed'):
             desktop.verify_signature(SNAPSHOT_CHECKSUM.replace(b'fbdb', b'fbdc'), SNAPSHOT_SIGNATURE, key, fingerprint)
+    def test_preflight_stops_only_on_an_image_its_publisher_says_is_gone(self):
+        import urllib.error
+        images = desktop.read(desktop.ROOT / 'assets/linux-desktop-images.json')['images']
+        current = images['opensuse-tumbleweed']['rolling']['listing'] + 'Snapshot.qcow2'
+        resolved = []
+        def resolve(image):
+            resolved.append(image)
+            return image | {'url': current}
+        addresses = {name: image.get('url', current) for name, image in images.items()}
+        # A mirror reached by a redirect cannot say the image is gone: only the pinned host can.
+        answers = {'arch': 404, 'opensuse-tumbleweed': 410, 'debian-13': 503, 'fedora-44': 405,
+                   'ubuntu-24.04': (404, 'https://mirror.example.org/image.qcow2'),
+                   'ubuntu-26.04': urllib.error.URLError('no route'), 'mint-22.3': TimeoutError('slow')}
+        asked = []
+        def opener(request, timeout):
+            name = next(key for key, url in addresses.items() if url == request.full_url)
+            asked.append((name, request.get_method(), timeout))
+            answer = answers.get(name)
+            if isinstance(answer, tuple):
+                raise urllib.error.HTTPError(answer[1], answer[0], 'answer', {}, None)
+            if isinstance(answer, int):
+                raise urllib.error.HTTPError(request.full_url, answer, 'answer', {}, None)
+            if answer is not None:
+                raise answer
+            return contextlib.nullcontext()
+        gone, unsure = desktop.missing_desktop_images(opener, resolve=resolve)
+        self.assertEqual(resolved, [images['opensuse-tumbleweed']])
+        # A rolling image replaced between the listing and the HEAD has nothing to pin again.
+        self.assertEqual(sorted(gone), ['arch'])
+        self.assertEqual(sorted(unsure), ['debian-13', 'fedora-44', 'mint-22.3', 'opensuse-tumbleweed',
+                                          'ubuntu-24.04', 'ubuntu-26.04'])
+        self.assertIn('replaced since it was listed', unsure['opensuse-tumbleweed'])
+        self.assertIn(images['arch']['url'], gone['arch'])
+        self.assertIn('answered by https://mirror.example.org/image.qcow2', unsure['ubuntu-24.04'])
+        self.assertEqual(sorted(name for name, _, _ in asked), sorted(images))
+        self.assertEqual({(method, timeout) for _, method, timeout in asked}, {('HEAD', 10)})
+        # A rolling image that cannot be resolved now is a warning, and its address is not asked.
+        asked.clear()
+        def unresolved(image):
+            raise ValueError('The publisher lists 0 images')
+        answers['opensuse-tumbleweed'] = None
+        gone, unsure = desktop.missing_desktop_images(opener, resolve=unresolved)
+        self.assertEqual(sorted(gone), ['arch'])
+        self.assertIn('ValueError resolving the current image from https://download.opensuse.org/', unsure['opensuse-tumbleweed'])
+        self.assertNotIn('opensuse-tumbleweed', [name for name, _, _ in asked])
+
+    def test_preflight_image_check_is_bounded_as_a_whole(self):
+        import threading
+        import time
+        release = threading.Event()
+        def opener(request, timeout):
+            release.wait(5)  # every publisher hangs longer than the budget
+            return contextlib.nullcontext()
+        started = time.monotonic()
+        gone, unsure = desktop.missing_desktop_images(
+            opener, timeout=10, budget=0.5, resolve=lambda image: image | {'url': 'https://example.org/x.qcow2'})
+        elapsed = time.monotonic() - started
+        release.set()
+        self.assertEqual(gone, {})
+        images = desktop.read(desktop.ROOT / 'assets/linux-desktop-images.json')['images']
+        self.assertEqual(sorted(unsure), sorted(images))
+        self.assertTrue(all('no answer within 0.5 s' in reason for reason in unsure.values()))
+        self.assertLess(elapsed, 3)
 
     def test_mint_rejects_live_boot_and_requires_installer_success(self):
         for mount, marker in (('overlay overlay', True), ('squashfs /dev/loop0', True),
