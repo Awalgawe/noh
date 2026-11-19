@@ -1,8 +1,10 @@
 """Controls for release acceptance; no network, no container and no real release."""
 import hashlib
+import inspect
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 import release_acceptance as acceptance
 
@@ -12,6 +14,32 @@ def sha(data):
 
 
 class Acceptance(unittest.TestCase):
+    def test_windows_acceptance_runs_one_mcp_job_on_the_installed_copy(self):
+        # Before the test installation is removed, and recorded with the other checks.
+        source = inspect.getsource(acceptance.windows)
+        call = source.index('    mcp = installed_mcp_job(installed / "bin", upgrade / "mcp")\n')
+        self.assertLess(call, source.index("ci.remove_test_installation(upgrade, installed)"))
+        self.assertIn('"mcp_job_on_the_installed_copy": mcp}', source)
+        with tempfile.TemporaryDirectory() as temporary:
+            bin_folder, work = Path(temporary) / "bin", Path(temporary) / "mcp"
+            commands = []
+            def run(command, **_):
+                commands.append(command)
+                if "-n" in command:
+                    Path(command[-1]).write_bytes(b"media")
+            def job(command, clip, soundtrack, output):
+                self.assertEqual(command, [bin_folder / "noh-mcp.exe"])
+                self.assertEqual((clip.parent, soundtrack.parent, output.parent), (work, work, work))
+                output.write_bytes(b"exported")
+                return {"tools": ["noh_export"]}
+            with mock.patch.object(acceptance.subprocess, "run", run), \
+                    mock.patch.object(acceptance.mcp_check, "mcp_job", job):
+                result = acceptance.installed_mcp_job(bin_folder, work)
+        # The installed FFmpeg makes both media files and decodes the export.
+        self.assertEqual([command[0] for command in commands], [str(bin_folder / "ffmpeg.exe")] * 3)
+        self.assertEqual(commands[-1][-4:], ["-i", str(work / "mcp-composition.mp4"), "-f", "null", "-"][-4:])
+        self.assertEqual(result, {"tools": ["noh_export"], "export_sha256": sha(b"exported")})
+
     def test_checksums_must_be_plain_lines_with_safe_unique_names(self):
         good = "a" * 64 + "  NOH-1.2.3-linux-x64.zip\n" + "b" * 64 + "  linux-x64-DELIVERY.json\n"
         self.assertEqual(set(acceptance.parse_checksums(good)), {"NOH-1.2.3-linux-x64.zip", "linux-x64-DELIVERY.json"})
