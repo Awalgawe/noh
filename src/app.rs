@@ -15,6 +15,7 @@ mod app_lyrics;
 mod app_lyrics_edit;
 mod app_lyrics_pair;
 mod app_lyrics_save;
+mod app_lyrics_screen;
 mod app_media;
 mod app_navigation;
 mod app_options;
@@ -56,6 +57,7 @@ struct NohApp {
     effects: app_effects::State,
     style_panel: app_style_panel::State,
     lyrics_edit: app_lyrics_edit::State,
+    lyrics_screen: app_lyrics_screen::State,
     lyrics_save: app_lyrics_save::State,
     lyrics_pair: app_lyrics_pair::State,
     /// Close the window this frame (the unsaved-lyrics question was answered).
@@ -164,6 +166,7 @@ impl Default for NohApp {
             effects: app_effects::State::default(),
             style_panel: app_style_panel::State::default(),
             lyrics_edit: app_lyrics_edit::State::default(),
+            lyrics_screen: app_lyrics_screen::State::default(),
             lyrics_save: app_lyrics_save::State::default(),
             lyrics_pair: app_lyrics_pair::State::default(),
             close_now: false,

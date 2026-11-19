@@ -1648,6 +1648,9 @@ impl NohApp {
         let empty =
             self.clips.is_empty() && self.wav.is_none() && self.project.track.path.is_none();
         self.header(ui);
+        // The lyrics screen takes the place of the montage and of its bar; the
+        // header above and the dialogs below are the same on both screens.
+        let lyrics_screen = self.lyrics_screen.open;
         // Reserve space first, render its interactive controls last to preserve Tab order.
         let height_id = ui
             .id()
@@ -1659,7 +1662,7 @@ impl NohApp {
             .map(|(_, height)| height)
             .unwrap_or(if compact { 176.0 } else { 112.0 });
         let bar_pad = if compact { 12.0 } else { 14.0 };
-        let bar_rect = (!empty).then(|| {
+        let bar_rect = (!empty && !lyrics_screen).then(|| {
             egui::Panel::bottom("operations")
                 .exact_size(bar_height)
                 .resizable(false)
@@ -1671,6 +1674,14 @@ impl NohApp {
         let scroll = egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(style::background(ui)))
             .show(ui, |ui| {
+                if lyrics_screen {
+                    self.lyrics_screen_ui(ui);
+                    // The screen scrolls its own body: nothing to report here.
+                    return egui::ScrollArea::vertical()
+                        .id_salt("montage-behind-lyrics")
+                        .max_height(0.0)
+                        .show(ui, |_| {});
+                }
                 body_rect = ui.max_rect();
                 let nested = ui.spacing().scroll;
                 ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
@@ -1760,10 +1771,14 @@ impl NohApp {
                 .map(|f| f.path().to_path_buf())
                 .collect::<Vec<_>>()
         });
-        if !paths.is_empty() {
-            self.drop_files(paths, &ctx);
+        // The lyrics screen takes no files: a drop on it is ignored, and no
+        // overlay promises otherwise while they hover.
+        if !lyrics_screen {
+            if !paths.is_empty() {
+                self.drop_files(paths, &ctx);
+            }
+            self.drop_overlay(&ctx, body_rect);
         }
-        self.drop_overlay(&ctx, body_rect);
         if ctx.input(|i| i.pointer.any_released() || i.key_pressed(egui::Key::Escape)) {
             self.dragging = None;
         }
