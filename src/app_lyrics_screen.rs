@@ -1,7 +1,8 @@
 //! The lyrics screen (mockup v5): the lyrics as a text, one field per line, a
 //! zoomed track that follows playback, and the monitor beside them. It edits
 //! the same session as the lyrics lane (app_lyrics_edit.rs), through the same
-//! undo history; each step names itself for « Annuler : … ».
+//! undo history; each step names itself for « Annuler : … ». The sync game
+//! (hold Espace while it is sung) is in `game`.
 use super::*;
 use app_style::{self as style, space};
 use egui::{
@@ -13,6 +14,8 @@ use noh::{
     timeline::{Range, Viewport},
 };
 use std::sync::Arc;
+
+mod game;
 
 const MODEBAR_H: f32 = 56.0;
 const FOOT_H: f32 = 44.0;
@@ -114,6 +117,18 @@ pub struct State {
     syl: Option<SylEdit>,
     /// What the track shows, and what the sync game will take.
     pub level: Level,
+    /// The sync game in progress.
+    game: Option<game::Game>,
+    /// What the last game did, until something else is done.
+    summary: Option<(game::Summary, u64)>,
+    /// The playback speed chosen for the game.
+    speed: f64,
+    /// Tests stand in for the player's clock: Some(None) is « not playing ».
+    #[cfg(test)]
+    test_clock: Option<Option<u64>>,
+    /// Tests stand in for the engine: whether the one that can slow plays.
+    #[cfg(test)]
+    test_live: Option<bool>,
     view_start: u64,
     drag: Option<Drag>,
     /// The track as the drag in progress would leave it.
@@ -155,11 +170,26 @@ struct Drawn {
     ruler: Option<Rect>,
     foot: Option<Rect>,
     foot_text: Option<Rect>,
+    /// « Commencer ».
+    start: Option<Rect>,
+    /// The summary's « Reprendre à la ligne N » and « Tout annuler ».
+    again: Option<Rect>,
+    undo_all: Option<Rect>,
+    /// The sync bar, last frame.
+    sync: Option<Rect>,
     /// The current line's three buttons.
     cut: Option<Rect>,
     join: Option<Rect>,
     delete: Option<Rect>,
     view: Option<Viewport>,
+}
+
+impl State {
+    /// How much of the song the track shows.
+    fn span(&self, compact: bool) -> u64 {
+        self.game_span(compact)
+            .unwrap_or(if compact { VIEW_COMPACT_MS } else { VIEW_MS })
+    }
 }
 
 impl Default for State {
@@ -174,6 +204,13 @@ impl Default for State {
             word: None,
             syl: None,
             level: Level::Line,
+            game: None,
+            summary: None,
+            speed: 1.0,
+            #[cfg(test)]
+            test_clock: None,
+            #[cfg(test)]
+            test_live: None,
             view_start: 0,
             drag: None,
             preview: None,
@@ -514,6 +551,7 @@ impl NohApp {
             open: true,
             cur: at.min(track.cues.len().saturating_sub(1)),
             level: s.level,
+            speed: s.speed,
             was_short: self.mini_preview.short,
             shown: Some(track.clone()),
             scroll_to_cur: true,
@@ -559,6 +597,20 @@ impl NohApp {
                 self.subtitles.language = "en".into();
                 self.ls_open_syllables(0);
             }
+            // A game at the Words level, two lines further (as the mockup):
+            // three words taken; the fourth being held; a word that went by;
+            // and what the footer says after a game.
+            "-game" | "-game-hold" | "-game-missed" | "-summary" => {
+                let last = self
+                    .ls_track()
+                    .map_or(0, |t| t.cues.len().saturating_sub(1));
+                let line = (i + 2).min(last);
+                let scene = scene.strip_prefix("-game").unwrap_or(scene);
+                self.stage_lyrics_game(line, Level::Word, 3, scene);
+                if scene == "-summary" {
+                    self.ls_end_game();
+                }
+            }
             _ => {}
         }
     }
@@ -566,6 +618,7 @@ impl NohApp {
     /// « Terminé »: what was typed is kept (the lyrics are written about a
     /// second after the last change, as everywhere), playback pauses.
     pub(super) fn close_lyrics_screen(&mut self) {
+        self.ls_end_game();
         // Text typed while the lyrics file is read again is not in the lyrics
         // yet: the screen stays the moment it takes (« Terminé » works after).
         if self.ls_reading()
@@ -584,9 +637,10 @@ impl NohApp {
             self.mini_preview.short = true;
             self.mini_preview.invalidate();
         }
-        let level = self.lyrics_screen.level;
+        let (level, speed) = (self.lyrics_screen.level, self.lyrics_screen.speed);
         self.lyrics_screen = State {
             level,
+            speed,
             ..Default::default()
         };
     }
@@ -625,7 +679,7 @@ impl NohApp {
 
     fn ls_view(&self, compact: bool) -> Option<Viewport> {
         let duration = self.project.duration_ms;
-        let span = if compact { VIEW_COMPACT_MS } else { VIEW_MS }.min(duration);
+        let span = self.lyrics_screen.span(compact).min(duration);
         Range::place(self.lyrics_screen.view_start, span, duration).map(Viewport)
     }
 
@@ -1018,6 +1072,12 @@ impl NohApp {
         if s.toast.is_some_and(|t| now >= t) {
             s.toast = None;
         }
+        // The game's summary describes the lyrics as the game left them.
+        if s.summary
+            .is_some_and(|(_, revision)| revision != self.project.edit_revision)
+        {
+            s.summary = None;
+        }
         if s.flash.as_ref().is_some_and(|(_, t)| now >= *t) {
             s.flash = None;
         }
@@ -1032,7 +1092,7 @@ impl NohApp {
         if s.syl.as_ref().is_some_and(|e| e.word >= words) {
             s.syl = None;
         }
-        let span = if compact { VIEW_COMPACT_MS } else { VIEW_MS }.min(duration);
+        let span = s.span(compact).min(duration);
         if playing && s.drag.is_none() && (ph > s.view_start + span * 7 / 10 || ph < s.view_start) {
             s.view_start = ph.saturating_sub(span * 3 / 10);
         }
@@ -1052,6 +1112,11 @@ impl NohApp {
     /// Otherwise: Espace plays or pauses, ← → and Alt+← → act on the chosen
     /// word, Échap closes one layer at a time.
     fn ls_keys(&mut self, ctx: &egui::Context, track: &SubtitleTrack) {
+        // During a game every key is the game's, whatever has the focus.
+        if self.lyrics_screen.game.is_some() {
+            self.ls_game_keys(ctx);
+            return;
+        }
         if self.lyrics_question_open() || self.lyrics_question_pending() || self.ls_reading() {
             return;
         }
@@ -1189,6 +1254,7 @@ impl NohApp {
         let full = ui.available_rect_before_wrap();
         let compact = full.width() < style::COMPACT_BELOW;
         self.ls_sync(&track, compact);
+        self.ls_game_frame(&ctx);
         self.ls_keys(&ctx, &track);
         if !self.lyrics_screen.open {
             return;
@@ -1295,8 +1361,11 @@ impl NohApp {
             Some(w) if w.is_empty() => l.text(plain).to_string(),
             Some(w) => l.format(named, &[w.clone()]),
         };
+        // During a game the text, the undo arrows and « Terminé » wait.
+        let game = self.lyrics_screen.game.is_some();
+        let (undo, redo) = (undo.filter(|_| !game), redo.filter(|_| !game));
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if style::button(ui, l.text("lyrics_screen.done"), true, true, 0.0).clicked() {
+            if style::button(ui, l.text("lyrics_screen.done"), !game, true, 0.0).clicked() {
                 self.close_lyrics_screen();
             }
             ui.add_space(space::XS);
@@ -1372,7 +1441,25 @@ impl NohApp {
         let lanes_h = 20.0 + 18.0 + 4.0 + wave_h + 4.0 + LANE_H;
         let track_h = 16.0 + 40.0 + space::S + lanes_h + space::M;
         ui.add_space(space::M);
-        if compact {
+        let game = self.lyrics_screen.game.is_some();
+        let bar_h = if compact && game { 70.0 } else { 40.0 };
+        if compact && game {
+            // Nothing scrolls while Espace is held: the line to sing, the
+            // track and the footer must fit at once, so the monitor and the
+            // text go (the prompt shows the words, and the text cannot be
+            // edited meanwhile). libmpv draws its pictures only when the
+            // monitor is painted: two pixels of it stay, under the title's
+            // rule, so playback never waits for a picture nobody takes.
+            let dot = Rect::from_min_size(ui.max_rect().left_top(), vec2(2.0, 2.0));
+            let mut tiny = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt("lyrics-screen-monitor-kept")
+                    .max_rect(dot),
+            );
+            // Nothing of it shows outside those two pixels (its spinner would).
+            tiny.set_clip_rect(dot);
+            self.paint_monitor(&mut tiny, dot);
+        } else if compact {
             let aspect = self.canvas_aspect();
             let monitor_h = (width / aspect.max(16.0 / 9.0)).min(218.0);
             let (rect, _) = ui.allocate_exact_size(
@@ -1402,9 +1489,13 @@ impl NohApp {
             );
             self.ls_text(ui, doc, track);
         }
-        ui.add_space(16.0);
-        let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 40.0), Sense::hover());
-        let bar = Rect::from_min_size(pos2(left, rect.top()), vec2(width, 40.0));
+        ui.add_space(if compact && game { 0.0 } else { 16.0 });
+        let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), bar_h), Sense::hover());
+        let bar = Rect::from_min_size(pos2(left, rect.top()), vec2(width, bar_h));
+        #[cfg(test)]
+        {
+            self.lyrics_screen.drawn.sync = Some(bar);
+        }
         self.ls_syncbar(ui, bar, compact);
         ui.add_space(space::S);
         let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), lanes_h), Sense::hover());
@@ -1524,14 +1615,27 @@ impl NohApp {
         } else {
             "preview.play"
         });
-        let response = ui
-            .interact(button, ui.id().with("lyrics-screen-play"), Sense::click())
-            .on_hover_text(name);
-        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, name));
+        // The game plays and pauses the song itself: the button waits.
+        let enabled = self.lyrics_screen.game.is_none();
+        let response = ui.interact(
+            button,
+            ui.id().with("lyrics-screen-play"),
+            if enabled {
+                Sense::click()
+            } else {
+                Sense::hover()
+            },
+        );
+        let response = if enabled {
+            response.on_hover_text(name)
+        } else {
+            response
+        };
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, name));
         ui.painter().circle_filled(
             button.center(),
             16.0,
-            if response.hovered() {
+            if response.hovered() && enabled {
                 t.surface_3
             } else {
                 t.surface_2
@@ -1545,10 +1649,10 @@ impl NohApp {
             } else {
                 app_icons::Icon::Play
             },
-            t.text,
+            if enabled { t.text } else { t.text_3 },
         );
         style::focus(ui, &response);
-        if response.clicked() {
+        if response.clicked() && enabled {
             self.mini_play(ui.ctx());
         }
     }
@@ -1576,7 +1680,11 @@ impl NohApp {
         ui.painter().with_clip_rect(head).text(
             head.min + vec2(title_w + space::S, 0.0),
             Align2::LEFT_TOP,
-            l.text("lyrics_screen.text_hint"),
+            l.text(if self.lyrics_screen.game.is_some() {
+                "lyrics_screen.text_waits"
+            } else {
+                "lyrics_screen.text_hint"
+            }),
             FontId::proportional(style::text::SMALL),
             t.text_3,
         );
@@ -1597,6 +1705,7 @@ impl NohApp {
             .iter()
             .position(|c| c.start_ms <= ph && ph < c.end_ms);
         let cur = self.lyrics_screen.cur;
+        let game = self.lyrics_screen.game.is_some();
         // What the rows ask for, applied after they are drawn.
         enum Ask {
             Choose(usize, usize),
@@ -1688,7 +1797,7 @@ impl NohApp {
                         "lyrics_screen.listen",
                         &[app_timeline::clock(cue.start_ms, track.duration_ms, l)],
                     );
-                    if i != cur {
+                    if i != cur || game {
                         let galley = ui.painter().layout(
                             cue.text.clone(),
                             FontId::proportional(style::text::BODY),
@@ -1713,7 +1822,13 @@ impl NohApp {
                         row.widget_info(|| {
                             egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &cue.text)
                         });
-                        if row.hovered() || row.has_focus() {
+                        if i == cur {
+                            // The line the game is on.
+                            ui.painter().rect_filled(rect, style::radius::M, t.seg_on);
+                            if std::mem::take(&mut self.lyrics_screen.scroll_to_cur) {
+                                ui.scroll_to_rect(rect.expand2(vec2(0.0, 36.0)), None);
+                            }
+                        } else if (row.hovered() || row.has_focus()) && !game {
                             ui.painter()
                                 .rect_filled(rect, style::radius::M, t.surface_2);
                         }
@@ -1907,10 +2022,13 @@ impl NohApp {
         if left == Some(self.lyrics_screen.cur) {
             self.lyrics_screen.leave_pending = true;
         }
-        if self.ls_reading() {
-            // Nothing can be written for a moment: what was asked is dropped,
-            // what was typed stays in its field.
+        if self.ls_reading() || game {
+            // Nothing can be written for a moment (or a game runs): what was
+            // asked is dropped, what was typed stays in its field.
             return;
+        }
+        if self.lyrics_screen.text_focus {
+            self.lyrics_screen.summary = None;
         }
         if ask.is_some() || self.lyrics_screen.text_focus {
             self.lyrics_screen.leave_pending = false;
@@ -1947,8 +2065,13 @@ impl NohApp {
 
     /// Above the track: what it shows, and what the sync game will take.
     fn ls_syncbar(&mut self, ui: &mut egui::Ui, bar: Rect, compact: bool) {
+        if self.lyrics_screen.game.is_some() {
+            self.ls_game_syncbar(ui, bar, compact);
+            return;
+        }
         let l = self.locale.language;
         let t = style::tokens(ui);
+        let ctx = ui.ctx().clone();
         let mut row = ui.new_child(
             egui::UiBuilder::new()
                 .id_salt("lyrics-screen-sync")
@@ -1978,6 +2101,31 @@ impl NohApp {
             self.lyrics_screen.level = levels[k];
             self.lyrics_screen.word = None;
             self.lyrics_screen.syl = None;
+            self.lyrics_screen.summary = None;
+        }
+        // « Commencer à la ligne N »: the game goes from the current line on.
+        let ready = self.project.duration_ms > 0
+            && self.ls_track().is_some_and(|t| !t.cues.is_empty())
+            && !self.ls_reading();
+        let label = if compact {
+            l.text("lyrics_screen.start").to_string()
+        } else {
+            l.format(
+                "lyrics_screen.start_at",
+                &[(self.lyrics_screen.cur + 1).to_string()],
+            )
+        };
+        let start = ui
+            .with_layout(Layout::right_to_left(Align::Center), |ui| {
+                style::button(ui, label, ready, true, 0.0)
+            })
+            .inner;
+        #[cfg(test)]
+        {
+            self.lyrics_screen.drawn.start = Some(start.rect);
+        }
+        if start.clicked() {
+            self.ls_start_game(&ctx);
         }
     }
 
@@ -2030,12 +2178,21 @@ impl NohApp {
             ui.id().with("lyrics-screen-ruler"),
             Sense::click_and_drag(),
         );
+        let game = self.lyrics_screen.game.is_some();
         if (seek.is_pointer_button_down_on() || seek.clicked())
+            && !game
             && let Some(p) = seek.interact_pointer_pos()
         {
             self.navigate(time_at(view, ruler, p.x), false);
         }
-        let event = self.ls_lane_gestures(ui, lane, view, track);
+        // During a game the lane only shows the guides and the takes.
+        let event = if game {
+            self.lyrics_screen.drag = None;
+            self.lyrics_screen.preview = None;
+            None
+        } else {
+            self.ls_lane_gestures(ui, lane, view, track)
+        };
         let shown = self.lyrics_screen.preview.clone();
         let shown = shown.as_ref().unwrap_or(track);
         let cur = self.lyrics_screen.cur;
@@ -2056,6 +2213,19 @@ impl NohApp {
                 pos2((b - 1.0).max(a + 3.0), lane.bottom() - 6.0),
             );
             let current = i == cur;
+            if game {
+                painter.rect_filled(block, style::radius::M, t.surface_2);
+                if current {
+                    painter.rect_stroke(
+                        block,
+                        style::radius::M,
+                        Stroke::new(1.0, t.border_strong),
+                        egui::StrokeKind::Inside,
+                    );
+                }
+                self.ls_game_block(&painter, lane, view, i, block);
+                continue;
+            }
             painter.rect_filled(
                 block,
                 style::radius::M,
@@ -2162,7 +2332,7 @@ impl NohApp {
             }
         }
         // « + » in each gap of half a second or more, wide enough to hit.
-        for (a, b) in gaps(shown) {
+        for (a, b) in gaps(shown).into_iter().filter(|_| !game) {
             let (x0, x1) = (x_at(view, lane, a), x_at(view, lane, b));
             let centre = (x0 + x1) / 2.0;
             if x1 - x0 >= 32.0 && centre > lane.left() && centre < lane.right() {
@@ -2473,6 +2643,7 @@ impl NohApp {
     }
 
     fn ls_lane_event(&mut self, event: LaneEvent, ctx: &egui::Context) {
+        self.lyrics_screen.summary = None;
         let i = self.lyrics_screen.cur;
         let l = self.locale.language;
         let line = [(i + 1).to_string()];
@@ -2605,6 +2776,10 @@ impl NohApp {
     }
 
     fn ls_footer_text(&mut self, ui: &mut egui::Ui, track: &SubtitleTrack) {
+        if self.lyrics_screen.game.is_some() {
+            self.ls_game_footer(ui);
+            return;
+        }
         let l = self.locale.language;
         let t = style::tokens(ui);
         let cur = self.lyrics_screen.cur;
@@ -2687,6 +2862,10 @@ impl NohApp {
                     self.ls_apply_syllables();
                 }
             }
+            return;
+        }
+        if let Some((summary, _)) = self.lyrics_screen.summary {
+            self.ls_summary_footer(ui, summary, track.cues.len());
             return;
         }
         let caret = self
@@ -3440,6 +3619,540 @@ mod tests {
         }
     }
 
+    // ---- The sync game ----
+
+    fn space(pressed: bool, repeat: bool) -> egui::Event {
+        egui::Event::Key {
+            key: Key::Space,
+            physical_key: None,
+            pressed,
+            repeat,
+            modifiers: Modifiers::NONE,
+        }
+    }
+
+    /// One frame with the player's clock at `ms` (None: not playing).
+    fn at(app: &mut NohApp, ctx: &egui::Context, ms: Option<u64>, events: Vec<egui::Event>) {
+        app.lyrics_screen.test_clock = Some(ms);
+        frame(app, ctx, events);
+    }
+
+    /// Hold Espace from `from` to `to`.
+    fn hold(app: &mut NohApp, ctx: &egui::Context, from: u64, to: u64) {
+        at(app, ctx, Some(from), vec![space(true, false)]);
+        at(app, ctx, Some((from + to) / 2), vec![space(true, true)]);
+        at(app, ctx, Some(to), vec![space(false, false)]);
+    }
+
+    /// A game at `level` from line `line`, its playback started.
+    fn game(app: &mut NohApp, ctx: &egui::Context, level: Level, line: usize) {
+        app.lyrics_screen.level = level;
+        app.lyrics_screen.cur = line;
+        frame(app, ctx, Vec::new());
+        app.ls_start_game(ctx);
+        assert!(app.lyrics_screen.game.is_some());
+        // The player gets to where playback was asked from.
+        let from = app.lyrics_track().unwrap().cues[line]
+            .start_ms
+            .saturating_sub(2000);
+        at(app, ctx, Some(from), Vec::new());
+    }
+
+    fn word(app: &NohApp, line: usize, k: usize) -> (u64, Option<u64>, WordSource) {
+        let w = &edit::words_or_estimate(&app.lyrics_track().unwrap().cues[line])[k];
+        (w.start_ms, w.end_ms, w.source)
+    }
+
+    #[test]
+    fn holding_space_takes_words_with_their_ends_as_one_undo_step() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = app(folder.path());
+        let ctx = context();
+        let original = app.lyrics_track().unwrap();
+        let steps = app.history_labels().0.map(str::to_string);
+        game(&mut app, &ctx, Level::Word, 0);
+        // « Something » held from 1,10 to 1,60 s: a repeat of the key is not
+        // a second press.
+        hold(&mut app, &ctx, 1100, 1600);
+        assert_eq!(word(&app, 0, 0), (1100, Some(1600), WordSource::Hand));
+        assert_eq!(app.history_labels().0, Some("sync 1 word"));
+        // A breath, then « had »: its own start and end, the silence kept.
+        hold(&mut app, &ctx, 1900, 2100);
+        assert_eq!(word(&app, 0, 1), (1900, Some(2100), WordSource::Hand));
+        assert_eq!(word(&app, 0, 0).1, Some(1600));
+        assert_eq!(app.history_labels().0, Some("sync 2 words"));
+        let g = app.lyrics_screen.game.as_ref().unwrap();
+        assert_eq!((g.idx, g.holds.len()), (2, 2));
+        // Échap stops and keeps what was taken; the footer says what was done.
+        at(
+            &mut app,
+            &ctx,
+            Some(2200),
+            vec![key(Key::Escape, Modifiers::NONE)],
+        );
+        assert!(app.lyrics_screen.game.is_none() && app.lyrics_screen.open);
+        let (summary, _) = app.lyrics_screen.summary.unwrap();
+        assert_eq!((summary.count, summary.lines, summary.last), (2, 1, 0));
+        assert_eq!(word(&app, 0, 1).0, 1900);
+        // One undo step for the whole game.
+        assert!(app.undo());
+        assert_eq!(*app.lyrics_track().unwrap(), *original);
+        assert_eq!(app.history_labels().0.map(str::to_string), steps);
+        frame(&mut app, &ctx, Vec::new());
+        assert!(
+            app.lyrics_screen.summary.is_none(),
+            "undone: nothing to sum up"
+        );
+    }
+
+    #[test]
+    fn a_line_held_takes_its_start_and_end_and_legato_closes_small_gaps() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = app(folder.path());
+        let ctx = context();
+        game(&mut app, &ctx, Level::Line, 0);
+        hold(&mut app, &ctx, 1200, 3400);
+        // 60 ms later: one sung stretch, the first line ends where the second starts.
+        hold(&mut app, &ctx, 3460, 5800);
+        let t = app.lyrics_track().unwrap();
+        assert_eq!((t.cues[0].start_ms, t.cues[0].end_ms), (1200, 3460));
+        assert_eq!((t.cues[1].start_ms, t.cues[1].end_ms), (3460, 5800));
+        assert_eq!(app.history_labels().0, Some("sync 2 lines"));
+        // The third line is far: the game goes on, on that line.
+        assert_eq!(app.lyrics_screen.game.as_ref().unwrap().idx, 2);
+        // The last unit taken ends the game by itself.
+        hold(&mut app, &ctx, 40_100, 41_900);
+        assert!(app.lyrics_screen.game.is_none());
+        assert_eq!(app.lyrics_screen.summary.unwrap().0.count, 3);
+        assert_eq!(app.lyrics_screen.cur, 2);
+    }
+
+    #[test]
+    fn backspace_takes_again_and_twice_goes_one_more_back() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = app(folder.path());
+        let ctx = context();
+        let original = app.lyrics_track().unwrap();
+        game(&mut app, &ctx, Level::Word, 0);
+        hold(&mut app, &ctx, 1100, 1500);
+        hold(&mut app, &ctx, 1800, 2100);
+        hold(&mut app, &ctx, 2200, 2400);
+        let back = || vec![key(Key::Backspace, Modifiers::NONE)];
+        at(&mut app, &ctx, Some(2500), back());
+        let g = app.lyrics_screen.game.as_ref().unwrap();
+        assert_eq!((g.idx, g.holds.len(), g.redos), (2, 2, 1));
+        // Playback goes back 1.5 s before the word to take again, and the
+        // clock counts once it is there: a press before that is not a take.
+        assert!(g.waiting.is_some());
+        at(&mut app, &ctx, Some(2500), vec![space(true, false)]);
+        at(&mut app, &ctx, Some(2500), vec![space(false, false)]);
+        assert!(app.lyrics_screen.game.as_ref().unwrap().hold.is_none());
+        assert_eq!(app.history_labels().0, Some("sync 2 words"));
+        assert_eq!(
+            word(&app, 0, 2).2,
+            WordSource::Estimated,
+            "« to » is as it was"
+        );
+        // Twice in a row: one more word back; then all of them.
+        at(&mut app, &ctx, Some(700), back());
+        at(&mut app, &ctx, Some(300), back());
+        let g = app.lyrics_screen.game.as_ref().unwrap();
+        assert_eq!((g.idx, g.holds.len()), (0, 0));
+        assert_eq!(*app.lyrics_track().unwrap(), *original);
+        // Nothing left to take back: the key still rewinds.
+        at(&mut app, &ctx, Some(0), back());
+        assert!(app.lyrics_screen.game.is_some());
+        // With Espace held, Retour arrière drops that press, not the take before.
+        at(&mut app, &ctx, Some(100), Vec::new());
+        hold(&mut app, &ctx, 1100, 1500);
+        at(&mut app, &ctx, Some(1800), vec![space(true, false)]);
+        assert!(app.lyrics_screen.game.as_ref().unwrap().hold.is_some());
+        app.lyrics_screen.game.as_mut().unwrap().last_back = None;
+        at(&mut app, &ctx, Some(1900), back());
+        let g = app.lyrics_screen.game.as_ref().unwrap();
+        assert_eq!((g.hold, g.idx, g.holds.len()), (None, 1, 1));
+    }
+
+    #[test]
+    fn a_unit_that_goes_by_unheld_makes_the_game_wait_and_space_resumes() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = app(folder.path());
+        let ctx = context();
+        game(&mut app, &ctx, Level::Word, 0);
+        hold(&mut app, &ctx, 1100, 1500);
+        // « had » is expected until about 2,2 s; 1.5 s later, nothing held.
+        let guide = app.lyrics_screen.game.as_ref().unwrap().guides[1];
+        at(&mut app, &ctx, Some(guide.end_ms + 1400), Vec::new());
+        assert!(app.lyrics_screen.game.as_ref().unwrap().paused.is_none());
+        at(&mut app, &ctx, Some(guide.end_ms + 1600), Vec::new());
+        let g = app.lyrics_screen.game.as_ref().unwrap();
+        assert_eq!(g.paused, Some(game::Pause::Missed));
+        // Espace resumes just before the missed word: that press is not a take.
+        at(&mut app, &ctx, None, vec![space(true, false)]);
+        at(&mut app, &ctx, None, vec![space(false, false)]);
+        let g = app.lyrics_screen.game.as_ref().unwrap();
+        assert!(g.paused.is_none() && g.hold.is_none() && g.holds.len() == 1);
+        at(
+            &mut app,
+            &ctx,
+            Some(guide.start_ms.saturating_sub(1500)),
+            Vec::new(),
+        );
+        hold(&mut app, &ctx, guide.start_ms, guide.start_ms + 200);
+        hold(&mut app, &ctx, 2300, 2450);
+        assert_eq!(app.lyrics_screen.game.as_ref().unwrap().holds.len(), 3);
+        // « give » is left (expected until 3 s, so not timed out at 4,35 s),
+        // and the next line started at 4 s: a press now is for that line.
+        // The word was passed; the press is not used.
+        at(&mut app, &ctx, Some(4350), vec![space(true, false)]);
+        let g = app.lyrics_screen.game.as_ref().unwrap();
+        assert_eq!(
+            (g.paused, g.hold, g.holds.len()),
+            (Some(game::Pause::Missed), None, 3)
+        );
+    }
+
+    #[test]
+    fn a_game_with_no_take_leaves_the_lyrics_and_the_history_as_they_were() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = app(folder.path());
+        let ctx = context();
+        let original = app.lyrics_track().unwrap();
+        // At the Syllables level the words of the lines to play are cut
+        // first; stopping at once takes that back too.
+        game(&mut app, &ctx, Level::Syllable, 0);
+        at(
+            &mut app,
+            &ctx,
+            Some(100),
+            vec![key(Key::Escape, Modifiers::NONE)],
+        );
+        assert!(app.lyrics_screen.game.is_none() && app.lyrics_screen.summary.is_none());
+        assert_eq!(*app.lyrics_track().unwrap(), *original);
+        assert_eq!(app.history_labels(), (None, None));
+        // The song ending (playback stops by itself) ends a game and keeps
+        // its takes.
+        game(&mut app, &ctx, Level::Line, 2);
+        hold(&mut app, &ctx, 40_200, 41_000);
+        assert!(
+            app.lyrics_screen.game.is_none(),
+            "the last line ends the game"
+        );
+        game(&mut app, &ctx, Level::Line, 1);
+        hold(&mut app, &ctx, 4100, 5000);
+        at(&mut app, &ctx, None, Vec::new());
+        assert!(app.lyrics_screen.game.is_none());
+        assert_eq!(app.lyrics_track().unwrap().cues[1].start_ms, 4100);
+    }
+
+    #[test]
+    fn during_a_game_the_text_the_undo_keys_and_the_track_wait() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = app(folder.path());
+        let ctx = context();
+        cursor(&mut app, &ctx, 0, 3);
+        game(&mut app, &ctx, Level::Word, 0);
+        assert!(
+            !app.lyrics_screen.text_focus,
+            "the field gave the keyboard back"
+        );
+        hold(&mut app, &ctx, 1100, 1500);
+        // Typed text goes nowhere, Ctrl+Z undoes nothing, « Terminé » waits.
+        at(
+            &mut app,
+            &ctx,
+            Some(1600),
+            vec![
+                egui::Event::Text("x".into()),
+                key(Key::Z, Modifiers::COMMAND),
+            ],
+        );
+        assert_eq!(texts(&app)[0], "Something had to give");
+        assert_eq!(word(&app, 0, 0).0, 1100);
+        assert!(app.lyrics_screen.game.is_some());
+        // A press on the lane starts no drag.
+        let d = app.lyrics_screen.drawn;
+        let p = d.lane.unwrap().center();
+        at(
+            &mut app,
+            &ctx,
+            Some(1650),
+            vec![egui::Event::PointerMoved(p)],
+        );
+        at(
+            &mut app,
+            &ctx,
+            Some(1700),
+            vec![egui::Event::PointerButton {
+                pos: p,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Modifiers::NONE,
+            }],
+        );
+        assert!(app.lyrics_screen.drag.is_none());
+    }
+
+    #[test]
+    fn the_narrow_window_shows_the_prompt_the_track_and_the_footer_during_a_game() {
+        let folder = tempfile::tempdir().unwrap();
+        let ctx = context();
+        for language in Language::ALL {
+            let mut app = app(folder.path());
+            app.locale.language = language;
+            app.lyrics_screen.level = Level::Word;
+            app.lyrics_screen.compact = true;
+            frame_at(&mut app, &ctx, vec2(420.0, 492.0), Vec::new());
+            app.ls_start_game(&ctx);
+            app.lyrics_screen.test_clock = Some(Some(0));
+            // The first instructions, then a missed word: the two longest footers.
+            for missed in [false, true] {
+                if missed {
+                    app.lyrics_screen.game.as_mut().unwrap().paused = Some(game::Pause::Missed);
+                }
+                for _ in 0..3 {
+                    frame_at(&mut app, &ctx, vec2(420.0, 492.0), Vec::new());
+                }
+                let d = app.lyrics_screen.drawn;
+                let (sync, lane, foot, text) = (
+                    d.sync.unwrap(),
+                    d.lane.unwrap(),
+                    d.foot.unwrap(),
+                    d.foot_text.unwrap(),
+                );
+                // No scrolling while Espace is held: all of it is on screen.
+                assert!(sync.top() >= MODEBAR_H, "{language:?} {sync:?}");
+                assert!(
+                    sync.bottom() <= lane.top() && lane.bottom() <= foot.top(),
+                    "{language:?} missed={missed}: {sync:?} {lane:?} {foot:?}"
+                );
+                assert!(
+                    foot.bottom() <= 492.5 && foot.contains_rect(text),
+                    "{language:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_first_edit_question_of_an_srt_pauses_the_game_and_keeps_it_one_undo_step() {
+        let folder = tempfile::tempdir().unwrap();
+        let ctx = context();
+        // An .srt NOH has never been allowed to write: its first edit asks.
+        let untrusted = |folder: &std::path::Path| {
+            let mut app = app(folder);
+            app.trust_lyrics(folder.join("another.srt"));
+            app
+        };
+        let mut app = untrusted(folder.path());
+        let original = app.lyrics_track().unwrap();
+        game(&mut app, &ctx, Level::Word, 0);
+        hold(&mut app, &ctx, 1100, 1500);
+        assert!(
+            app.lyrics_question_open(),
+            "the first take is the first edit"
+        );
+        // The game waits for the answer: no take meanwhile.
+        at(&mut app, &ctx, Some(1700), vec![space(true, false)]);
+        at(&mut app, &ctx, Some(1800), vec![space(false, false)]);
+        let g = app.lyrics_screen.game.as_ref().unwrap();
+        assert_eq!((g.paused, g.holds.len()), (Some(game::Pause::Question), 1));
+        // « Modifier le .srt »: the take is kept and written, Espace resumes.
+        let path = app.project.track.path.clone().unwrap();
+        app.consent_first_edit(path);
+        at(&mut app, &ctx, None, Vec::new());
+        assert_eq!(
+            app.lyrics_screen.game.as_ref().unwrap().paused,
+            Some(game::Pause::Answered)
+        );
+        at(&mut app, &ctx, None, vec![space(true, false)]);
+        at(&mut app, &ctx, None, vec![space(false, false)]);
+        at(&mut app, &ctx, Some(400), Vec::new());
+        hold(&mut app, &ctx, 1900, 2100);
+        hold(&mut app, &ctx, 2200, 2400);
+        assert_eq!(app.history_labels().0, Some("sync 3 words"));
+        at(
+            &mut app,
+            &ctx,
+            Some(2500),
+            vec![key(Key::Escape, Modifiers::NONE)],
+        );
+        assert_eq!(app.lyrics_screen.summary.unwrap().0.count, 3);
+        // « Tout annuler », clicked: the whole game goes, first take included.
+        frame(&mut app, &ctx, Vec::new());
+        let undo_all = app
+            .lyrics_screen
+            .drawn
+            .undo_all
+            .expect("the summary's buttons");
+        click(&mut app, &ctx, undo_all.center());
+        assert_eq!(*app.lyrics_track().unwrap(), *original);
+        assert_eq!(app.history_labels().0, None);
+        assert!(app.lyrics_screen.summary.is_none());
+
+        // « Annuler » on the question: the game ends, lyrics and history untouched.
+        let mut app = untrusted(folder.path());
+        let original = app.lyrics_track().unwrap();
+        game(&mut app, &ctx, Level::Word, 0);
+        hold(&mut app, &ctx, 1100, 1500);
+        assert!(app.lyrics_question_open());
+        at(&mut app, &ctx, Some(1600), Vec::new());
+        app.cancel_first_edit();
+        at(&mut app, &ctx, None, Vec::new());
+        assert!(app.lyrics_screen.game.is_none() && app.lyrics_screen.summary.is_none());
+        assert_eq!(*app.lyrics_track().unwrap(), *original);
+        assert_eq!(app.history_labels(), (None, None));
+    }
+
+    #[test]
+    fn a_syllables_game_cuts_only_the_lines_that_get_a_take() {
+        let folder = tempfile::tempdir().unwrap();
+        let packs = folder.path().join("languages");
+        let dir = packs.join("en");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("language.json"),
+            r#"{"id": "en", "name": {}, "version": "1", "syllables": {"vowels": "aeiouy"}}"#,
+        )
+        .unwrap();
+        let mut app = app(folder.path());
+        app.set_language_packs(noh::languages::scan(&[packs]));
+        app.subtitles.language = "en".into();
+        let ctx = context();
+        let cut = |app: &NohApp, line: usize| {
+            edit::words_or_estimate(&app.lyrics_track().unwrap().cues[line])
+                .iter()
+                .any(|w| w.syllables.is_some())
+        };
+        game(&mut app, &ctx, Level::Syllable, 0);
+        // The game shows every line's syllables (« Some·thing », « noth·ing »)…
+        let g = app.lyrics_screen.game.as_ref().unwrap();
+        let texts = |line: usize| -> Vec<&str> {
+            g.units
+                .iter()
+                .filter(|u| u.cue == line)
+                .map(|u| u.text.as_str())
+                .collect()
+        };
+        assert!(
+            texts(0).len() > 4 && texts(1).len() > 3,
+            "{:?} {:?}",
+            texts(0),
+            texts(1)
+        );
+        // …but the lyrics are not touched before a take.
+        assert!(!cut(&app, 0) && !cut(&app, 1));
+        hold(&mut app, &ctx, 1100, 1400);
+        at(
+            &mut app,
+            &ctx,
+            Some(1500),
+            vec![key(Key::Escape, Modifiers::NONE)],
+        );
+        // One syllable taken on line 1: that line has its splits, the others
+        // are as they were.
+        assert!(cut(&app, 0));
+        assert!(!cut(&app, 1) && !cut(&app, 2));
+        assert_eq!(app.lyrics_track().unwrap().cues[1].words, None);
+        assert_eq!(app.history_labels().0, Some("sync 1 syllable"));
+    }
+
+    #[test]
+    fn the_game_waits_when_the_player_that_could_slow_the_song_stops() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = app(folder.path());
+        let ctx = context();
+        app.lyrics_screen.test_live = Some(true);
+        app.lyrics_screen.speed = 0.75;
+        game(&mut app, &ctx, Level::Word, 0);
+        at(&mut app, &ctx, Some(200), Vec::new());
+        let g = app.lyrics_screen.game.as_ref().unwrap();
+        assert!(g.paused.is_none() && app.lyrics_screen.speed == 0.75);
+        hold(&mut app, &ctx, 1100, 1500);
+        // The usual player takes over: it cannot slow down.
+        app.lyrics_screen.test_live = Some(false);
+        at(&mut app, &ctx, Some(1600), vec![space(true, false)]);
+        at(&mut app, &ctx, Some(1650), vec![space(false, false)]);
+        let g = app.lyrics_screen.game.as_ref().unwrap();
+        assert_eq!(g.paused, None, "that Espace resumed the game");
+        assert_eq!(g.holds.len(), 1, "and was not a take");
+        assert_eq!(app.lyrics_screen.speed, 1.0);
+        // The pause itself, before any key.
+        let mut app = self::app(folder.path());
+        app.lyrics_screen.test_live = Some(true);
+        app.lyrics_screen.speed = 0.5;
+        game(&mut app, &ctx, Level::Word, 0);
+        app.lyrics_screen.test_live = Some(false);
+        at(&mut app, &ctx, Some(300), Vec::new());
+        assert_eq!(
+            app.lyrics_screen.game.as_ref().unwrap().paused,
+            Some(game::Pause::Engine)
+        );
+        assert_eq!(app.lyrics_screen.speed, 1.0);
+        // Stopping keeps the take and leaves no speed behind.
+        app.ls_end_game();
+        assert!(app.lyrics_screen.game.is_none());
+    }
+
+    #[test]
+    fn the_lyrics_are_written_after_the_game_not_during_it() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = app(folder.path());
+        let ctx = context();
+        let srt = app.project.track.path.clone().unwrap();
+        let on_disk = std::fs::read_to_string(&srt).unwrap();
+        game(&mut app, &ctx, Level::Line, 0);
+        hold(&mut app, &ctx, 1200, 3400);
+        assert!(app.has_unsaved_lyrics());
+        // The write is due: it waits for the end of the game.
+        app.lyrics_save.write_at = Some(Instant::now() - Duration::from_secs(1));
+        at(&mut app, &ctx, Some(3500), Vec::new());
+        assert!(app.has_unsaved_lyrics());
+        assert_eq!(std::fs::read_to_string(&srt).unwrap(), on_disk);
+        at(
+            &mut app,
+            &ctx,
+            Some(3600),
+            vec![key(Key::Escape, Modifiers::NONE)],
+        );
+        assert!(app.lyrics_screen.game.is_none());
+        app.lyrics_save.write_at = Some(Instant::now() - Duration::from_secs(1));
+        frame(&mut app, &ctx, Vec::new());
+        assert!(!app.has_unsaved_lyrics(), "written once the game is over");
+        assert!(
+            std::fs::read_to_string(&srt)
+                .unwrap()
+                .contains("00:00:01,200 --> 00:00:03,400")
+        );
+    }
+
+    #[test]
+    fn the_summary_offers_to_go_on_at_the_next_line() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = app(folder.path());
+        let ctx = context();
+        game(&mut app, &ctx, Level::Line, 0);
+        hold(&mut app, &ctx, 1200, 3400);
+        at(
+            &mut app,
+            &ctx,
+            Some(3500),
+            vec![key(Key::Escape, Modifiers::NONE)],
+        );
+        frame(&mut app, &ctx, Vec::new());
+        let again = app
+            .lyrics_screen
+            .drawn
+            .again
+            .expect("the summary's buttons");
+        click(&mut app, &ctx, again.center());
+        let g = app.lyrics_screen.game.as_ref().expect("a new game");
+        assert_eq!(g.units[0].cue, 1, "from the line after the last take");
+        assert!(app.lyrics_screen.summary.is_none());
+        // The transport's button waits during a game: a click on it does nothing.
+        assert!(app.lyrics_screen.game.is_some());
+    }
+
     /// Opt-in CPU frame cost of the lyrics screen at 980 × 850 (less the
     /// application's header), tessellation included, beside the main screen's
     /// own with the same song: a real waveform and up to 120 lines.
@@ -3483,7 +4196,14 @@ mod tests {
         app.wav = Some(std::path::PathBuf::from(&wav));
         app.wav_seconds = Some(duration as f64 / 1000.0);
         app.capture_state = Some("frame-cost".into());
-        for level in [None, Some(Level::Line), Some(Level::Syllable)] {
+        // Last, a game at the Words level with Espace held all along: the
+        // prompt, the guides, the takes and the growing hold are drawn.
+        for (level, playing) in [
+            (None, false),
+            (Some(Level::Line), false),
+            (Some(Level::Syllable), false),
+            (Some(Level::Word), true),
+        ] {
             match level {
                 Some(level) => {
                     if !app.lyrics_screen.open {
@@ -3493,11 +4213,26 @@ mod tests {
                 }
                 None => app.close_lyrics_screen(),
             }
+            if playing {
+                app.lyrics_screen.test_clock = Some(Some(0));
+                app.ls_start_game(&ctx);
+                assert!(app.lyrics_screen.game.is_some());
+            }
             let mut samples = Vec::new();
             for n in 0..620u64 {
                 // The playhead crosses the song: the track turns its page.
                 app.mini_preview.cursor_ms = n * 97 % duration;
                 app.lyrics_screen.view_start = (n / 60) * 8000 % duration;
+                if let Some(g) = &mut app.lyrics_screen.game {
+                    // Held since a little before the playhead, on a unit that
+                    // moves on with it; the game never waits.
+                    let now = n * 97 % duration;
+                    app.lyrics_screen.test_clock = Some(Some(now));
+                    g.paused = None;
+                    g.waiting = None;
+                    g.idx = (n as usize / 6) % g.units.len();
+                    g.hold = Some(now.saturating_sub(300));
+                }
                 let height = if level.is_some() { 802.0 } else { 850.0 };
                 let started = Instant::now();
                 let output = ctx.run_ui(
@@ -3529,6 +4264,7 @@ mod tests {
                 "{} lines={lines} frames={} p50_ms={:.3} p95_ms={:.3} max_ms={:.3}",
                 match level {
                     None => "MAIN_SCREEN".to_string(),
+                    Some(level) if playing => format!("LYRICS_SCREEN game level={level:?}"),
                     Some(level) => format!("LYRICS_SCREEN level={level:?}"),
                 },
                 samples.len(),

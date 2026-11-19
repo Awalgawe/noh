@@ -486,6 +486,18 @@ impl NohApp {
         }
     }
 
+    /// The step `key` made was left unarmed (a question was open on it): its
+    /// next pieces grow it again.
+    pub(super) fn rearm_edit_run(&mut self, key: u64) {
+        if !self.lyrics_edit.history.is_empty() {
+            self.lyrics_edit.run = Some((
+                key,
+                self.lyrics_edit.history.len(),
+                self.project.edit_revision,
+            ));
+        }
+    }
+
     /// The step in progress is over: the next piece starts a new undo step.
     pub(super) fn end_edit_run(&mut self) {
         self.lyrics_edit.run = None;
@@ -680,9 +692,11 @@ impl NohApp {
         // Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z), Suppr on the chosen cue, unless typing.
         let focus_free = ctx.memory(|m| m.focused().is_none());
         // A lyrics question open: no key edits behind it.
+        // During a sync game every key is the game's (app_lyrics_screen/game.rs).
         let keys = !ctx.egui_wants_keyboard_input()
             && !self.lyrics_frozen()
-            && !self.lyrics_question_open();
+            && !self.lyrics_question_open()
+            && !self.lyrics_game_running();
         if keys {
             self.word_keys(ctx, focus_free || self.lyrics_edit.bubble_focus);
         }
@@ -964,6 +978,12 @@ impl NohApp {
     /// The split typed for word `wi` of cue `i` ("" joins it back). A split
     /// that drops or adds letters, or has no room, changes nothing and says why.
     /// The language packs, read from languages/ beside NOH on first use.
+    /// Tests give the packs instead of reading languages/ beside NOH.
+    #[cfg(test)]
+    pub(super) fn set_language_packs(&mut self, packs: noh::languages::Packs) {
+        self.lyrics_edit.packs = Some(Arc::new(packs));
+    }
+
     pub(super) fn language_packs(&mut self) -> Arc<noh::languages::Packs> {
         self.lyrics_edit
             .packs
