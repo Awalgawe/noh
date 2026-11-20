@@ -672,6 +672,9 @@ fn build(
         .stdout(Stdio::null())
         .stderr(stderr)
         .spawn()?;
+    // Closing NOH stops the copy and waits for this encoder; a NOH that is
+    // killed takes it along too.
+    crate::process::adopt(&child);
     let began = Instant::now();
     let status = loop {
         let late = began.elapsed() > COPY_TIME;

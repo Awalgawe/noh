@@ -1,5 +1,23 @@
 //! Bounded pipe readers and process ownership. Workers inherit their supervisor's
 //! tree; standalone inspections receive their own process tree and deadline.
+//!
+//! A media helper does not outlive this process. An owner that drops its
+//! `Tree` kills and reaps it; a process that ends before its owners did (the
+//! window closed while a worker thread still held a decoder) is covered
+//! twice: on Windows every `Tree`, and every helper given to `adopt`, belongs
+//! to a job the system closes with this process, killing what is left,
+//! however the process ended; everywhere, `settle` lets an ordinary exit wait
+//! a bounded time for the owners of a `Tree` to finish reaping.
+//!
+//! Unix has the bounded wait only. No parent-death signal is asked for: on
+//! Linux PR_SET_PDEATHSIG follows the thread that spawned, not the process,
+//! and would kill a child when its worker thread ends. So there a process
+//! that is killed, or an owner that does not stop when told, still leaves
+//! its child; and a worker that spawns after `settle` saw no child left is
+//! not waited for.
+//!
+//! What must outlive NOH on purpose (the update's installer, the relaunch
+//! after an update) is started with `Command` directly, and is in no job.
 use process_wrap::std::{ChildWrapper, CommandWrap};
 use std::{
     io::{self, BufRead, BufReader, Read},
@@ -8,6 +26,129 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+
+/// The `Tree`s alive in this process: spawned, not yet killed and reaped.
+static LIVE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Wait until every child this process started is gone, `limit` at most.
+/// Called at the end of an ordinary exit, once the owners were told to stop:
+/// a worker thread needs a moment to kill and reap its child, and the
+/// process must not end under it. True when none is left.
+pub fn settle(limit: Duration) -> bool {
+    let deadline = Instant::now() + limit;
+    loop {
+        if LIVE.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+}
+
+/// Windows: one job for every child of this process, with "kill on job
+/// close". This process holds its only handle and never closes it: the system
+/// does when the process ends, in whatever way, and then ends every process
+/// still in the job. A child's own job (`isolate`) nests inside it.
+#[cfg(windows)]
+mod exit_job {
+    use std::{ffi::c_void, os::windows::io::AsRawHandle, sync::OnceLock};
+
+    #[repr(C)]
+    #[derive(Default)]
+    struct BasicLimits {
+        per_process_user_time_limit: i64,
+        per_job_user_time_limit: i64,
+        limit_flags: u32,
+        minimum_working_set_size: usize,
+        maximum_working_set_size: usize,
+        active_process_limit: u32,
+        affinity: usize,
+        priority_class: u32,
+        scheduling_class: u32,
+    }
+    /// JOBOBJECT_EXTENDED_LIMIT_INFORMATION.
+    #[repr(C)]
+    #[derive(Default)]
+    struct ExtendedLimits {
+        basic: BasicLimits,
+        io: [u64; 6],
+        process_memory_limit: usize,
+        job_memory_limit: usize,
+        peak_process_memory_used: usize,
+        peak_job_memory_used: usize,
+    }
+    const EXTENDED_LIMIT_INFORMATION: i32 = 9;
+    const KILL_ON_JOB_CLOSE: u32 = 0x2000;
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn CreateJobObjectW(attributes: *const c_void, name: *const u16) -> *mut c_void;
+        fn SetInformationJobObject(
+            job: *mut c_void,
+            class: i32,
+            information: *const c_void,
+            length: u32,
+        ) -> i32;
+        fn AssignProcessToJobObject(job: *mut c_void, process: *mut c_void) -> i32;
+        fn CloseHandle(handle: *mut c_void) -> i32;
+    }
+
+    /// The job's handle, as an address (a raw pointer is not `Sync`); 0 when
+    /// the system gave none.
+    static JOB: OnceLock<usize> = OnceLock::new();
+
+    fn job() -> *mut c_void {
+        *JOB.get_or_init(|| unsafe {
+            let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+            if job.is_null() {
+                return 0;
+            }
+            let mut limits = ExtendedLimits::default();
+            limits.basic.limit_flags = KILL_ON_JOB_CLOSE;
+            if SetInformationJobObject(
+                job,
+                EXTENDED_LIMIT_INFORMATION,
+                (&raw const limits).cast(),
+                size_of::<ExtendedLimits>() as u32,
+            ) == 0
+            {
+                // A job that would not kill is of no use here.
+                CloseHandle(job);
+                return 0;
+            }
+            job as usize
+        }) as *mut c_void
+    }
+
+    /// Put a child just spawned in the job. Best effort: a child the system
+    /// refuses to add keeps its owner's kill only, and the journal says so.
+    pub fn adopt(child: &std::process::Child) {
+        let job = job();
+        if job.is_null() {
+            static SAID: std::sync::Once = std::sync::Once::new();
+            SAID.call_once(|| {
+                tracing::warn!("no exit job: a helper may outlive a process that is killed");
+            });
+        } else if unsafe { AssignProcessToJobObject(job, child.as_raw_handle().cast()) } == 0 {
+            tracing::warn!(
+                pid = child.id(),
+                error = %std::io::Error::last_os_error(),
+                "a helper could not join the exit job"
+            );
+        }
+    }
+}
+
+/// A helper spawned without a `Tree` (its owner kills it itself when told to
+/// stop) still ends with this process on Windows. Nothing elsewhere.
+pub(crate) fn adopt(child: &std::process::Child) {
+    #[cfg(windows)]
+    exit_job::adopt(child);
+    #[cfg(not(windows))]
+    let _ = child;
+}
 
 pub(crate) struct Tree(pub Box<dyn ChildWrapper>);
 impl Tree {
@@ -19,7 +160,7 @@ impl Tree {
             #[cfg(unix)]
             wrapped.wrap(process_wrap::std::ProcessSession);
         }
-        Ok(Self(wrapped.spawn_with(|command| {
+        let child = wrapped.spawn_with(|command| {
             #[cfg(windows)]
             {
                 use std::os::windows::process::CommandExt;
@@ -32,8 +173,15 @@ impl Tree {
                 command
                     .creation_flags(CREATE_NO_WINDOW | if isolate { CREATE_SUSPENDED } else { 0 });
             }
-            command.spawn()
-        })?))
+            let child = command.spawn()?;
+            // Before process-wrap resumes an isolated child, so that nothing
+            // it starts escapes the job.
+            #[cfg(windows)]
+            exit_job::adopt(&child);
+            Ok(child)
+        })?;
+        LIVE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(Self(child))
     }
 }
 impl Drop for Tree {
@@ -42,6 +190,7 @@ impl Drop for Tree {
         // Reap the leader without a second wait on the Windows completion port:
         // process-wrap::try_wait may already have consumed its notification.
         let _ = self.0.inner_mut().wait();
+        LIVE.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -287,6 +436,21 @@ mod tests {
                 std::io::stdout().flush().unwrap();
                 child.wait().unwrap();
             }
+            Ok("abandon") => {
+                // A process that ends while it still owns a child: the child
+                // is never killed by its owner.
+                let isolate = std::env::var("NOH_FIXTURE_ISOLATE").unwrap() == "true";
+                let mut child = fixture_command("child");
+                child.stdout(Stdio::inherit()).stderr(Stdio::null());
+                std::mem::forget(Tree::spawn(child, isolate).unwrap());
+                thread::sleep(Duration::from_millis(
+                    std::env::var("NOH_FIXTURE_LINGER")
+                        .unwrap()
+                        .parse()
+                        .unwrap(),
+                ));
+                std::process::exit(0);
+            }
             Ok("child") => {
                 println!("CHILD_READY|{}", std::process::id());
                 std::io::stdout().flush().unwrap();
@@ -406,6 +570,74 @@ mod tests {
             }
         }
     }
+    /// The window closed while a worker thread still held a decoder: the
+    /// process ends without its `Tree` being dropped, and the system ends
+    /// the child with it.
+    #[test]
+    #[cfg(windows)]
+    fn a_child_does_not_outlive_a_process_that_ended_without_killing_it() {
+        for isolate in [false, true] {
+            let mut owner = fixture_command("abandon");
+            owner
+                .env("NOH_FIXTURE_ISOLATE", isolate.to_string())
+                .env("NOH_FIXTURE_LINGER", "300")
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null());
+            let mut owner = owner.spawn().unwrap();
+            let pipe = owner.stdout.take().unwrap();
+            let (tx, rx) = mpsc::channel();
+            thread::spawn(move || {
+                let _ = lines(pipe, 4096, |line| tx.send(line).is_ok());
+            });
+            let deadline = Instant::now() + Duration::from_secs(10);
+            let child = loop {
+                let line = rx
+                    .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                    .unwrap();
+                if let Some(pid) = line.strip_prefix("CHILD_READY|") {
+                    break pid.parse::<u32>().unwrap();
+                }
+            };
+            let child = Handle::open(child);
+            assert_eq!(child.wait(0), 258, "the child runs while its owner does");
+            assert!(owner.wait().unwrap().success());
+            assert_eq!(
+                child.wait(5000),
+                0,
+                "isolate={isolate}: the child outlived the process that started it"
+            );
+        }
+    }
+
+    #[test]
+    fn settle_waits_for_a_child_being_reaped_and_gives_up_at_its_limit() {
+        let mut command = fixture_command("child");
+        command.stdout(Stdio::null()).stderr(Stdio::null());
+        let tree = Tree::spawn(command, true).unwrap();
+        let started = Instant::now();
+        assert!(!settle(Duration::from_millis(50)), "a child is alive");
+        assert!(started.elapsed() < Duration::from_secs(2));
+        // An owner told to stop reaps a moment later, on its own thread.
+        let reaped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let done = reaped.clone();
+        let owner = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(150));
+            drop(tree);
+            done.store(true, std::sync::atomic::Ordering::SeqCst);
+        });
+        // Other tests may own children of their own meanwhile, which can only
+        // make the wait longer: when it ends before its limit, this child was
+        // reaped first.
+        if settle(Duration::from_secs(5)) {
+            assert!(started.elapsed() >= Duration::from_millis(150));
+            owner.join().unwrap();
+            assert!(reaped.load(std::sync::atomic::Ordering::SeqCst));
+        } else {
+            owner.join().unwrap();
+        }
+    }
+
     #[test]
     fn cancellation_reaps_a_confirmed_active_descendant() {
         let mut command = fixture_command("parent");

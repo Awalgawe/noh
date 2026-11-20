@@ -1803,6 +1803,67 @@ mod tests {
         }
         assert_eq!(small.frames.len(), MAX_CACHE_FRAMES);
     }
+    /// The window closes while the monitor's still picture is being decoded:
+    /// the worker is dropped, and by the time the exit's wait ends the
+    /// decoder is gone. A program that never answers stands in for a decoder
+    /// stuck on a file.
+    #[test]
+    fn a_decoder_in_flight_is_gone_when_the_exit_wait_ends() {
+        let folder = tempfile::tempdir().unwrap();
+        let script = folder.path().join("decoder.rs");
+        let decoder = folder
+            .path()
+            .join(format!("decoder{}", std::env::consts::EXE_SUFFIX));
+        std::fs::write(
+            &script,
+            r##"use std::{env, fs, thread, time::Duration};
+fn main() {
+    // The header probe gets no answer; the decode never ends, and says it lives.
+    if !env::args().any(|a| a == "rawvideo") { std::process::exit(1); }
+    let beat = env::current_exe().unwrap().with_extension("beat");
+    let mut n = 0u64;
+    loop { n += 1; fs::write(&beat, n.to_string()).unwrap(); thread::sleep(Duration::from_millis(20)); }
+}
+"##,
+        )
+        .unwrap();
+        let mut compiler =
+            crate::command(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()));
+        compiler.arg(&script).arg("-o").arg(&decoder);
+        #[cfg(all(windows, target_env = "gnu"))]
+        compiler.args(["-C", "linker=rust-lld", "-C", "linker-flavor=ld.lld"]);
+        let (status, log) =
+            crate::process::capture(compiler, Duration::from_secs(60), true).unwrap();
+        assert!(status.success(), "{log}");
+        let source = folder.path().join("clip.mp4");
+        std::fs::write(&source, b"identity-only fixture").unwrap();
+        let beat = decoder.with_extension("beat");
+        let read = || std::fs::read_to_string(&beat).unwrap_or_default();
+
+        let worker = FrameWorker::new(|| {});
+        assert!(
+            worker
+                .enqueue(FrameRequest::Still {
+                    item: source.into(),
+                    ffmpeg: decoder.clone(),
+                })
+                .is_some()
+        );
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while read().is_empty() {
+            assert!(Instant::now() < deadline, "the decoder never started");
+            thread::sleep(Duration::from_millis(20));
+        }
+        // What closing the window does, then what the end of `main` does.
+        drop(worker);
+        // Other tests' children can only make that wait longer: when it ends,
+        // this decoder was killed and reaped.
+        crate::process::settle(Duration::from_secs(10));
+        let seen = read();
+        thread::sleep(Duration::from_millis(300));
+        assert_eq!(read(), seen, "the decoder still runs after the exit's wait");
+    }
+
     #[test]
     fn invalidation_cancels_active_and_clears_bounded_mailbox() {
         let cancel = Arc::new(AtomicBool::new(false));

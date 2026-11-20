@@ -273,4 +273,4 @@ pub fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     cmd
 }
 
-mod process;
+pub mod process;

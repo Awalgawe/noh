@@ -160,6 +160,7 @@ fn text(mut command: Command, url: &str, stop: &dyn Fn() -> bool) -> Result<Stri
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| Error::Unsupported(format!("curl did not start: {e}")))?;
+    crate::process::adopt(&child);
     // Pipes are drained on their own threads so a full pipe never blocks curl.
     let mut out = child.stdout.take().expect("piped");
     let mut err = child.stderr.take().expect("piped");
@@ -236,6 +237,7 @@ pub fn download(
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| Error::Unsupported(format!("curl did not start: {e}")))?;
+    crate::process::adopt(&child);
     let status = loop {
         if stop() {
             let _ = child.kill();

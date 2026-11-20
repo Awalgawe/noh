@@ -5,6 +5,16 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
+## Unreleased
+
+### Fixes
+
+- Closing NOH no longer leaves a video decoder running behind it: closing
+  waits up to two seconds for the decoders still running to be stopped. On
+  Windows the decoders, the encoders and the downloads NOH starts also end
+  with it when NOH is killed or crashes. The installer of an update is not
+  concerned: it goes on after NOH closes, as before.
+
 ## 0.3.1
 
 Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.3.1).

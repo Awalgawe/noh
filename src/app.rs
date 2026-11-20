@@ -1035,6 +1035,10 @@ fn main() -> eframe::Result {
             Ok(Box::new(app))
         }),
     );
+    // The window is closed and every worker was told to stop: give their
+    // threads the moment they need to kill and reap a decoder still running,
+    // so that none is left behind by the process ending under them.
+    noh::process::settle(std::time::Duration::from_secs(2));
     match &outcome {
         Ok(()) => app_startup::note("closed normally"),
         // The window never opened, or its event loop ended on an error: say why before exiting.
