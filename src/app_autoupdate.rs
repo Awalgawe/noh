@@ -1,7 +1,6 @@
 //! Automatic updates in the interface: the Settings section, the header badge,
 //! the checks on a timer and the installation when NOH closes. The work itself
-//! is in `noh::auto_update`. Inactive while the older `updates` prototype is
-//! compiled, so the two never run together.
+//! is in `noh::auto_update`.
 use super::*;
 use app_style::{self as style, Kind, space};
 use noh::auto_update::{

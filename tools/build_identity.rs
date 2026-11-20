@@ -21,12 +21,6 @@ const INPUT_FILES: &[&str] = &[
     ".cargo/config.toml",
 ];
 pub const OPTION_ENV: &[&str] = &[
-    "NOH_UPDATE_TRUST_JSON",
-    "NOH_UPDATE_PACKAGE_ID",
-    "NOH_UPDATE_QUALIFICATION_ROOT",
-    "NOH_UPDATE_FEED_URL",
-    "NOH_UPDATE_CHANNEL",
-    "NOH_UPDATE_FORMAT",
     "OPT_LEVEL",
     "DEBUG",
     "CARGO_ENCODED_RUSTFLAGS",
@@ -348,21 +342,6 @@ mod tests {
         assert!(!info.render().contains("private compiler flags"));
     }
     #[test]
-    fn update_feed_credentials_are_rejected_before_embedding() {
-        assert!(credential_free_update_feed(
-            "https://api.github.com/repos/example/noh/releases/assets/1"
-        ));
-        for value in [
-            "https://github.com/a?token=synthetic-secret",
-            "https://synthetic-secret@api.github.com/a",
-            "https://github.com/a#private",
-            "http://github.com/a",
-        ] {
-            assert!(!credential_free_update_feed(value));
-        }
-    }
-
-    #[test]
     fn unavailable_vcs_and_compiler_are_explicit() {
         let root = tempfile::tempdir().unwrap();
         let info = git_info(root.path());
@@ -607,13 +586,6 @@ pub fn git_info(root: &Path) -> GitInfo {
 
 pub fn is_option(key: &str) -> bool {
     OPTION_ENV.contains(&key) || key.starts_with("CARGO_PROFILE_")
-}
-/// Build-time credential guard, not the runtime URL/host authentication policy.
-/// Do not embed common userinfo/query credentials even in an invalid feed config.
-pub fn credential_free_update_feed(value: &str) -> bool {
-    value.strip_prefix("https://").is_some_and(|rest| {
-        !value.contains(['?', '#']) && !rest.split('/').next().unwrap_or_default().contains('@')
-    })
 }
 pub fn normalize_option(value: &str, root: &Path) -> String {
     let path = root.to_string_lossy();

@@ -12,19 +12,11 @@ gui = ["dep:eframe", "dep:rfd", "dep:open", "dep:rodio", "dep:libloading", "dep:
 # Caption effects engine (OpenGL): layout, plugins, GPU compositor and export mix.
 effects = ["dep:cosmic-text", "dep:fdsm", "dep:fdsm-ttf-parser", "dep:nalgebra", "dep:ttf-parser", "dep:naga", "dep:glow", "dep:glutin", "dep:glutin-winit", "dep:winit", "dep:bytemuck"]
 mcp = ["dep:rmcp", "dep:tokio", "dep:tokio-util"]
-updates = ["dep:ring", "dep:base64", "dep:semver", "dep:sha2", "dep:reqwest", "dep:tokio", "dep:windows-sys", "dep:quick-xml", "dep:zip"]
 
 [dependencies]
-ring = { version = "=0.17.14", optional = true }
-base64 = { version = "0.22", optional = true }
-semver = { version = "1", features = ["serde"], optional = true }
-sha2 = { version = "0.10", optional = true }
 # The preview copies are named by SHA-256. rmcp already brings this release
-# into the packaged build; the 0.10 one above belongs to the updates only.
+# into the packaged build.
 sha2_11 = { package = "sha2", version = "0.11", optional = true }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"], optional = true }
-quick-xml = {version = "0.41", optional = true}
-zip = {version = "=9.5.1", default-features = false, features = ["deflate"], optional = true}
 eframe = { version = "0.36.2", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"], optional = true }
 rfd = { version = "0.17.2", optional = true }
 open = { version = "5.3", optional = true }
@@ -74,9 +66,6 @@ egui-winit = { git = "https://github.com/Awalgawe/egui", rev = "3c7cc5468ca8de52
 [patch."https://github.com/crmne/winit"]
 dpi = { version = "=0.1.2" }
 
-[target.'cfg(windows)'.dependencies]
-windows-sys = {version = "0.61.2", optional = true, features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_IO", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Pipes"]}
-
 [build-dependencies]
 embedinator = "=0.1.0"
 sha2 = "0.10"
@@ -85,31 +74,6 @@ process-wrap = { version = "9.1", features = ["std"] }
 [[example]]
 name = "dev"
 path = "tools/dev.rs"
-
-[[example]]
-name = "update-release"
-path = "tools/update_release.rs"
-required-features = ["updates"]
-
-[[example]]
-name = "update-measure"
-path = "tools/update_measure.rs"
-required-features = ["updates"]
-
-[[example]]
-name = "update-setup-probe"
-path = "tools/update_setup_probe.rs"
-required-features = ["updates"]
-
-[[bin]]
-name = "noh-update-guard"
-path = "src/update_guard_main.rs"
-required-features = ["updates"]
-
-[[bin]]
-name = "noh-update-repair"
-path = "src/update_repair_main.rs"
-required-features = ["updates"]
 
 [[example]]
 name = "scrub_probe"

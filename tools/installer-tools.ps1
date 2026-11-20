@@ -1,7 +1,7 @@
 # Install the pinned official compiler on the disposable CI runner.
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$Directory)
-. "$PSScriptRoot/update-qualification/common.ps1"
+. "$PSScriptRoot/windows-common.ps1"
 $Directory = Assert-PlainPath $Directory
 [void][IO.Directory]::CreateDirectory($Directory)
 $archive = "$Directory/innosetup-7.1.0-x64.exe"

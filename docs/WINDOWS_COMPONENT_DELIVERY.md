@@ -46,9 +46,10 @@ qualification of final GitHub-built bytes.
 
 ## Historical recovery inventory
 
-The public root `741da7a` already contains `tools/setup_profiles.rs`,
+The public root `741da7a` already contained `tools/setup_profiles.rs`,
 `tools/build-installer.ps1`, `tools/installer/noh.iss` and
-`src/update/bootstrap.rs`. They were not deleted by the public import.
+`src/update/bootstrap.rs`. They were not deleted by the public import; they were
+removed with the update prototype after 0.3.0 and remain in Git history.
 Commit `522d91b` introduced the three profiles and authenticated web installer;
 `1b7536e` repaired download cancellation. The public release added a separate
 ordinary installer (`public.iss`) without connecting those profile capabilities.
@@ -69,8 +70,9 @@ previously shipped on-demand component manager.
 speech/model files and preview support, show translated recovery help, and
 recheck availability off the GUI thread. The inspected history contains no
 FFmpeg/Whisper download action there. Before 0.1.1, the public app linked only to the
-Microsoft prerequisite download. `src/app_updates.rs` provides a separate,
-feature-gated full-application update flow, not media-component acquisition.
+Microsoft prerequisite download. The automatic update (`src/auto_update`)
+replaces the whole application through the installer; it is not media-component
+acquisition.
 
 ## Current user requirement
 

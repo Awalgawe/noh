@@ -1563,7 +1563,6 @@ impl NohApp {
                         if r.clicked() {
                             self.settings_open = !self.settings_open;
                         }
-                        #[cfg(not(feature = "updates"))]
                         self.autoupdate_badge(ui);
                         if self.resources.unavailable() {
                             let warning = style::icon_button(
@@ -1593,29 +1592,7 @@ impl NohApp {
         }
         self.receive();
         self.retry_generation(&ui.ctx().clone());
-        #[cfg(feature = "updates")]
-        self.poll_updates(&ctx);
-        #[cfg(not(feature = "updates"))]
         self.autoupdate_frame(&ctx);
-        #[cfg(feature = "updates")]
-        if self.update_blocks_session()
-            || (self.updates.capture_fixture && self.updates.confirm_install)
-        {
-            // No media controls or project shortcuts run after safe-close consent.
-            // The old process lease remains alive until normal application exit.
-            ctx.request_repaint_after(Duration::from_millis(100));
-            return egui::ScrollArea::vertical().show(ui, |ui| {
-                egui::Window::new(l.text("updates.title"))
-                    .id(egui::Id::new("update-session-close"))
-                    .collapsible(false)
-                    .resizable(false)
-                    .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
-                    .default_width(460.0)
-                    .max_width((ui.available_width() - 32.0).max(100.0))
-                    .show(&ctx, |ui| self.update_shutdown_controls(ui, &ctx));
-                self.capture_frame(&ctx);
-            });
-        }
         self.receive_captions(&ctx);
         self.receive_shorts(&ctx);
         self.prepare_views(&ctx);
@@ -1851,9 +1828,6 @@ impl eframe::App for NohApp {
     fn on_exit(&mut self, gl: Option<&eframe::glow::Context>) {
         // Stops the copy in progress and waits for its encoder to be gone.
         self.mini_preview.warmer.take();
-        #[cfg(feature = "updates")]
-        self.updates.worker.take();
-        #[cfg(not(feature = "updates"))]
         self.autoupdate_exit();
         if let Some(scrubber) = &mut self.mini_preview.scrubber {
             scrubber.close(gl);

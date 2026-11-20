@@ -5,7 +5,6 @@ import json
 import os
 from pathlib import Path
 import shutil
-import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -181,60 +180,6 @@ class DeliveryTests(unittest.TestCase):
         job['conclusion'] = 'failure'
         with self.assertRaises(ValueError):
             delivery.fetch(args, FakeGitHub())
-
-    @unittest.skipUnless(os.name == "nt" and shutil.which("pwsh"), "Windows PowerShell runner preflight")
-    def test_actual_runner_accepts_three_historical_profiles_without_local_A(self):
-        old = self.root / "old"
-        new = self.root / "new"
-        old.mkdir(); new.mkdir()
-        files = {}
-        for name in ("keys.json", "source-inventory.json", "tools/bootstrap-B.exe", "tools/update-release.exe"):
-            target = delivery.member(old, name)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(b"synthetic preflight input")
-            files[name] = delivery.digest(target)
-        for profile in delivery.PROFILES:
-            tail = delivery.suffix(profile)
-            name = f"NOH-0.1.1-win-x64{tail}-Setup.exe"
-            target = delivery.member(old, f"packages-B{tail}/{name}")
-            target.parent.mkdir(parents=True)
-            target.write_bytes(profile.encode())
-            files[f"packages-B{tail}/{name}"] = delivery.digest(target)
-            release = {"profile": profile, "version": "0.1.1", "package_id": "NOH", "artifacts": [
-                {"file_name": name, "sha256": delivery.digest(target)}]}
-            delivery.write(old / f"release-B{tail}.json", release)
-            delivery.write(old / f"envelope-B{tail}.json", {"synthetic": True})
-            for path in (f"release-B{tail}.json", f"envelope-B{tail}.json"):
-                files[path] = delivery.digest(old / path)
-        previous = {"schema": 1, "repository": delivery.REPOSITORY, "package_id": "NOH", "source_commit": "a" * 40,
-                    "version_b": "0.1.1", "files": [{"path": p, "sha256": h} for p, h in files.items()]}
-        # The original catalog also names A; none of those files exists locally.
-        previous["files"].append({"path": "packages-A/unused-Setup.exe", "sha256": "b" * 64})
-        delivery.write(old / "candidate.json", previous)
-        old_hash = delivery.digest(old / "candidate.json")
-        baseline = {"version": "0.1.1", "source_commit": "a" * 40, "candidate_sha256": old_hash}
-        delivery.write(new / "baseline.json", baseline)
-        current = {"schema": 1, "package_id": "NOH", "source_commit": "c" * 40, "version_a": "0.1.1", "version_b": "0.1.2",
-                   "baseline_sha256": delivery.digest(new / "baseline.json"), "files": [
-                       {"path": "baseline.json", "sha256": delivery.digest(new / "baseline.json")}]}
-        delivery.write(new / "candidate.json", current)
-        command = ["pwsh", "-NoProfile", "-File", str(Path(__file__).with_name("update-setup-clients.ps1")),
-                   "-Stage", "Accept", "-ValidateInputsOnly", "-CandidateDirectory", str(new), "-ExpectedCommit", "c" * 40,
-                   "-PreviousCandidateDirectory", str(old), "-ExpectedPreviousCommit", "a" * 40,
-                   "-ExpectedPreviousCandidateSha256", old_hash]
-        for profile in delivery.PROFILES:
-            result = subprocess.run(command + ["-Profile", profile], capture_output=True, text=True, timeout=30)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            record = json.loads(result.stdout)
-            self.assertEqual((record["version_a"], record["version_b"], record["profile"]), ("0.1.1", "0.1.2", profile))
-        changed = command.copy(); changed[-1] = "f" * 64
-        result = subprocess.run(changed, capture_output=True, text=True, timeout=30)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("exact baseline", result.stderr)
-        (old / "tools/bootstrap-B.exe").write_bytes(b"tampered")
-        result = subprocess.run(command, capture_output=True, text=True, timeout=30)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Changed historical", result.stderr)
 
 
 if __name__ == "__main__":

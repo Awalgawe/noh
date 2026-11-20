@@ -2,12 +2,6 @@
 mod identity;
 
 fn main() {
-    if let Ok(feed) = std::env::var("NOH_UPDATE_FEED_URL") {
-        assert!(
-            identity::credential_free_update_feed(&feed),
-            "NOH_UPDATE_FEED_URL must be a public HTTPS URL without query, fragment or userinfo credentials"
-        );
-    }
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows")
         && std::env::var_os("CARGO_FEATURE_GUI").is_some()
     {

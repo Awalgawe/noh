@@ -29,9 +29,9 @@ A running Windows portable must be closed before packaging replaces it. Missing
 resources should fail explicitly rather than trigger unrecorded downloads or
 fallback behavior.
 
-For optional updater verification, build the matching GUI/CLI/MCP binaries with
-`gui,mcp,updates`, then run `cargo dev verify --media --mcp --updates`.
-Native installation qualification is separate; see [UPDATE_RECOVERY.md](UPDATE_RECOVERY.md).
+The automatic update (`src/auto_update`) is compiled with `gui` and tested by
+the ordinary suite; its installer side is tested by the release installer stage
+(see [UPDATES.md](UPDATES.md)).
 
 ## Media and transcription checks
 
@@ -97,7 +97,7 @@ The screen's CPU cost per frame is an opt-in test, beside the main screen's
 with the same song. `NOH_QA_WAV` is the song and `NOH_FFMPEG` reads it:
 
 ```sh
-cargo test --release --features gui,mcp,updates --bin noh-app lyrics_screen_frame_cost -- --ignored --nocapture
+cargo test --release --features gui,mcp --bin noh-app lyrics_screen_frame_cost -- --ignored --nocapture
 ```
 
 It measures layout and tessellation at 980 × 850 only: no GPU paint, no
@@ -147,7 +147,8 @@ without rebuilding the whole runtime unless executable behavior also changes.
 - Windows installer and portable downloads are available on
   [GitHub Releases](https://github.com/Awalgawe/noh/releases/latest). Linux and
   macOS distributions remain unqualified; macOS signing/notarization is incomplete.
-- Automatic installation of updates is disabled in ordinary builds.
+- Automatic updates install only in a Windows copy installed with the installer;
+  portable copies and Linux are only told that a version exists.
 - The desktop does not automatically restore a closed editing session.
 - HDR tone mapping and a verified end-to-end color-management contract are absent.
 - libmpv plays the live preview by default on Windows only. It has not been run

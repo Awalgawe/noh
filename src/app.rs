@@ -1,6 +1,5 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
-#[cfg(not(feature = "updates"))]
 mod app_autoupdate;
 mod app_captions;
 mod app_capture;
@@ -36,8 +35,6 @@ mod app_subtitles;
 mod app_timeline;
 mod app_track;
 mod app_ui;
-#[cfg(feature = "updates")]
-mod app_updates;
 use app_job::{Event, Job, PreviewFile, Request};
 use app_locale::Locale;
 use app_media::{Clip, Metadata};
@@ -133,9 +130,6 @@ struct NohApp {
     settings_open: bool,
     /// Options.
     options: app_options::State,
-    #[cfg(feature = "updates")]
-    updates: app_updates::Workspace,
-    #[cfg(not(feature = "updates"))]
     autoupdate: app_autoupdate::AutoUpdate,
     drop_error: Option<Message>,
     /// Lyrics just generated into this file until acted on.
@@ -233,9 +227,6 @@ impl Default for NohApp {
             started: None,
             close_question: false,
             options: app_options::State::default(),
-            #[cfg(feature = "updates")]
-            updates: app_updates::Workspace::default(),
-            #[cfg(not(feature = "updates"))]
             autoupdate: app_autoupdate::AutoUpdate::default(),
             settings_open: std::env::var_os("NOH_CAPTURE_UI").is_some()
                 && std::env::var_os("NOH_CAPTURE_SETTINGS").is_some(),
@@ -782,16 +773,6 @@ impl NohApp {
 }
 
 fn main() -> eframe::Result {
-    #[cfg(all(windows, feature = "updates"))]
-    if let Some(code) = noh::update::lifecycle::hook_exit(std::env::args_os()) {
-        std::process::exit(code);
-    }
-    #[cfg(all(windows, feature = "updates"))]
-    let _update_lease = noh::update::windows::RuntimeLease::for_current_executable()
-        .unwrap_or_else(|error| {
-            eprintln!("noh-app: managed installation is unavailable: {error}");
-            std::process::exit(1);
-        });
     if std::env::args_os()
         .nth(1)
         .is_some_and(|s| s == "--version" || s == "-V")
@@ -810,11 +791,6 @@ fn main() -> eframe::Result {
     app_startup::note("preparing the application state");
     let mut app = NohApp::default();
     app_startup::speak(app.locale.language);
-    #[cfg(feature = "updates")]
-    if let Err(error) = app.load_update_capture_fixture() {
-        eprintln!("noh-app: {error}");
-        std::process::exit(1);
-    }
     app_startup::note("loading the bundled speech resources");
     if let Ok(executable) = std::env::current_exe()
         && let Some(folder) = executable.parent()
@@ -1010,16 +986,6 @@ fn main() -> eframe::Result {
             app.resources.preview = preview_issue;
             // Arguments also allow opening files from a shortcut, sorted by type.
             let arguments: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
-            #[cfg(all(windows, feature = "updates"))]
-            let arguments = if arguments.len() == 2
-                && matches!(
-                    arguments[0].to_str(),
-                    Some("--install-retained-update" | "--noh-update-ready-pipe")
-                ) {
-                Vec::new()
-            } else {
-                arguments
-            };
             if !arguments.is_empty() {
                 app.drop_files(arguments, &cc.egui_ctx);
             }

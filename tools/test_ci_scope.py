@@ -134,7 +134,7 @@ class ScopeTests(unittest.TestCase):
                          {"windows": False, "unix": True})
 
     def test_shared_inputs_require_every_platform(self):
-        for path in ("src/media.rs", "src/update/windows.rs", "Cargo.lock", "Cargo.toml",
+        for path in ("src/media.rs", "src/auto_update/windows.rs", "Cargo.lock", "Cargo.toml",
                      "build.rs", ".cargo/config.toml", "locales/fr.json", "assets/noh-icon.png",
                      "tools/dev.rs", "tools/delivery.py", "tests/media.rs", ".github/workflows/pr.yml",
                      "tools/ci_scope.py", "future/input.dat", "docs/embedded.bin"):

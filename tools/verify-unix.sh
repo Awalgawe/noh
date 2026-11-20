@@ -81,13 +81,13 @@ export NOH_TEST_PLAYBACK_AUDIO="$task_audio"
 
 cargo fmt --check
 # The GUI unit tests launch the normal desktop worker beside their test binary.
-task_build=(build --locked --features gui,mcp,updates --bins --example dev)
+task_build=(build --locked --features gui,mcp --bins --example dev)
 if ((task_offline)); then task_build+=(--offline); fi
 cargo "${task_build[@]}"
 
 task_dev="$CARGO_TARGET_DIR/debug/examples/dev"
 task_app="$CARGO_TARGET_DIR/debug/noh-app"
-task_verify=(verify --media --mcp --updates)
+task_verify=(verify --media --mcp)
 if ((task_offline)); then task_verify+=(--offline); fi
 if ((task_transcription)); then task_verify+=(--transcription); fi
 "$task_dev" "${task_verify[@]}"
