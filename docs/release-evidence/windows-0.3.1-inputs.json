@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "platform": "windows-x64",
+  "version": "0.3.1",
+  "scope": "Dependency and dataset input materials only; the final candidate and its qualification are separate.",
+  "baseline_source_commit": "c72e15bc5163e68c0ad20c4713ffc4b952fbadf8",
+  "prior_input_review": {
+    "path": "docs/release-evidence/windows-0.3.0-inputs.json",
+    "sha256": "bac23f518455ac14b230ef97e4cfd895b8c443e8e031bdf1802fbb701757460d"
+  },
+  "inputs": {
+    "Cargo.lock": "db3686948be29fddd9815d8bcd64c0943d4c2efede3cc9bcebca9f0e0e977809",
+    "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "assets/delivery-windows.lock.json": "29ef275d01c409cee973d1869c11f36379cfaaef704a3684e44bea6812f5f544",
+    "assets/preview-runtime.json": "72c92e5eb5d128913798f80a06a03294db798519809201458d0b17c29a4112a4",
+    "assets/rust-notices.lock.json": "905d83803fb60351458f9ba233559356f7abd1aadb8bee9660ee37b01594c2b3",
+    "assets/speech-bundle.json": "4bef71e92e5f3857e6d06e3a0b95971bc60448e838a6cf822fe9045d344c089f",
+    "assets/syllable-sources.lock.json": "a1d6be0dadb87a80181df37b47c0cf49360680e49837cdce5bb86728fc646bf2",
+    "assets/windows-native.lock.json": "de8481277cc2e37a70773f69dcc304eb13be44f2db65c84d6f3324d1e26331ed",
+    "rust_standard_library_source": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
+    "tools/build_syllable_dicts.py": "76413ca0f84eaa5fe815539ca16a0b48af34b36c3949805ba7e172c7831c0366",
+    "tools/rust_notices.py": "16d8215d716f1bf5b318e984f14687dad9b1a7f34dda103b13202d271da1cb44",
+    "tools/windows_runtime.py": "090d182a40c72503f982457c1b2e1225586bdcfdb378e27d5b8573e23863c860"
+  },
+  "changed_input_paths": [
+    "Cargo.lock"
+  ],
+  "new_input_paths": [],
+  "unchanged_input_paths": [
+    "LICENSE",
+    "assets/delivery-windows.lock.json",
+    "assets/preview-runtime.json",
+    "assets/rust-notices.lock.json",
+    "assets/speech-bundle.json",
+    "assets/syllable-sources.lock.json",
+    "assets/windows-native.lock.json",
+    "rust_standard_library_source",
+    "tools/build_syllable_dicts.py",
+    "tools/rust_notices.py",
+    "tools/windows_runtime.py"
+  ],
+  "third_party_cargo_records_unchanged": 532,
+  "changed_sources": [],
+  "changes": [
+    "Cargo.lock differs from the 0.3.0 file (sha256 f739d9756ca4c6b3d14659b7ff456bd3e269036e9943465a7c5da0cc02e20a02) by one line, inside the entry of the noh package itself: its version, 0.3.0 to 0.3.1. No third-party package is added, removed or changed, and no dependency of the noh package is added or removed.",
+    "The 0.3.1 source changes are a correction of the lyrics screen's sync game in the desktop application's own modules; they add no dependency.",
+    "Every other hashed input is byte-identical to its 0.3.0 value."
+  ],
+  "licence_reading": {
+    "method": "None: no third-party record and no dataset changed, so the 0.3.0 reading stands as recorded in the prior review, with its stated limits.",
+    "records_read": 0
+  },
+  "dataset_licences": {
+    "record": "assets/syllable-sources.lock.json and docs/THIRD-PARTY.md, section Syllable dictionaries",
+    "moby": "Moby Hyphenation List: public domain by grant from the author, as recorded in the lock (read 2026-11-10); accepted by the project maintainer on 2026-11-10 for worldwide distribution.",
+    "lexique": "Lexique 3.83: CC BY-SA 4.0. README-Lexique.txt, read 2026-11-09, is byte-identical in the reviewed archive and in the repacked one (sha256 f7501cf57c88894e839d4deb233c19863b935abc60a510447747828e9fe5ddfe, compared 2026-11-18). The repacked archive adds CC.BY.SA.txt (sha256 28a9529c7d0bb4dc51f4bf5c116a3d16ef247a052f7591466768ddf563fd1cf5), byte-identical to https://creativecommons.org/licenses/by-sa/4.0/legalcode.txt as served on 2026-11-18.",
+    "unchanged": "assets/syllable-sources.lock.json and docs/THIRD-PARTY.md are byte-identical to their 0.3.0 files; the dataset review carried by the 0.3.0 record, back to 0.2.0's mirrors and repacked Lexique archive, is carried unchanged.",
+    "third_party_md_sha256": "bfdf3e77604ab18623fae2a2f5676859b840e0494c6220c5d693d41cfaeceda6"
+  },
+  "verification": {
+    "cargo_lock_diff": "git diff c72e15b -- Cargo.lock shows exactly: -version = \"0.3.0\" / +version = \"0.3.1\", under the noh package.",
+    "third_party_packages_in_lock": 532,
+    "third_party_records_compared": "Every [[package]] block other than noh's is byte-identical in the two lock files.",
+    "other_inputs_compared": "Each other hashed input was hashed in the release commit's tree and equals the value of the 0.3.0 record.",
+    "open_points_carried": "Those of the prior reviews are unchanged, including the objc2 0.6.5 point recorded in the 0.1.6 review.",
+    "not_verified": [
+      "Final build materials: required after the candidate build.",
+      "Which crates are compiled into this platform's binary was not determined, as in the prior reviews.",
+      "The datasets were not fetched again for this record; the release's pre-build check fetches them into an empty cache."
+    ]
+  }
+}
