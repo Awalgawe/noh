@@ -979,6 +979,9 @@ const OVERLAY_STATES: &[&str] = &[
     "exists",
     "details",
     "options",
+    "update-ready",
+    "update-waiting",
+    "update-busy",
     "analyzing",
     "cancelling",
 ];
@@ -1188,6 +1191,11 @@ impl NohApp {
                 }
                 if state == "options" {
                     self.settings_open = true;
+                }
+                // A downloaded update: the header badge, the wait for MCP
+                // servers, a refusal naming what runs.
+                if state.starts_with("update-") {
+                    self.stage_autoupdate(state);
                 }
                 // Writing as you edit (lyrics plan 3): the first-edit question
                 // after a real edit, and the marks a failed write leaves.

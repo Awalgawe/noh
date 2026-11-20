@@ -229,6 +229,13 @@ has already committed, success and the output remain. EOF or broken protocol
 pipes close admission, cancel active work and wait for the owned controller's
 cleanup. Published outputs and unrelated files are preserved.
 
+An installed Windows copy that installs an update asks its servers to stop (see
+[UPDATES.md](UPDATES.md)). From then on a server refuses new jobs with
+`mcp.updating`. It exits once no job runs and the last one ended at least 15 s
+ago, and never in the middle of a job. Its job IDs end with it. A client that
+does not restart stdio servers by itself (interactive Claude Code) needs to
+reconnect it after the update.
+
 ## Client configuration
 
 Configure a stdio server in your MCP client with an absolute executable path.

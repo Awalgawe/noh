@@ -62,6 +62,9 @@ const STATES: &[&str] = &[
     "unreadable",
     "details",
     "options",
+    "update-ready",
+    "update-waiting",
+    "update-busy",
     "resources",
     "resources-options",
 ];

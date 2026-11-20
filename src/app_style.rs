@@ -263,6 +263,41 @@ pub fn button(
     };
     button_kind(ui, label, enabled, kind, width, CONTROL_H)
 }
+/// Notice button: something waits for the user (a downloaded update). 1 px
+/// `accent` outline, a 6 px `accent` dot before an `accent-text` 14/600
+/// label, `accent-soft` fill on hover; button radius and height. Louder than a
+/// quiet button, quieter than the zone's primary action.
+pub fn notice_button(ui: &mut Ui, label: &str, tip: &str) -> egui::Response {
+    const PAD: f32 = 12.0;
+    const DOT: f32 = 6.0;
+    const GAP: f32 = 8.0;
+    let t = tokens(ui);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), semibold(text::BODY), t.accent_text);
+    let size = Vec2::new(PAD + DOT + GAP + galley.size().x + PAD, CONTROL_H);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+    let painter = ui.painter();
+    if response.hovered() || response.has_focus() {
+        painter.rect_filled(rect, radius::M, t.accent_soft);
+    }
+    painter.rect_stroke(
+        rect.shrink(0.5),
+        radius::M,
+        Stroke::new(1.0, t.accent),
+        egui::StrokeKind::Inside,
+    );
+    let dot = egui::pos2(rect.left() + PAD + DOT / 2.0, rect.center().y);
+    painter.circle_filled(dot, DOT / 2.0, t.accent);
+    let text = egui::pos2(
+        rect.left() + PAD + DOT + GAP,
+        rect.center().y - galley.size().y / 2.0,
+    );
+    painter.galley(text, galley, t.accent_text);
+    focus(ui, &response);
+    response.on_hover_text(tip)
+}
 /// Icon button (`ibtn`): transparent, `text-2` glyph, `surface-2` on hover.
 /// The name is both the tooltip and the accessible label.
 pub fn icon_button(
