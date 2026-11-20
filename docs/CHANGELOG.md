@@ -5,6 +5,32 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
+## 0.3.1
+
+Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.3.1).
+
+### Lyrics
+
+- The sync game no longer ends at its first take when "Captions on the
+  video" is on. In 0.3.0 each take edited the lyrics, which stopped the
+  song, and the game took that for the end of the song. Without captions
+  on the video the game was not affected. The captions on the monitor are
+  redrawn with the new times when the game ends.
+
+### Known issues
+
+- Installed 0.3.0 copies on Windows are offered this version by their
+  automatic update. It is the first published release they can receive that
+  way: no installed copy had yet updated itself from a published release.
+- If the caption effect fails during a sync game, the preview falls back to
+  the player's own captions and stops the song, which ends the game, as in
+  0.3.0.
+- That the captions drawn over the picture follow the new times during a
+  game was read in the code, not measured.
+- The other known issues of [0.3.0](https://github.com/Awalgawe/noh/releases/tag/v0.3.0)
+  remain, including those it carries from 0.2.0: nothing else in this
+  version was written to correct them.
+
 ## 0.3.0
 
 Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.3.0).
