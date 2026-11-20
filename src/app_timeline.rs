@@ -108,6 +108,10 @@ impl TimelineState {
     pub fn ruler_rect(&self) -> Option<Rect> {
         self.geometry.map(|g| g.ruler)
     }
+    /// The lyrics lane drawn last frame, when the project has lyrics.
+    pub fn lyrics_lane_rect(&self) -> Option<Rect> {
+        self.geometry.and_then(|g| g.cues)
+    }
     /// Zoom controls wait while a range drag is in progress.
     pub fn dragging(&self) -> bool {
         self.drag.is_some()

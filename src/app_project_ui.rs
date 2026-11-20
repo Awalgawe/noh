@@ -258,6 +258,124 @@ mod tests {
         );
     }
 
+    /// Resting the pointer on the lyrics lane says which line is under it
+    /// and what a click does; while a job locks the lyrics, why nothing opens.
+    #[test]
+    fn resting_on_the_lyrics_lane_shows_the_line_and_what_a_click_does() {
+        let folder = tempfile::tempdir().unwrap();
+        let ctx = egui::Context::default();
+        app_locale::install_fonts(&ctx);
+        let mut app = NohApp::default();
+        let srt = "1\n00:00:02,000 --> 00:00:05,000\nfirst line\n\n2\n00:00:09,000 --> 00:00:12,000\nsecond line\n\n";
+        let path = folder.path().join("song.srt");
+        std::fs::write(&path, srt).unwrap();
+        app.project.duration_ms = 20_000;
+        app.project.track.path = Some(path.clone());
+        app.project.track.loaded = Some(app_track::Loaded {
+            track: std::sync::Arc::new(noh::subtitle_srt::parse(srt, 20_000).unwrap()),
+            snapshot: noh::inspection::Snapshot(vec![
+                noh::inspection::FileStamp::read(&path).unwrap(),
+            ]),
+            model: None,
+            lyrics_unwritten: None,
+            srt_stamp: noh::inspection::FileStamp::read(&path).ok(),
+            lyrics_stamp: None,
+            pairing: Default::default(),
+        });
+        // Every text painted at `time`, the pointer where `at` says.
+        let frame = |app: &mut NohApp, time: f64, at: Option<egui::Pos2>| {
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(980.0, 400.0),
+                    )),
+                    time: Some(time),
+                    events: at.map(egui::Event::PointerMoved).into_iter().collect(),
+                    ..Default::default()
+                },
+                |ui| {
+                    app_style::apply(ui.ctx());
+                    ui.add_space(40.0);
+                    app.project_timeline(ui, false);
+                },
+            );
+            output.textures_delta.clear();
+            let mut texts = Vec::new();
+            fn walk(shape: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+                match shape {
+                    egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| walk(s, out)),
+                    egui::Shape::Text(t) => out.push((
+                        t.galley.text().to_string(),
+                        t.galley.rect.translate(t.pos.to_vec2()),
+                    )),
+                    _ => {}
+                }
+            }
+            for clipped in &output.shapes {
+                walk(&clipped.shape, &mut texts);
+            }
+            texts
+        };
+        // The pointer comes to rest on the second line, and stays two seconds.
+        let rest = |app: &mut NohApp, from: f64, at: egui::Pos2| {
+            let mut texts = frame(app, from, Some(at));
+            for n in 1..=20 {
+                texts = frame(app, from + f64::from(n) * 0.1, None);
+            }
+            texts
+        };
+        let at = frame(&mut app, 0.0, None)
+            .into_iter()
+            .find(|(text, _)| text == "second line")
+            .expect("the second line is painted on the lane")
+            .1
+            .center();
+        let l = app.locale.language;
+        let hint = l.text("lyrics_screen.lane_hint");
+        let tips = |texts: &[(String, egui::Rect)]| -> Vec<String> {
+            texts
+                .iter()
+                .filter(|(text, _)| {
+                    text.contains(hint) || text.contains(l.text("lyrics_screen.locked"))
+                })
+                .map(|(text, _)| text.clone())
+                .collect()
+        };
+        assert!(
+            tips(&frame(&mut app, 0.05, None)).is_empty(),
+            "no pointer, no tooltip"
+        );
+        let shown = rest(&mut app, 1.0, at);
+        let tip = tips(&shown);
+        assert_eq!(tip.len(), 1, "{shown:?}");
+        assert!(
+            tip[0].contains("second line") && !tip[0].contains("first line"),
+            "{tip:?}"
+        );
+        assert!(
+            tip[0].contains("0:09") && tip[0].contains("0:12"),
+            "{tip:?}"
+        );
+        // All of it is in the window.
+        let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(980.0, 400.0));
+        let rect = shown.iter().find(|(text, _)| *text == tip[0]).unwrap().1;
+        assert!(window.contains_rect(rect), "{rect:?}");
+        // The pointer goes: so does the tooltip.
+        frame(&mut app, 4.0, Some(egui::pos2(5.0, 5.0)));
+        assert!(tips(&frame(&mut app, 4.1, None)).is_empty());
+        // A job runs: the reason, not the line.
+        app.cancelling = true;
+        let shown = rest(&mut app, 6.0, at);
+        let tip = tips(&shown);
+        assert_eq!(tip.len(), 1, "{shown:?}");
+        assert!(
+            !tip[0].contains("second line") && !tip[0].contains(hint),
+            "{tip:?}"
+        );
+        assert!(!app.lyrics_screen.open);
+    }
+
     /// The painted flag keeps the interface decimal in both preview views.
     #[test]
     fn short_flag_text_follows_the_language_in_video_and_short_views() {

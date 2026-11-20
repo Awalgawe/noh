@@ -1846,6 +1846,7 @@ impl eframe::App for NohApp {
         self.scrub_capture_input(ctx, input);
         self.seek_capture_input(ctx, input);
         self.drag_capture_input(ctx, input);
+        self.lane_tip_capture_input(input);
     }
     fn on_exit(&mut self, gl: Option<&eframe::glow::Context>) {
         // Stops the copy in progress and waits for its encoder to be gone.

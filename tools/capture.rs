@@ -38,6 +38,16 @@ const STATES: &[&str] = &[
     "lyrics-menu",
     "lyrics-generating",
     "lyrics-track-menu",
+    "lyrics-lane-tip",
+    "lyrics-screen",
+    "lyrics-screen-cut",
+    "lyrics-screen-word",
+    "lyrics-screen-syllables",
+    "lyrics-screen-game",
+    "lyrics-screen-game-hold",
+    "lyrics-screen-game-missed",
+    "lyrics-screen-summary",
+    "lyrics-screen-read-only",
     "lyrics-first-edit",
     "lyrics-unsaved",
     "lyrics-srt-stale",
@@ -260,6 +270,27 @@ const LAYOUT: &[LayoutCase] = &[
     ),
     ("options", "", "fr", "light", WIDE, "options-fr-light-980"),
     ("options", "", "ja", "dark", COMPACT, "options-ja-dark-420"),
+    // The lyrics screen (mockup v5), and the tooltip of the main screen's
+    // lyrics lane, which opens it.
+    ("lyrics-screen", "", "fr", "dark", WIDE, ""),
+    ("lyrics-screen", "", "fr", "light", WIDE, ""),
+    ("lyrics-screen-game-hold", "", "fr", "dark", WIDE, ""),
+    ("lyrics-screen-game-hold", "", "fr", "light", WIDE, ""),
+    ("lyrics-screen-cut", "", "de", "dark", WIDE, ""),
+    ("lyrics-screen-word", "", "ja", "light", WIDE, ""),
+    ("lyrics-screen-syllables", "", "fr", "dark", WIDE, ""),
+    ("lyrics-screen-game", "", "de", "light", WIDE, ""),
+    ("lyrics-screen-game-missed", "", "ja", "dark", WIDE, ""),
+    ("lyrics-screen-summary", "", "de", "light", WIDE, ""),
+    ("lyrics-screen-read-only", "", "fr", "dark", WIDE, ""),
+    ("lyrics-screen", "", "de", "dark", COMPACT, ""),
+    ("lyrics-screen-word", "", "fr", "light", COMPACT, ""),
+    ("lyrics-screen-game-hold", "", "fr", "dark", COMPACT, ""),
+    ("lyrics-screen-game-missed", "", "de", "light", COMPACT, ""),
+    ("lyrics-screen-summary", "", "ja", "dark", COMPACT, ""),
+    ("lyrics-screen-read-only", "", "ja", "light", COMPACT, ""),
+    ("lyrics-lane-tip", "", "fr", "dark", WIDE, ""),
+    ("lyrics-lane-tip", "", "de", "light", WIDE, ""),
     // Additional popup states.
     ("ready", "open=fades", "fr", "dark", WIDE, ""),
     ("ready", "open=fades", "de", "light", COMPACT, ""),
@@ -939,6 +970,20 @@ mod tests {
         let stems: BTreeSet<_> = cases.iter().map(|c| c.stem.clone()).collect();
         assert_eq!(stems.len(), cases.len());
         assert!(cases.iter().all(|c| STATES.contains(&c.state.as_str())));
+        // The lyrics screen: every state it has, and both themes at 980 × 850.
+        for state in STATES.iter().filter(|s| s.starts_with("lyrics-screen")) {
+            assert!(cases.iter().any(|c| c.state == *state), "{state}");
+        }
+        for theme in ["dark", "light"] {
+            assert!(cases.iter().any(|c| c.state == "lyrics-screen"
+                && c.theme == theme
+                && (c.width, c.height) == WIDE));
+            assert!(
+                cases
+                    .iter()
+                    .any(|c| c.state == "lyrics-lane-tip" && c.theme == theme)
+            );
+        }
         let shorts = build_cases(&options(Some("short"))).unwrap();
         assert_eq!(shorts.len(), 8);
         assert!(tweaks("view=short,view=video").is_err());
