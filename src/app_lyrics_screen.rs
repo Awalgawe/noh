@@ -3455,6 +3455,9 @@ mod tests {
         let mut app = app(folder.path());
         let ctx = context();
         assert!(app.edit_track(|t| edit::set_text(t, 0, "Something had to go")));
+        // Frames are compared by what they paint: nothing may come into
+        // them from a check still running behind.
+        app.resources_checked();
         let video = folder.path().join("clip.mp4");
         // What the whole application paints, with or without a file held
         // over the window, and with one dropped.
