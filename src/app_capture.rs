@@ -190,8 +190,14 @@ pub fn require_live() -> bool {
 }
 /// A capture of the live preview that sends its own pointer events, or none.
 pub fn drives_pointer() -> bool {
-    seek_playing_enabled() || drag_playing_enabled() || transport_enabled()
+    seek_playing_enabled() || drag_playing_enabled() || transport_enabled() || lane_tip_enabled()
 }
+/// The capture of the lyrics lane's tooltip rests its own pointer on the lane.
+pub fn lane_tip_enabled() -> bool {
+    std::env::var_os("NOH_CAPTURE_UI").is_some()
+        && std::env::var("NOH_CAPTURE_STATE").as_deref() == Ok(LANE_TIP)
+}
+const LANE_TIP: &str = "lyrics-lane-tip";
 pub fn seek_playing_enabled() -> bool {
     std::env::var_os("NOH_CAPTURE_UI").is_some()
         && std::env::var("NOH_CAPTURE_SEEK_PLAYING").as_deref() == Ok("1")
@@ -950,6 +956,7 @@ const OVERLAY_STATES: &[&str] = &[
     "lyrics-menu",
     "lyrics-generating",
     "lyrics-track-menu",
+    "lyrics-lane-tip",
     "lyrics-screen",
     "lyrics-screen-cut",
     "lyrics-screen-word",
@@ -978,6 +985,7 @@ const OVERLAY_STATES: &[&str] = &[
 const LYRICS_STATES: &[&str] = &[
     "unreadable",
     "lyrics-track-menu",
+    "lyrics-lane-tip",
     "lyrics-screen",
     "lyrics-screen-cut",
     "lyrics-screen-word",
@@ -1229,6 +1237,9 @@ impl NohApp {
                         .map(|last| last.min(10))
                 {
                     self.stage_lyrics_screen(i, scene);
+                    if ctx.viewport_rect().width() < app_style::COMPACT_BELOW {
+                        self.stage_lyrics_view_compact();
+                    }
                 }
                 if state == "details" {
                     self.open_sheet(false, None);
@@ -1247,17 +1258,66 @@ impl NohApp {
                         state,
                         "lyrics-first-edit" | "lyrics-save-failed" | "lyrics-differ"
                     )
-                        || modal_settled(ctx))
+                        || settled(ctx, 500))
+                    // The lyrics screen: once its monitor shows the picture
+                    // of the staged time, not the wait for it.
+                    && (!state.starts_with("lyrics-screen") || !self.mini_preview.painted.1)
+                    // The lane's tooltip: once it has come, the pointer at rest.
+                    && (state != LANE_TIP || settled(ctx, 1200))
             }
         }
     }
 }
-/// A modal staged for a capture has finished fading in (half a second after
-/// the capture first waited for it).
-fn modal_settled(ctx: &egui::Context) -> bool {
-    let id = egui::Id::new("capture-modal-since");
+/// What a capture staged has finished coming in: a modal's fade-in (half a
+/// second), a tooltip's delay. Counted from the capture's first wait for it.
+fn settled(ctx: &egui::Context, ms: u64) -> bool {
+    let id = egui::Id::new("capture-settled-since");
     let since = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(id, Instant::now));
-    since.elapsed() > Duration::from_millis(500)
+    since.elapsed() > Duration::from_millis(ms)
+}
+impl NohApp {
+    /// The pointer of the `lyrics-lane-tip` capture: brought once onto the
+    /// lyrics lane, over the first line the timeline shows whole, and left
+    /// there as a hand would leave it. Nothing is pressed.
+    pub(super) fn lane_tip_capture_input(&mut self, input: &mut egui::RawInput) {
+        if !lane_tip_enabled() || self.capture_overlay_step < 2 {
+            return;
+        }
+        let (Some(lane), Some(track)) = (
+            self.project_ui.timeline.lyrics_lane_rect(),
+            self.lyrics_track(),
+        ) else {
+            return;
+        };
+        let view = self
+            .project
+            .viewport
+            .map(|v| v.0)
+            .unwrap_or(noh::timeline::Range {
+                start_ms: 0,
+                end_ms: self.project.duration_ms,
+            });
+        let Some(line) = track
+            .cues
+            .iter()
+            .find(|c| c.start_ms >= view.start_ms && c.end_ms <= view.end_ms)
+        else {
+            return;
+        };
+        let middle = (line.start_ms + line.end_ms) as f64 / 2.0;
+        let x = lane.left()
+            + lane.width()
+                * ((middle - view.start_ms as f64) / (view.end_ms - view.start_ms).max(1) as f64)
+                    as f32;
+        // Placed once: a tooltip waits for a pointer that has stopped moving,
+        // and every such event counts as a move.
+        static PLACED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !PLACED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            input
+                .events
+                .push(egui::Event::PointerMoved(egui::pos2(x, lane.center().y)));
+        }
+    }
 }
 
 pub fn number(key: &str, default: f32, min: f32, max: f32) -> f32 {
@@ -2347,6 +2407,10 @@ impl NohApp {
                         // A staged edit (the first-edit question) is not written
                         // to the fixture and must not ask before closing.
                         self.project.edit = None;
+                        // A staged job held the monitor's picture back: the
+                        // closing window must not start its decoder, which
+                        // would outlive it.
+                        self.mini_keep_still();
                     }
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }

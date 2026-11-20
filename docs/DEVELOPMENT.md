@@ -80,6 +80,33 @@ On Windows use `.exe` paths. Filters include `--states`, `--languages`, `--theme
 Use a new output directory and visually inspect screenshots as well as reports.
 Screenshot success is not a human interaction test.
 
+The lyrics screen has its own states, all in the layout campaign:
+`lyrics-screen` (as it opens), `-cut`, `-word`, `-syllables`, `-game`,
+`-game-hold`, `-game-missed`, `-summary` and `-read-only`. They need a project
+whose song has an `.srt` beside it. For the screen alone:
+
+```sh
+cargo dev capture-ui --matrix layout --states lyrics-screen,lyrics-screen-game-hold --app target/qa/noh-app --ffmpeg path/to/ffmpeg --project path/to/new-fixtures/project.json --output path/to/new-captures
+```
+
+`lyrics-lane-tip` is the main screen with the capture's own pointer at rest on
+the lyrics lane, taken once the tooltip has come; a real mouse is ignored
+meanwhile.
+
+The screen's CPU cost per frame is an opt-in test, beside the main screen's
+with the same song. `NOH_QA_WAV` is the song and `NOH_FFMPEG` reads it:
+
+```sh
+cargo test --release --features gui,mcp,updates --bin noh-app lyrics_screen_frame_cost -- --ignored --nocapture
+```
+
+It measures layout and tessellation at 980 × 850 only: no GPU paint, no
+player picture.
+
+Its budget is absolute: 95 frames in 100 under 2 ms in the release build, which
+the test asserts. The screen costs more than the main screen (about 0.8 ms
+against 0.5 ms when both are measured warm).
+
 ### The live preview
 
 `NOH_CAPTURE_PROJECT_ACTION=live-preview` (or `live-short`) presses Play and

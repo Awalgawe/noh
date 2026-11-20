@@ -485,6 +485,11 @@ impl NohApp {
             || self.captions.running.is_some()
             || self.shorts.running.is_some()
     }
+    /// The monitor asks for no picture of the time it is on: for a capture's
+    /// closing window, whose decoder would outlive it.
+    pub(super) fn mini_keep_still(&mut self) {
+        self.mini_preview.requested = Some((u64::MAX, self.mini_preview.cursor_ms));
+    }
     pub(super) fn mini_bounds(&self) -> (u64, u64) {
         if self.mini_preview.short
             && let Some(range) = self.project.range
