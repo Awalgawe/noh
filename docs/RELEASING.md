@@ -354,6 +354,15 @@ new pin is reviewed and recorded before any build.
    again and do not delete anything: read its message. A version is lost only when
    the public state itself is wrong, for example a pre-release that became the
    latest release.
+   Just before publishing, the stage signs a build provenance attestation
+   (`actions/attest`, through Sigstore) for every file of the release and for
+   `PUBLICATION.json`. GitHub keeps the attestations apart from the release, so the
+   asset list does not change. They say that `release.yml` on main published these
+   exact bytes from the named commit; anyone can check a downloaded file with
+   `gh attestation verify <file> --repo Awalgawe/noh`. They do not replace code
+   signing: Windows SmartScreen still sees an unsigned installer. If the attestation
+   step fails, the filled draft stays and nothing is public: handle it like a
+   refused publication above. `ACCEPTANCE.json`, added later, is not attested.
 6. `stage=acceptance`, `tag=v<version>`: the published files are downloaded as a
    user downloads them, checked against `SHA256SUMS` and exercised on Windows and
    Linux. The result is attached to the release as `ACCEPTANCE.json`, the only file
