@@ -12,7 +12,7 @@ use noh::{
 use std::{
     path::Path,
     sync::{Arc, atomic::AtomicBool},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use support::Fixture;
 
@@ -27,14 +27,34 @@ fn request(f: &Fixture) -> CaptionRequest {
         preview: false,
     }
 }
+/// The longest a burn may say nothing before the test calls it hung. A burn
+/// is silent while its captions are drawn and encoded, from the encoder
+/// being chosen to FFmpeg's first progress line: about 1 s here for a burn
+/// alone, up to 11 s in a debug build when this file's tests start side by
+/// side, and more than the former 45 s at times on the slowest CI runner,
+/// where the whole file takes 4 to 8 times longer than here. The limit is
+/// four times the former 45 s, so that a slow machine is not taken for a
+/// hang.
+const SILENCE: Duration = Duration::from_secs(180);
+
 fn burn(f: &Fixture, req: &CaptionRequest) -> Vec<Event> {
     let job = Job::burn_with_worker(req.clone(), f.exe.clone(), || {});
+    let started = Instant::now();
     let mut events = Vec::new();
     loop {
-        let event = job
-            .events
-            .recv_timeout(Duration::from_secs(45))
-            .expect("Caption job deadline");
+        // A burn that hangs says which one, when, and what it had reported.
+        let event = job.events.recv_timeout(SILENCE).unwrap_or_else(|e| {
+            panic!(
+                "Caption job deadline: {e:?} after {SILENCE:?} of silence, {:?} into the burn of {:?} to {:?}; reports so far: {events:?}",
+                started.elapsed(),
+                std::fs::read_to_string(&req.subtitles)
+                    .unwrap_or_default()
+                    .chars()
+                    .take(60)
+                    .collect::<String>(),
+                req.output.file_name().unwrap_or_default()
+            )
+        });
         let done = event.is_terminal();
         events.push(event);
         if done {
