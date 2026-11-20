@@ -443,6 +443,17 @@ mod tests {
                 let mut child = fixture_command("child");
                 child.stdout(Stdio::inherit()).stderr(Stdio::null());
                 std::mem::forget(Tree::spawn(child, isolate).unwrap());
+                // And one started directly, as the update's installer and
+                // the relaunch are: it is meant to go on after its parent.
+                if std::env::var_os("NOH_FIXTURE_FREE").is_some() {
+                    std::mem::forget(
+                        fixture_command("free")
+                            .stdout(Stdio::inherit())
+                            .stderr(Stdio::null())
+                            .spawn()
+                            .unwrap(),
+                    );
+                }
                 thread::sleep(Duration::from_millis(
                     std::env::var("NOH_FIXTURE_LINGER")
                         .unwrap()
@@ -450,6 +461,11 @@ mod tests {
                         .unwrap(),
                 ));
                 std::process::exit(0);
+            }
+            Ok("free") => {
+                println!("FREE_READY|{}", std::process::id());
+                std::io::stdout().flush().unwrap();
+                thread::sleep(Duration::from_secs(60));
             }
             Ok("child") => {
                 println!("CHILD_READY|{}", std::process::id());
@@ -608,6 +624,54 @@ mod tests {
                 "isolate={isolate}: the child outlived the process that started it"
             );
         }
+    }
+
+    /// The update's installer and the relaunch after an update are started
+    /// with `Command` directly, because they must go on after NOH: such a
+    /// child is in no job, and outlives a parent whose job was closed.
+    #[test]
+    #[cfg(windows)]
+    fn a_child_started_directly_outlives_its_parent_and_the_exit_job() {
+        let mut owner = fixture_command("abandon");
+        owner
+            .env("NOH_FIXTURE_ISOLATE", "true")
+            .env("NOH_FIXTURE_FREE", "1")
+            .env("NOH_FIXTURE_LINGER", "300")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        let mut owner = owner.spawn().unwrap();
+        let pipe = owner.stdout.take().unwrap();
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let _ = lines(pipe, 4096, |line| tx.send(line).is_ok());
+        });
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let (mut owned, mut free) = (None, None);
+        while owned.is_none() || free.is_none() {
+            let line = rx
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .unwrap();
+            if let Some(pid) = line.strip_prefix("CHILD_READY|") {
+                owned = Some(pid.parse::<u32>().unwrap());
+            }
+            if let Some(pid) = line.strip_prefix("FREE_READY|") {
+                free = Some(pid.parse::<u32>().unwrap());
+            }
+        }
+        let (owned, free_pid) = (Handle::open(owned.unwrap()), free.unwrap());
+        let free = Handle::open(free_pid);
+        assert!(owner.wait().unwrap().success());
+        // The job was there and was closed: the owned child is gone.
+        assert_eq!(owned.wait(5000), 0);
+        let alive = free.wait(1000);
+        // Whatever is asserted next, the 60 s fixture does not stay behind.
+        let _ = crate::command("taskkill")
+            .args(["/F", "/PID", &free_pid.to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        assert_eq!(alive, 258, "a child started directly ended with its parent");
     }
 
     #[test]
