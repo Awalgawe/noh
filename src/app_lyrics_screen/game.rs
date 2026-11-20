@@ -726,14 +726,15 @@ impl NohApp {
                 .as_ref()
                 .is_some_and(|g| g.was_live && !g.started);
         let speed = self.lyrics_screen.speed;
+        let prompt_h = self.lyrics_screen.prompt_h;
         let Some(g) = &self.lyrics_screen.game else {
             return;
         };
         // The prompt on its own row in the narrow window, the buttons under it.
         let (prompt_rect, buttons) = if compact {
             (
-                Rect::from_min_size(bar.min, vec2(bar.width(), 30.0)),
-                Rect::from_min_max(pos2(bar.left(), bar.top() + 38.0), bar.max),
+                Rect::from_min_size(bar.min, vec2(bar.width(), prompt_h)),
+                Rect::from_min_max(pos2(bar.left(), bar.top() + prompt_h + 8.0), bar.max),
             )
         } else {
             (bar, bar)
@@ -787,14 +788,22 @@ impl NohApp {
                     );
                 };
                 let speeds = |ui: &mut egui::Ui, ask: &mut Option<Ask>| {
-                    let names: Vec<String> = SPEEDS
+                    // Read from the normal speed to the slowest, left to
+                    // right: the wide window lays this bar out from the
+                    // right, which would turn them round.
+                    let order: Vec<f64> = if compact {
+                        SPEEDS.to_vec()
+                    } else {
+                        SPEEDS.iter().rev().copied().collect()
+                    };
+                    let names: Vec<String> = order
                         .iter()
                         .map(|s| format!("{}×", l.localize_decimal(format!("{s}"))))
                         .collect();
                     let names: Vec<&str> = names.iter().map(String::as_str).collect();
-                    let selected = SPEEDS.iter().position(|s| *s == speed).unwrap_or(0);
+                    let selected = order.iter().position(|s| *s == speed).unwrap_or(0);
                     if let Some(k) = style::segmented(ui, "lyrics-screen-speed", &names, selected) {
-                        *ask = Some(Ask::Speed(SPEEDS[k]));
+                        *ask = Some(Ask::Speed(order[k]));
                     }
                 };
                 let again = |ui: &mut egui::Ui, ask: &mut Option<Ask>| {
@@ -835,11 +844,69 @@ impl NohApp {
         };
         // The prompt: the units of the line being sung. Done ones dimmed, the
         // expected one underlined, or filled while Espace is held.
-        let size = if compact { 19.0 } else { 22.0 };
-        let font = style::semibold(size);
         let painter = ui.painter_at(prompt_rect);
-        let mut x = prompt_rect.left();
         let y = prompt_rect.center().y;
+        // The line being sung, piece by piece: (unit, text), the separators
+        // between two units having none.
+        let pieces: Vec<(Option<usize>, &str)> = match (g.paused, g.units.get(g.idx)) {
+            (None, Some(u)) => {
+                let line: Vec<usize> = (0..g.units.len())
+                    .filter(|n| g.units[*n].cue == u.cue)
+                    .collect();
+                let mut pieces = Vec::new();
+                for (k, n) in line.iter().enumerate() {
+                    let unit = &g.units[*n];
+                    if k > 0 {
+                        let same_word =
+                            g.level == Level::Syllable && g.units[line[k - 1]].word == unit.word;
+                        pieces.push((None, if same_word { "·" } else { " " }));
+                    }
+                    pieces.push((Some(*n), unit.text.as_str()));
+                }
+                pieces
+            }
+            _ => Vec::new(),
+        };
+        // A long line is written smaller, down to a size still read at a
+        // glance; longer yet, it slides so that the expected unit and what
+        // follows it are in sight.
+        let (full, least) = if compact { (19.0, 14.0) } else { (22.0, 16.0) };
+        let widths = |size: f32| -> Vec<f32> {
+            pieces
+                .iter()
+                .map(|(_, s)| {
+                    painter
+                        .layout_no_wrap(s.to_string(), style::semibold(size), t.text)
+                        .size()
+                        .x
+                })
+                .collect()
+        };
+        let room = prompt_rect.width();
+        let mut size = full;
+        let mut total: f32 = widths(size).iter().sum();
+        while total > room && size > least {
+            size = (size - 0.5).max(least);
+            total = widths(size).iter().sum();
+        }
+        let slide = if total > room {
+            let before: f32 = pieces
+                .iter()
+                .zip(widths(size))
+                .take_while(|((n, _), _)| *n != Some(g.idx))
+                .map(|(_, w)| w)
+                .sum();
+            // The expected unit a quarter of the way in, the line's end at
+            // the right edge at most.
+            (before - room * 0.25).clamp(0.0, total - room)
+        } else {
+            0.0
+        };
+        #[cfg(test)]
+        let mut expected = None;
+        let mut needed = PROMPT_H;
+        let font = style::semibold(size);
+        let mut x = prompt_rect.left() - slide;
         let text = |painter: &egui::Painter, x: &mut f32, s: &str, color: Color32, mark: u8| {
             let galley = painter.layout_no_wrap(s.to_string(), font.clone(), color);
             let r = Rect::from_min_size(pos2(*x, y - galley.size().y / 2.0), galley.size());
@@ -869,46 +936,53 @@ impl NohApp {
                     Pause::Question => "lyrics_screen.game_question",
                     Pause::Answered => "lyrics_screen.game_answered",
                 };
-                let size = if compact { 14.0 } else { 17.0 };
-                let galley = painter.layout(
-                    l.format(key, &[u.text.clone()]),
-                    style::semibold(size),
-                    t.text,
-                    prompt_rect.width(),
-                );
+                // The wide window's bar is one control high: a long reason is
+                // written smaller until it holds there, on two rows at most.
+                let mut size = if compact { 14.0 } else { 17.0 };
+                let layout = |size: f32| {
+                    painter.layout(
+                        l.format(key, &[u.text.clone()]),
+                        style::semibold(size),
+                        t.text,
+                        prompt_rect.width(),
+                    )
+                };
+                let mut galley = layout(size);
+                while !compact && galley.size().y > prompt_rect.height() && size > 13.0 {
+                    size -= 1.0;
+                    galley = layout(size);
+                }
+                // Why the game waits may take two rows in the narrow window.
+                needed = needed.max(galley.size().y);
                 painter.galley(
                     pos2(prompt_rect.left(), y - galley.size().y / 2.0),
                     galley,
                     t.text,
                 );
             }
-            (None, Some(u)) => {
-                let line: Vec<usize> = (0..g.units.len())
-                    .filter(|n| g.units[*n].cue == u.cue)
-                    .collect();
-                for (k, n) in line.iter().enumerate() {
-                    let unit = &g.units[*n];
-                    if k > 0 {
-                        let same_word =
-                            g.level == Level::Syllable && g.units[line[k - 1]].word == unit.word;
-                        text(
-                            &painter,
-                            &mut x,
-                            if same_word { "·" } else { " " },
-                            t.text_3,
-                            0,
-                        );
-                    }
-                    let (color, mark) = if *n < g.idx {
+            (None, Some(_)) => {
+                for (n, piece) in &pieces {
+                    let Some(n) = *n else {
+                        text(&painter, &mut x, piece, t.text_3, 0);
+                        continue;
+                    };
+                    let (color, mark) = if n < g.idx {
                         (t.text_2, 0)
-                    } else if *n == g.idx && g.hold.is_some() {
+                    } else if n == g.idx && g.hold.is_some() {
                         (t.on_accent, 2)
-                    } else if *n == g.idx {
+                    } else if n == g.idx {
                         (t.text, 1)
                     } else {
                         (t.text_3, 0)
                     };
-                    text(&painter, &mut x, &unit.text, color, mark);
+                    let from = x;
+                    text(&painter, &mut x, piece, color, mark);
+                    #[cfg(test)]
+                    if n == g.idx {
+                        expected = Some(Rect::from_x_y_ranges(from..=x, prompt_rect.y_range()));
+                    }
+                    #[cfg(not(test))]
+                    let _ = from;
                 }
             }
             _ => {}
@@ -919,6 +993,16 @@ impl NohApp {
             Some(Ask::Again) => self.ls_game_back(&ctx),
             Some(Ask::Speed(s)) => self.lyrics_screen.speed = s,
             None => {}
+        }
+        // The narrow window's prompt is next drawn as high as its text was.
+        if (needed - self.lyrics_screen.prompt_h).abs() > 0.5 {
+            self.lyrics_screen.prompt_h = needed;
+            ctx.request_repaint();
+        }
+        #[cfg(test)]
+        {
+            self.lyrics_screen.drawn.prompt = Some(prompt_rect);
+            self.lyrics_screen.drawn.expected = expected;
         }
     }
 
