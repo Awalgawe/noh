@@ -308,13 +308,25 @@ new pin is reviewed and recorded before any build.
    new run must cover all of them. Its screens are kept as evidence; nobody
    reviews them.
 
-   Re-run a failed desktop only after reading why it failed. Two intermittent
-   failures are known on Debian 13 and may be re-run: the interface capture that
-   never ends (`gui-timeout.json` is present; seen in 3 of 23 runs; the player
-   reports the end of the clip after about one second, cause under investigation), and the file dialog left open
-   ("The Zenity fallback remains running"; seen once, the test's keys did not reach
-   the dialog). The release notes then name the desktop and the attempt that
-   passed. Any other failure stops the release.
+   Re-run a failed desktop only after reading why it failed. Three intermittent
+   failures are known on Debian 13 and may be re-run:
+   - the interface capture that never ends (`gui-timeout.json` is present; seen in
+     3 of 23 runs; the player reports the end of the clip after about one second,
+     cause under investigation);
+   - the preview's tone missing from the recorded audio ("Recorded virtual audio
+     does not establish the application preview tone"; seen once, on 0.3.0's
+     desktop run). There the preview showed about a second of pictures with no
+     sound, then reported the end of the clip: the player symptom above, with
+     silence added. Whether the application or the virtual machine loses the
+     sound is not established. Re-run only when `runtime/gui.json` in the
+     desktop's evidence shows `mini_preview.player` with `phase` "Ended",
+     `position` 3.0 (the test clip's length) and `frame.position` just above 1
+     (1.04 in 0.3.0's run). Any other player state: stop;
+   - the file dialog left open ("The Zenity fallback remains running"; seen twice,
+     the test's keys did not reach the dialog).
+
+   The release notes then name the desktop and the attempt that passed. Any other
+   failure stops the release.
 5. `stage=publish`, with the build run, attempt and commit, plus `installer_run_id`,
    `installer_attempt` and `desktop_run_id` (`python tools/release_next.py
    before-publish <build run> <installer run> <desktop run>` prints this dispatch and
