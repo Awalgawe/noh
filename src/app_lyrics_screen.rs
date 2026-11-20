@@ -3780,6 +3780,44 @@ mod tests {
     }
 
     #[test]
+    fn a_take_leaves_the_song_playing_and_the_game_s_end_refreshes_the_monitor() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = app(folder.path());
+        let ctx = context();
+        // « Sous-titres sur la vidéo » is on: an edit drops the monitor's
+        // pictures, which show the captions.
+        app.project.apply_subtitles = true;
+        // The preview, as every frame of the application keeps it.
+        app.poll_mini_preview(&ctx);
+        game(&mut app, &ctx, Level::Word, 0);
+        app.poll_mini_preview(&ctx);
+        let (stops, revision) = (app.mini_preview.invalidations, app.revision);
+        for (from, to) in [(1000, 1400), (1500, 1900)] {
+            hold(&mut app, &ctx, from, to);
+            app.poll_mini_preview(&ctx);
+        }
+        assert!(app.lyrics_screen.game.is_some());
+        assert_eq!(word(&app, 0, 1).0, 1500, "the takes are in the lyrics");
+        assert_eq!(
+            app.mini_preview.invalidations, stops,
+            "the player is not stopped by a take"
+        );
+        assert_ne!(app.revision, revision, "what was checked is out of date");
+        // The game over, the monitor shows the lyrics as they are now.
+        app.ls_end_game();
+        app.poll_mini_preview(&ctx);
+        assert_eq!(app.mini_preview.invalidations, stops + 1);
+        app.poll_mini_preview(&ctx);
+        assert_eq!(app.mini_preview.invalidations, stops + 1, "once");
+        // Outside a game, an edit drops the pictures at once, as before.
+        app.edit_track(|t| {
+            t.cues[1].text = "and nothing is lost".into();
+            true
+        });
+        assert!(app.mini_preview.invalidations > stops + 1);
+    }
+
+    #[test]
     fn a_line_held_takes_its_start_and_end_and_legato_closes_small_gaps() {
         let folder = tempfile::tempdir().unwrap();
         let mut app = app(folder.path());

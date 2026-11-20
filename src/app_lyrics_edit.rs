@@ -422,7 +422,14 @@ impl NohApp {
         // Written about 1 s later.
         self.lyrics_changed();
         if self.project.apply_subtitles {
-            self.invalidated();
+            // A sync game writes each take while the song plays: stopping the
+            // player would end the game at its first take. The monitor's
+            // pictures are dropped once the game is over (`poll_mini_preview`).
+            if self.lyrics_game_running() {
+                self.changed_under_playback();
+            } else {
+                self.invalidated();
+            }
         }
     }
 

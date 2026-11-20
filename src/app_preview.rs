@@ -108,6 +108,9 @@ pub struct State {
     pub player_grid: Vec<u8>,
     /// What the monitor painted last frame: a picture, the loading spinner.
     pub painted: (bool, bool),
+    /// How many times the player was stopped and the pictures dropped.
+    #[cfg(test)]
+    pub invalidations: u32,
     /// And whether the paused preview's picture was painted over it.
     pub painted_scrub: bool,
     /// Makes the light copies of the videos ahead of their first use.
@@ -158,6 +161,8 @@ impl Default for State {
             player_luma: 0.0,
             player_grid: Vec::new(),
             painted: (false, false),
+            #[cfg(test)]
+            invalidations: 0,
             painted_scrub: false,
             warmer: None,
             engines: Vec::new(),
@@ -304,6 +309,10 @@ impl State {
     }
     pub fn invalidate(&mut self) {
         noh::profile!("app: preview invalidated (player stopped, pictures dropped)");
+        #[cfg(test)]
+        {
+            self.invalidations += 1;
+        }
         if let Some(scrubber) = &self.scrubber {
             scrubber.invalidate();
         }
@@ -620,7 +629,10 @@ impl NohApp {
             self.mini_preview.short = false;
         }
         let stamp = self.project.stamp(self.revision, self.mini_preview.short);
-        if self.mini_preview.stamp.as_ref() != Some(&stamp) {
+        // A sync game writes each take while the song plays: the player is
+        // not stopped for it (that would end the game at its first take). The
+        // pictures, which show the captions, follow once the game is over.
+        if self.mini_preview.stamp.as_ref() != Some(&stamp) && !self.lyrics_game_running() {
             if self
                 .mini_preview
                 .stamp
