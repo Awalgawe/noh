@@ -28,7 +28,7 @@ WRAPPERS = ('public.iss', 'public-messages.iss', 'public-profile.iss', 'public-c
 
 
 def includes(profile, name):
-    """Keep the established setup_profiles.rs content boundaries."""
+    """Profile contents: Standard leaves out speech; Minimal keeps only the CLI and MCP programs of bin/."""
     if profile not in PROFILES:
         raise ValueError('Unknown installation profile')
     if profile == 'complete':

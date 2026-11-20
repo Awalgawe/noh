@@ -4,7 +4,7 @@ param(
     [Parameter(Mandatory)][string]$Cache,
     [Parameter(Mandatory)][string]$Runtime
 )
-. "$PSScriptRoot/update-qualification/common.ps1"
+. "$PSScriptRoot/windows-common.ps1"
 if (-not $IsWindows) { throw 'Windows PowerShell 7 is required' }
 $evidence = Join-Path $workspace 'logs/ci-media'
 if (Test-Path -LiteralPath $evidence) { throw 'Fresh evidence directory required' }
@@ -29,9 +29,9 @@ $env:NOH_EXE = "$workspace/target/qa/noh.exe"
 $env:NOH_APP_EXE = "$workspace/target/qa/noh-app.exe"
 $env:NOH_MCP_EXE = "$workspace/target/qa/noh-mcp.exe"
 Invoke-RecordedProcess (Get-Command python).Source @('tools/windows_test_runtime.py','--cache',$Cache,'--output',$Runtime) $workspace "$evidence/test-runtime" 300
-$features = 'gui,mcp,updates'
+$features = 'gui,mcp'
 Invoke-RecordedProcess $cargo @('build','--locked','--offline','--profile','qa','--features',$features,'--bins') $workspace "$evidence/workers" 1800
-$tests = @('test','--locked','--offline','--profile','qa','--features',$features,'--lib','--bins','--tests','--example','dev','--example','update-release')
+$tests = @('test','--locked','--offline','--profile','qa','--features',$features,'--lib','--bins','--tests','--example','dev')
 Invoke-RecordedProcess $cargo ($tests + @('--no-run','--message-format=json')) $workspace "$evidence/compile" 1800
 $artifacts = @(Get-Content "$evidence/compile.stdout.log" | ForEach-Object {
     $item = $_ | ConvertFrom-Json
@@ -103,7 +103,7 @@ foreach ($arm in @(@('original-serial',$originalExe,1),@('candidate-serial',$can
 # Execute every remaining original target with the unchanged serial policy.
 # Explicit target selection avoids rerunning either media diagnostic here.
 $otherTests = @($artifacts | Where-Object { $_.target.kind -contains 'test' -and $_.target.name -notin @('media','ci_media_baseline') } | ForEach-Object { $_.target.name } | Sort-Object -Unique)
-$remaining = @('test','--locked','--offline','--profile','qa','--features',$features,'--lib','--bins','--example','dev','--example','update-release')
+$remaining = @('test','--locked','--offline','--profile','qa','--features',$features,'--lib','--bins','--example','dev')
 foreach ($target in $otherTests) { $remaining += @('--test',$target) }
 Invoke-RecordedProcess $cargo ($remaining + @('--','--test-threads=1')) $workspace "$evidence/remaining-suite" 1200
 $summaries=[regex]::Matches((Get-Content "$evidence/remaining-suite.stdout.log" -Raw),'test result: ok\. (\d+) passed; 0 failed; (\d+) ignored; 0 measured; 0 filtered out')

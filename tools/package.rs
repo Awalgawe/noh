@@ -88,15 +88,11 @@ pub fn bundle(
     ffmpeg: &Path,
     gui: bool,
     mcp: bool,
-    updates: bool,
     speech: Option<&Path>,
     portable: bool,
 ) -> Result<()> {
     #[cfg(target_os = "macos")]
     {
-        if updates {
-            return Err("Update-enabled macOS bundles are not qualified.".into());
-        }
         if !gui {
             return Err("macOS packaging requires --gui.".into());
         }
@@ -104,10 +100,8 @@ pub fn bundle(
     }
     #[cfg(target_os = "linux")]
     {
-        if !gui || !mcp || updates || !portable {
-            return Err(
-                "Linux packaging requires --gui --mcp --portable and disabled updates.".into(),
-            );
+        if !gui || !mcp || !portable {
+            return Err("Linux packaging requires --gui --mcp --portable.".into());
         }
         return linux::bundle(
             root,
@@ -119,7 +113,7 @@ pub fn bundle(
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         let _ = portable;
-        bundle_windows(root, release, ffmpeg, gui, mcp, updates, speech)
+        bundle_windows(root, release, ffmpeg, gui, mcp, speech)
     }
 }
 
@@ -130,7 +124,6 @@ fn bundle_windows(
     ffmpeg: &Path,
     gui: bool,
     mcp: bool,
-    updates: bool,
     speech: Option<&Path>,
 ) -> Result<()> {
     let dist = root.join("dist");
@@ -159,10 +152,6 @@ fn bundle_windows(
     }
     if mcp {
         executables.push(("noh-mcp.exe", "bin/noh-mcp.exe"));
-    }
-    if updates {
-        executables.push(("noh-update-guard.exe", "bin/noh-update-guard.exe"));
-        executables.push(("noh-update-repair.exe", "bin/noh-update-repair.exe"));
     }
     for (name, destination) in &executables {
         fs::copy(release.join(name), ready.join(destination))?;
@@ -378,9 +367,6 @@ fn copy_docs(root: &Path, ready: &Path, _mcp: bool) -> Result<()> {
         "RUST_NOTICE_DECISIONS.md",
         "WINDOWS_REDISTRIBUTION.md",
         "UPDATES.md",
-        "UPDATE_RECOVERY.md",
-        "UPDATE_RELEASE.md",
-        "UPDATE_NATIVE_GATES.md",
     ] {
         fs::copy(root.join("docs").join(name), ready.join("docs").join(name))?;
     }
@@ -914,7 +900,7 @@ mod tests {
             .map(|entry| entry.unwrap().file_name().into_string().unwrap())
             .collect();
         names.sort();
-        assert_eq!(names.len(), 19);
+        assert_eq!(names.len(), 16);
         assert!(names.contains(&"APP.md".into()));
         assert!(names.contains(&"CLI.md".into()));
         assert_eq!(
@@ -935,9 +921,6 @@ mod tests {
                 "SHORT_PRESETS.md",
                 "THIRD-PARTY.md",
                 "UPDATES.md",
-                "UPDATE_NATIVE_GATES.md",
-                "UPDATE_RECOVERY.md",
-                "UPDATE_RELEASE.md",
                 "WINDOWS_REDISTRIBUTION.md",
             ]
         );

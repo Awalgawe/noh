@@ -29,9 +29,6 @@ enum Task {
         gui: bool,
         #[arg(long)]
         mcp: bool,
-        /// Include the experimental update lease, hooks and standalone guardian.
-        #[arg(long)]
-        updates: bool,
         #[arg(long)]
         offline: bool,
         #[arg(long)]
@@ -52,9 +49,6 @@ enum Task {
         /// Include MCP protocol and real-worker scenarios (requires FFmpeg).
         #[arg(long, requires = "media")]
         mcp: bool,
-        /// Include updater policy and GUI behavior in the same verification run.
-        #[arg(long)]
-        updates: bool,
         /// Exercise local speech recognition using explicitly configured models and fixture.
         #[arg(long, requires = "media")]
         transcription: bool,
@@ -91,7 +85,6 @@ fn build(
     source_root: Option<PathBuf>,
     gui: bool,
     mcp: bool,
-    updates: bool,
     offline: bool,
     no_bundle: bool,
     portable: bool,
@@ -112,9 +105,6 @@ fn build(
         if gui {
             package::validate_source_root(&root)?;
         }
-    }
-    if updates && !cfg!(windows) && !no_bundle {
-        return Err("Update-enabled bundle qualification currently requires Windows; use --no-bundle for source checks.".into());
     }
     if portable && !cfg!(any(target_os = "macos", target_os = "linux")) {
         return Err(
@@ -147,16 +137,6 @@ fn build(
     }
     if mcp {
         command.args(["--features", "mcp", "--bin", "noh-mcp"]);
-    }
-    if updates {
-        command.args([
-            "--features",
-            "updates",
-            "--bin",
-            "noh-update-guard",
-            "--bin",
-            "noh-update-repair",
-        ]);
     }
     if offline {
         command.arg("--offline");
@@ -193,14 +173,13 @@ fn build(
         &ffmpeg,
         gui,
         mcp,
-        updates,
         speech.as_deref(),
         portable,
     )?;
     Ok(())
 }
 
-fn verify(media: bool, mcp: bool, updates: bool, transcription: bool, offline: bool) -> Result<()> {
+fn verify(media: bool, mcp: bool, transcription: bool, offline: bool) -> Result<()> {
     if transcription {
         for name in [
             "NOH_WHISPER",
@@ -219,12 +198,7 @@ fn verify(media: bool, mcp: bool, updates: bool, transcription: bool, offline: b
     fmt.args(["fmt", "--check"]);
     checked(fmt)?;
     let mut tests = cargo();
-    let features = match (mcp, updates) {
-        (true, true) => "gui,mcp,updates",
-        (true, false) => "gui,mcp",
-        (false, true) => "gui,updates",
-        (false, false) => "gui",
-    };
+    let features = if mcp { "gui,mcp" } else { "gui" };
     tests.args([
         "test",
         "--locked",
@@ -307,7 +281,6 @@ fn main() {
             source_root,
             gui,
             mcp,
-            updates,
             offline,
             no_bundle,
             portable,
@@ -317,7 +290,6 @@ fn main() {
             source_root,
             gui,
             mcp,
-            updates,
             offline,
             no_bundle,
             portable,
@@ -327,10 +299,9 @@ fn main() {
         Task::Verify {
             media,
             mcp,
-            updates,
             transcription,
             offline,
-        } => verify(media, mcp, updates, transcription, offline),
+        } => verify(media, mcp, transcription, offline),
         Task::CaptureUi(options) => capture::run(*options),
         Task::Fixtures(options) => fixtures::run(options),
     };

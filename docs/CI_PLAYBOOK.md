@@ -21,7 +21,7 @@ files and both sides of renames; unavailable comparisons select every platform.
 | Unix verification script or native workflow | Linux and macOS, both Mac architectures |
 | Rust, Cargo, shared tools, embedded resources, languages, routing or unknown inputs | Windows, Linux and both Mac architectures |
 
-Windows reuses `windows-qa.ps1`, the `qa` profile, matching GUI/CLI/MCP/update
+Windows reuses `windows-qa.ps1`, the `qa` profile, matching GUI/CLI/MCP
 workers and the existing synthetic media tests. Linux and macOS reuse the native
 suite, including update tests and existing GUI captures. No path produces release
 profiles, signed Setup packages or installers. The Windows job acquires only the
@@ -301,6 +301,9 @@ small support ZIP retains the original catalog, keys, source inventory, B releas
 descriptors, verifier and historical bootstrap. The catalog still lists its old A;
 only the explicit historical B subset is required during acquisition/acceptance.
 Never rewrite that catalog or rebuild/re-sign the old application.
+That private Setup producer, its scripts and the `update-release` verifier were
+removed with the update prototype after 0.3.0; the paragraphs above and below
+on its baseline and acceptance are history.
 
 Release assets do not use the CI artifact expiry timer, but can still be deleted.
 The pre-build check verifies private release identity and every retained API digest;
@@ -415,8 +418,8 @@ restore step is not evidence that all expensive build outputs were cached.
 Keep QA before release to fail early. The two profiles intentionally differ, so
 reversing them cannot share compiled artifacts across their compiler settings.
 Historical runs built the verifier and development helper with different
-features from the GUI/MCP tests. The Windows producer now compiles both with
-`gui,mcp,updates` in the QA graph. It compiles the development helper once before
+features from the GUI/MCP tests. The Windows producer then compiled both with
+the QA feature set (`gui,mcp,updates` at the time). It compiles the development helper once before
 injecting release options, then passes `build --source-root <snapshot>`.
 Both Cargo commands and packaging use that explicit root. Omitting the option
 still selects the helper's compiled-in `CARGO_MANIFEST_DIR`, so a changed working

@@ -57,8 +57,6 @@ pub mod subtitles;
 pub mod syllables;
 pub mod timeline;
 mod timing;
-#[cfg(feature = "updates")]
-pub mod update;
 mod wav;
 pub mod waveform;
 #[derive(Debug)]

@@ -83,8 +83,8 @@ No preview runtime or speech models are acquired, and executables are not packag
 or uploaded. Rust 1.98.1 is fixed by the delivery policy; Windows uses the existing
 GNU/LLD configuration. Runner tests do not qualify clean-user installation.
 
-The Windows Setup release workflow and its exact-byte native acceptance are
-described in [UPDATE_RELEASE.md](UPDATE_RELEASE.md). For reusable lessons on
+The release workflow and its acceptance are described in
+[RELEASING.md](RELEASING.md). For reusable lessons on
 reducing CI build time, cache invalidation, prebuilt images and evidence reuse,
 see [CI_PLAYBOOK.md](CI_PLAYBOOK.md).
 

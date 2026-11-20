@@ -1,7 +1,8 @@
 """Private Setup CI transport: retained baseline, exact artifacts and inert drafts.
 
-This never publishes a release or executes downloaded code. Package signature
-verification belongs to build-installer.ps1 before payloads are staged here.
+This never publishes a release or executes downloaded code. Its GitHub client is
+shared by the release tools; the Setup producer it served (build-installer.ps1,
+update-setup-clients.ps1) was removed with the update prototype after 0.3.0.
 """
 import argparse
 import hashlib

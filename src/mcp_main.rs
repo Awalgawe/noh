@@ -17,16 +17,6 @@ struct Options {
 }
 
 fn main() {
-    #[cfg(all(windows, feature = "updates"))]
-    if let Some(code) = noh::update::lifecycle::hook_exit(std::env::args_os()) {
-        std::process::exit(code);
-    }
-    #[cfg(all(windows, feature = "updates"))]
-    let _update_lease = noh::update::windows::RuntimeLease::for_current_executable()
-        .unwrap_or_else(|error| {
-            eprintln!("noh-mcp: managed installation is unavailable: {error}");
-            std::process::exit(1);
-        });
     // Engine jobs execute this same binary. Dispatch before creating the MCP runtime.
     if std::env::args_os()
         .nth(1)

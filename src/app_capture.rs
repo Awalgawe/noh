@@ -2353,25 +2353,6 @@ impl NohApp {
             );
             report["subtitle_outcome"] =
                 serde_json::json!(self.subtitles.outcome.as_ref().map(|outcome| &outcome.key));
-            #[cfg(feature = "updates")]
-            {
-                report["update_layout_fixture"] = serde_json::json!(self.updates.capture_fixture);
-                report["update_safe_close"] = serde_json::json!(self.updates.confirm_install);
-                report["update_qualification_step"] =
-                    serde_json::json!(self.updates.qualification_step);
-                report["update_qualification_automated_consent"] =
-                    serde_json::json!(self.updates.qualification_step >= 2);
-                report["update_state"] = serde_json::json!(match self.updates.view.state {
-                    noh::update::State::Idle => "idle",
-                    noh::update::State::Checking => "checking",
-                    noh::update::State::Available { .. } => "available",
-                    noh::update::State::Downloading { .. } => "downloading",
-                    noh::update::State::Verifying => "verifying",
-                    noh::update::State::Ready { .. } => "ready",
-                    noh::update::State::Applying => "applying",
-                    noh::update::State::Failed { .. } => "failed",
-                });
-            }
             let _ = std::fs::write(
                 PathBuf::from(&path).with_extension("json"),
                 serde_json::to_vec_pretty(&report).unwrap(),

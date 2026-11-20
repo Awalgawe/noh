@@ -29,8 +29,8 @@ dispatched independently and do not start additional push or PR runs.
 | `native.yml` | Reusable Linux and macOS verification called by PR validation. | Both Mac architectures remain covered; development evidence, not public packaging. |
 
 The five Windows measurement workflows and the private `windows-setup.yml` and
-`update-release.yml` prototypes have been retired. Their sources and past runs
-remain in Git/Actions history. Public automatic updates, from 0.3.0, come from
+`update-release.yml` prototypes have been retired, and the update prototype code
+was removed after 0.3.0. Their sources and past runs remain in Git/Actions history. Public automatic updates, from 0.3.0, come from
 `src/auto_update`, not from them (step 7 of the publication below). The
 current Windows installer workflow preserves the three content profiles and web
 selection in ordinary per-user public installers. It does not enable the private

@@ -284,21 +284,10 @@ impl NohApp {
             self.set_ffmpeg(path, ctx);
         }
         // 5. Updates use their own worker and do not lock media operations.
-        let updates = ui.scope(|ui| {
+        ui.scope(|ui| {
             heading(ui, "updates.title");
-            #[cfg(feature = "updates")]
-            self.update_controls(ui, ctx);
-            #[cfg(not(feature = "updates"))]
             self.autoupdate_section(ui, ctx);
         });
-        #[cfg(feature = "updates")]
-        if self.updates.capture_fixture {
-            // The normal Settings body scrolls. Layout captures explicitly bring
-            // the new section into view, including in a 420 x 540 sheet.
-            ui.scroll_to_rect(updates.response.rect, Some(egui::Align::Center));
-        }
-        #[cfg(not(feature = "updates"))]
-        let _ = updates;
         // 6. Build information.
         let build = egui::CollapsingHeader::new(l.text("ui.build_information"))
             .id_salt("options-build")

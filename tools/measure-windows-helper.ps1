@@ -1,7 +1,7 @@
 # Compare snapshot helper recompilation with one reusable explicit-root helper.
 [CmdletBinding()]
 param()
-. "$PSScriptRoot/update-qualification/common.ps1"
+. "$PSScriptRoot/windows-common.ps1"
 if (-not $IsWindows) { throw 'Windows PowerShell 7 is required' }
 $evidence = Join-Path $workspace 'logs/ci-helper'
 if (Test-Path -LiteralPath $evidence) { throw 'Fresh evidence directory required' }
@@ -15,7 +15,7 @@ Expand-Archive -LiteralPath $archive -DestinationPath $snapshot
 Set-SnapshotVersion $snapshot '0.1.3'
 $cargo = (Get-Command cargo).Source
 $env:CARGO_TARGET_DIR = Join-Path $workspace 'target'
-$features = 'gui,mcp,updates'
+$features = 'gui,mcp'
 # Both actual pipelines already require these workers; keep this shared cost
 # outside the helper comparison. No application release or bundle is produced.
 Invoke-RecordedProcess $cargo @('build','--locked','--offline','--profile','qa','--features',$features,'--bins') $workspace "$evidence/workers" 1800
@@ -27,11 +27,11 @@ $helperHash = (Get-FileHash -LiteralPath $helper).Hash.ToLowerInvariant()
 Invoke-RecordedProcess $cargo $helperArgs $snapshot "$evidence/snapshot-helper" 900
 Invoke-RecordedProcess "$workspace/target/qa/examples/dev.exe" @('--help') $snapshot "$evidence/snapshot-help" 15
 $workerHashes = @{}
-foreach ($name in @('noh','noh-app','noh-mcp','noh-update-guard','noh-update-repair')) {
+foreach ($name in @('noh','noh-app','noh-mcp')) {
     $workerHashes[$name] = (Get-FileHash -LiteralPath "$workspace/target/qa/$name.exe").Hash.ToLowerInvariant()
 }
 $inputs = @{commit=(git rev-parse HEAD).Trim();baseline=$baseline;snapshot=$snapshot;version='0.1.3';features=$features;profile='qa';rustflags=$env:RUSTFLAGS;rust=(rustc -Vv | Out-String);helper_sha256=$helperHash;workers=$workerHashes;order=@('reusable-helper','snapshot-helper');sources=@{}}
-foreach ($name in @('tools/dev.rs','tools/update-setup-clients.ps1','tools/measure-windows-helper.ps1','tools/package.rs','Cargo.toml','Cargo.lock')) {
+foreach ($name in @('tools/dev.rs','tools/measure-windows-helper.ps1','tools/package.rs','Cargo.toml','Cargo.lock')) {
     $inputs.sources[$name]=(Get-FileHash -LiteralPath "$workspace/$name").Hash.ToLowerInvariant()
 }
 Write-Json $inputs "$evidence/inputs.json"

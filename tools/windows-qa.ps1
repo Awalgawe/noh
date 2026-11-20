@@ -5,12 +5,12 @@ param(
     [Parameter(Mandatory)][string]$Runtime,
     [switch]$ValidateHelpers
 )
-. "$PSScriptRoot/update-qualification/common.ps1"
+. "$PSScriptRoot/windows-common.ps1"
 if (-not $IsWindows) { throw 'Windows PowerShell 7 is required' }
 $logs = Join-Path $workspace 'logs/setup'
 [void][IO.Directory]::CreateDirectory($logs)
 $cargo = (Get-Command cargo).Source
-$features = 'gui,mcp,updates'
+$features = 'gui,mcp'
 $env:CARGO_TARGET_DIR = Join-Path $workspace 'target'
 Write-Json @{features=$features;profile='qa';rustflags=$env:RUSTFLAGS;encoded_rustflags=$env:CARGO_ENCODED_RUSTFLAGS;source_commit=(git -C $workspace rev-parse HEAD).Trim()} "$logs/qa-inputs.json"
 Invoke-RecordedProcess (Get-Command python).Source @('tools/windows_test_runtime.py','--cache',$Cache,'--output',$Runtime) $workspace "$logs/test-runtime" 300
@@ -21,13 +21,12 @@ $env:NOH_MCP_EXE = "$workspace/target/qa/noh-mcp.exe"
 Invoke-RecordedProcess $cargo @('build','--locked','--offline','--profile','qa','--features',$features,'--bins') $workspace "$logs/workers" 1800
 Invoke-RecordedProcess $cargo @('fmt','--all','--check') $workspace "$logs/format" 120
 $env:NOH_MEDIA_TESTS = '1'
-$tests = @('test','--locked','--offline','--profile','qa','--features',$features,'--lib','--bins','--tests','--example','dev','--example','update-release')
+$tests = @('test','--locked','--offline','--profile','qa','--features',$features,'--lib','--bins','--tests','--example','dev')
 Invoke-RecordedProcess $cargo ($tests + @('--no-run')) $workspace "$logs/compile-tests" 1800
 Invoke-RecordedProcess $cargo ($tests + @('--','--test-threads=1')) $workspace "$logs/verification" 1200
 if ($ValidateHelpers) {
     # Exercise the same compiler inputs as production without signing, media
     # bundling or release compilation. This mode never populates its Cargo cache.
-    Invoke-RecordedProcess $cargo @('build','--locked','--offline','--profile','qa','--features',$features,'--example','update-release') $workspace "$logs/verifier" 300
     $snapshot = Join-Path $workspace 'logs/qa-source-B'
     if (Test-Path -LiteralPath $snapshot) { throw 'Helper validation needs a fresh snapshot' }
     $paths = @(& git -C $workspace -c core.quotepath=false ls-files)
