@@ -197,8 +197,14 @@ impl NohApp {
         }
     }
     pub(super) fn invalidated(&mut self) {
-        self.project.range_moved = false;
         self.mini_preview.invalidate();
+        self.changed_under_playback();
+    }
+    /// The project changed and the player goes on playing: what was checked
+    /// or exported is out of date, the monitor's pictures are not dropped.
+    /// For a sync game, whose takes are written while the song plays.
+    pub(super) fn changed_under_playback(&mut self) {
+        self.project.range_moved = false;
         self.revision = self.revision.wrapping_add(1);
         self.diagnosis_revision = None;
         self.diagnosis = None;
