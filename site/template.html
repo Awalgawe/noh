@@ -1,0 +1,1623 @@
+<!doctype html>
+<html lang="{{lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{meta.title}}</title>
+<meta name="description" content="{{meta.description}}">
+<link rel="icon" href="{{base}}noh-icon.svg" type="image/svg+xml">
+{{hreflang}}
+{{redirect}}
+<style>@font-face { font-family: "Jost"; src: url("{{base}}fonts/Jost-Variable.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
+
+/* Layout: one left-aligned column of text beside a running miniature of NOH (the hero),
+   then how it works over the real screenshot, then every download grouped by system. */
+:root {
+  /* Page palette = NOH's own interface tokens (assets/ui-tokens.json), light theme. */
+  --ground: #F4F4F1;
+  --raised: #FFFFFF;
+  --sunk: #EBEBE7;
+  --line: #D9D8D2;
+  --line-strong: #878680;
+  --ink: #1B1C1E;
+  --ink-2: #53565A;
+  --ink-3: #63666B;
+  --accent: #0B6C66;
+  --on-accent: #FFFFFF;
+  --accent-text: #0A635D;
+  --focus: #1F6FEB;
+  --warn: #8A5A00;
+
+  /* The miniature app is always in NOH's dark theme, as on the screenshot. */
+  --app-bg: #17181A;
+  --app-surface: #1F2023;
+  --app-line: #34363A;
+  --app-text: #EDEEEA;
+  --app-text-2: #B1B3AE;
+  --app-wave: #6F726D;
+  --app-accent: #5FCABE;
+  --app-on-accent: #06241F;
+  --app-line-strong: #6A6C72;
+  --app-surface-3: #33353A;
+  --app-ok: #8FD18C;
+  --app-seg-on: #3A3C41;
+  --app-style-bg: #2E3340;
+  --app-warn: #E9C46A;
+  --seq-1: #4E6A8A;
+  --seq-2: #7E5F45;
+  --seq-3: #53704C;
+  --monitor: #000000;
+
+  --mock-bg: #1B1C1E;
+  --mock-text: #EDEEEA;
+
+  /* The drawn SmartScreen screen: Windows' blue, the same in both themes. */
+  --ss-bg: #0F5A9E;
+  --ss-text: #FFFFFF;
+  --ss-ring: #FFD34D;
+  --ss-done-bg: #FFFFFF;
+  --ss-done-text: #1B1C1E;
+
+  --font-brand: "Jost", "Futura", "Century Gothic", system-ui, sans-serif;
+  --font-text: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Hiragino Sans", "Yu Gothic UI", "Microsoft YaHei UI", "Malgun Gothic", sans-serif;
+  --font-code: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+
+  --measure: 34rem;
+  --wide: 72rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #17181A; --raised: #1F2023; --sunk: #292A2E; --line: #34363A; --line-strong: #6A6C72;
+    --ink: #EDEEEA; --ink-2: #B1B3AE; --ink-3: #989A94;
+    --accent: #5FCABE; --on-accent: #06241F; --accent-text: #7AD6CB; --focus: #8AB8FF; --warn: #E9C46A;
+    --app-bg: #121315; --app-surface: #1F2023;
+    --mock-bg: #EDEEEA; --mock-text: #1B1C1E;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #17181A; --raised: #1F2023; --sunk: #292A2E; --line: #34363A; --line-strong: #6A6C72;
+  --ink: #EDEEEA; --ink-2: #B1B3AE; --ink-3: #989A94;
+  --accent: #5FCABE; --on-accent: #06241F; --accent-text: #7AD6CB; --focus: #8AB8FF; --warn: #E9C46A;
+  --app-bg: #121315; --app-surface: #1F2023;
+  --mock-bg: #EDEEEA; --mock-text: #1B1C1E;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font: 400 1rem/1.6 var(--font-text);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+a { color: var(--accent-text); text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.wrap { max-width: var(--wide); margin-inline: auto; }
+h1, h2, h3 { font-family: var(--font-brand); font-weight: 600; line-height: 1.1; text-wrap: balance; margin: 0; }
+p { margin: 0; }
+code, kbd { font-family: var(--font-code); font-size: 0.9em; }
+
+/* Header */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-block: 1.5rem; }
+.wordmark { display: block; color: var(--ink); }
+.wordmark svg { display: block; height: 1.15rem; width: auto; }
+.top nav { display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: flex-end; }
+.top nav a { color: var(--ink-2); text-decoration: none; font-size: 0.9375rem; }
+.top nav a:hover { color: var(--ink); text-decoration: underline; }
+
+/* Hero */
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: clamp(2rem, 5vw, 4.5rem);
+  align-items: center;
+  padding-block: clamp(1.5rem, 5vw, 4rem) clamp(3rem, 7vw, 6rem);
+}
+.hero h1 { font-size: clamp(2.35rem, 4.6vw, 3.9rem); line-height: 1.04; letter-spacing: -0.012em; max-width: 13ch; }
+.lede { margin-top: 1.25rem; font-size: 1.125rem; color: var(--ink-2); max-width: var(--measure); }
+.get { margin-top: 2rem; display: grid; gap: 0.85rem; justify-items: start; }
+.get[hidden] { display: none; }
+.get h2 { font-size: 1.35rem; }
+.get p { color: var(--ink-2); max-width: var(--measure); }
+.btn {
+  display: inline-flex; align-items: center; gap: 0.6rem;
+  font: 600 1.0625rem/1 var(--font-text);
+  padding: 1rem 1.4rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn svg { width: 1.15rem; height: 1.15rem; flex: none; }
+.btn-primary { background: var(--accent); color: var(--on-accent); }
+.btn-primary:hover { filter: brightness(1.08); text-decoration: none; }
+.btn-secondary { background: var(--raised); color: var(--ink); border-color: var(--line-strong); }
+.btn-secondary:hover { background: var(--sunk); }
+.btn-row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.facts { font-size: 0.9375rem; color: var(--ink-2); }
+.facts strong { color: var(--ink); font-weight: 600; }
+.alt { display: flex; flex-wrap: wrap; gap: 0.35rem 1.25rem; font-size: 0.9375rem; }
+.release { margin-top: 2rem; font-size: 0.875rem; color: var(--ink-3); max-width: var(--measure); }
+.copied { font-size: 0.9375rem; color: var(--accent-text); }
+.share-url { font: 0.875rem/1.4 var(--font-code); color: var(--ink-2); word-break: break-all; }
+
+.demo { margin: 0; min-width: 0; }
+.warn-line { display: flex; gap: 0.5rem; align-items: flex-start; }
+.warn-line svg { width: 1rem; height: 1rem; flex: none; margin-top: 0.25rem; color: var(--warn); }
+
+/* Sections */
+section.band { padding-block: clamp(3rem, 7vw, 5.5rem); border-top: 1px solid var(--line); }
+.band > .wrap > h2 { font-size: clamp(1.7rem, 3vw, 2.4rem); }
+.band-intro { margin-top: 0.75rem; color: var(--ink-2); max-width: var(--measure); }
+
+.flow { list-style: none; margin: 2.25rem 0 0; padding: 0; display: grid; gap: clamp(2.5rem, 5vw, 4rem); counter-reset: step; }
+.flow-step { display: grid; grid-template-columns: minmax(0, 0.4fr) minmax(0, 1fr); gap: clamp(1.5rem, 4vw, 3.5rem); align-items: center; counter-increment: step; }
+.flow-text { display: grid; gap: 0.5rem; align-content: start; }
+.flow-text::before {
+  content: counter(step);
+  font: 800 1.1rem/1 var(--font-brand);
+  width: 2rem; height: 2rem; display: grid; place-items: center;
+  border-radius: 6px; background: var(--ink); color: var(--ground);
+}
+.flow-text h3 { font-size: 1.35rem; margin-top: 0.4rem; }
+.flow-text p { color: var(--ink-2); max-width: 32ch; }
+.flow-video { margin: 0; min-width: 0; }
+.flow-frame { position: relative; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--app-bg); container-type: inline-size; }
+
+/* The drawn NOH 0.3.1 window of each step. Sizes are in em of a font tied to the frame's width (cqw):
+   the window is 80em wide, like the real 980 px client area at about 12 px per em. */
+.sim { position: relative; overflow: hidden; font: 400 0.6rem/1.3 var(--font-text); font-size: 1.25cqw; background: var(--app-bg); color: var(--app-text); }
+/* Only the cursor and the dragged file move; the window itself changes state at once, as NOH does. */
+.sim *:not(.sim-cursor):not(.sim-ghost) { transition: none !important; }
+.sim .tide-waves { animation: none; }
+.sim-head { display: flex; justify-content: space-between; align-items: center; height: 4em; padding-inline: 2em; border-bottom: 1px solid var(--app-line); }
+.sim-head svg { display: block; height: 1.3em; width: auto; }
+.sim-head .sim-sliders { width: 1.3em; height: 1.1em; border-block: 0.15em solid var(--app-text-2); }
+.sim-body { padding: 0.8em 2em 0; display: grid; gap: 1em; }
+/* empty state: the whole window is a drop zone */
+.sim-drop { position: absolute; left: 2em; right: 2em; top: 4.8em; bottom: 2em; border: 0.15em dashed var(--app-line-strong); border-radius: 1em; display: grid; align-content: center; justify-items: center; gap: 1.1em; text-align: center; background: var(--app-bg); }
+.sim-drop.hot { border-color: var(--app-accent); }
+.sim:not(.is-empty) .sim-drop { opacity: 0; pointer-events: none; }
+.sim-drop svg { width: 2.4em; height: 2.4em; color: var(--app-text-2); }
+.sim-drop h4 { margin: 0; font: 600 1.8em/1.2 var(--font-text); }
+.sim-drop p { margin: 0; color: var(--app-text-2); font-size: 1.15em; }
+.sim-drop .sim-addfiles { background: var(--app-accent); color: var(--app-on-accent); font-weight: 600; padding: 0.7em 1em; border-radius: 0.5em; font-size: 1.15em; }
+.sim-pills { display: flex; gap: 0.6em; flex-wrap: wrap; justify-content: center; }
+.sim-pills span { background: var(--app-surface); border-radius: 999px; padding: 0.4em 0.9em; color: var(--app-text-2); }
+.sim-drop small { color: var(--app-text-2); font-size: 1em; }
+/* top row */
+.sim-top { display: grid; grid-template-columns: minmax(0, 1fr) 24em; gap: 2em; align-items: start; }
+.sim-tiles { display: flex; gap: 1em; }
+.sim-tile, .sim-add { flex: none; width: 9.1em; }
+.sim-tile { display: grid; gap: 0.4em; opacity: 0; transform: scale(0.85); }
+.sim-tile.on { opacity: 1; transform: none; }
+.sim-thumb { aspect-ratio: 16 / 9; border-radius: 0.5em; overflow: hidden; }
+.sim-thumb svg, .sim-layer svg, .sim-ghost svg { display: block; width: 100%; height: 100%; }
+.sim-meta { display: flex; gap: 0.4em; align-items: center; color: var(--app-text-2); }
+.sim .badge { width: 1.4em; height: 1.4em; font-size: 0.9em; border-radius: 0.3em; }
+.sim-dur { background: var(--app-surface); border-radius: 0.3em; padding: 0.1em 0.45em; font-size: 0.9em; color: var(--app-text); }
+.sim-add { display: grid; gap: 0.4em; color: var(--app-text-2); }
+.sim-add i { aspect-ratio: 16 / 9; border: 0.12em dashed var(--app-line-strong); border-radius: 0.5em; display: grid; place-items: center; font-style: normal; font-size: 1.3em; }
+.sim-side { display: grid; gap: 0.6em; }
+.sim-chip { display: flex; align-items: center; gap: 0.7em; min-width: 0; height: 3.4em; padding: 0 0.9em; border-radius: 0.6em; background: var(--app-surface); border: 0.12em solid transparent; white-space: nowrap; overflow: hidden; }
+.sim-chip.empty { background: transparent; border: 0.12em dashed var(--app-line-strong); color: var(--app-text-2); }
+.sim-chip svg { width: 1.1em; height: 1.1em; flex: none; color: var(--app-text-2); }
+.sim-chip b { font-weight: 600; color: var(--app-text); font-size: 1.1em; }
+.sim-chip .sim-right { margin-left: auto; display: flex; align-items: center; gap: 0.8em; color: var(--app-text-2); }
+.sim-chip .sim-edit { background: var(--app-surface-3); color: var(--app-text); border-radius: 0.4em; padding: 0.35em 0.7em; }
+.sim-song-name, .sim-song-add, .sim-lyr-add, .sim-lyr-gen, .sim-lyr-done { display: none; align-items: center; gap: 0.7em; width: 100%; }
+.sim.has-song .sim-song-name, .sim:not(.has-song) .sim-song-add { display: flex; }
+.sim[data-lyrics="none"] .sim-lyr-add, .sim[data-lyrics="gen"] .sim-lyr-gen, .sim[data-lyrics="done"] .sim-lyr-done { display: flex; }
+.sim-menu { position: absolute; z-index: 2; width: 22em; padding: 0.4em; border-radius: 0.6em; background: var(--app-surface); border: 1px solid var(--app-line); box-shadow: 0 0.8em 2em rgba(0, 0, 0, 0.5); display: none; }
+.sim-menu.on { display: grid; }
+.sim-menu span { padding: 0.6em 0.8em; border-radius: 0.4em; }
+.sim-menu span small { display: block; color: var(--app-text-2); font-size: 0.85em; }
+.sim-menu span.hover { background: var(--app-surface-3); }
+/* middle: preview and captions panel */
+.sim-mid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 1.3em; align-items: stretch; }
+.sim-monitor { position: relative; aspect-ratio: 16 / 9; border-radius: 0.6em; overflow: hidden; background: var(--monitor); }
+.sim-layer { position: absolute; inset: 0; opacity: 0; }
+.sim-layer.on { opacity: 1; }
+.sim-cap { position: absolute; left: 0; right: 0; bottom: 8%; text-align: center; font: 600 1.7em/1.2 var(--font-text); color: rgba(255, 255, 255, 0.95); text-shadow: 0 0.06em 0.2em rgba(0, 0, 0, 0.7); display: none; }
+.sim.caps-on .sim-cap { display: block; }
+.sim-cap .sung { color: #FFD34D; }
+.sim-cap .next { color: rgba(255, 255, 255, 0.55); }
+.sim-panel { border-radius: 0.6em; background: var(--app-surface); padding: 1em; display: grid; grid-template-rows: auto auto 1fr; gap: 0.9em; min-width: 0; }
+.sim-panel-head { display: flex; align-items: center; gap: 0.7em; }
+.sim-switch { width: 2.4em; height: 1.35em; border-radius: 1em; background: var(--app-surface-3); position: relative; flex: none; }
+.sim-switch::after { content: ""; position: absolute; top: 0.2em; left: 0.2em; width: 0.95em; height: 0.95em; border-radius: 50%; background: var(--app-text-2); }
+.sim.caps-on .sim-switch { background: var(--app-accent); }
+.sim.caps-on .sim-switch::after { transform: translateX(1.05em); background: var(--app-on-accent); }
+.sim-panel-head b { font-weight: 600; font-size: 1.05em; white-space: nowrap; }
+.sim-seg { margin-left: auto; display: flex; background: var(--app-surface-3); border-radius: 0.5em; padding: 0.2em; color: var(--app-text-2); white-space: nowrap; }
+.sim-seg span { padding: 0.3em 0.7em; border-radius: 0.35em; }
+.sim-seg span:first-child { background: var(--app-seg-on); color: var(--app-text); }
+.sim-styles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6em; }
+.sim:not(.has-lyrics) .sim-styles, .sim.has-lyrics:not(.caps-on) .sim-styles { opacity: 0.55; }
+.sim-style { border: 0.12em solid var(--app-line); border-radius: 0.5em; padding: 0.35em; display: grid; gap: 0.25em; min-width: 0; position: relative; }
+.sim-style.used { border-color: var(--app-text); }
+.sim-style i { display: grid; place-items: center; height: 2.6em; border-radius: 0.3em; background: var(--app-style-bg); font: 700 1.1em/1 var(--font-text); font-style: normal; white-space: nowrap; overflow: hidden; }
+.sim-style span { font-size: 0.85em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-style em { position: absolute; right: 0.5em; bottom: 0.3em; font-style: normal; font-size: 0.75em; color: var(--app-ok); display: none; }
+.sim-style.used em { display: block; }
+.sim-note { align-self: end; color: var(--app-text-2); font-size: 0.9em; }
+/* transport, timeline, lyrics lane */
+.sim-transport { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+.sim-time { font-variant-numeric: tabular-nums; }
+.sim-ctrls { display: flex; align-items: center; gap: 1em; color: var(--app-text-2); }
+.sim-play { width: 2.8em; height: 2.8em; border-radius: 50%; background: var(--app-surface); display: grid; place-items: center; color: var(--app-text); }
+.sim-play svg { width: 0.9em; height: 0.9em; }
+.sim-fades { justify-self: end; background: var(--app-surface); border-radius: 0.5em; padding: 0.5em 0.9em; }
+.sim-tl { position: relative; display: grid; gap: 0.25em; }
+.sim-ruler { display: flex; justify-content: space-between; color: var(--app-text-2); font-size: 0.85em; height: 1.4em; border-bottom: 1px solid var(--app-line); }
+.sim-cells { display: flex; height: 2.3em; border-radius: 0.3em; overflow: hidden; background: var(--app-surface); }
+.sim-cell { display: grid; place-items: center; min-width: 0; overflow: hidden; font-size: 0.9em; border-right: 1px solid var(--app-bg); opacity: 0; }
+.sim-cell.on { opacity: 1; }
+.sim-cell.cut { background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0) 0 0.35em, rgba(255, 255, 255, 0.18) 0.35em 0.5em) !important; }
+.sim-wave { display: block; width: 100%; height: 4.6em; border-radius: 0.3em; background: var(--app-surface); }
+.sim-wave { visibility: hidden; }
+.sim.has-song .sim-wave { visibility: visible; }
+.sim-lane { position: relative; height: 2.8em; border-radius: 0.3em; background: var(--app-surface); display: none; }
+.sim.has-lyrics .sim-lane, .sim[data-lyrics="gen"] .sim-lane { display: block; }
+.sim-line { position: absolute; top: 0.45em; bottom: 0.45em; border-radius: 0.3em; background: var(--app-surface-3); padding: 0 0.5em; display: flex; align-items: center; font-size: 0.85em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; }
+.sim-line.on { opacity: 1; }
+.sim-playhead { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; margin-left: -1px; background: var(--app-text); }
+.sim-short { display: flex; justify-content: space-between; align-items: center; height: 3.4em; color: var(--app-text-2); }
+.sim-short b { font-weight: 400; color: var(--app-text); margin-right: 1.2em; }
+/* export bar */
+.sim-bar { display: flex; justify-content: space-between; align-items: center; gap: 1em; margin-top: 0.4em; padding: 1em 2em; border-top: 1px solid var(--app-line); background: var(--app-bg); }
+.sim-status { display: grid; gap: 0.3em; min-width: 0; }
+.sim-st { display: none; align-items: center; gap: 0.6em; font-weight: 600; white-space: nowrap; }
+.sim[data-status="wait"] .sim-st-wait, .sim[data-status="ready"] .sim-st-ready, .sim[data-status="prog"] .sim-st-prog, .sim[data-status="done"] .sim-st-done { display: flex; }
+.sim-st-wait { font-weight: 400; color: var(--app-text-2); white-space: normal; }
+.sim-st svg { width: 1.3em; height: 1.3em; color: var(--app-ok); flex: none; }
+.sim-dest { color: var(--app-text-2); padding-left: 1.9em; white-space: nowrap; }
+.sim-dest u { color: var(--app-accent); text-underline-offset: 0.15em; margin-left: 0.4em; }
+.sim[data-status="wait"] .sim-dest { display: none; }
+.sim-prog-label { font-variant-numeric: tabular-nums; }
+.sim-progress { width: 12em; height: 0.5em; border-radius: 0.3em; overflow: hidden; background: var(--app-surface-3); }
+.sim-progress i { display: block; height: 100%; width: 0; background: var(--app-accent); }
+.sim-export { padding: 0.75em 1em; border-radius: 0.5em; background: var(--app-accent); color: var(--app-on-accent); font-weight: 600; font-size: 1.1em; white-space: nowrap; }
+.sim[data-status="wait"] .sim-export { opacity: 0.45; }
+/* cursor and dragged files */
+.sim-cursor { position: absolute; left: 0; top: 0; z-index: 4; width: 1.6em; height: 2em; pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5)); }
+.sim-ghost { position: absolute; left: 0; top: 0; z-index: 3; display: flex; opacity: 0; pointer-events: none; transition: opacity 150ms linear; }
+.sim-ghost.on { opacity: 0.92; }
+.sim-ghost .gcard { width: 6.5em; aspect-ratio: 16 / 9; border-radius: 0.4em; overflow: hidden; box-shadow: 0 0.3em 0.8em rgba(0, 0, 0, 0.5); }
+.sim-ghost .gcard + .gcard { margin-left: -5em; margin-top: 0.5em; }
+.sim-ghost .gwav { display: flex; gap: 0.5em; align-items: center; padding: 0.6em 0.9em; border-radius: 0.5em; border: 1px solid var(--app-line); background: var(--app-surface); white-space: nowrap; box-shadow: 0 0.3em 0.8em rgba(0, 0, 0, 0.5); }
+.sim-ghost .gwav svg { width: 1.1em; height: 1.1em; color: var(--app-text-2); }
+.sim.still .sim-cursor, .sim.still .sim-ghost { display: none; }
+/* The lyrics screen (step 4), after NOH 0.3.1's own. */
+.ls { display: none; }
+.sim.ls-on .ls { display: grid; }
+.sim.ls-on .sim-body, .sim.ls-on .sim-bar { display: none; }
+.ls-top { display: flex; justify-content: space-between; align-items: center; padding: 0.9em 2em; border-bottom: 1px solid var(--app-line); }
+.ls-top b { font-weight: 600; font-size: 1.3em; margin-right: 0.6em; }
+.ls-top .ls-sub { color: var(--app-text-2); }
+.ls-acts { display: flex; align-items: center; gap: 1.2em; color: var(--app-text-2); }
+.ls-done { background: var(--app-accent); color: var(--app-on-accent); font-weight: 600; padding: 0.5em 0.9em; border-radius: 0.5em; }
+.ls.game .ls-done { background: var(--app-surface); color: var(--app-text-2); }
+.ls-mid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 1.3em; padding: 1em 2em 0; }
+.ls-preview { position: relative; aspect-ratio: 16 / 9; border-radius: 0.5em; overflow: hidden; background: var(--monitor); }
+.ls-badge { position: absolute; left: 0.6em; top: 0.6em; z-index: 1; padding: 0.25em 0.55em; border-radius: 0.4em; background: rgba(0, 0, 0, 0.6); font-size: 0.85em; }
+.ls-badge::before { content: ""; display: inline-block; width: 0.5em; height: 0.5em; margin-right: 0.45em; border-radius: 50%; background: var(--app-warn); }
+.ls-cap { position: absolute; left: 0; right: 0; bottom: 10%; margin: 0; text-align: center; font: 600 1.35em/1.2 var(--font-text); color: #FFFFFF; text-shadow: 0 0.06em 0.2em rgba(0, 0, 0, 0.7); }
+.ls-time { display: flex; align-items: center; gap: 1em; margin-top: 0.6em; font-variant-numeric: tabular-nums; }
+.ls-text { display: grid; align-content: start; gap: 0.15em; padding: 0.6em; border-radius: 0.6em; background: var(--app-surface); }
+.ls-text-head { display: flex; gap: 0.7em; padding: 0.2em 0.4em 0.5em; color: var(--app-text-2); font-size: 0.9em; }
+.ls-text-head b { color: var(--app-text); font-weight: 600; }
+.ls-row { display: flex; gap: 1em; padding: 0.45em 0.6em; border-radius: 0.4em; white-space: nowrap; overflow: hidden; }
+.ls-row.sel { background: var(--app-surface-3); }
+.ls-t { min-width: 2.4em; color: var(--app-text-2); font-variant-numeric: tabular-nums; }
+.ls-row.now .ls-t { color: var(--app-accent); font-weight: 600; }
+.ls-rowacts { display: none; gap: 1.5em; padding: 0.2em 0.6em 0.5em 4em; color: var(--app-text-2); font-size: 0.9em; }
+.ls.sel .ls-rowacts { display: flex; }
+.ls-sync { padding: 1.1em 2em 0.6em; }
+.ls-idle, .ls-game { display: flex; align-items: center; gap: 1em; min-height: 2.6em; }
+.ls-idle b { font-weight: 600; }
+.ls-start { margin-left: auto; padding: 0.55em 0.9em; border-radius: 0.5em; background: var(--app-accent); color: var(--app-on-accent); font-weight: 600; white-space: nowrap; }
+.ls-game { display: none; }
+.ls.game .ls-idle { display: none; }
+.ls.game .ls-game { display: flex; }
+.ls-big { padding: 0.05em 0.3em; border-radius: 0.2em; background: var(--app-accent); color: var(--app-on-accent); font: 600 1.5em/1.3 var(--font-text); white-space: nowrap; }
+.ls-game-right { margin-left: auto; display: flex; align-items: center; gap: 0.7em; }
+.ls-count { color: var(--app-text-2); font-variant-numeric: tabular-nums; }
+.ls-btn { padding: 0.45em 0.8em; border-radius: 0.4em; background: var(--app-surface); }
+.ls-track { position: relative; display: grid; gap: 0.25em; padding: 0 2em; }
+.ls-lane { position: relative; height: 5.6em; border-radius: 0.3em; background: var(--app-surface); }
+.ls-block { position: absolute; top: 0.6em; bottom: 0.6em; display: flex; align-items: center; padding: 0 0.6em; border-radius: 0.5em; background: var(--app-surface-3); white-space: nowrap; overflow: hidden; }
+.ls-block i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--app-accent); }
+.ls-block span { position: relative; }
+.ls.game .ls-block { background: transparent; border: 0.12em dashed var(--app-line-strong); color: var(--app-text-2); }
+.ls.game .ls-block.cur { border-color: var(--app-accent); color: var(--app-text); }
+.ls.game .ls-block.cur span { color: var(--app-on-accent); }
+.ls-foot { margin-top: 0.9em; padding: 1.1em 2em; border-top: 1px solid var(--app-line); color: var(--app-text-2); }
+.ls-foot kbd { padding: 0 0.35em; border: 1px solid var(--app-line-strong); border-radius: 0.3em; background: var(--app-surface); color: var(--app-text); font: inherit; }
+@container (max-width: 520px) {
+  .ls-mid { grid-template-columns: minmax(0, 1fr); }
+  .ls-foot { font-size: 1.6em; }
+  /* Phone: one column; the export bar and the drop invitation stay at about 11-12 px. */
+  .sim { font-size: 2cqw; }
+  .sim-top, .sim-mid { grid-template-columns: minmax(0, 1fr); }
+  .sim-tile, .sim-add { width: 8em; }
+  .sim-ctrls .sim-skip, .sim-fades, .sim-short { display: none; }
+  .sim-bar { font-size: 1.7em; }
+  .sim-drop { font-size: 1.6em; }
+  .sim-progress { width: 5em; }
+  .sim-dest { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sim *, .sim-cursor, .sim-ghost { transition: none !important; }
+}
+.flow-bar { margin-top: 0.6rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-size: 0.875rem; color: var(--ink-3); }
+.flow-pause { font: 600 0.8125rem var(--font-text); color: var(--ink); background: var(--raised); border: 1px solid var(--line-strong); border-radius: 6px; padding: 0.25rem 0.7rem; cursor: pointer; }
+
+.more { margin: 3rem 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.75rem 3rem; }
+.more div { display: grid; gap: 0.35rem; max-width: 32rem; }
+.more h3 { font-size: 1.125rem; }
+.more p { color: var(--ink-2); }
+
+/* Downloads */
+.os-tabs { margin-top: 2rem; display: inline-flex; gap: 0.25rem; padding: 0.25rem; border-radius: 10px; background: var(--sunk); }
+.os-tabs button { font: 600 0.9375rem var(--font-text); color: var(--ink-2); background: transparent; border: 0; border-radius: 7px; padding: 0.55rem 1.1rem; cursor: pointer; }
+.os-tabs button[aria-selected="true"] { background: var(--raised); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+.systems { margin-top: 2rem; display: grid; gap: 3rem; }
+.system[hidden] { display: none; }
+.system { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 1.25rem 3rem; scroll-margin-top: 1.5rem; }
+.system > header h3 { font-size: 1.5rem; }
+.system > header p { margin-top: 0.4rem; font-size: 0.9375rem; color: var(--ink-2); }
+.files { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.file { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.25rem 1.5rem; align-items: center; padding-block: 1.1rem; border-bottom: 1px solid var(--line); }
+.file h4 { margin: 0; font: 600 1.0625rem/1.3 var(--font-text); display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.6rem; }
+.file h4 small { font: 600 0.75rem/1 var(--font-text); color: var(--accent-text); border: 1px solid currentColor; border-radius: 999px; padding: 0.2rem 0.5rem; }
+.file p { color: var(--ink-2); font-size: 0.9375rem; max-width: 40rem; }
+.file .name { font: 0.8125rem/1.4 var(--font-code); color: var(--ink-3); word-break: break-all; }
+.file-get { display: flex; align-items: center; gap: 1rem; justify-self: end; grid-row: 1 / span 3; grid-column: 2; }
+.size { font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 0.9375rem; white-space: nowrap; }
+.dl { font-weight: 600; white-space: nowrap; }
+.file-group { padding-block: 1.1rem 0.4rem; font-size: 0.875rem; color: var(--ink-3); }
+.note { margin-top: 1.25rem; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.75rem; font-size: 0.9375rem; color: var(--ink-2); max-width: 44rem; }
+.note svg { width: 1.1rem; height: 1.1rem; color: var(--warn); margin-top: 0.2rem; }
+.note b { color: var(--ink); font-weight: 600; }
+.linux-steps { margin: 1.25rem 0 0; padding: 0; list-style: none; counter-reset: ls; display: grid; gap: 1rem; max-width: 44rem; }
+.linux-steps li { counter-increment: ls; display: grid; grid-template-columns: 1.6rem minmax(0, 1fr); gap: 0.6rem; color: var(--ink-2); font-size: 0.9375rem; }
+.linux-steps li::before { content: counter(ls); font: 800 0.95rem/1.6 var(--font-brand); color: var(--ink); }
+.cmd { margin-top: 0.5rem; display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 6px; background: var(--raised); overflow: hidden; }
+.cmd pre { margin: 0; padding: 0.6rem 0.75rem; overflow-x: auto; flex: 1; min-width: 0; font: 0.8125rem/1.5 var(--font-code); color: var(--ink); }
+.cmd button { border: 0; border-left: 1px solid var(--line); background: var(--sunk); color: var(--ink); font: 600 0.8125rem var(--font-text); padding-inline: 0.8rem; cursor: pointer; }
+.mcp { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2rem clamp(2rem, 5vw, 4rem); align-items: start; }
+.mcp-list { margin: 1.25rem 0 0; padding-left: 1.2rem; display: grid; gap: 0.5rem; color: var(--ink-2); max-width: 36rem; }
+.mcp-privacy { margin-top: 1.25rem; color: var(--ink-2); max-width: 36rem; }
+.mcp-setup { display: grid; gap: 0.85rem; min-width: 0; }
+.mcp-setup h3 { font-size: 1.25rem; }
+.mcp-setup p { color: var(--ink-2); }
+.mcp-paths { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.4rem 1rem; font-size: 0.9375rem; }
+.mcp-paths dt { color: var(--ink-2); }
+.mcp-paths dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.mcp .cmd { margin-top: 0; }
+.everything { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; font-size: 0.9375rem; }
+
+/* Footer */
+.foot { border-top: 1px solid var(--line); padding-block: 2.5rem 6rem; }
+.foot .wrap { display: flex; flex-wrap: wrap; gap: 1.25rem 3rem; align-items: baseline; justify-content: space-between; }
+.foot p { color: var(--ink-2); font-size: 0.9375rem; max-width: 34rem; }
+.foot nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; font-size: 0.9375rem; }
+
+/* The Windows SmartScreen screen, drawn for this page (not a copy of Microsoft's window) */
+.ss-host { width: 100%; max-width: 28rem; }
+.ss-host[data-mode="static"] { max-width: 44rem; margin-top: 1.25rem; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.ss-pane { display: grid; gap: 0.4rem; min-width: 0; }
+.ss-pane-label { font-size: 0.8125rem; color: var(--ink-2); display: flex; gap: 0.4rem; align-items: center; }
+.ss-pane-label b { color: var(--ink); }
+.ss-pane-label .ss-num { display: inline-grid; place-items: center; width: 1.3rem; height: 1.3rem; border-radius: 4px; background: var(--ink); color: var(--ground); font: 800 0.75rem/1 var(--font-brand); }
+.ss-win {
+  position: relative; overflow: hidden;
+  background: var(--ss-bg); color: var(--ss-text);
+  border-radius: 6px;
+  padding: 1rem 1.1rem 0.9rem;
+  font: 400 0.75rem/1.45 var(--font-text);
+  min-height: 11.5rem;
+  display: flex; flex-direction: column; gap: 0.55rem;
+  box-shadow: 0 14px 30px -18px rgba(0, 0, 0, 0.6);
+}
+.ss-title { font: 300 1.2rem/1.2 var(--font-text); }
+.get .ss-win p, .ss-win p { color: var(--ss-text); max-width: none; }
+.ss-more { color: var(--ss-text); text-decoration: underline; align-self: flex-start; border-radius: 3px; }
+.ss-details { display: none; }
+.ss-details p span { display: inline-block; min-width: 5.5em; }
+.ss-buttons { margin-top: auto; display: flex; justify-content: flex-end; gap: 0.5rem; padding-top: 0.4rem; }
+.ss-btn { border: 1px solid var(--ss-text); border-radius: 2px; padding: 0.3rem 0.9rem; min-width: 6.5rem; text-align: center; white-space: nowrap; }
+.ss-run { display: none; }
+.ss-win[data-step="2"] .ss-details, .ss-win[data-step="2"] .ss-run { display: block; }
+.ss-win[data-step="2"] .ss-more { display: none; }
+.ss-press { box-shadow: 0 0 0 3px var(--ss-ring); background: rgba(255, 255, 255, 0.18); }
+.ss-done { position: absolute; inset: 0; display: none; place-items: center; align-content: center; gap: 0.5rem; background: var(--ss-done-bg); color: var(--ss-done-text); text-align: center; padding: 1rem; font-size: 0.875rem; }
+.ss-done svg { width: 1.6rem; height: 1.6rem; color: var(--accent-text); }
+.ss-win[data-step="3"] .ss-done { display: grid; }
+.ss-cursor { position: absolute; left: 0; top: 0; width: 18px; height: 22px; pointer-events: none; transition: transform 850ms cubic-bezier(0.3, 0.7, 0.2, 1); filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5)); }
+.ss-win[data-step="3"] .ss-cursor { display: none; }
+.ss-caption { margin-top: 0.4rem; font-size: 0.8125rem; color: var(--ink-3); }
+.ss-caption-wide { grid-column: 1 / -1; margin-top: -0.4rem; }
+.ss-steps [data-browser][hidden] { display: none; }
+.ss-anim-bar { margin-top: 0.4rem; display: flex; gap: 0.75rem; align-items: center; justify-content: space-between; }
+.ss-anim-bar button { font: 600 0.8125rem var(--font-text); color: var(--ink); background: var(--raised); border: 1px solid var(--line-strong); border-radius: 6px; padding: 0.25rem 0.65rem; cursor: pointer; }
+.ss-steps { margin: 0.25rem 0 0; padding-left: 1.3rem; display: grid; gap: 0.3rem; color: var(--ink-2); }
+.ss-steps b { color: var(--ink); }
+@media (max-width: 560px) {
+  .ss-host[data-mode="static"] { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { .ss-cursor { transition: none; } }
+
+@media (max-width: 880px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .hero h1 { max-width: 16ch; }
+  .flow-step { grid-template-columns: minmax(0, 1fr); }
+  .more { grid-template-columns: minmax(0, 1fr); }
+  .system { grid-template-columns: minmax(0, 1fr); }
+  .mcp { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .top nav a.optional { display: none; }
+  .file { grid-template-columns: minmax(0, 1fr); }
+  .file-get { grid-row: auto; grid-column: 1; justify-self: start; }
+  .btn { width: 100%; justify-content: center; }
+  .btn-row { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+}
+.tide-waves { animation: tide 6s linear infinite; }
+@keyframes tide { from { transform: translateX(0); } to { transform: translateX(-40px); } }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; }
+img, svg { max-width: 100%; }
+[hidden] { display: none !important; }
+.lang { position: relative; }
+.lang summary { list-style: none; cursor: pointer; color: var(--ink-2); font-size: 0.9375rem; }
+.lang summary::-webkit-details-marker { display: none; }
+.lang summary:hover { color: var(--ink); }
+.lang ul { position: absolute; right: 0; top: calc(100% + 0.5rem); z-index: 5; margin: 0; padding: 0.35rem; list-style: none; border: 1px solid var(--line); border-radius: 8px; background: var(--raised); box-shadow: 0 10px 30px -14px rgba(0, 0, 0, 0.4); min-width: 10rem; }
+.lang li a { display: block; padding: 0.45rem 0.7rem; border-radius: 6px; color: var(--ink); text-decoration: none; }
+.lang li a:hover, .lang li a[aria-current="true"] { background: var(--sunk); }
+</style>
+</head>
+<body>
+
+<template id="scene-a">
+  <svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><linearGradient id="skyA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F1DDBA"/><stop offset="1" stop-color="#E4B48E"/></linearGradient></defs>
+    <rect width="160" height="90" fill="url(#skyA)"/>
+    <circle cx="112" cy="33" r="12" fill="#FBEFD9"/>
+    <path d="M0 58 C22 44 44 46 66 54 C90 63 112 40 160 46 V90 H0Z" fill="#C27A5D"/>
+    <path d="M0 64 C30 56 52 70 80 62 C104 56 128 58 160 66 V90 H0Z" fill="#87585A"/>
+    <path d="M0 74 C26 66 54 62 82 70 C108 77 134 66 160 70 V90 H0Z" fill="#3F6870"/>
+    <path d="M0 84 C34 76 70 80 100 84 C124 87 144 80 160 82 V90 H0Z" fill="#24454D"/>
+  </svg>
+</template>
+<template id="scene-b">
+  <svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><linearGradient id="skyB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E7EEE6"/><stop offset="1" stop-color="#BCD5D6"/></linearGradient></defs>
+    <rect width="160" height="90" fill="url(#skyB)"/>
+    <circle cx="44" cy="30" r="9" fill="#F7F4EA"/>
+    <rect y="50" width="160" height="40" fill="#4F8C96"/>
+    <g class="tide-waves">
+      <path d="M0 56 q10 -4 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 V90 H0Z" fill="#3E7884"/>
+      <path d="M0 66 q10 -5 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 V90 H0Z" fill="#2F6470"/>
+      <path d="M0 78 q10 -5 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 V90 H0Z" fill="#234F5A"/>
+    </g>
+  </svg>
+</template>
+<template id="scene-c">
+  <svg viewBox="0 0 160 90" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs><linearGradient id="skyC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1F2C42"/><stop offset="1" stop-color="#3F5468"/></linearGradient></defs>
+    <rect width="160" height="90" fill="url(#skyC)"/>
+    <circle cx="124" cy="22" r="8" fill="#F1EBD8"/>
+    <circle cx="128" cy="19" r="7" fill="#26344B"/>
+    <g fill="#E8E4D6"><circle cx="20" cy="14" r="0.8"/><circle cx="46" cy="24" r="0.6"/><circle cx="78" cy="10" r="0.8"/><circle cx="96" cy="30" r="0.6"/><circle cx="148" cy="40" r="0.6"/></g>
+    <path d="M0 62 L34 40 L60 56 L94 34 L128 54 L160 44 V90 H0Z" fill="#3A5650"/>
+    <g fill="#1C322E">
+      <path d="M14 90 L24 58 L34 90Z"/><path d="M30 90 L42 50 L54 90Z"/><path d="M50 90 L58 66 L66 90Z"/>
+      <path d="M104 90 L116 54 L128 90Z"/><path d="M122 90 L132 62 L142 90Z"/><path d="M138 90 L150 48 L162 90Z"/>
+    </g>
+    <rect y="84" width="160" height="6" fill="#16282A"/>
+  </svg>
+</template>
+
+<header class="wrap top">
+  <a class="wordmark" href="{{home}}" aria-label="{{nav.home_label}}">
+    <!-- The NOH wordmark: Jost ExtraBold letters, same geometry as assets/noh-icon.svg -->
+    <svg viewBox="0 0 2886.1 770" fill="currentColor" aria-hidden="true">
+      <path transform="translate(-71.93 735) scale(1 -1)" d="M541 700V344L72 735V0H258V356L727 -35V700Z"/>
+      <path transform="translate(1029.92 735) scale(1 -1)" d="M237 350Q237 407 259.0 450.0Q281 493 321.0 517.5Q361 542 415 542Q472 542 511.5 517.5Q551 493 572.0 450.0Q593 407 593 350Q593 294 571.0 250.5Q549 207 509.5 182.5Q470 158 415 158Q361 158 321.0 182.5Q281 207 259.0 250.5Q237 294 237 350ZM32 350Q32 268 60.0 199.0Q88 130 139.5 79.5Q191 29 261.0 1.5Q331 -26 415 -26Q499 -26 569.5 1.5Q640 29 691.0 79.5Q742 130 770.0 199.0Q798 268 798 350Q798 433 769.5 500.5Q741 568 689.0 616.5Q637 665 567.5 691.5Q498 718 415 718Q334 718 264.5 691.5Q195 665 143.0 616.5Q91 568 61.5 500.5Q32 433 32 350Z"/>
+      <path transform="translate(2150.19 735) scale(1 -1)" d="M119 279H663V452H119ZM542 700V0H736V700ZM72 700V0H266V700Z"/>
+    </svg>
+  </a>
+  <nav aria-label="{{nav.page}}">
+    <a class="optional" href="#how">{{nav.how}}</a>
+    <a href="#downloads">{{nav.downloads}}</a>
+    <a class="optional" href="https://github.com/Awalgawe/noh">{{nav.source}}</a>
+    {{lang_menu}}
+  </nav>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div>
+      <h1>{{hero.title}}</h1>
+      <p class="lede">{{hero.lede}}</p>
+
+      <!-- One block per detected system; the script shows one. Windows is shown before the script runs. -->
+      <div class="get" data-os="windows">
+        <a class="btn btn-primary" id="win-dl" href="{{url.web}}">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M5.5 8.5 10 13l4.5-4.5M4 17h12"/></svg>
+          {{win.button}}
+        </a>
+        <p class="facts">{{win.facts}}</p>
+        <p class="facts warn-line"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.5 18 17H2Z"/><path d="M10 8v4M10 14.5v.01"/></svg><span>{{win.warn}}</span></p>
+        <p class="alt"><a href="#windows">{{win.other}}</a><a href="#linux">{{tab.linux}}</a></p>
+      </div>
+
+      <!-- Shown once the Windows button is clicked; the download itself goes on through the link. -->
+      <div class="get" data-os="windows-started" hidden>
+        <h2 id="started-title" tabindex="-1">{{started.title}}</h2>
+        <ol class="ss-steps">
+          <!-- Edge holds rarely downloaded files in its downloads list before Windows is even asked. -->
+          <li data-browser="edge" hidden>{{started.edge}}</li>
+          <li>{{started.open}}<span data-browser="other"> {{started.keep_other}}</span></li>
+          <li>{{started.more}}</li>
+          <li>{{started.run}}</li>
+        </ol>
+        <p>{{started.blue}}</p>
+        <div class="ss-host" data-mode="anim"></div>
+        <p class="alt"><a href="{{url.web}}">{{started.again}}</a><a href="#" id="started-back">{{started.back}}</a></p>
+      </div>
+
+      <div class="get" data-os="linux" hidden>
+        <a class="btn btn-primary" href="{{url.linux}}">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M5.5 8.5 10 13l4.5-4.5M4 17h12"/></svg>
+          {{linux.button}}
+        </a>
+        <p class="facts">{{linux.facts}}</p>
+        <p class="alt"><a href="#windows">{{tab.windows}}</a></p>
+      </div>
+
+      <div class="get" data-os="mac" hidden>
+        <h2>{{mac.title}}</h2>
+        <p>{{mac.body}}</p>
+        <div class="btn-row">
+          <a class="btn btn-secondary" href="#downloads">{{mac.button}}</a>
+        </div>
+        <p class="alt"><a href="https://github.com/Awalgawe/noh/blob/main/docs/BUILDING.md">{{mac.source}}</a></p>
+      </div>
+
+      <div class="get" data-os="mobile" hidden>
+        <h2>{{mobile.title}}</h2>
+        <p>{{mobile.body}}</p>
+        <button class="btn btn-secondary" type="button" id="copy-link">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M13 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/></svg>
+          {{mobile.copy}}
+        </button>
+        <p class="copied" id="copy-status" role="status"></p>
+        <p class="alt"><a href="#downloads">{{mobile.all}}</a></p>
+      </div>
+
+      <div class="get" data-os="other" hidden>
+        <h2>{{other.title}}</h2>
+        <div class="btn-row">
+          <a class="btn btn-primary" href="#windows">{{tab.windows}}</a>
+          <a class="btn btn-secondary" href="#linux">{{tab.linux}}</a>
+        </div>
+        <p class="facts">{{other.facts}}</p>
+      </div>
+
+      <p class="release">{{release.line}}</p>
+    </div>
+
+    <figure class="demo">
+      <div class="flow-frame" data-sim="0"></div>
+      <div class="flow-bar"><span>{{hero.caption}}</span><button class="flow-pause" type="button" data-step="0">{{ui.pause}}</button></div>
+    </figure>
+  </div>
+
+  <section class="band" id="how" aria-labelledby="how-title">
+    <div class="wrap">
+      <h2 id="how-title">{{how.title}}</h2>
+      <!-- Each step shows a drawn NOH window animated in HTML (no video): it follows the theme and the page's
+        language, needs no download, and shows no path or file of anyone's. A loop runs only while its row is on screen
+        (IntersectionObserver), never again after the visitor paused it, and not by itself under reduced motion,
+        where the step's end state is shown still. Only what NOH itself animates moves. -->
+      <ol class="flow">
+{{steps}}      </ol>
+
+      <div class="more">
+        <div>
+          <h3>{{more.short.title}}</h3>
+          <p>{{more.short.text}}</p>
+        </div>
+        <div>
+          <h3>{{more.quality.title}}</h3>
+          <p>{{more.quality.text}}</p>
+        </div>
+        <div>
+          <h3>{{more.lang.title}}</h3>
+          <p>{{more.lang.text}}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="downloads" aria-labelledby="dl-title">
+    <div class="wrap">
+      <h2 id="dl-title">{{dl.title}}</h2>
+      <p class="band-intro">{{dl.intro}}</p>
+
+      <div class="os-tabs" role="tablist" aria-label="{{dl.tabs_label}}">
+        <button type="button" role="tab" id="tab-windows" aria-controls="windows" aria-selected="true">{{tab.windows}}</button>
+        <button type="button" role="tab" id="tab-linux" aria-controls="linux" aria-selected="false" tabindex="-1">{{tab.linux}}</button>
+        <button type="button" role="tab" id="tab-mac" aria-controls="mac" aria-selected="false" tabindex="-1">{{tab.mac}}</button>
+      </div>
+      <!-- One system at a time: the visitor's, chosen by the same detection as the button at the top. -->
+      <div class="systems">
+        <section class="system" id="windows" role="tabpanel" aria-labelledby="tab-windows">
+          <header>
+            <h3>{{tab.windows}}</h3>
+            <p>{{win.req}}</p>
+          </header>
+          <div>
+            <ul class="files">
+              <li class="file">
+                <h4>{{f.web.title}} <small>{{f.recommended}}</small></h4>
+                <p>{{f.web.text}}</p>
+                <p class="name">{{file.web}}</p>
+                <div class="file-get"><span class="size">{{size.web}}</span><a class="dl" href="{{url.web}}">{{f.download}}</a></div>
+              </li>
+              <li class="file-group">{{f.group.offline}}</li>
+              <li class="file">
+                <h4>{{f.standard.title}}</h4>
+                <p>{{f.standard.text}}</p>
+                <p class="name">{{file.standard}}</p>
+                <div class="file-get"><span class="size">{{size.standard}}</span><a class="dl" href="{{url.standard}}">{{f.download}}</a></div>
+              </li>
+              <li class="file">
+                <h4>{{f.complete.title}}</h4>
+                <p>{{f.complete.text}}</p>
+                <p class="name">{{file.complete}}</p>
+                <div class="file-get"><span class="size">{{size.complete}}</span><a class="dl" href="{{url.complete}}">{{f.download}}</a></div>
+              </li>
+              <li class="file">
+                <h4>{{f.minimal.title}}</h4>
+                <p>{{f.minimal.text}}</p>
+                <p class="name">{{file.minimal}}</p>
+                <div class="file-get"><span class="size">{{size.minimal}}</span><a class="dl" href="{{url.minimal}}">{{f.download}}</a></div>
+              </li>
+              <li class="file-group">{{f.group.noinstall}}</li>
+              <li class="file">
+                <h4>{{f.portable.title}}</h4>
+                <p>{{f.portable.text}}</p>
+                <p class="name">{{file.portable}}</p>
+                <div class="file-get"><span class="size">{{size.portable}}</span><a class="dl" href="{{url.portable}}">{{f.download}}</a></div>
+              </li>
+            </ul>
+            <div class="note" id="smartscreen">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.5 18 17H2Z"/><path d="M10 8v4M10 14.5v.01"/></svg>
+              <p>{{ss.note}}</p>
+            </div>
+            <div class="ss-host ss-note" data-mode="static"></div>
+          </div>
+        </section>
+
+        <section class="system" id="linux" role="tabpanel" aria-labelledby="tab-linux" hidden>
+          <header>
+            <h3>{{tab.linux}}</h3>
+            <p>{{linux.req}}</p>
+          </header>
+          <div>
+            <ul class="files">
+              <li class="file">
+                <h4>{{f.portable.title}}</h4>
+                <p>{{linux.zip.text}}</p>
+                <p class="name">{{file.linux}}</p>
+                <div class="file-get"><span class="size">{{size.linux}}</span><a class="dl" href="{{url.linux}}">{{f.download}}</a></div>
+              </li>
+            </ul>
+            <ol class="linux-steps">
+              <li><div>{{linux.step1}}
+                <div class="cmd"><pre id="apt-cmd">sudo apt update &amp;&amp; sudo apt install ffmpeg libmpv2 zenity xdg-utils</pre><button type="button" id="copy-apt">{{ui.copy}}</button></div>
+                {{linux.step1_other}}</div></li>
+              <li><div>{{linux.step2}}</div></li>
+              <li><div>{{linux.step3}}</div></li>
+            </ol>
+          </div>
+        </section>
+
+        <section class="system" id="mac" role="tabpanel" aria-labelledby="tab-mac" hidden>
+          <header>
+            <h3>{{tab.mac}}</h3>
+            <p>{{mac.req}}</p>
+          </header>
+          <div>
+            <p class="band-intro" style="margin-top:0">{{mac.text}}</p>
+          </div>
+        </section>
+      </div>
+
+      <p class="everything">
+        <a href="https://github.com/Awalgawe/noh/releases">{{dl.all}}</a>
+        <a href="{{url.sums}}">{{dl.sums}}</a>
+        <a href="https://github.com/Awalgawe/noh/blob/main/docs/INSTALLING.md">{{dl.guide}}</a>
+      </p>
+    </div>
+  </section>
+
+  <section class="band" id="mcp" aria-labelledby="mcp-title">
+    <div class="wrap mcp">
+      <div class="mcp-text">
+        <h2 id="mcp-title">{{mcp.title}}</h2>
+        <p class="band-intro">{{mcp.intro}}</p>
+        <ul class="mcp-list">
+          <li>{{mcp.li1}}</li>
+          <li>{{mcp.li2}}</li>
+          <li>{{mcp.li3}}</li>
+          <li>{{mcp.li4}}</li>
+        </ul>
+        <p class="mcp-privacy">{{mcp.privacy}}</p>
+      </div>
+      <div class="mcp-setup">
+        <h3>{{mcp.setup}}</h3>
+        <p>{{mcp.setup_text}}</p>
+        <dl class="mcp-paths">
+          <dt>{{mcp.win_installed}}</dt><dd><code>%LOCALAPPDATA%\Programs\NOH\bin\noh-mcp.exe</code></dd>
+          <dt>{{mcp.win_portable}}</dt><dd>{{mcp.portable_where}}</dd>
+          <dt>{{tab.linux}}</dt><dd><code>NOH.AppDir/usr/lib/noh/bin/noh-mcp</code></dd>
+        </dl>
+        <p>{{mcp.example}}</p>
+        <div class="cmd"><pre id="mcp-cmd">{
+  "mcpServers": {
+    "noh": {
+      "command": "C:\\Users\\&lt;you&gt;\\AppData\\Local\\Programs\\NOH\\bin\\noh-mcp.exe"
+    }
+  }
+}</pre><button type="button" id="copy-mcp">{{ui.copy}}</button></div>
+        <p><a href="https://github.com/Awalgawe/noh/blob/main/docs/MCP.md">{{mcp.tools}}</a></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <p>{{foot.text}}</p>
+    <nav aria-label="{{foot.project}}">
+      <a href="https://github.com/Awalgawe/noh">{{foot.source}}</a>
+      <a href="https://github.com/Awalgawe/noh/blob/main/LICENSE">{{foot.licence}}</a>
+      <a href="https://github.com/Awalgawe/noh/issues">{{foot.issues}}</a>
+    </nav>
+  </div>
+</footer>
+
+<script>window.NOH = {{data}};</script>
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- Page data, written by tools/build_site.py ---------- */
+  // NOH.ui: the page's own words; NOH.app: the app's words (locales/<lang>.lang), so the drawings say what NOH says.
+  var NOH = window.NOH;
+  function A(key) {
+    var s = NOH.app[key], args = arguments;
+    return s.replace(/\{(\d)\}/g, function (m, d) { return args[Number(d) + 1]; });
+  }
+  function U(key, values) {
+    return NOH.ui[key].replace(/\{(\w+)\}/g, function (m, k) { return values[k]; });
+  }
+
+
+  /* ---------- Which download to offer ---------- */
+  function detectSystem() {
+    var ua = navigator.userAgent || "";
+    var uad = navigator.userAgentData;
+    var platform = (uad && uad.platform) || navigator.platform || "";
+    if ((uad && uad.mobile) || /Android|iPhone|iPad|iPod/i.test(ua)) return "mobile";
+    // iPadOS presents itself as a Mac; a Mac has no touch screen.
+    if (/Mac/i.test(platform) && navigator.maxTouchPoints > 1) return "mobile";
+    if (/Win/i.test(platform) || /Windows/i.test(ua)) return "windows";
+    if (/CrOS|Chrome OS/i.test(platform + " " + ua)) return "other";
+    if (/Mac/i.test(platform) || /Mac OS X/i.test(ua)) return "mac";
+    if (/Linux|X11/i.test(platform + " " + ua)) {
+      // Builds exist for x86-64 only.
+      return /aarch64|arm/i.test(platform + " " + ua) ? "other" : "linux";
+    }
+    return "other";
+  }
+
+  var blocks = document.querySelectorAll(".get[data-os]");
+  var currentOs = null;
+  function showSystem(os) {
+    blocks.forEach(function (b) { b.hidden = b.getAttribute("data-os") !== os; });
+    currentOs = os;
+    // Drawn cursors are placed from the layout, which a hidden block does not have.
+    if (staticPanes) requestAnimationFrame(placeStaticCursors);
+    if (ssAnim) { if (os === "windows-started") ssAnim.start(); else ssAnim.stop(); }
+  }
+  var detected = detectSystem();
+  showSystem(detected);
+  var pendingTab = detected;
+
+  /* ---------- Downloads: one system at a time ---------- */
+  var osTabs = document.querySelectorAll(".os-tabs [role=tab]");
+  function setOsTab(id, focus) {
+    osTabs.forEach(function (t) {
+      var on = t.getAttribute("aria-controls") === id;
+      t.setAttribute("aria-selected", String(on));
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+      if (on && focus) t.focus();
+    });
+  }
+  osTabs.forEach(function (t, k) {
+    t.addEventListener("click", function () { setOsTab(t.getAttribute("aria-controls")); });
+    t.addEventListener("keydown", function (e) {
+      var d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (!d) return;
+      e.preventDefault();
+      var next = osTabs[(k + d + osTabs.length) % osTabs.length];
+      setOsTab(next.getAttribute("aria-controls"), true);
+    });
+  });
+  // Any anchor aimed at a tab panel, or at something inside one (#linux, #smartscreen…), opens that panel first:
+  // on a click in the page, when the page is opened from a shared link, and with Back/Forward.
+  function openTabFor(id, scroll) {
+    var target = id && document.getElementById(id);
+    var panel = target && target.closest("[role=tabpanel]");
+    if (!panel) return;
+    setOsTab(panel.id);
+    if (scroll) target.scrollIntoView();
+  }
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest("a[href^='#']");
+    if (a) openTabFor(a.getAttribute("href").slice(1), false);
+  });
+  window.addEventListener("hashchange", function () { openTabFor(location.hash.slice(1), true); });
+  function tabFor(os) { return os === "linux" || os === "mac" ? os : "windows"; }
+  setOsTab(tabFor(pendingTab));
+  // A hidden target cannot be scrolled to on load: open its panel, then scroll.
+  openTabFor(location.hash.slice(1), true);
+
+  /* ---------- Copy buttons ---------- */
+  function copyText(text, onDone, fallbackNode) {
+    function fallback() {
+      if (fallbackNode) {
+        var r = document.createRange(); r.selectNodeContents(fallbackNode);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      }
+      onDone(false);
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { onDone(true); }, fallback);
+      } else { fallback(); }
+    } catch (e) { fallback(); }
+  }
+  var copyLink = document.getElementById("copy-link");
+  var copyStatus = document.getElementById("copy-status");
+  copyLink.addEventListener("click", function () {
+    var url = location.href.split("#")[0];
+    copyText(url, function (ok) {
+      copyStatus.textContent = "";
+      if (ok) { copyStatus.textContent = NOH.ui.copied_link; return; }
+      var u = document.createElement("span"); u.className = "share-url"; u.textContent = url;
+      copyStatus.append(NOH.ui.copy_this + " ", u);
+    });
+  });
+  var aptBtn = document.getElementById("copy-apt");
+  var aptCmd = document.getElementById("apt-cmd");
+  aptBtn.addEventListener("click", function () {
+    copyText(aptCmd.textContent, function (ok) {
+      aptBtn.textContent = ok ? NOH.ui.copied : NOH.ui.selected;
+      setTimeout(function () { aptBtn.textContent = NOH.ui.copy; }, 1800);
+    }, aptCmd);
+  });
+
+  /* ---------- The SmartScreen screen, in the visitor's language ---------- */
+  // Wording per Windows language: site/windows-strings.json (checked on the web; some strings still to confirm).
+  var SS = NOH.ss;
+  var EDGE = NOH.edge;
+  var EXE = NOH.webFile;
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Windows shows its warnings in the system's language, not in the page's: the browser's language is the best guess,
+  // and the page's language is the fallback.
+  var ssLang = (function () {
+    var full = (navigator.language || "en").toLowerCase();
+    var l = full.slice(0, 2);
+    // Only Simplified Chinese has its strings here; zh-TW and zh-HK Windows show Traditional.
+    if (l === "zh") return /^zh-(cn|sg|hans)/.test(full) || full === "zh" ? "zh" : "en";
+    return SS[l] ? l : (SS[NOH.lang] ? NOH.lang : "en");
+  })();
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text) e.textContent = text;
+    return e;
+  }
+  // One drawn window. Its text nodes carry data-k keys filled by setLang().
+  function buildWindow() {
+    var win = el("div", "ss-win");
+    win.setAttribute("aria-hidden", "true");
+    win.setAttribute("data-step", "0");
+    var title = el("div", "ss-title"); title.dataset.k = "title";
+    var body = el("p"); body.dataset.k = "body";
+    var more = el("span", "ss-more"); more.dataset.k = "more";
+    var details = el("div", "ss-details");
+    var pApp = el("p"); var sApp = el("span"); sApp.dataset.k = "app"; var sSepA = el("span"); sSepA.dataset.k = "sep"; pApp.append(sApp, sSepA, EXE);
+    var pPub = el("p"); var sPub = el("span"); sPub.dataset.k = "pub"; var sUnk = el("span"); sUnk.dataset.k = "unknown"; var sSep = el("span"); sSep.dataset.k = "sep"; pPub.append(sPub, sSep, sUnk);
+    details.append(pApp, pPub);
+    var buttons = el("div", "ss-buttons");
+    var run = el("span", "ss-btn ss-run"); run.dataset.k = "run";
+    var dont = el("span", "ss-btn"); dont.dataset.k = "dont";
+    buttons.append(run, dont);
+    var done = el("div", "ss-done");
+    done.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m7.5 12.5 3 3 6-6.5"/></svg>';
+    done.append(el("span", "", NOH.ui.ss_opens));
+    var cursor = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    cursor.setAttribute("class", "ss-cursor");
+    cursor.setAttribute("viewBox", "0 0 18 22");
+    cursor.innerHTML = '<path d="M1.5 1.5v16l4.2-4 2.9 6.6 2.7-1.2-2.8-6.4h5.9Z" fill="#FFFFFF" stroke="#111214" stroke-width="1.3" stroke-linejoin="round"/>';
+    win.append(title, body, more, details, buttons, done, cursor);
+    return win;
+  }
+  // Put the cursor's tip on the middle of a target, or on a resting spot.
+  function pointAt(win, target) {
+    var cursor = win.querySelector(".ss-cursor");
+    var x, y;
+    if (target) {
+      var w = win.getBoundingClientRect(), t = target.getBoundingClientRect();
+      // Tip on the lower right corner of the target, so the arrow does not hide the words.
+      x = t.right - w.left - 6;
+      y = t.bottom - w.top - 3;
+    } else {
+      x = win.clientWidth * 0.62; y = win.clientHeight * 0.55;
+    }
+    cursor.style.transform = "translate(" + Math.round(x - 2) + "px," + Math.round(y - 2) + "px)";
+  }
+  function setStep(win, step, press) {
+    win.setAttribute("data-step", String(step));
+    win.querySelectorAll(".ss-press").forEach(function (p) { p.classList.remove("ss-press"); });
+    if (press) win.querySelector(press).classList.add("ss-press");
+  }
+
+  var ssWindows = [];
+  var staticPanes = [];
+  var ssAnim = null;
+  var CAPTION = NOH.ui.ss_caption;
+  document.querySelectorAll(".ss-host").forEach(function (host) {
+    if (host.getAttribute("data-mode") === "anim" && reduceMotion) host.setAttribute("data-mode", "static");
+    if (host.getAttribute("data-mode") === "anim") {
+      var win = buildWindow();
+      host.appendChild(win);
+      var bar = el("div", "ss-anim-bar");
+      var cap = el("span", "ss-caption", CAPTION);
+      var btn = el("button", "", NOH.ui.pause); btn.type = "button";
+      bar.append(cap, btn);
+      host.appendChild(bar);
+      ssWindows.push(win);
+      ssAnim = makeAnimation(win, btn);
+    } else {
+      [["1", "more", 0], ["2", "run", 2]].forEach(function (p) {
+        var pane = el("div", "ss-pane");
+        var label = el("div", "ss-pane-label"); label.append(el("span", "ss-num", p[0]));
+        var lt = el("span"); lt.dataset.click = p[1]; label.appendChild(lt);
+        var win = buildWindow();
+        setStep(win, p[2], p[1] === "more" ? ".ss-more" : ".ss-run");
+        pane.append(label, win);
+        host.appendChild(pane);
+        ssWindows.push(win);
+        staticPanes.push({ win: win, target: p[1] === "more" ? ".ss-more" : ".ss-run" });
+      });
+      host.appendChild(el("p", "ss-caption ss-caption-wide", CAPTION));
+    }
+  });
+  function placeStaticCursors() {
+    staticPanes.forEach(function (p) { pointAt(p.win, p.win.querySelector(p.target)); });
+  }
+
+  // Runs only while the "download started" block is on screen, from its first step.
+  function makeAnimation(win, btn) {
+    // 0 rest, move to More info, press, details appear, move to Run anyway, press, installer opens.
+    var script = [
+      [700, function () { setStep(win, 0); pointAt(win, null); }],
+      [1100, function () { pointAt(win, win.querySelector(".ss-more")); }],
+      [450, function () { setStep(win, 0, ".ss-more"); }],
+      [900, function () { setStep(win, 2); }],
+      [1100, function () { pointAt(win, win.querySelector(".ss-run")); }],
+      [450, function () { setStep(win, 2, ".ss-run"); }],
+      [2400, function () { setStep(win, 3); }]
+    ];
+    var i = 0, timer = null, playing = false;
+    function tick() {
+      var stepNow = script[i];
+      stepNow[1]();
+      i = (i + 1) % script.length;
+      timer = setTimeout(tick, stepNow[0]);
+    }
+    function set(p) {
+      clearTimeout(timer);
+      playing = p;
+      btn.textContent = p ? NOH.ui.pause : NOH.ui.play;
+      if (p) tick();
+    }
+    btn.addEventListener("click", function () { set(!playing); });
+    setStep(win, 0);
+    return {
+      start: function () { i = 0; set(true); },
+      stop: function () { set(false); }
+    };
+  }
+
+  function setLang(lang) {
+    ssLang = lang;
+    var t = SS[lang];
+    ssWindows.forEach(function (win) {
+      win.setAttribute("lang", lang);
+      win.querySelectorAll("[data-k]").forEach(function (n) { n.textContent = t[n.dataset.k]; });
+    });
+    document.querySelectorAll("[data-t]").forEach(function (n) { n.textContent = t[n.getAttribute("data-t")]; n.setAttribute("lang", lang); });
+    document.querySelectorAll("[data-e]").forEach(function (n) { n.textContent = EDGE[lang][n.getAttribute("data-e")]; n.setAttribute("lang", lang); });
+    document.querySelectorAll("[data-click]").forEach(function (n) {
+      n.textContent = NOH.ui.ss_click + " ";
+      var b = el("b", "", t[n.dataset.click]); b.setAttribute("lang", lang);
+      n.appendChild(b);
+    });
+    requestAnimationFrame(placeStaticCursors);
+  }
+  setLang(ssLang);
+  window.addEventListener("resize", placeStaticCursors);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeStaticCursors);
+
+  // After the Windows button: the download goes on, the hero says what comes next.
+  document.getElementById("win-dl").addEventListener("click", function () {
+    setTimeout(function () {
+      showSystem("windows-started");
+      document.getElementById("started-title").focus({ preventScroll: true });
+    }, 300);
+  });
+  document.getElementById("started-back").addEventListener("click", function (e) {
+    e.preventDefault();
+    showSystem("windows");
+  });
+
+  // Edge gets its own first step; other browsers get one line about keeping the file.
+  function setBrowser(b) {
+    document.querySelectorAll("[data-browser]").forEach(function (n) { n.hidden = n.getAttribute("data-browser") !== b; });
+  }
+  setBrowser(/Edg\//.test(navigator.userAgent || "") ? "edge" : "other");
+  if (currentOs === "windows-started" && ssAnim) ssAnim.start();
+
+  var mcpBtn = document.getElementById("copy-mcp");
+  var mcpCmd = document.getElementById("mcp-cmd");
+  mcpBtn.addEventListener("click", function () {
+    copyText(mcpCmd.textContent, function (ok) {
+      mcpBtn.textContent = ok ? NOH.ui.copied : NOH.ui.selected;
+      setTimeout(function () { mcpBtn.textContent = NOH.ui.copy; }, 1800);
+    }, mcpCmd);
+  });
+
+  /* ---------- Shared helpers for the drawn windows ---------- */
+  // Each copy of a scene gets its own gradient ids.
+  var copies = 0;
+  function scene(id) {
+    var frag = document.getElementById("scene-" + id).content.cloneNode(true);
+    var n = ++copies;
+    frag.querySelectorAll("[id]").forEach(function (node) {
+      var old = node.id;
+      node.id = old + "-" + n;
+      frag.querySelectorAll("[fill='url(#" + old + ")']").forEach(function (u) { u.setAttribute("fill", "url(#" + node.id + ")"); });
+    });
+    return frag;
+  }
+  var NS = "http://www.w3.org/2000/svg";
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- Step animations: a drawn NOH 0.3.1 window per step ---------- */
+  var SIM_SONG = 30;
+  var SIM_SEQ = [{ id: "a", len: 3 }, { id: "b", len: 3 }, { id: "c", len: 10, clip: true }, { id: "a2", scene: "a", len: 3 }];
+  var SIM_BADGE = ["b-a", "b-b", "b-c", "b-a"];
+  var SIM_LETTERS = ["A", "B", "C", "D"];
+  var SIM_LYRICS = [
+    { from: 2, to: 8, text: "Leave the porch light on" },
+    { from: 9, to: 15, text: "the evening keeps our time" },
+    { from: 16, to: 22, text: "every picture finds its place" },
+    { from: 23, to: 29, text: "and the song carries the rest" }
+  ];
+  var SIM_STYLES = [
+    { name: "Classic", look: '<span style="font-weight:600">La la la</span>' },
+    { name: "Type block", look: '<span style="font:800 0.55em/1 var(--font-text);text-align:center;color:#FFD34D">LA<br><span style="color:#fff">LA<br>LA</span></span>' },
+    { name: "Breath", look: '<span style="font-weight:400;font-size:1.2em">La la la</span>' },
+    { name: "Falling words", look: '<span style="font-weight:800;font-size:1.15em">La la</span>' },
+    { name: "Simple karaoke", look: '<span><span style="color:#FFD34D">La la</span> la</span>' },
+    { name: "Sung sweep", look: '<span><span style="color:#FFD34D">La l</span><span style="color:#9a9a92">a la</span></span>' }
+  ];
+  var CHECK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="m5.2 8.2 2 2 3.8-4.2"/></svg>';
+  var NOTE = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M6 12V3.5l7-1.5V10.5"/><circle cx="4.25" cy="12" r="1.75"/><circle cx="11.25" cy="10.5" r="1.75"/></svg>';
+  var LINES = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h7"/></svg>';
+  var FOLDER = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em;margin-right:0.4em"><path d="M2 4.5h4l1.5 1.5H14v6.5H2Z"/></svg>';
+  var DROP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10M7.5 9.5 12 14l4.5-4.5M4 19h16"/></svg>';
+
+  function buildSim(step) {
+    var sim = el("div", "sim");
+    sim.setAttribute("aria-hidden", "true");
+    var head = el("div", "sim-head");
+    head.append(document.querySelector(".wordmark svg").cloneNode(true), el("span", "sim-sliders"));
+    var body = el("div", "sim-body");
+
+    // top row
+    var top = el("div", "sim-top");
+    var tiles = el("div", "sim-tiles");
+    var tileEls = SIM_SEQ.map(function (q, k) {
+      var t = el("div", "sim-tile");
+      var th = el("div", "sim-thumb"); th.appendChild(scene(q.scene || q.id));
+      var meta = el("div", "sim-meta");
+      meta.append(el("span", "badge " + SIM_BADGE[k], SIM_LETTERS[k]), el("span", "sim-dur", q.len + " s"));
+      t.append(th, meta);
+      tiles.appendChild(t);
+      return t;
+    });
+    var add = el("div", "sim-add"); add.append(el("i", "", "+"), el("span", "", A("strip.add")));
+    tiles.appendChild(add);
+    var side = el("div", "sim-side");
+    var song = el("div", "sim-chip sim-songchip");
+    var songName = el("span", "sim-song-name"); songName.innerHTML = NOTE;
+    var sr = el("span", "sim-right"); sr.append(el("span", "", "0:30"), el("span", "", "…"));
+    songName.append(el("b", "", "Night walk.wav"), sr);
+    var songAdd = el("span", "sim-song-add"); songAdd.innerHTML = NOTE; songAdd.append(A("song.add"));
+    song.append(songName, songAdd);
+    var lyr = el("div", "sim-chip sim-lyrchip");
+    var lyrAdd = el("span", "sim-lyr-add"); lyrAdd.innerHTML = LINES; lyrAdd.append(el("b", "", A("lyrics.title")), A("lyrics.add"));
+    var lyrGen = el("span", "sim-lyr-gen"); lyrGen.innerHTML = LINES;
+    lyrGen.append(el("b", "", A("lyrics.title")), A("lyrics.generating"));
+    var lyrDone = el("span", "sim-lyr-done"); lyrDone.innerHTML = LINES;
+    var editBtn = el("span", "sim-edit", A("lyrics_screen.edit"));
+    var lr = el("span", "sim-right"); lr.append(editBtn, el("span", "", "…"));
+    lyrDone.append(el("b", "", A("lyrics.title")), A("lyrics.lines.other", SIM_LYRICS.length), lr);
+    lyr.append(lyrAdd, lyrGen, lyrDone);
+    side.append(song, lyr);
+    top.append(tiles, side);
+
+    // middle: preview and captions panel
+    var mid = el("div", "sim-mid");
+    var monitor = el("div", "sim-monitor");
+    var layers = {};
+    ["a", "b", "c"].forEach(function (id) { var l = el("div", "sim-layer"); l.appendChild(scene(id)); monitor.appendChild(l); layers[id] = l; });
+    var cap = el("p", "sim-cap");
+    monitor.appendChild(cap);
+    var panel = el("div", "sim-panel");
+    var ph = el("div", "sim-panel-head");
+    var sw = el("span", "sim-switch");
+    var seg = el("span", "sim-seg"); seg.append(el("span", "", A("style.tab_styles")), el("span", "", A("style.tab_settings")));
+    ph.append(sw, el("b", "", A("style.show")), seg);
+    var styles = el("div", "sim-styles");
+    var styleEls = SIM_STYLES.map(function (st, k) {
+      var d = el("div", "sim-style" + (k === 0 ? " used" : ""));
+      var i = el("i"); i.innerHTML = st.look;
+      d.append(i, el("span", "", NOH.styles[k]), el("em", "", A("style.used")));
+      styles.appendChild(d);
+      return d;
+    });
+    var note = el("p", "sim-note");
+    panel.append(ph, styles, note);
+    mid.append(monitor, panel);
+
+    // transport
+    var transport = el("div", "sim-transport");
+    var time = el("span", "sim-time", "0:00.0 / 0:30.0");
+    var ctrls = el("span", "sim-ctrls");
+    var play = el("span", "sim-play");
+    play.innerHTML = '<svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M3 1.6v8.8a.6.6 0 0 0 .9.5l7-4.4a.6.6 0 0 0 0-1L3.9 1.1a.6.6 0 0 0-.9.5Z"/></svg>';
+    ctrls.append(el("span", "sim-skip", "⋮◁"), el("span", "sim-skip", "−5 s"), play, el("span", "sim-skip", "+5 s"), el("span", "sim-skip", "▷⋮"));
+    transport.append(time, ctrls, el("span", "sim-fades", A("fades.label", "1 s", "2 s")));
+
+    // timeline
+    var tl = el("div", "sim-tl");
+    var ruler = el("div", "sim-ruler");
+    ["0:00", "0:05", "0:10", "0:15", "0:20", "0:25", ""].forEach(function (t) { ruler.appendChild(el("span", "", t)); });
+    var cellsBox = el("div", "sim-cells");
+    var cells = [];
+    for (var t = 0, i = 0; t < SIM_SONG; i++) {
+      var k = i % SIM_SEQ.length, q = SIM_SEQ[k], len = Math.min(q.len, SIM_SONG - t);
+      var c = el("div", "sim-cell" + (len < q.len ? " cut" : ""), SIM_LETTERS[k]);
+      c.style.width = (len / SIM_SONG * 100) + "%";
+      c.style.background = "var(--seq-" + ([1, 2, 3, 1][k]) + ")";
+      cellsBox.appendChild(c);
+      cells.push({ el: c, id: q.scene || q.id, from: t, to: t + len });
+      t += len;
+    }
+    var wave = document.createElementNS(NS, "svg");
+    wave.setAttribute("class", "sim-wave"); wave.setAttribute("viewBox", "0 0 240 40"); wave.setAttribute("preserveAspectRatio", "none");
+    var wg = document.createElementNS(NS, "g"); wg.setAttribute("fill", "var(--app-wave)");
+    var sd = 11 + step;
+    for (var x = 0; x < 120; x++) {
+      sd = (sd * 16807) % 2147483647;
+      var h = Math.max(2, (0.35 + 0.65 * sd / 2147483647) * (0.55 + 0.45 * Math.abs(Math.sin(x / 120 * Math.PI * 2.4))) * 34);
+      var r = document.createElementNS(NS, "rect");
+      r.setAttribute("x", String(x * 2 + 0.3)); r.setAttribute("width", "1.4");
+      r.setAttribute("y", String(20 - h / 2)); r.setAttribute("height", String(h));
+      wg.appendChild(r);
+    }
+    wave.appendChild(wg);
+    var lane = el("div", "sim-lane");
+    var lineEls = SIM_LYRICS.map(function (l) {
+      var d = el("span", "sim-line", l.text);
+      d.style.left = (l.from / SIM_SONG * 100) + "%";
+      d.style.width = ((l.to - l.from) / SIM_SONG * 100) + "%";
+      lane.appendChild(d);
+      return d;
+    });
+    var playhead = el("div", "sim-playhead");
+    tl.append(ruler, cellsBox, wave, lane, playhead);
+    var short = el("div", "sim-short");
+    var sl = el("span"); sl.append(el("b", "", "+  Choose a short"), "or drag across the waveform");
+    short.append(sl, el("span", "", "−   +   ⛶"));
+    body.append(top, mid, transport, tl, short);
+
+    // export bar
+    var bar = el("div", "sim-bar");
+    var status = el("div", "sim-status");
+    var stWait = el("span", "sim-st sim-st-wait", A("ui.missing_inputs"));
+    var stReady = el("span", "sim-st sim-st-ready"); stReady.innerHTML = CHECK; stReady.append(A("bar.ready"));
+    var stProg = el("span", "sim-st sim-st-prog");
+    var progLabel = el("span", "sim-prog-label", A("ui.export_running", 0));
+    var progTrack = el("span", "sim-progress"); var progFill = el("i"); progTrack.appendChild(progFill);
+    stProg.append(progLabel, progTrack);
+    var stDone = el("span", "sim-st sim-st-done"); stDone.innerHTML = CHECK; stDone.append(A("status.done"));
+    var dest = el("span", "sim-dest"); dest.innerHTML = FOLDER; dest.append("NOH-demo › Night walk_noh.mp4"); dest.appendChild(el("u", "", A("bar.change")));
+    status.append(stWait, stReady, stProg, stDone, dest);
+    var exportBtn = el("span", "sim-export", A("bar.export_video"));
+    bar.append(status, exportBtn);
+
+    // empty state, menu, cursor
+    var drop = el("div", "sim-drop");
+    drop.innerHTML = DROP;
+    var pills = el("div", "sim-pills");
+    [A("home.kind_pictures"), A("home.kind_videos"), A("home.kind_song"), A("home.kind_lyrics")].forEach(function (t) { pills.appendChild(el("span", "", t)); });
+    drop.append(el("h4", "", A("home.drop_title")), el("p", "", A("home.drop_body")), el("span", "sim-addfiles", A("home.add_files")), pills, el("small", "", A("home.local")));
+    var menu = el("div", "sim-menu");
+    var mGen = el("span"); mGen.append(A("lyrics.generate"), el("small", "", A("lyrics.generate_help")));
+    var mImp = el("span", "", A("lyrics.import"));
+    menu.append(mGen, mImp);
+    var ghost = el("div", "sim-ghost");
+    var cursor = document.createElementNS(NS, "svg");
+    cursor.setAttribute("class", "sim-cursor"); cursor.setAttribute("viewBox", "0 0 18 22");
+    cursor.innerHTML = '<path d="M1.5 1.5v16l4.2-4 2.9 6.6 2.7-1.2-2.8-6.4h5.9Z" fill="#FFFFFF" stroke="#111214" stroke-width="1.3" stroke-linejoin="round"/>';
+    // The lyrics screen, only in step 4. Its track shows the first 13 s, as the app's zoom does.
+    var LS_SPAN = 13;
+    var ls = step === 4 ? buildLyricsScreen() : null;
+    function buildLyricsScreen() {
+      var o = {};
+      var root = el("div", "ls");
+      var top = el("div", "ls-top");
+      var title = el("span"); title.append(el("b", "", A("lyrics_screen.title")), el("span", "ls-sub", A("lyrics_screen.lines.other", SIM_LYRICS.length) + " · Night walk.wav"));
+      var acts = el("span", "ls-acts"); o.done = el("span", "ls-done", A("lyrics_screen.done"));
+      acts.append(el("span", "", "↶"), el("span", "", "↷"), o.done);
+      top.append(title, acts);
+      var mid = el("div", "ls-mid");
+      var left = el("div");
+      var prev = el("div", "ls-preview");
+      o.layers = {};
+      ["a", "b", "c"].forEach(function (id) { var l = el("div", "sim-layer"); l.appendChild(scene(id)); prev.appendChild(l); o.layers[id] = l; });
+      o.cap = el("p", "ls-cap");
+      prev.append(el("span", "ls-badge", A("lyrics_screen.not_on_video")), o.cap);
+      var tline = el("div", "ls-time"); o.time = el("span", "", "0:00.0 / 0:30.0"); o.play = el("span", "sim-play"); o.play.innerHTML = play.innerHTML;
+      tline.append(o.time, o.play);
+      left.append(prev, tline);
+      var text = el("div", "ls-text");
+      var th = el("div", "ls-text-head"); o.hint = el("span", "", A("lyrics_screen.text_hint")); th.append(el("b", "", A("lyrics_screen.text")), o.hint);
+      text.appendChild(th);
+      o.rows = SIM_LYRICS.map(function (l) {
+        var r = el("div", "ls-row"); r.append(el("span", "ls-t", "0:" + String(l.from).padStart(2, "0")), el("span", "", l.text));
+        text.appendChild(r); return r;
+      });
+      o.rowActs = el("div", "ls-rowacts"); o.rowActs.append(el("span", "", A("lyrics_screen.cut")), el("span", "", A("lyrics_screen.join")), el("span", "", A("edit.delete")));
+      text.insertBefore(o.rowActs, o.rows[1]);
+      mid.append(left, text);
+      var sync = el("div", "ls-sync");
+      var idle = el("div", "ls-idle");
+      var seg = el("span", "sim-seg"); seg.append(el("span", "", A("lyrics_screen.level_lines")), el("span", "", A("lyrics_screen.level_words")), el("span", "", A("lyrics_screen.level_syllables")));
+      o.start = el("span", "ls-start", A("lyrics_screen.start_at", 1));
+      idle.append(el("b", "", A("lyrics_screen.sync")), seg, o.start);
+      var game = el("div", "ls-game");
+      o.big = el("span", "ls-big", SIM_LYRICS[0].text);
+      o.count = el("span", "ls-count", A("words.tap_count", 0, SIM_LYRICS.length));
+      o.stop = el("span", "ls-btn", A("lyrics_screen.game_stop"));
+      var gr = el("span", "ls-game-right"); gr.append(o.count, el("span", "ls-btn", A("lyrics_screen.game_again")), o.stop);
+      game.append(o.big, gr);
+      sync.append(idle, game);
+      var trk = el("div", "ls-track");
+      var ruler = el("div", "sim-ruler");
+      ["0:00", "0:02", "0:04", "0:06", "0:08", "0:10", "0:12"].forEach(function (t) { ruler.appendChild(el("span", "", t)); });
+      var cbox = el("div", "sim-cells");
+      cells.forEach(function (c) {
+        if (c.from >= LS_SPAN) return;
+        var d = el("div", "sim-cell on", c.el.textContent);
+        d.style.width = ((Math.min(c.to, LS_SPAN) - c.from) / LS_SPAN * 100) + "%";
+        d.style.background = c.el.style.background;
+        cbox.appendChild(d);
+      });
+      var lane = el("div", "ls-lane");
+      o.blocks = SIM_LYRICS.map(function (l) {
+        var b = el("div", "ls-block"); var fill = el("i"); b.append(fill, el("span", "", l.text));
+        b.style.left = (l.from / LS_SPAN * 100) + "%";
+        b.style.width = ((Math.min(l.to, LS_SPAN + 6) - l.from) / LS_SPAN * 100) + "%";
+        lane.appendChild(b);
+        return { el: b, fill: fill, from: l.from, to: l.to };
+      });
+      o.head = el("div", "sim-playhead");
+      trk.append(ruler, cbox, wave.cloneNode(true), lane, o.head);
+      o.foot = el("div", "ls-foot");
+      root.append(top, mid, sync, trk, o.foot);
+      o.root = root;
+      return o;
+    }
+    function lsShow(on) { sim.classList.toggle("ls-on", on); }
+    function lsSelect(k) {
+      ls.rows.forEach(function (r, j) { r.classList.toggle("sel", j === k); });
+      ls.root.classList.toggle("sel", k === 0);
+    }
+    function lsFoot(game) {
+      ls.foot.textContent = "";
+      if (!game) { ls.foot.textContent = A("lyrics_screen.foot_idle"); return; }
+      A("lyrics_screen.game_foot").split(/(\[[^\]]+\])/).forEach(function (part) {
+        if (/^\[.+\]$/.test(part)) ls.foot.append(el("kbd", "", part.slice(1, -1)));
+        else if (part) ls.foot.append(part);
+      });
+    }
+    function lsGame(on) {
+      ls.root.classList.toggle("game", on);
+      ls.hint.textContent = on ? A("lyrics_screen.text_waits") : A("lyrics_screen.text_hint");
+      // The song plays during the sync: the button shows Pause, as in the app.
+      ls.play.innerHTML = on ? '<svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><rect x="2.5" y="1.5" width="2.4" height="9" rx="0.5"/><rect x="7.1" y="1.5" width="2.4" height="9" rx="0.5"/></svg>' : play.innerHTML;
+      lsFoot(on);
+      ls.blocks.forEach(function (b) { b.fill.style.width = "0"; b.el.classList.remove("cur"); });
+    }
+    function lsAt(pos) {
+      var f = Math.min(1, pos / LS_SPAN);
+      ls.head.style.left = "calc(2em + (100% - 4em) * " + f + ")";
+      ls.time.textContent = fmt(pos) + " / 0:30.0";
+      var cell = cells.find(function (c) { return pos >= c.from && pos < c.to; }) || cells[0];
+      ["a", "b", "c"].forEach(function (k) { ls.layers[k].classList.toggle("on", k === cell.id); });
+      var line = SIM_LYRICS.find(function (l) { return pos >= l.from && pos < l.to; });
+      ls.cap.textContent = line ? line.text : "";
+      ls.rows.forEach(function (r, j) { r.classList.toggle("now", SIM_LYRICS[j] === line); });
+      if (ls.root.classList.contains("game")) {
+        var done = SIM_LYRICS.filter(function (l) { return l.to <= pos; }).length;
+        ls.count.textContent = A("words.tap_count", done, SIM_LYRICS.length);
+        var cur = SIM_LYRICS[Math.min(done, SIM_LYRICS.length - 1)];
+        ls.big.textContent = cur.text;
+        ls.blocks.forEach(function (b) {
+          b.el.classList.toggle("cur", b.from === cur.from);
+          // Space is held while the line is sung: the sung part fills.
+          b.fill.style.width = (Math.max(0, Math.min(1, (pos - b.from) / (b.to - b.from))) * 100) + "%";
+        });
+      }
+    }
+
+    sim.append(head, body, bar, drop, menu, ghost, cursor);
+    if (ls) sim.insertBefore(ls.root, bar);
+
+    // ---- states ----
+    function showLayer(id) { ["a", "b", "c"].forEach(function (k) { layers[k].classList.toggle("on", k === id); }); }
+    function setTiles(n) {
+      tileEls.forEach(function (t, k) { t.classList.toggle("on", k < n); });
+      showLayer(n > 0 ? "a" : null);
+    }
+    function setSong(on) {
+      sim.classList.toggle("has-song", on);
+      cells.forEach(function (c) {
+        c.el.classList.toggle("on", on);
+      });
+    }
+    function setLyrics(state) {
+      sim.setAttribute("data-lyrics", state);
+      sim.classList.toggle("has-lyrics", state === "done");
+      lineEls.forEach(function (d, k) {
+        d.classList.toggle("on", state === "done");
+      });
+      updateNote();
+    }
+    function setCaps(on) { sim.classList.toggle("caps-on", on); updateNote(); }
+    function useStyle(k) { styleEls.forEach(function (d, j) { d.classList.toggle("used", j === k); }); }
+    function updateNote() {
+      var lyrics = sim.classList.contains("has-lyrics"), on = sim.classList.contains("caps-on");
+      note.textContent = !lyrics ? A("style.no_lyrics") : !on ? A("style.off") : A("style.one_style");
+    }
+    function setStatus(st) { sim.setAttribute("data-status", st); }
+    function setProgress(f) {
+      progFill.style.width = (f * 100) + "%";
+      progLabel.textContent = A("ui.export_running", Math.round(f * 100));
+    }
+    function fmt(sec) { var m = Math.floor(sec / 60), z = sec - m * 60; return m + ":" + (z < 10 ? "0" : "") + z.toFixed(1); }
+    function setPlayhead(pos) {
+      playhead.style.left = (pos / SIM_SONG * 100) + "%";
+      time.textContent = fmt(pos) + " / 0:30.0";
+      var cell = cells.find(function (c) { return pos >= c.from && pos < c.to; }) || cells[cells.length - 1];
+      showLayer(cell.id);
+      var line = SIM_LYRICS.find(function (l) { return pos >= l.from && pos < l.to; });
+      cap.textContent = "";
+      if (line) {
+        var words = line.text.split(" "), sung = Math.floor((pos - line.from) / (line.to - line.from - 1) * words.length + 1);
+        words.forEach(function (w, j) {
+          if (j) cap.appendChild(document.createTextNode(" "));
+          cap.appendChild(el("span", j < sung ? "sung" : "", w));
+        });
+        // As in the app, the next line waits under the sung one, dimmed.
+        var next = SIM_LYRICS[SIM_LYRICS.indexOf(line) + 1];
+        if (next) { cap.appendChild(document.createElement("br")); cap.appendChild(el("span", "next", next.text)); }
+      }
+    }
+    function spot(target, fx, fy) {
+      var w = sim.getBoundingClientRect(), r = target.getBoundingClientRect();
+      return { x: r.left - w.left + r.width * (fx == null ? 0.5 : fx), y: r.top - w.top + r.height * (fy == null ? 0.5 : fy) };
+    }
+    function moveTo(pt, ms) {
+      var tr = ms ? "transform " + ms + "ms cubic-bezier(0.35, 0.1, 0.25, 1)" : "none";
+      cursor.style.transition = tr; ghost.style.transition = (ms ? tr + ", " : "") + "opacity 150ms linear";
+      cursor.style.transform = "translate(" + Math.round(pt.x - 2) + "px," + Math.round(pt.y - 2) + "px)";
+      ghost.style.transform = "translate(" + Math.round(pt.x + 12) + "px," + Math.round(pt.y + 14) + "px)";
+    }
+    function edge(side, fy) { return { x: side === "left" ? -4 : sim.clientWidth + 4, y: sim.clientHeight * fy }; }
+    function ghostFiles() {
+      ghost.textContent = "";
+      SIM_SEQ.forEach(function (q) { var g = el("div", "gcard"); g.appendChild(scene(q.scene || q.id)); ghost.appendChild(g); });
+    }
+    function ghostWav() {
+      ghost.textContent = "";
+      var g = el("div", "gwav"); g.innerHTML = NOTE; g.append("Night walk.wav"); ghost.appendChild(g);
+    }
+    function openMenu(on) {
+      menu.classList.toggle("on", on);
+      if (on) {
+        // Measured once shown: a hidden menu has no width. Aligned to the chip's right edge, inside the window.
+        var w = sim.getBoundingClientRect(), r = lyr.getBoundingClientRect();
+        menu.style.left = Math.max(0, r.right - w.left - menu.offsetWidth) + "px";
+        menu.style.top = (r.bottom - w.top + 4) + "px";
+      }
+      mGen.classList.remove("hover");
+    }
+    var raf = null;
+    function animate(ms, fn) {
+      var t0 = null;
+      function f(now) {
+        if (t0 === null) t0 = now;
+        var k = Math.min(1, (now - t0) / ms);
+        fn(k);
+        raf = k < 1 ? requestAnimationFrame(f) : null;
+      }
+      raf = requestAnimationFrame(f);
+    }
+    function base(o) {
+      sim.classList.remove("still");
+      sim.classList.toggle("is-empty", !!o.empty);
+      drop.classList.remove("hot");
+      setTiles(o.tiles || 0); setSong(!!o.song, false); setLyrics(o.lyrics || "none", false); setCaps(!!o.caps); useStyle(o.style || 0);
+      setStatus(o.song ? "ready" : "wait"); setPlayhead(o.at || 0); setProgress(0);
+      openMenu(false); ghost.classList.remove("on");
+    }
+
+    // ---- one loop per step: [action, wait in ms] ----
+    var scripts = {
+      0: [
+        [function () { base({ tiles: 4, song: true, lyrics: "done", caps: true, style: 4 }); sim.classList.add("still"); animate(30000, function (k) { setPlayhead(k * 30); }); }, 30200]
+      ],
+      1: [
+        [function () { base({ empty: true }); ghostFiles(); moveTo(edge("left", 0.45), 0); }, 600],
+        [function () { ghost.classList.add("on"); moveTo(spot(drop, 0.5, 0.42), 1300); }, 1500],
+        [function () { ghost.classList.remove("on"); sim.classList.remove("is-empty"); setTiles(4); }, 900],
+        [function () { moveTo(spot(add, 1.4, 1.3), 900); }, 2400]
+      ],
+      2: [
+        // The song is carried across the window (NOH takes a drop anywhere); the song, its waveform and the
+        // repeated sequence then appear at once, as in the app.
+        [function () { base({ tiles: 4 }); ghostWav(); moveTo(edge("left", 0.62), 0); }, 600],
+        [function () { ghost.classList.add("on"); moveTo(spot(monitor, 0.6, 0.6), 1400); }, 1500],
+        [function () { ghost.classList.remove("on"); setSong(true); setStatus("ready"); }, 1400],
+        [function () { moveTo(spot(play), 850); }, 1000],
+        [function () { animate(3000, function (k) { setPlayhead(k * 12); }); }, 3300],
+        [function () { moveTo(spot(play, 2.5, 2.2), 700); }, 1100]
+      ],
+      3: [
+        [function () { base({ tiles: 4, song: true }); moveTo(spot(monitor, 0.7, 0.5), 0); }, 600],
+        [function () { moveTo(spot(lyr, 0.5, 0.5), 900); }, 1000],
+        [function () { openMenu(true); }, 500],
+        [function () { moveTo(spot(mGen, 0.4, 0.4), 500); }, 450],
+        [function () { mGen.classList.add("hover"); }, 300],
+        [function () { openMenu(false); setLyrics("gen"); }, 1300],
+        [function () { setLyrics("done"); }, 900],
+        [function () { moveTo(spot(lyr, 0.7, 1.6), 700); }, 2400]
+      ],
+      4: [
+        [function () { base({ tiles: 4, song: true, lyrics: "done" }); lsShow(false); moveTo(spot(monitor, 0.6, 0.5), 0); }, 600],
+        [function () { moveTo(spot(editBtn), 900); }, 1000],
+        [function () { lsShow(true); lsGame(false); lsSelect(-1); lsAt(9.1); }, 700],
+        [function () { moveTo(spot(ls.rows[0], 0.45, 0.5), 700); }, 800],
+        [function () { lsSelect(0); }, 1400],
+        [function () { moveTo(spot(ls.start), 800); }, 900],
+        [function () { lsSelect(-1); lsGame(true); lsAt(1.2); animate(7000, function (k) { lsAt(1.2 + k * 7.6); }); }, 7200],
+        [function () { moveTo(spot(ls.stop), 600); }, 700],
+        [function () { lsGame(false); lsAt(9.1); }, 800],
+        [function () { moveTo(spot(ls.done), 700); }, 800],
+        [function () { lsShow(false); }, 1500]
+      ],
+      5: [
+        [function () { base({ tiles: 4, song: true, lyrics: "done" }); moveTo(spot(monitor, 0.7, 0.5), 0); }, 600],
+        [function () { moveTo(spot(sw), 900); }, 1000],
+        [function () { setCaps(true); setPlayhead(10.5); }, 700],
+        [function () { moveTo(spot(styleEls[4], 0.5, 0.45), 700); }, 800],
+        [function () { useStyle(4); animate(3000, function (k) { setPlayhead(10.5 + k * 4.4); }); }, 3600]
+      ],
+      6: [
+        [function () { base({ tiles: 4, song: true, lyrics: "done", caps: true, style: 4, at: 11.5 }); moveTo(spot(monitor, 0.8, 0.6), 0); }, 700],
+        [function () { moveTo(spot(exportBtn), 1000); }, 1150],
+        [function () { setStatus("prog"); animate(2600, setProgress); }, 2800],
+        [function () { setStatus("done"); }, 2400]
+      ]
+    };
+    var script = scripts[step], idx = 0, timer = null;
+    function tick() {
+      var a = script[idx];
+      a[0]();
+      idx = (idx + 1) % script.length;
+      timer = setTimeout(tick, a[1]);
+    }
+    return {
+      el: sim,
+      start: function () { idx = 0; tick(); },
+      stop: function () { clearTimeout(timer); if (raf) cancelAnimationFrame(raf); raf = null; },
+      // The step's end state, without cursor: shown when nothing animates (reduced motion).
+      still: function () {
+        var o = [{ tiles: 4, song: true, lyrics: "done", caps: true, style: 4, at: 10.5 },
+          { tiles: 4 },
+          { tiles: 4, song: true, at: 7 },
+          { tiles: 4, song: true, lyrics: "done" },
+          { tiles: 4, song: true, lyrics: "done" },
+          { tiles: 4, song: true, lyrics: "done", caps: true, style: 4, at: 12 },
+          { tiles: 4, song: true, lyrics: "done", caps: true, style: 4, at: 12 }][step];
+        base(o);
+        if (step === 4) { lsShow(true); lsGame(false); lsSelect(0); lsAt(9.1); }
+        if (step === 6) { setStatus("done"); setProgress(1); }
+        sim.classList.add("still");
+      }
+    };
+  }
+
+  document.querySelectorAll(".flow-frame[data-sim]").forEach(function (frame) {
+    var n = Number(frame.getAttribute("data-sim"));
+    var sim = buildSim(n);
+    frame.appendChild(sim.el);
+    var btn = frame.parentNode.querySelector(".flow-pause");
+    // userPaused: the visitor's choice wins over scrolling; under reduced motion nothing starts by itself.
+    var st = { inView: false, userPaused: reduce, running: false };
+    function sync() {
+      var run = st.inView && !st.userPaused;
+      if (run && !st.running) { sim.start(); st.running = true; }
+      if (!run && st.running) { sim.stop(); st.running = false; }
+      var action = st.userPaused ? NOH.ui.play : NOH.ui.pause;
+      btn.textContent = action;
+      btn.setAttribute("aria-label", n ? U("aria_step", { action: action, n: n }) : U("aria_hero", { action: action }));
+    }
+    btn.addEventListener("click", function () { st.userPaused = !st.userPaused; sync(); });
+    sim.still();
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) { st.inView = e.isIntersecting; sync(); });
+      }, { threshold: 0.35 }).observe(frame);
+    } else {
+      st.inView = true;
+    }
+    sync();
+  });
+})();
+</script>
+</body>
+</html>

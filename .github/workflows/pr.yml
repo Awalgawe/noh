@@ -29,6 +29,8 @@ jobs:
           fetch-depth: 0
       - name: Verify routing and merge-gate controls
         run: python3 -m unittest discover -s tools -p test_ci_scope.py
+      - name: Check the download site builder with a recorded release
+        run: python3 -m unittest discover -s tools -p test_build_site.py
       - name: Select native platforms from the complete Git diff
         id: scope
         run: python3 tools/ci_scope.py

@@ -33,6 +33,17 @@ class ScopeTests(unittest.TestCase):
                                               "SECURITY.md", ".github/pull_request_template.md"]),
                          {"windows": False, "unix": False})
 
+    def test_download_site_needs_no_native_build(self):
+        none = {"windows": False, "unix": False}
+        for path in sorted(ci_scope.SITE_ONLY) + ["site/template.html", "site/i18n/fr.json"]:
+            with self.subTest(path=path):
+                self.assertEqual(ci_scope.select([path]), none)
+        self.assertEqual(ci_scope.select([".github/workflows/pages.yml"]), none)
+        # A page change beside an app change still builds the app everywhere.
+        self.assertEqual(ci_scope.select(["site/template.html", "src/main.rs"]), {"windows": True, "unix": True})
+        # The app reads its own words: a locale change still builds everywhere, even though the site shows some.
+        self.assertEqual(ci_scope.select(["locales/fr.lang"]), {"windows": True, "unix": True})
+
     def test_release_tooling_needs_no_native_build(self):
         none = {"windows": False, "unix": False}
         for path in sorted(ci_scope.RELEASE_ONLY):

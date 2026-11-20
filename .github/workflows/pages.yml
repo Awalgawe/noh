@@ -1,0 +1,65 @@
+name: Download site
+
+# The download page is rebuilt for the latest published release, so the browser never asks GitHub for it:
+# - after each successful Release run (dispatched by a person: a `release` event made by GITHUB_TOKEN would start nothing);
+# - when the page or its builder changes on main (an app change rebuilds nothing here: the page shows the released app);
+# - by hand.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - tools/build_site.py
+      - tools/testdata/site-release.json
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the pages for the latest release
+    # A Release run starts this whatever its outcome; a failed one changed nothing. Every successful stage
+    # (verify, build, publish…) rebuilds the same page, which is harmless: only promote changes the latest release.
+    # Nothing is downloaded from the triggering run: the page is built from main and the public release data.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the site builder with a recorded release
+        run: python3 -m unittest discover -s tools -p test_build_site.py
+      - name: Build the pages for the latest release
+        # Read-only token: the builder only reads releases/latest. A missing file fails here, and the site stays as it was.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/build_site.py --repo "${{ github.repository }}" --out _site
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

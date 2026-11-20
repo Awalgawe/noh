@@ -34,6 +34,13 @@ RELEASE_ONLY = {
     ".github/workflows/delivery-draft.yml", ".github/workflows/linux-desktop-probe.yml",
 }
 
+# The download site: no native job builds or reads it. PR validation's first job checks its builder,
+# and the Pages workflow rebuilds it from main.
+SITE_ONLY = {
+    "tools/build_site.py", "tools/test_build_site.py", "tools/testdata/site-release.json",
+    ".github/workflows/pages.yml",
+}
+
 
 def select(paths):
     """Unknown paths and unavailable change lists require all native platforms."""
@@ -44,7 +51,7 @@ def select(paths):
         if path in {"README.md", "AGENTS.md", "CONTRIBUTING.md", "SECURITY.md",
                     ".github/pull_request_template.md"} or (
             path.startswith("docs/") and path.endswith(".md")
-        ) or path in RELEASE_ONLY:
+        ) or path in RELEASE_ONLY or path in SITE_ONLY or path.startswith("site/"):
             continue
         if path in WINDOWS_ONLY or path.startswith("tools/installer/"):
             windows = True
