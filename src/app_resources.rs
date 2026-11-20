@@ -157,6 +157,19 @@ impl NohApp {
             self.refresh_metadata(ctx);
         }
     }
+    /// For a test that draws whole frames and compares them: the resources
+    /// as already checked and found whole. The real check starts a quarter
+    /// of a second after the first frame, on a thread, and what it finds (the
+    /// header's warning, where a resource is missing) comes in at a later
+    /// frame: between two frames of the test or after it, with the machine.
+    #[cfg(test)]
+    pub(super) fn resources_checked(&mut self) {
+        let inputs = self.resource_inputs();
+        self.resources.desired = Some(inputs.clone());
+        self.resources.last = Some(inputs);
+        self.resources.changed = None;
+        self.resources.issues.clear();
+    }
     pub(super) fn resource_inputs(&self) -> Inputs {
         Inputs {
             ffmpeg: self.ffmpeg.clone(),
