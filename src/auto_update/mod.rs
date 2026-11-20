@@ -446,7 +446,7 @@ pub fn sha256_reader(mut reader: impl Read, stop: &dyn Fn() -> bool) -> Result<S
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Preferences {
-    /// Look for a new version at start and every 24 hours.
+    /// Look for a new version at start and every [`CHECK_INTERVAL`].
     pub check: bool,
     /// Install a downloaded update when NOH closes normally.
     pub install_on_exit: bool,
@@ -483,6 +483,12 @@ impl Preferences {
     }
 }
 
+/// Seconds between two automatic checks, at start as while NOH stays open: a
+/// release published in the afternoon is seen the same day, not the next
+/// morning. Four requests a day stay far below GitHub's unauthenticated limit
+/// (60 an hour).
+pub const CHECK_INTERVAL: u64 = 4 * 60 * 60;
+
 /// What the previous runs left: when GitHub was last asked, and which
 /// installation was launched before NOH closed.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -502,6 +508,9 @@ pub struct Attempt {
     /// [`version_folder`]; no path is stored, so a damaged state file can never
     /// name a folder to delete.
     pub version: String,
+    /// MCP servers were asked to stop for it: their assistants must reconnect them.
+    #[serde(default)]
+    pub servers_stopped: bool,
 }
 
 /// What the start after an installation attempt tells the user. The files of
@@ -525,16 +534,7 @@ pub fn version_folder(root: &Path, version: Version) -> PathBuf {
 impl State {
     /// The folder holding downloads and `state.json`.
     pub fn folder() -> Option<PathBuf> {
-        #[cfg(target_os = "windows")]
-        let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
-        #[cfg(target_os = "macos")]
-        let base = std::env::var_os("HOME").map(|p| PathBuf::from(p).join("Library/Caches"));
-        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-        let base = std::env::var_os("XDG_CACHE_HOME")
-            .filter(|p| !p.is_empty())
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|p| PathBuf::from(p).join(".cache")));
-        base.map(|p| p.join("noh").join("updates"))
+        crate::update_stop::folder()
     }
     pub fn read(folder: &Path) -> Self {
         std::fs::read_to_string(folder.join("state.json"))
@@ -552,10 +552,11 @@ impl State {
         )?;
         std::fs::rename(temporary, folder.join("state.json"))
     }
-    /// A check is due when none was ever made or the last one is a day old.
+    /// A check is due when none was ever made or the last one is
+    /// [`CHECK_INTERVAL`] old.
     pub fn check_due(&self, now: u64) -> bool {
         self.last_check == 0
-            || now.saturating_sub(self.last_check) >= 24 * 60 * 60
+            || now.saturating_sub(self.last_check) >= CHECK_INTERVAL
             || now < self.last_check
     }
     /// The verdict on the last installation attempt, if there was one.
@@ -597,44 +598,179 @@ pub fn setup_arguments(installed: &Path, log: &Path, pid: u32, relaunch: bool) -
     arguments
 }
 
+/// A process running a program of the installed folder.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Process {
+    pub pid: u32,
+    pub parent: u32,
+    /// Lowercase file name: `noh-mcp.exe`, `ffmpeg.exe`…
+    pub name: String,
+}
+
+/// What keeps the installed files busy, grouped the way the user knows it: a
+/// program started by another one of the folder (an export's FFmpeg, an MCP
+/// job's worker) belongs to the one that started it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Holder {
+    /// MCP servers an assistant keeps open. They stop by themselves for an
+    /// update once they have no job (`crate::update_stop`). `working`: those
+    /// running a job, seen by the programs they started.
+    Servers { count: usize, working: usize },
+    /// `noh-cli` commands.
+    Commands(usize),
+    /// Other NOH windows.
+    Windows(usize),
+    /// Work this NOH started.
+    Own(usize),
+    /// Another program of the folder, by file name.
+    Program { name: String, count: usize },
+}
+
+/// Groups `processes` (never `own` itself) by the program that started them.
+pub fn holders(processes: &[Process], own: u32) -> Vec<Holder> {
+    let by_pid: std::collections::HashMap<u32, &Process> =
+        processes.iter().map(|p| (p.pid, p)).collect();
+    let mut counts: std::collections::BTreeMap<(u8, &str), usize> = Default::default();
+    let mut working = 0;
+    for process in processes {
+        // Only the first program of each chain counts. In a cycle (reused
+        // process numbers) each process counts for itself.
+        let mut root = process;
+        let mut seen = std::collections::HashSet::from([process.pid]);
+        while let Some(parent) = by_pid.get(&root.parent) {
+            if !seen.insert(parent.pid) {
+                root = process;
+                break;
+            }
+            root = parent;
+        }
+        if root.pid != process.pid {
+            continue;
+        }
+        if process.name == "noh-mcp.exe"
+            && process.parent != own
+            && processes.iter().any(|p| p.parent == process.pid)
+        {
+            working += 1;
+        }
+        let key = match process.name.as_str() {
+            _ if process.parent == own => (3, ""),
+            "noh-mcp.exe" => (0, ""),
+            "noh-cli.exe" => (1, ""),
+            "noh.exe" => (2, ""),
+            name => (4, name),
+        };
+        *counts.entry(key).or_default() += 1;
+    }
+    counts
+        .into_iter()
+        .map(|((kind, name), count)| match kind {
+            0 => Holder::Servers { count, working },
+            1 => Holder::Commands(count),
+            2 => Holder::Windows(count),
+            3 => Holder::Own(count),
+            _ => Holder::Program {
+                name: name.to_owned(),
+                count,
+            },
+        })
+        .collect()
+}
+
 /// Why the installer was not started.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Refusal {
-    /// A program of the installed folder runs (another NOH window, an export,
-    /// the MCP server, FFmpeg, whisper-cli): installing now would fail or cut it
-    /// off. What runs, for the message.
-    Busy(Vec<String>),
+    /// Something runs from the installed folder: installing now would fail or
+    /// cut it off.
+    Busy(Vec<Holder>),
     Failed(Error),
 }
 
+/// How long NOH, closing, waits for idle MCP servers to stop.
+pub const EXIT_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Only MCP servers hold the files: asking them to stop can free the folder.
+/// Anything else would keep the update from installing, so no server is
+/// asked to stop for nothing.
+pub fn only_servers(held: &[Holder]) -> bool {
+    !held.is_empty() && held.iter().all(|h| matches!(h, Holder::Servers { .. }))
+}
+
+/// What holds the files of `installation`, and whether its MCP servers were
+/// asked to stop.
+#[cfg(target_os = "windows")]
+pub struct Stopped {
+    pub held: Vec<Holder>,
+    pub asked: bool,
+}
+
+/// When only MCP servers hold the files of `installation`, asks them to stop
+/// (`crate::update_stop`) and waits up to `wait` while they are all that holds
+/// them. Anything else is reported at once, before any server is asked. The
+/// request is left in force: the caller withdraws it when it does not install.
+#[cfg(target_os = "windows")]
+pub fn stop_servers(
+    installation: &Path,
+    root: &Path,
+    own: u32,
+    wait: std::time::Duration,
+) -> Result<Stopped> {
+    use crate::update_stop::{StopRequest, now};
+    let mut held = holders(&windows::running(installation, own)?, own);
+    if !only_servers(&held) {
+        return Ok(Stopped { held, asked: false });
+    }
+    StopRequest::write(root, installation, now())?;
+    let start = std::time::Instant::now();
+    while only_servers(&held) && start.elapsed() < wait {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        held = holders(&windows::running(installation, own)?, own);
+    }
+    Ok(Stopped { held, asked: true })
+}
+
 /// Starts the silent installation of `ready` and records the attempt; the
-/// caller then closes NOH. `relaunch`: the user asked for a restart.
+/// caller then closes NOH. `relaunch`: the user asked for a restart. Idle MCP
+/// servers of the copy are stopped first; `servers_asked`: the interface
+/// already had them stop, so the next start says to reconnect them.
 #[cfg(target_os = "windows")]
 pub fn apply(
     ready: &worker::Ready,
     root: &Path,
     relaunch: bool,
+    servers_asked: bool,
 ) -> std::result::Result<(), Refusal> {
     let own = std::process::id();
-    let busy = windows::running(&ready.installation.folder, own).map_err(Refusal::Failed)?;
-    if !busy.is_empty() {
-        return Err(Refusal::Busy(busy.iter().map(|r| r.to_string()).collect()));
+    let result = (|| {
+        let stopped = stop_servers(&ready.installation.folder, root, own, EXIT_WAIT)
+            .map_err(Refusal::Failed)?;
+        if !stopped.held.is_empty() {
+            return Err(Refusal::Busy(stopped.held));
+        }
+        worker::require_space(&std::env::temp_dir(), installer_space(&ready.components))
+            .map_err(Refusal::Failed)?;
+        let log = version_folder(root, ready.version).join("install.log");
+        let arguments = setup_arguments(&ready.installation.folder, &log, own, relaunch);
+        let mut state = State::read(root);
+        state.attempt = Some(Attempt {
+            version: ready.version.to_string(),
+            servers_stopped: servers_asked || stopped.asked,
+        });
+        state.save(root).map_err(|e| Refusal::Failed(e.into()))?;
+        if let Err(error) = windows::launch(&ready.setup, &ready.setup_sha256, &arguments) {
+            state.attempt = None;
+            let _ = state.save(root);
+            return Err(Refusal::Failed(error));
+        }
+        Ok(())
+    })();
+    // Installing: the request lapses by itself; for the rest of its lifetime it
+    // keeps servers a client starts meanwhile from holding the files. Not
+    // installing: withdraw it.
+    if result.is_err() {
+        crate::update_stop::StopRequest::clear(root);
     }
-    worker::require_space(&std::env::temp_dir(), installer_space(&ready.components))
-        .map_err(Refusal::Failed)?;
-    let log = version_folder(root, ready.version).join("install.log");
-    let arguments = setup_arguments(&ready.installation.folder, &log, own, relaunch);
-    let mut state = State::read(root);
-    state.attempt = Some(Attempt {
-        version: ready.version.to_string(),
-    });
-    state.save(root).map_err(|e| Refusal::Failed(e.into()))?;
-    if let Err(error) = windows::launch(&ready.setup, &ready.setup_sha256, &arguments) {
-        state.attempt = None;
-        let _ = state.save(root);
-        return Err(Refusal::Failed(error));
-    }
-    Ok(())
+    result
 }
 
 pub mod fetch;

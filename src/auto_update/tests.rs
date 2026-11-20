@@ -403,14 +403,14 @@ fn preferences_default_to_checking_and_installing_on_exit() {
 }
 
 #[test]
-fn a_check_is_due_once_a_day() {
+fn a_check_is_due_every_four_hours() {
     let state = State {
         last_check: 1_000_000,
         ..State::default()
     };
     assert!(!state.check_due(1_000_000));
-    assert!(!state.check_due(1_000_000 + 24 * 3600 - 1));
-    assert!(state.check_due(1_000_000 + 24 * 3600));
+    assert!(!state.check_due(1_000_000 + 4 * 3600 - 1));
+    assert!(state.check_due(1_000_000 + 4 * 3600));
     // A clock set back does not silence checks for ever.
     assert!(state.check_due(999_999));
     assert!(State::default().check_due(1));
@@ -423,6 +423,7 @@ fn the_next_start_tells_whether_the_installation_happened() {
         last_check: 0,
         attempt: Some(Attempt {
             version: version.into(),
+            servers_stopped: true,
         }),
         not_started: Some("noh-cli.exe".into()),
     };
@@ -482,4 +483,78 @@ fn the_installer_runs_silently_without_closing_other_noh_processes() {
     // InstallLocation ends with a separator; the argument never does.
     let registry = Path::new(r"C:\Users\someone\AppData\Local\Programs\NOH\");
     assert_eq!(setup_arguments(registry, log, 4242, true), arguments);
+}
+
+#[test]
+fn what_holds_the_folder_is_grouped_by_the_program_that_started_it() {
+    let p = |pid, parent, name: &str| Process {
+        pid,
+        parent,
+        name: name.into(),
+    };
+    let own = 1;
+    let processes = [
+        // Two MCP servers started by an assistant (pid 900, outside the
+        // folder); one runs a job: its engine worker and that worker's FFmpeg.
+        p(10, 900, "noh-mcp.exe"),
+        p(11, 900, "noh-mcp.exe"),
+        p(12, 11, "noh-mcp.exe"),
+        p(13, 12, "ffmpeg.exe"),
+        // A CLI export and its FFmpeg.
+        p(20, 901, "noh-cli.exe"),
+        p(21, 20, "ffmpeg.exe"),
+        // Another NOH window, this NOH's own preview FFmpeg, a lone whisper-cli.
+        p(30, 902, "noh.exe"),
+        p(40, own, "ffmpeg.exe"),
+        p(50, 903, "whisper-cli.exe"),
+        p(51, 903, "whisper-cli.exe"),
+        // Reused process numbers pointing at each other: each counts.
+        p(60, 61, "ffprobe.exe"),
+        p(61, 60, "ffprobe.exe"),
+    ];
+    assert_eq!(
+        holders(&processes, own),
+        [
+            Holder::Servers {
+                count: 2,
+                working: 1,
+            },
+            Holder::Commands(1),
+            Holder::Windows(1),
+            Holder::Own(1),
+            Holder::Program {
+                name: "ffprobe.exe".into(),
+                count: 2,
+            },
+            Holder::Program {
+                name: "whisper-cli.exe".into(),
+                count: 2,
+            },
+        ]
+    );
+    assert!(holders(&[], own).is_empty());
+}
+
+#[test]
+fn a_state_from_before_servers_were_stopped_still_reads() {
+    let folder = tempfile::tempdir().unwrap();
+    std::fs::write(
+        folder.path().join("state.json"),
+        r#"{"last_check":5,"attempt":{"version":"0.3.1"},"not_started":null}"#,
+    )
+    .unwrap();
+    let attempt = State::read(folder.path()).attempt.unwrap();
+    assert_eq!(attempt.version, "0.3.1");
+    assert!(!attempt.servers_stopped);
+}
+
+#[test]
+fn servers_are_asked_to_stop_only_when_they_alone_hold_the_folder() {
+    let servers = Holder::Servers {
+        count: 2,
+        working: 0,
+    };
+    assert!(only_servers(std::slice::from_ref(&servers)));
+    assert!(!only_servers(&[]));
+    assert!(!only_servers(&[servers, Holder::Commands(1)]));
 }

@@ -57,6 +57,7 @@ pub mod subtitles;
 pub mod syllables;
 pub mod timeline;
 mod timing;
+pub mod update_stop;
 mod wav;
 pub mod waveform;
 #[derive(Debug)]

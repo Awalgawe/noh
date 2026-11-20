@@ -46,6 +46,10 @@ struct State {
     prefix: String,
     next_id: u64,
     closed: bool,
+    /// An update of this copy waits for the server to stop: no new job starts.
+    draining: bool,
+    /// When the last job ended, so a client can still read its result.
+    last_finished: Option<Instant>,
     active: Option<Active>,
     terminal: VecDeque<Record>,
     retained_bytes: usize,
@@ -109,6 +113,8 @@ impl Session {
                     prefix,
                     next_id: 1,
                     closed: false,
+                    draining: false,
+                    last_finished: None,
                     active: None,
                     terminal: VecDeque::new(),
                     retained_bytes: 0,
@@ -252,6 +258,9 @@ impl Session {
                 "The client session is shutting down.",
             ));
         }
+        if state.draining {
+            return Err(updating());
+        }
         if state.active.is_some() {
             return Err(SessionError::new(
                 "mcp.busy",
@@ -270,6 +279,9 @@ impl Session {
                     "mcp.closed",
                     "The client session is shutting down.",
                 ));
+            }
+            if state.draining {
+                return Err(updating());
             }
             if state.active.is_some() {
                 return Err(SessionError::new(
@@ -437,6 +449,27 @@ impl Session {
             wait_ms: 0,
             include_result: false,
         })
+    }
+
+    /// An update of this copy asks the server to stop (`true`) or no longer
+    /// does (`false`): new jobs are refused meanwhile, running ones go on.
+    pub fn set_draining(&self, draining: bool) {
+        self.0.shared.state.lock().unwrap().draining = draining;
+    }
+
+    /// Closes the session when no job runs and none ended within `quiet`, so
+    /// the server can exit for an update; `false` while a job still needs it.
+    /// Closing under the status lock means no job can start in between.
+    pub fn close_if_idle(&self, quiet: Duration) -> bool {
+        let mut state = self.0.shared.state.lock().unwrap();
+        if state.closed {
+            return true;
+        }
+        if state.active.is_some() || state.last_finished.is_some_and(|t| t.elapsed() < quiet) {
+            return false;
+        }
+        state.closed = true;
+        true
     }
 
     /// Cheap EOF/error hook: stop admission and signal cancellation without joins.
@@ -743,6 +776,7 @@ fn finish(shared: &Shared, id: &str, terminal: Terminal) {
             return;
         }
         let mut record = state.active.take().unwrap().record;
+        state.last_finished = Some(Instant::now());
         record.state = terminal_state;
         record.result = result;
         record.error = error;
@@ -769,6 +803,13 @@ fn finish(shared: &Shared, id: &str, terminal: Terminal) {
     drop(evicted);
     drop(discarded);
     shared.changed.notify_all();
+}
+
+fn updating() -> SessionError {
+    SessionError::new(
+        "mcp.updating",
+        "NOH is installing an update: this server stops as soon as it has no job. Start the job again once the server is reconnected.",
+    )
 }
 
 fn prepare_terminal(
@@ -958,6 +999,25 @@ mod tests {
         }))
         .unwrap();
         assert_eq!(input.truth, Some(TruthInput::Srt));
+    }
+
+    #[test]
+    fn an_update_stops_admission_and_closes_only_an_idle_session() {
+        let session = session();
+        session.set_draining(true);
+        assert_eq!(session.ready_to_start().unwrap_err().code, "mcp.updating");
+        // A running job keeps the server; so does a result just finished.
+        let id = reserve(&session);
+        assert!(!session.close_if_idle(Duration::ZERO));
+        finish(&session.0.shared, &id, Ok(Some(exported())));
+        assert!(!session.close_if_idle(Duration::from_secs(3600)));
+        // Withdrawn: jobs are accepted again and nothing closes.
+        session.set_draining(false);
+        assert!(session.ready_to_start().is_ok());
+        assert!(session.close_if_idle(Duration::ZERO));
+        assert_eq!(session.ready_to_start().unwrap_err().code, "mcp.closed");
+        // The finished result is still readable until the server exits.
+        assert_eq!(session.job(query(&id)).unwrap().state, JobState::Succeeded);
     }
 
     fn session() -> Session {

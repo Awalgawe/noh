@@ -228,6 +228,7 @@ where
         stop_session.stop_admission_and_cancel()
     });
     let transport = transport::BoundedStdio::new(read, write, shutdown.clone());
+    let watch = tokio::spawn(stop_for_update(session.clone(), shutdown.clone()));
     let result = match (Server {
         session: session.clone(),
     })
@@ -241,11 +242,37 @@ where
             .map_err(io::Error::other),
         Err(error) => Err(io::Error::other(error)),
     };
+    watch.abort();
     shutdown.stop();
     tokio::task::spawn_blocking(move || session.join_and_drop_jobs())
         .await
         .map_err(io::Error::other)?;
     result
+}
+
+/// How often a server looks for an update's stop request.
+const UPDATE_POLL: std::time::Duration = std::time::Duration::from_secs(1);
+/// How long a finished job's result stays readable before an update may stop
+/// the server: a client polling `noh_job` reads it within a few seconds.
+const UPDATE_QUIET: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Ends the session for an update of the copy this server runs from
+/// (`crate::update_stop`): new jobs are refused while the request stands, and
+/// the server stops once no job runs, never in the middle of one. The client
+/// sees the server exit; an interactive client must reconnect it afterwards.
+async fn stop_for_update(session: Session, shutdown: transport::Shutdown) {
+    let mut tick = tokio::time::interval(UPDATE_POLL);
+    loop {
+        tick.tick().await;
+        let requested = tokio::task::spawn_blocking(crate::update_stop::requested_here)
+            .await
+            .unwrap_or(false);
+        session.set_draining(requested);
+        if requested && session.close_if_idle(UPDATE_QUIET) {
+            shutdown.stop();
+            return;
+        }
+    }
 }
 
 #[cfg(test)]

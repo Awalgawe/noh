@@ -75,6 +75,10 @@ impl Worker {
     pub fn phase(&self) -> Phase {
         self.phase.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
+    /// Shows `phase` without doing any work: interface captures only.
+    pub fn stage(&mut self, phase: Phase) {
+        *self.phase.lock().unwrap_or_else(|e| e.into_inner()) = phase;
+    }
     pub fn busy(&self) -> bool {
         self.thread.as_ref().is_some_and(|t| !t.is_finished())
     }

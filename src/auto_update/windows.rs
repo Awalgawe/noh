@@ -4,7 +4,7 @@
 //! Raw `extern "system"` declarations, as `src/i18n.rs` already does: no
 //! dependency changes.
 
-use super::{Error, Installation, Profile, Result};
+use super::{Error, Installation, Process, Profile, Result};
 use std::{
     ffi::{OsStr, OsString},
     fs::File,
@@ -172,27 +172,10 @@ fn executable_names(folder: &Path) -> std::collections::BTreeSet<String> {
     names
 }
 
-/// A process that keeps the installed files busy.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Running {
-    /// Its program, inside the installed folder.
-    Program(PathBuf),
-    /// Named like one of the folder's programs, but Windows would not say where
-    /// it runs from: counted as running, so the check fails closed.
-    Unknown(String),
-}
-
-impl std::fmt::Display for Running {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Running::Program(path) => write!(f, "{}", path.display()),
-            Running::Unknown(name) => write!(f, "{name} (?)"),
-        }
-    }
-}
-
-/// Processes other than `own` that run a program from inside `folder`.
-pub fn running(folder: &Path, own: u32) -> Result<Vec<Running>> {
+/// Processes other than `own` that run a program from inside `folder`. One
+/// named like a program of the folder whose location Windows will not give is
+/// counted too, so the check fails closed.
+pub fn running(folder: &Path, own: u32) -> Result<Vec<Process>> {
     const TH32CS_SNAPPROCESS: u32 = 0x0000_0002;
     const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
     let names = executable_names(folder);
@@ -228,10 +211,12 @@ pub fn running(folder: &Path, own: u32) -> Result<Vec<Running>> {
                     image = Some(PathBuf::from(OsString::from_wide(&buffer[..size as usize])));
                 }
             }
-            match image {
-                Some(image) if inside(folder, &image) => found.push(Running::Program(image)),
-                Some(_) => {}
-                None => found.push(Running::Unknown(name)),
+            if image.is_none_or(|image| inside(folder, &image)) {
+                found.push(Process {
+                    pid: entry.pid,
+                    parent: entry.parent,
+                    name,
+                });
             }
         }
         more = unsafe { Process32NextW(snapshot, &mut entry) } != 0;
@@ -382,11 +367,14 @@ mod tests {
         }
         let found = found.unwrap();
         assert_eq!(found.len(), copies.len(), "{found:?}");
-        for copy in &copies {
+        for (copy, child) in copies.iter().zip(&children) {
+            let name = copy.file_name().unwrap().to_string_lossy().to_lowercase();
             assert!(
-                found
-                    .iter()
-                    .any(|r| matches!(r, Running::Program(p) if same_path(p, copy))),
+                found.contains(&Process {
+                    pid: child.id(),
+                    parent: std::process::id(),
+                    name,
+                }),
                 "{copy:?} in {found:?}"
             );
         }
