@@ -398,9 +398,11 @@ consumed by a signing job.
 
 Cache entries are immutable. If the first save followed an early failure, an exact
 hit may retain only part of the dependencies; inspect actual compilation, not just
-the hit flag. This happened in run 37469621614. NOH now uses a stable v2 dependency
-cache generation and disables `cache-on-failure`; it does not rotate keys per run
-or commit, clear unrelated caches, or rerun the completed release for this fix.
+the hit flag. This happened in run 37469621614. NOH then used a stable v2 dependency
+cache generation and disabled `cache-on-failure`. Since 0.3.0 the Release build
+restores no compiled dependencies at all: compiled bytes from a cache are not
+compared with anything, and the release commit changes `Cargo.lock`, so the first
+build of a release never found them (RELEASING.md, caches).
 
 Read the pinned action's implementation when configuration behaves unexpectedly:
 in rust-cache v2.9.2, [`shared-key` replaces `key`](https://github.com/Swatinem/rust-cache/blob/6323deb102c322ba6fcbdcafc7e3dddab59af2b6/src/config.ts).
