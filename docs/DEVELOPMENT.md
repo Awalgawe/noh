@@ -97,7 +97,7 @@ The screen's CPU cost per frame is an opt-in test, beside the main screen's
 with the same song. `NOH_QA_WAV` is the song and `NOH_FFMPEG` reads it:
 
 ```sh
-cargo test --release --features gui,mcp,updates --bin noh-app lyrics_screen_frame_cost -- --ignored --nocapture
+cargo test --release --features gui,mcp --bin noh-app lyrics_screen_frame_cost -- --ignored --nocapture
 ```
 
 It measures layout and tessellation at 980 × 850 only: no GPU paint, no
