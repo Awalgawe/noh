@@ -110,8 +110,9 @@ class MatrixTests(unittest.TestCase):
     def test_gui_requires_real_decoded_video_and_audio(self):
         value = {'fixture': False, 'timed_out': False, 'capture_ready': True,
                  'project_terminal': 'finished', 'resource_issues': 0,
-                 'mini_preview': {'explicit_ffmpeg': False, 'player': {'audio_available': True,
-                                  'frame': {'position': 1.2, 'width': 128, 'height': 72}}}}
+                 'mini_preview': {'explicit_ffmpeg': False, 'player': {
+                     'audio_available': True, 'phase': 'Ready', 'playing': True, 'position': 1.205,
+                     'frame': {'position': 1.2, 'width': 128, 'height': 72}}}}
         probe.check_gui_report(value)
         for field, replacement in [('fixture', True), ('project_terminal', 'failed'), ('timed_out', True)]:
             with self.subTest(field=field), self.assertRaises(ValueError):
@@ -120,6 +121,21 @@ class MatrixTests(unittest.TestCase):
             changed = copy.deepcopy(value)
             changed['mini_preview']['player'][field] = replacement
             with self.subTest(field=field), self.assertRaises(ValueError):
+                probe.check_gui_report(changed)
+
+    def test_gui_requires_the_player_still_playing_when_the_capture_ends(self):
+        value = {'fixture': False, 'timed_out': False, 'capture_ready': True,
+                 'project_terminal': 'finished', 'resource_issues': 0,
+                 'mini_preview': {'explicit_ffmpeg': False, 'player': {
+                     'audio_available': True, 'phase': 'Ready', 'playing': True, 'position': 1.425,
+                     'frame': {'position': 1.417, 'width': 128, 'height': 72}}}}
+        probe.check_gui_report(value)
+        # Debian 13 on 0.3.0's desktop run: the clip's end reported, the last picture near one second.
+        stopped = {'phase': 'Ended', 'playing': False, 'position': 3.0}
+        for changes in (stopped, {'playing': False}, {'phase': 'Loading'}, {'position': 3.0}, {'position': None}):
+            changed = copy.deepcopy(value)
+            changed['mini_preview']['player'].update(changes)
+            with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, probe.STOPPED):
                 probe.check_gui_report(changed)
 
 

@@ -313,15 +313,16 @@ new pin is reviewed and recorded before any build.
    - the interface capture that never ends (`gui-timeout.json` is present; seen in
      3 of 23 runs; the player reports the end of the clip after about one second,
      cause under investigation);
-   - the preview's tone missing from the recorded audio ("Recorded virtual audio
-     does not establish the application preview tone"; seen once, on 0.3.0's
-     desktop run). There the preview showed about a second of pictures with no
-     sound, then reported the end of the clip: the player symptom above, with
-     silence added. Whether the application or the virtual machine loses the
-     sound is not established. Re-run only when `runtime/gui.json` in the
-     desktop's evidence shows `mini_preview.player` with `phase` "Ended",
-     `position` 3.0 (the test clip's length) and `frame.position` just above 1
-     (1.04 in 0.3.0's run). Any other player state: stop;
+   - the preview stopping before the capture ends ("The preview stopped playing
+     before the capture ended"; seen once, on 0.3.0's desktop run, where only the
+     later audio check caught it). There the preview showed about a second of
+     pictures with no sound, then reported the end of the clip: the player symptom
+     above, with silence added. Whether the application or the virtual machine
+     loses the sound is not established. Re-run only when the message reads
+     `phase Ended, playing False, position 3.0 of a 3 s clip` with the last picture
+     just above 1. Any other state in that message, and a failed audio check
+     ("Recorded virtual audio does not establish the application preview tone"),
+     which now means the player was still playing: stop;
    - the file dialog left open ("The Zenity fallback remains running"; seen twice,
      the test's keys did not reach the dialog).
 

@@ -19,6 +19,10 @@ from linux_elf import audit_bundle, require_host_runtime
 from linux_host import check_host
 from mcp_check import mcp_job
 
+# Length of the synthetic clip and soundtrack the interface previews.
+CLIP_SECONDS = 3
+STOPPED = 'The preview stopped playing before the capture ended'
+
 
 def check_gui_report(report):
     preview = report.get('mini_preview', {})
@@ -31,6 +35,15 @@ def check_gui_report(report):
             or not player.get('audio_available') or frame.get('position', 0) < 1
             or frame.get('width', 0) <= 0 or frame.get('height', 0) <= 0):
         raise ValueError('Actual NOH import/video/audio preview did not pass; inspect gui.json')
+    # The capture ends once a picture past one second is shown, so the player must still be
+    # playing then. A player that reports the clip's end while its last picture is near one
+    # second (seen on Debian 13) would otherwise pass here and fail later at the audio check.
+    position = player.get('position')
+    if (player.get('phase') != 'Ready' or player.get('playing') is not True
+            or not isinstance(position, (int, float)) or not position < CLIP_SECONDS):
+        raise ValueError(f"{STOPPED} (phase {player.get('phase')}, playing {player.get('playing')}, "
+                         f"position {position} of a {CLIP_SECONDS} s clip, last picture at "
+                         f"{frame.get('position')}); inspect gui.json")
 
 
 def gui_preview(appdir, clip, soundtrack, tmp, evidence):
@@ -263,10 +276,10 @@ def main():
             soundtrack = Path(tmp) / 'silence.wav'
             output = Path(tmp) / 'composition.mp4'
             ffmpeg = result['host']['ffmpeg']
-            for command in ([ffmpeg, '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=128x72:rate=12:duration=3',
+            for command in ([ffmpeg, '-v', 'error', '-f', 'lavfi', '-i', f'testsrc2=size=128x72:rate=12:duration={CLIP_SECONDS}',
                              '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-n', str(clip)],
                             [ffmpeg, '-v', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000',
-                             '-t', '3', '-ac', '2', '-c:a', 'pcm_s16le', '-n', str(soundtrack)]):
+                             '-t', str(CLIP_SECONDS), '-ac', '2', '-c:a', 'pcm_s16le', '-n', str(soundtrack)]):
                 subprocess.run(command, check=True, capture_output=True, text=True, timeout=45)
             command = [str(home / 'bin/noh-cli'), str(clip), str(soundtrack), '--reencode',
                        '--fade-in', '0', '--fade-out', '0', '--output', str(output)]
