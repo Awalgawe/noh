@@ -135,14 +135,14 @@ large-runtime PR upload or automatic publication. Source/bottle/vendor staging c
 consume substantial runner disk space; actual hosted-runner capacity/time must be
 measured.
 
-The Linux build restores two caches. Only a Release run on main writes them, a
-`verify` run included. GitHub drops a cache that nothing has read for seven days,
-and the least recently read ones once the repository holds more than 10 GB: they
-usually serve the builds of one release, not the first build of the next. The first
-holds downloads: each file is compared with its pinned SHA-256 before every use, and
-the folders restored beside them are removed before the build, so Whisper is compiled
-again each time. The second holds compiled Rust dependencies, which are used as
-restored: nothing compares them with anything. The Windows build restores no cache.
+The Linux build restores one cache, of downloads. Only a Release run on main writes
+it, a `verify` run included. GitHub drops a cache that nothing has read for seven
+days, and the least recently read ones once the repository holds more than 10 GB: it
+usually serves the builds of one release, not the first build of the next. Each file
+is compared with its pinned SHA-256 before every use, and the folders restored beside
+them are removed before the build, so Whisper is compiled again each time. No
+compiled bytes come from a cache into a published package: neither build restores
+compiled Rust dependencies, and the Windows build restores no cache at all.
 
 ## Current review boundary
 
