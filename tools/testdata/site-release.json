@@ -1,0 +1,131 @@
+{
+  "tag_name": "v0.3.1",
+  "published_at": "2026-11-20T13:16:57Z",
+  "assets": [
+    {
+      "name": "ACCEPTANCE.json",
+      "size": 15391,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/ACCEPTANCE.json"
+    },
+    {
+      "name": "COMPONENTS.json",
+      "size": 204812,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/COMPONENTS.json"
+    },
+    {
+      "name": "INSTALLER-PROVENANCE.json",
+      "size": 5903,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/INSTALLER-PROVENANCE.json"
+    },
+    {
+      "name": "installer-test-evidence.zip",
+      "size": 536997,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/installer-test-evidence.zip"
+    },
+    {
+      "name": "INSTALLER-TESTS.json",
+      "size": 1904524,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/INSTALLER-TESTS.json"
+    },
+    {
+      "name": "linux-desktop-evidence.zip",
+      "size": 23114399,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/linux-desktop-evidence.zip"
+    },
+    {
+      "name": "linux-x64-DELIVERY.json",
+      "size": 4911537,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/linux-x64-DELIVERY.json"
+    },
+    {
+      "name": "NOH-0.3.1-linux-x64-materials.zip",
+      "size": 374936735,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-0.3.1-linux-x64-materials.zip"
+    },
+    {
+      "name": "NOH-0.3.1-linux-x64.zip",
+      "size": 500048640,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-0.3.1-linux-x64.zip"
+    },
+    {
+      "name": "NOH-0.3.1-windows-x64-complete-installer-sources.zip",
+      "size": 10659173,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-0.3.1-windows-x64-complete-installer-sources.zip"
+    },
+    {
+      "name": "NOH-0.3.1-windows-x64-Complete-Setup.exe",
+      "size": 1233128464,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-0.3.1-windows-x64-Complete-Setup.exe"
+    },
+    {
+      "name": "NOH-0.3.1-windows-x64-maintenance-installer-sources.zip",
+      "size": 10659173,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-0.3.1-windows-x64-maintenance-installer-sources.zip"
+    },
+    {
+      "name": "NOH-0.3.1-windows-x64-materials.zip",
+      "size": 1286847871,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-0.3.1-windows-x64-materials.zip"
+    },
+    {
+      "name": "NOH-0.3.1-windows-x64-minimal-installer-sources.zip",
+      "size": 10659173,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-0.3.1-windows-x64-minimal-installer-sources.zip"
+    },
+    {
+      "name": "NOH-0.3.1-windows-x64-Minimal-Setup.exe",
+      "size": 51365675,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-0.3.1-windows-x64-Minimal-Setup.exe"
+    },
+    {
+      "name": "NOH-0.3.1-windows-x64-standard-installer-sources.zip",
+      "size": 10659173,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-0.3.1-windows-x64-standard-installer-sources.zip"
+    },
+    {
+      "name": "NOH-0.3.1-windows-x64-Standard-Setup.exe",
+      "size": 160558548,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-0.3.1-windows-x64-Standard-Setup.exe"
+    },
+    {
+      "name": "NOH-0.3.1-windows-x64-web-installer-sources.zip",
+      "size": 10659173,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-0.3.1-windows-x64-web-installer-sources.zip"
+    },
+    {
+      "name": "NOH-0.3.1-windows-x64-Web-Setup.exe",
+      "size": 51365664,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-0.3.1-windows-x64-Web-Setup.exe"
+    },
+    {
+      "name": "NOH-0.3.1-windows-x64.zip",
+      "size": 1327331275,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-0.3.1-windows-x64.zip"
+    },
+    {
+      "name": "NOH-windows-x64-media-8d4b5e37f6068ae8.zip",
+      "size": 133505969,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-windows-x64-media-8d4b5e37f6068ae8.zip"
+    },
+    {
+      "name": "NOH-windows-x64-speech-e20e96941925787b.zip",
+      "size": 1146046884,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/NOH-windows-x64-speech-e20e96941925787b.zip"
+    },
+    {
+      "name": "PUBLICATION.json",
+      "size": 3304,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/PUBLICATION.json"
+    },
+    {
+      "name": "SHA256SUMS",
+      "size": 2247,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/SHA256SUMS"
+    },
+    {
+      "name": "windows-x64-DELIVERY.json",
+      "size": 5217330,
+      "browser_download_url": "https://github.com/Awalgawe/noh/releases/download/v0.3.1/windows-x64-DELIVERY.json"
+    }
+  ]
+}

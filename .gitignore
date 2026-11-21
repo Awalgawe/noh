@@ -22,3 +22,6 @@ __pycache__/
 
 # Syllable dictionaries are built from public datasets (tools/build_syllable_dicts.py), never committed.
 assets/languages/*/dictionary.txt
+
+# Download site built locally by tools/build_site.py
+/_site/
