@@ -180,6 +180,9 @@ jobs:
     permissions:
       contents: write
       actions: read
+      # Only the attestation step uses these: a short-lived signing certificate, and the attestation record.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -213,6 +216,16 @@ jobs:
           path: ${{ runner.temp }}/noh-release-publication/PUBLICATION.json
           if-no-files-found: error
           retention-days: 90
+      - name: Attest that this workflow published the verified files
+        # Signed through Sigstore and kept by GitHub, outside the release: the asset list does not change.
+        # Anyone can check a downloaded file with: gh attestation verify <file> --repo Awalgawe/noh
+        # Before publishing: a release never becomes public without its attestations.
+        if: inputs.stage == 'publish'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            ${{ runner.temp }}/noh-release-publication/release/*
+            ${{ runner.temp }}/noh-release-publication/PUBLICATION.json
       - name: Publish the staged draft as a pre-release
         if: inputs.stage == 'publish'
         env:
