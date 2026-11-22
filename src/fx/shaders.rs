@@ -40,7 +40,7 @@ struct Globals { canvas: vec2<f32>, cov_size: f32, msdf_size: f32, msdf_range: f
 @group(0) @binding(1) var cov_tex: texture_2d<f32>;
 @group(0) @binding(2) var msdf_tex: texture_2d<f32>;
 @group(0) @binding(3) var samp: sampler;
-struct GlyphIn { coverage: f32, local: vec2<f32>, uv: vec2<f32>, color: vec4<f32>, color2: vec4<f32>, time: f32, progress: f32 };
+struct GlyphIn { coverage: f32, local: vec2<f32>, uv: vec2<f32>, color: vec4<f32>, color2: vec4<f32>, time: f32, progress: f32, frame: vec2<f32> };
 struct VertexIn { corner: vec2<f32>, center: vec2<f32>, time: f32, index: f32 };
 HOOKS
 
@@ -64,6 +64,7 @@ struct VOut {
   @location(5) extra: vec4<f32>,
   @location(6) uvspan: vec4<f32>,
   @location(7) clip: f32,
+  @location(8) frame: vec2<f32>,
 };
 
 @vertex fn vs(@builtin(vertex_index) vi: u32, i: Inst) -> VOut {
@@ -84,6 +85,9 @@ struct VOut {
   o.extra = i.extra;
   o.uvspan = i.uv;
   o.clip = i.xform.w;
+  // Where the pixel is in the frame, 0..1 across and down: the same at every
+  // pixel scale (the canvas is the export's size in the preview too).
+  o.frame = r / g.canvas;
   return o;
 }
 
@@ -153,7 +157,7 @@ fn cov_at(uv: vec2<f32>, span: vec4<f32>) -> f32 {
     let t = smoothstep(v.extra.x - 0.02, v.extra.x + 0.02, v.local.x);
     col = mix(v.color2, v.color, t);
   }
-  return shade(GlyphIn(a, v.local, v.uv, col, v.color2, v.extra.y, v.extra.z));
+  return shade(GlyphIn(a, v.local, v.uv, col, v.color2, v.extra.y, v.extra.z, v.frame));
 }
 
 @vertex fn fs_tri(@builtin(vertex_index) id: u32) -> @builtin(position) vec4<f32> {
