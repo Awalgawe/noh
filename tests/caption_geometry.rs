@@ -15,6 +15,7 @@ use support::Fixture;
 
 fn request(f: &Fixture, source: &Path, subtitles: &Path, output: &Path) -> CaptionRequest {
     CaptionRequest {
+        scene: None,
         effect: None,
         source: source.to_path_buf(),
         subtitles: subtitles.to_path_buf(),

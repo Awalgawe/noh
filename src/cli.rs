@@ -11,14 +11,18 @@ use std::{
 #[derive(Parser)]
 #[command(
     name = "noh",
-    group = clap::ArgGroup::new("structured_operation").args(["diagnose", "transcribe", "burn_subtitles", "short", "project"]),
-    group = clap::ArgGroup::new("caption_operation").args(["burn_subtitles", "short", "project"]),
+    group = clap::ArgGroup::new("structured_operation").args(["diagnose", "transcribe", "burn_subtitles", "short", "project", "scene_check", "scene_look"]),
+    group = clap::ArgGroup::new("caption_operation").args(["burn_subtitles", "short", "project", "scene_check", "scene_look"]),
     group = clap::ArgGroup::new("short_operation").args(["short", "project"]),
     version = crate::build_info::VERSION,
     about = "Loop a sequence, generate or burn captions, or extract a selected vertical short.",
     after_help = "Positional form: noh VIDEO WAV [--video VIDEO ...]. The positional video comes first.\nFlagged form: noh --soundtrack WAV --video VIDEO --image IMAGE SECONDS [...]. Named items follow their option order.\nWithout fades: copy compatible video without re-encoding. Images are encoded.\nWith fades: high-quality H.264 (CRF 16). --partial-fades copies compatible central loops.\nMP4: AAC 320 kbit/s. MKV: lossless audio copy. Existing files are never overwritten.\nSubtitles: noh --transcribe SOURCE --output captions.srt --transcriber WHISPER --model MODEL --vad-model VAD [--language fr].\nTranscription uses a local GPU when available, otherwise CPU. Review the generated text and timing before use.\nCaption burn: noh --burn-subtitles SOURCE --srt captions.srt --output captioned.mp4 [--caption-size medium] [--caption-placement bottom] [--preview] [--json].\nBurning captions re-encodes video and never overwrites output. Captions (burn, short, project) use the Classique style by default, drawn by the OpenGL engine as in the app; without OpenGL, libass draws them, with the same line breaks.
 Effects: noh --list-effects shows the caption effects; --effect ID [--effect-preset NAME] [--effect-value KEY=VALUE ...] draws one instead of Classique, with OpenGL only (no libass fallback). An installed font missing on this computer is drawn in the effect's own font, with a warning. A project --preview cannot draw an effect.\nShort: noh --short SOURCE --start-ms 135 --end-ms 1775 --output short.mp4 [--framing pad|crop] [--srt reviewed.srt] [--preview] [--json].\nShort intervals use source playback milliseconds; optional SRT times refer to the original source.\nProject: noh --project --soundtrack voice.wav --video A.mp4 --video B.mp4 --output selected.mp4 --start-ms 13000 --end-ms 18000 [--restart-loops] [--srt reviewed.srt].\nProject start/end and SRT use the full WAV clock. Restart changes visuals and original-clip audio only. Omit start/end for a full montage; captions remain optional.
-A project --preview draws its captions with libass."
+A project --preview draws its captions with libass.
+Motion scenes (experimental, docs/MOTION_AUTHORING.md): noh --scene-check SOURCE --scene scene.noh-motion.rhai --srt reviewed.srt --output report-folder [--caption-safe-area youtube_shorts] [--from-ms A --to-ms B].
+noh --scene-look SOURCE --scene FILE --srt FILE --output frames-folder [--look stills|strip|sheet|measure] [--at-ms 500,2000] [--count 12] [--grid] [--bare].
+noh --burn-subtitles SOURCE --srt FILE --scene FILE --output out.mp4 [--from-ms A --to-ms B] draws the scene instead of the captions (a clip with --from-ms/--to-ms).
+A vertical video needs --caption-safe-area with a scene. Output folders must not exist."
 )]
 pub struct Options {
     /// Print the embedded build identity as JSON, without reading media.
@@ -99,6 +103,47 @@ pub struct Options {
     /// JSON. Repeatable.
     #[arg(long = "effect-value", value_name = "KEY=VALUE", requires = "effect")]
     effect_values: Vec<String>,
+    /// Experimental: a motion scene file (docs/MOTION_AUTHORING.md). With
+    /// --burn-subtitles it is drawn instead of the captions; with --scene-check
+    /// or --scene-look it is checked, or frames of it are drawn.
+    #[arg(long, value_name = "FILE", requires = "srt", conflicts_with_all = ["effect", "caption_size", "caption_placement", "short", "project"])]
+    scene: Option<PathBuf>,
+    /// Experimental: check --scene against this video and --srt at every frame;
+    /// writes report.json into the new --output folder.
+    #[arg(long, value_name = "SOURCE", requires_all = ["scene", "srt", "output"], conflicts_with_all = ["video", "wav", "soundtrack", "videos", "images", "fade_in", "fade_out", "partial_fades", "clip_audio", "force_encode", "diagnose", "transcribe", "burn_subtitles", "short", "project", "scene_look", "preview", "look", "at_ms", "count", "bare", "grid"])]
+    scene_check: Option<PathBuf>,
+    /// Experimental: draw frames of --scene over this video (PNGs and look.json
+    /// in the new --output folder), after checking it.
+    #[arg(long, value_name = "SOURCE", requires_all = ["scene", "srt", "output"], conflicts_with_all = ["video", "wav", "soundtrack", "videos", "images", "fade_in", "fade_out", "partial_fades", "clip_audio", "force_encode", "diagnose", "transcribe", "burn_subtitles", "short", "project", "scene_check", "preview"])]
+    scene_look: Option<PathBuf>,
+    /// What --scene-look draws: stills at --at-ms, a strip of eight frames over
+    /// the second at --at-ms, a sheet of --count frames, or a measure of the
+    /// texts at --at-ms (JSON).
+    #[arg(long, value_parser = ["stills", "strip", "sheet", "measure"], requires = "scene_look")]
+    look: Option<String>,
+    /// Instants in source milliseconds, comma-separated.
+    #[arg(
+        long,
+        value_name = "MS",
+        value_delimiter = ',',
+        requires = "scene_look"
+    )]
+    at_ms: Vec<u64>,
+    /// Frames of a sheet (1 to 24, default 12).
+    #[arg(long, requires = "scene_look")]
+    count: Option<usize>,
+    /// The video alone, without the scene's draws.
+    #[arg(long, requires = "scene_look")]
+    bare: bool,
+    /// The frame's edges, a line every tenth and the safe area drawn over.
+    #[arg(long, requires = "scene_look")]
+    grid: bool,
+    /// Interval in source milliseconds: what a scene check or sheet covers, or
+    /// the clip a burn with --scene renders.
+    #[arg(long, requires = "scene")]
+    from_ms: Option<u64>,
+    #[arg(long, requires = "scene")]
+    to_ms: Option<u64>,
     /// List the caption effects --effect can name, their presets and settings,
     /// the folders read and the folders refused (=json for JSON).
     #[arg(long, num_args = 0..=1, default_missing_value = "text", require_equals = true, value_parser = ["text", "json"], exclusive = true)]
@@ -407,6 +452,9 @@ pub fn run(arguments: impl IntoIterator<Item = OsString>) -> i32 {
         Ok(srt) => args.srt = srt,
         Err(code) => return code,
     }
+    if args.scene_check.is_some() || args.scene_look.is_some() {
+        return scene_job(args);
+    }
     if args.burn_subtitles.is_some() {
         return burn_subtitles(args);
     }
@@ -511,6 +559,70 @@ enum CliOperation {
     Burn(crate::captions::CaptionRequest),
     Short(crate::shorts::ShortRequest),
     Project(crate::project::ProjectRequest),
+    Scene(crate::scene_request::SceneRequest),
+}
+
+/// `--scene-check` and `--scene-look`: the same requests as the MCP's scene tools.
+fn scene_job(args: Options) -> i32 {
+    use crate::scene_request::{SceneMode, SceneRequest};
+    let ffmpeg = match crate::find_ffmpeg(args.ffmpeg.clone().map(PathBuf::into_os_string)) {
+        Ok(path) => path,
+        Err(error) => {
+            eprintln!("Error: {error}");
+            return 1;
+        }
+    };
+    let mode = if args.scene_check.is_some() {
+        SceneMode::Check
+    } else {
+        match args.look.as_deref().unwrap_or("stills") {
+            "strip" => match args.at_ms.as_slice() {
+                [at] => SceneMode::Strip { at_ms: *at },
+                _ => {
+                    eprintln!("Error: --look strip takes one instant in --at-ms.");
+                    return 1;
+                }
+            },
+            "sheet" => SceneMode::Sheet {
+                count: args.count.unwrap_or(12),
+            },
+            "measure" => SceneMode::Measure {
+                at_ms: args.at_ms.clone(),
+            },
+            _ => SceneMode::Stills {
+                at_ms: args.at_ms.clone(),
+            },
+        }
+    };
+    let absolute = |p: PathBuf| std::path::absolute(&p).unwrap_or(p);
+    let request = SceneRequest {
+        scene: absolute(args.scene.clone().unwrap()),
+        source: absolute(
+            args.scene_check
+                .clone()
+                .or(args.scene_look.clone())
+                .unwrap(),
+        ),
+        subtitles: absolute(args.srt.clone().unwrap()),
+        ffmpeg,
+        safe_area: args.caption_style().safe_area,
+        from_ms: args.from_ms,
+        to_ms: args.to_ms,
+        mode,
+        bare: args.bare,
+        grid: args.grid,
+        output: absolute(args.output.clone().unwrap()),
+    };
+    if let Err(error) = request.validate() {
+        return start_error(&error, args.json);
+    }
+    run_job(
+        CliOperation::Scene(request),
+        args.events,
+        args.cancel_file,
+        args.json,
+        args.worker,
+    )
 }
 
 /// `--list-effects=json`: the MCP's `noh_list_effects` shape (version, folders,
@@ -655,8 +767,23 @@ fn burn_subtitles(args: Options) -> i32 {
             return 1;
         }
     };
+    let range_ms = match (args.from_ms, args.to_ms) {
+        (Some(a), Some(b)) => Some([a, b]),
+        (None, None) => None,
+        _ => {
+            eprintln!("Error: a clip takes both --from-ms and --to-ms.");
+            return 1;
+        }
+    };
     // Clap requires the fields; validation, rendering and publication are shared.
     let request = crate::captions::CaptionRequest {
+        scene: args
+            .scene
+            .clone()
+            .map(|scene| crate::scene_request::SceneChoice {
+                scene: std::path::absolute(&scene).unwrap_or(scene),
+                range_ms,
+            }),
         effect: args.chosen_effect.clone(),
         source: args.burn_subtitles.unwrap(),
         subtitles: args.srt.unwrap(),
@@ -759,6 +886,9 @@ fn run_job(
         }
         CliOperation::Project(request) => {
             crate::jobs::Job::project_with_cancel(request, worker, cancel, || {})
+        }
+        CliOperation::Scene(request) => {
+            crate::jobs::Job::scene_with_cancel(request, worker, cancel, || {})
         }
     };
     loop {
@@ -988,6 +1118,109 @@ mod tests {
                 .code,
             "error.short_range"
         );
+    }
+
+    #[test]
+    fn scene_options_map_to_their_operations_and_refuse_effects() {
+        let (options, _) = parse(&[
+            "noh",
+            "--scene-look",
+            "video.mp4",
+            "--scene",
+            "a.noh-motion.rhai",
+            "--srt",
+            "a.srt",
+            "--output",
+            "frames",
+            "--look",
+            "stills",
+            "--at-ms",
+            "500,2000",
+            "--grid",
+        ])
+        .unwrap();
+        assert_eq!(options.at_ms, vec![500, 2000]);
+        assert!(options.grid && options.scene_look.is_some());
+        for refused in [
+            // A scene draws the lyrics itself.
+            vec![
+                "noh",
+                "--burn-subtitles",
+                "v.mp4",
+                "--srt",
+                "a.srt",
+                "--output",
+                "o.mp4",
+                "--scene",
+                "a.rhai",
+                "--effect",
+                "noh.drop",
+            ],
+            vec![
+                "noh",
+                "--burn-subtitles",
+                "v.mp4",
+                "--srt",
+                "a.srt",
+                "--output",
+                "o.mp4",
+                "--scene",
+                "a.rhai",
+                "--caption-size",
+                "large",
+            ],
+            // A check needs its scene, subtitles and folder.
+            vec![
+                "noh",
+                "--scene-check",
+                "v.mp4",
+                "--srt",
+                "a.srt",
+                "--output",
+                "f",
+            ],
+            vec![
+                "noh",
+                "--scene-check",
+                "v.mp4",
+                "--scene",
+                "a.rhai",
+                "--output",
+                "f",
+            ],
+            // Look options belong to a look.
+            vec![
+                "noh",
+                "--scene-check",
+                "v.mp4",
+                "--scene",
+                "a.rhai",
+                "--srt",
+                "a.srt",
+                "--output",
+                "f",
+                "--grid",
+            ],
+        ] {
+            assert!(parse(&refused).is_err(), "{refused:?}");
+        }
+        let (options, _) = parse(&[
+            "noh",
+            "--burn-subtitles",
+            "v.mp4",
+            "--srt",
+            "a.srt",
+            "--output",
+            "o.mp4",
+            "--scene",
+            "a.rhai",
+            "--from-ms",
+            "1000",
+            "--to-ms",
+            "2000",
+        ])
+        .unwrap();
+        assert_eq!((options.from_ms, options.to_ms), (Some(1000), Some(2000)));
     }
 
     #[test]

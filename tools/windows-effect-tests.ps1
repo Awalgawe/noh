@@ -15,7 +15,7 @@ $names = @(
     'a_cue_too_tall_for_libass_is_drawn_by_classique_with_an_overflow_warning',
     'a_missing_installed_font_is_drawn_in_the_plugin_face_with_a_warning',
     'a_chosen_effect_draws_the_short_and_warns_when_its_installed_font_is_missing',
-    'motion_gpu_checks'
+    'scene_jobs_check_look_burn_clip_and_refuse'
 )
 # The same build as tools/windows-qa.ps1, so nothing is compiled again.
 $env:CARGO_TARGET_DIR = Join-Path $workspace 'target'

@@ -1042,7 +1042,7 @@ fn run_effect(
         } else {
             fx::gl::Matrix::Bt601
         },
-        scene,
+        scene: fx::export::Layer::Plugin(Box::new(scene)),
         deadline,
         end: None,
     };

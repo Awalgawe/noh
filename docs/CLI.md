@@ -111,6 +111,30 @@ says so with `warning.effect_word_too_wide` and the time it first shows. When th
 word also leaves the safe area (any effect) or the picture (Classique only), that
 warning comes as well.
 
+### Motion scenes (experimental)
+
+In a build with the `motion` feature, a scene (a script file, see
+`docs/MOTION_AUTHORING.md`) can be checked, looked at and drawn:
+
+```sh
+noh --scene-check video.mp4 --scene song.noh-motion.rhai --srt reviewed.srt --output check
+noh --scene-look video.mp4 --scene song.noh-motion.rhai --srt reviewed.srt --output frames --look strip --at-ms 12000 --grid
+noh --burn-subtitles video.mp4 --srt reviewed.srt --scene song.noh-motion.rhai --output with-scene.mp4
+noh --burn-subtitles video.mp4 --srt reviewed.srt --scene song.noh-motion.rhai --from-ms 12000 --to-ms 20000 --preview --output clip.mp4
+```
+
+`--scene-check` writes `report.json` into the new `--output` folder; a refused
+scene stops with `error.scene_refused`, the instant and the reason, and nothing is
+published. `--scene-look` checks the same way, then writes PNGs and `look.json`:
+`--look stills` (default) at `--at-ms` (comma-separated), `strip` (eight frames
+over the second at `--at-ms`), `sheet` (`--count` frames over `--from-ms`/`--to-ms`
+or the whole video), `measure` (each text's box, JSON). `--grid` draws the frame's
+edges, a line every tenth and the safe area; `--bare` shows the video alone. With
+`--burn-subtitles`, `--scene` draws the scene instead of the captions (refused with
+`--effect`, `--caption-size` or `--caption-placement`), with OpenGL only; with
+`--from-ms` and `--to-ms` only that clip of the video is rendered, the scene keeping
+the video's clock. A vertical video needs `--caption-safe-area`.
+
 ### The lyrics file beside the subtitles
 
 `--srt` (burn, short and project) accepts an `.srt` or its NOH lyrics file

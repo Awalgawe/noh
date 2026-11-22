@@ -18,6 +18,7 @@ use support::Fixture;
 
 fn request(f: &Fixture) -> CaptionRequest {
     CaptionRequest {
+        scene: None,
         effect: None,
         source: f.path("source.mp4"),
         subtitles: f.path("reviewed.srt"),

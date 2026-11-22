@@ -47,6 +47,7 @@ mod progress;
 pub mod project;
 pub mod resources;
 pub mod safe_area;
+pub mod scene_request;
 #[cfg(feature = "gui")]
 pub mod scrub;
 mod sequence;

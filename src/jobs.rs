@@ -4,6 +4,7 @@ use crate::captions::CaptionRequest;
 use crate::engine::{EngineError, Event, ExportRequest, ExportResult, Message};
 use crate::inspection::{Diagnosis, InspectionRequest, InspectionResult, Snapshot};
 use crate::project::ProjectRequest;
+use crate::scene_request::SceneRequest;
 use crate::shorts::ShortRequest;
 use crate::subtitles::{SubtitleRequest, SubtitleResult};
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,8 @@ struct WorkerRequest {
     #[serde(default)]
     project: Option<ProjectRequest>,
     #[serde(default)]
+    scene: Option<SceneRequest>,
+    #[serde(default)]
     expected: Option<Diagnosis>,
     workspace: PathBuf,
 }
@@ -47,6 +50,7 @@ enum Operation {
     Captions(CaptionRequest),
     Short(ShortRequest),
     Project(ProjectRequest),
+    Scene(SceneRequest),
 }
 enum Outcome {
     Export(ExportResult),
@@ -300,6 +304,16 @@ impl Job {
     ) -> Self {
         Self::launch(Operation::Project(request), worker, cancel, repaint)
     }
+    /// Check a motion scene or look at frames of it; its folder of files is
+    /// published whole, or nothing.
+    pub fn scene_with_cancel(
+        request: SceneRequest,
+        worker: PathBuf,
+        cancel: Arc<AtomicBool>,
+        repaint: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
+        Self::launch(Operation::Scene(request), worker, cancel, repaint)
+    }
     fn launch(
         operation: Operation,
         worker: PathBuf,
@@ -444,6 +458,11 @@ fn run_with_command(
         Operation::Captions(request) => (None, None, None, Some(request), None, None, None),
         Operation::Short(request) => (None, None, None, None, Some(request), None, None),
         Operation::Project(request) => (None, None, None, None, None, Some(request), None),
+        Operation::Scene(_) => (None, None, None, None, None, None, None),
+    };
+    let scene = match operation {
+        Operation::Scene(request) => Some(request),
+        _ => None,
     };
     if let Some(InspectionRequest::Plan { request, .. }) = inspection {
         request.validate()?;
@@ -561,6 +580,9 @@ fn run_with_command(
         }
         snapshot = Some(request.snapshot()?);
         Some(output)
+    } else if let Some(request) = scene {
+        request.validate()?;
+        Some(request.output.clone())
     } else {
         None
     };
@@ -579,6 +601,7 @@ fn run_with_command(
             captions: captions.cloned(),
             shorts: shorts.cloned(),
             project: project.cloned(),
+            scene: scene.cloned(),
             expected: expected.cloned(),
             workspace: workspace.path().into(),
         };
@@ -670,6 +693,16 @@ fn run_with_command(
                     "Transcription deadline exceeded.",
                 ));
             }
+            if scene.is_some()
+                && started.elapsed() > Duration::from_secs(crate::scene_request::TOTAL_TIMEOUT_SECS)
+            {
+                return Err(EngineError::new(
+                    "error.timeout",
+                    "scene",
+                    None,
+                    "Scene job deadline exceeded.",
+                ));
+            }
             if inspection_limit > 0 && started.elapsed() > Duration::from_secs(inspection_limit) {
                 return Err(EngineError::new(
                     "error.timeout",
@@ -689,6 +722,7 @@ fn run_with_command(
                             && captions.is_none()
                             && shorts.is_none()
                             && project.is_none()
+                            && scene.is_none()
                             && value.is_ok())
                     {
                         return Err(EngineError::new(
@@ -743,7 +777,7 @@ fn run_with_command(
                                     project.montage.items.len() + 10
                                 } else if shorts.is_some() {
                                     10
-                                } else if captions.is_some() {
+                                } else if captions.is_some() || scene.is_some() {
                                     8
                                 } else {
                                     4
@@ -922,6 +956,22 @@ fn run_with_command(
             snapshot.verify()?;
         }
         let output = output.as_ref().unwrap();
+        if scene.is_some() {
+            let staged = workspace.path().join(crate::scene_request::STAGED);
+            crate::scene_request::check_staged(&staged)?;
+            if cancel.load(Ordering::Acquire) {
+                return Err(cancelled());
+            }
+            crate::scene_request::publish(&staged, output)?;
+            emit(Event::Progress {
+                percent: 100,
+                phase: Message::parse("status.done"),
+            });
+            return Ok(Outcome::Export(ExportResult {
+                output: output.clone(),
+                ..result
+            }));
+        }
         let extension = output
             .extension()
             .and_then(|s| s.to_str())
@@ -1022,6 +1072,29 @@ fn commit(staged: &Path, output: &Path, cancel: &AtomicBool) -> Result<(), Engin
     })
 }
 
+#[cfg(feature = "motion")]
+fn run_scene(
+    request: &SceneRequest,
+    workspace: &Path,
+    emit: &mut dyn FnMut(Event),
+) -> Result<ExportResult, EngineError> {
+    crate::motion::run::execute(request, workspace, emit)
+}
+
+#[cfg(not(feature = "motion"))]
+fn run_scene(
+    _: &SceneRequest,
+    _: &Path,
+    _: &mut dyn FnMut(Event),
+) -> Result<ExportResult, EngineError> {
+    Err(EngineError::new(
+        "error.scene_unavailable",
+        "scene",
+        None,
+        "This build of NOH cannot run scenes.",
+    ))
+}
+
 /// Called only by binary entry points. JSON is restricted to this transport.
 pub fn worker(path: &Path) -> i32 {
     let mut stdout = std::io::stdout().lock();
@@ -1060,6 +1133,24 @@ pub fn worker(path: &Path) -> i32 {
                 Some(path),
                 "Unsupported worker protocol version",
             ));
+        }
+        if let Some(request) = wire.scene {
+            let alone = wire.request.is_none()
+                && wire.inspection.is_none()
+                && wire.subtitles.is_none()
+                && wire.captions.is_none()
+                && wire.shorts.is_none()
+                && wire.project.is_none()
+                && wire.expected.is_none();
+            if !alone {
+                return Err(EngineError::new(
+                    "error.request",
+                    "read_request",
+                    Some(path),
+                    "Expected one operation",
+                ));
+            }
+            return run_scene(&request, &wire.workspace, &mut write).map(Outcome::Export);
         }
         match (
             wire.request,

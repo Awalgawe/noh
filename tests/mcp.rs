@@ -275,27 +275,30 @@ fn stdio_negotiation_schemas_strict_inputs_and_session_ownership() {
         let tools = listed["result"]["tools"].as_array().unwrap();
         let mut names: Vec<_> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
         names.sort_unstable();
-        assert_eq!(
-            names,
-            [
-                "noh_app_close",
-                "noh_app_do",
-                "noh_app_look",
-                "noh_app_open",
-                "noh_app_state",
-                "noh_burn_subtitles",
-                "noh_cancel",
-                "noh_diagnose",
-                "noh_export",
-                "noh_export_project",
-                "noh_inspect",
-                "noh_job",
-                "noh_list_effects",
-                "noh_make_short",
-                "noh_preview",
-                "noh_transcribe",
-            ]
-        );
+        let mut expected = vec![
+            "noh_app_close",
+            "noh_app_do",
+            "noh_app_look",
+            "noh_app_open",
+            "noh_app_state",
+            "noh_burn_subtitles",
+            "noh_cancel",
+            "noh_diagnose",
+            "noh_export",
+            "noh_export_project",
+            "noh_inspect",
+            "noh_job",
+            "noh_list_effects",
+            "noh_make_short",
+            "noh_preview",
+            "noh_transcribe",
+        ];
+        // The experimental scene tools, in a build that draws scenes.
+        if cfg!(feature = "motion") {
+            expected.extend(["noh_scene_check", "noh_scene_clip", "noh_scene_look"]);
+            expected.sort_unstable();
+        }
+        assert_eq!(names, expected);
         for tool in tools {
             assert_eq!(tool["inputSchema"]["type"], "object", "{tool}");
             assert_eq!(tool["inputSchema"]["additionalProperties"], false, "{tool}");

@@ -55,12 +55,15 @@ cargo --offline dev verify --media --mcp --offline
 | `noh_make_short` | `source`, `output`, `start_ms`, `end_ms`; optional `ffmpeg`, `framing`, `captions`, `preview` | Vertical clip job ID; result includes the measured duration and exported MP4 |
 | `noh_job` | `job_id` | Current status, optionally waiting for a change and returning the result |
 | `noh_cancel` | `job_id` | Cancellation request/current status |
-| `noh_list_effects` | none | The caption effects `effect.id` can name, their presets and settings, the folders read and refused |
+| `noh_list_effects` | none | The caption effects `effect.id` can name, their presets and settings, the folders read and refused; in a build with motion scenes, `motion` (format, functions, caps, author guide) |
 | `noh_app_open` | `title` | A NOH window the agent drives: `app_id`, its state and every window of this session |
 | `noh_app_do` | `app_id`, `action` | One gesture in the window; the state revision it led to |
 | `noh_app_state` | `app_id`; optional `after_revision`, `wait_ms` | What the window shows, as data, with `user_position` |
 | `noh_app_look` | `app_id`, `output`; optional `scope`, `at_ms` | A PNG of the window or its monitor, written to a free path |
 | `noh_app_close` | `app_id` | The window closed, or why nothing was closed |
+| `noh_scene_check` | `scene`, `source`, `subtitles`, `output` (a new folder); optional `truth`, `safe_area`, `from_ms`, `to_ms`, `ffmpeg` | Experimental. Scene check job ID; `report.json` in the folder |
+| `noh_scene_look` | `scene`, `source`, `subtitles`, `output` (a new folder); optional `mode`, `at_ms`, `count`, `from_ms`, `to_ms`, `bare`, `grid`, `truth`, `safe_area`, `ffmpeg` | Experimental. Frames of the scene as PNGs (or a measure as JSON) and `look.json` |
+| `noh_scene_clip` | `scene`, `source`, `subtitles`, `start_ms`, `end_ms`, `output`; optional `truth`, `safe_area`, `ffmpeg` | Experimental. A clip of at most 30 s with the scene, preview quality |
 
 `noh_transcribe` processes an explicitly selected local audio file or the first
 audio stream in a selected video using local CPU transcription. All paths are
@@ -110,6 +113,34 @@ engine) in a BT.709 export and the FFmpeg in use blends them in BT.601 (FFmpeg
 older than 7.1, such as Ubuntu 24.04's 6.1), the job warns with
 `warning.caption_colors_old_ffmpeg`: the colours may be slightly off; nothing is
 corrected. NOH measures this by drawing one red box with that FFmpeg.
+
+Motion scenes (experimental; only in a build with the `motion` feature, whose
+tools then appear): a scene is a script file that draws the lyrics, shapes,
+particles and layers over a video, checked before anything is drawn and again on
+every frame drawn. The author guide is `docs/MOTION_AUTHORING.md`, also served in
+`noh_list_effects` (`motion.guide`), with the format line, the functions, the caps
+and the faces; no tool names the language. `noh_scene_check` evaluates every frame
+of the interval at the video's frame rate and writes `report.json`: a refused
+scene fails the job (`error.scene_refused`, with the instant and the reason) and
+publishes nothing; otherwise the counted maxima against the caps, warnings, what
+was not checked, and two times measured on this machine for information (the
+script's, and the whole frame's on up to eight frames). `noh_scene_look` checks
+the same way, then draws frames with the export's engine over the video:
+`stills` (`at_ms`, up to 16), `strip` (eight frames over the second at `at_ms`),
+`sheet` (`count` frames spread over the interval) and their `sheet.png`, or
+`measure` (each text's box, JSON). `grid` draws the frame's edges, a line every
+tenth and the safe area; `bare` shows the video alone. `noh_scene_clip` and
+`noh_burn_subtitles` with `motion: {"scene": …}` draw the scene instead of the
+captions (refused with `effect`, `size` or `placement`); OpenGL is required
+(`error.motion_gl_unavailable`), there is no libass fallback. The video's sound
+gives the scene's energy and onsets; its size is the canvas. A vertical video
+requires `safe_area` (`error.safe_area_required`): the agent asks the user which
+platform the video is for. Output folders must not exist; a folder is published
+whole by a rename, or not at all. One job at a time applies to scene jobs too: a
+look started during an export is refused with `mcp.busy`. In this version the scene
+tools take one video (`source`), the case of a caption burn; the montage form (a
+song WAV, ordered clips, the project's size) is to come with `noh_export_project`
+and a scene, as an additional field exclusive with `source`.
 
 Subtitles and their lyrics file (`noh_burn_subtitles`, and `captions` in
 `noh_make_short` and `noh_export_project`): `subtitles` is an `.srt` or its NOH

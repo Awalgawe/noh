@@ -104,6 +104,7 @@ impl Workspace {
     }
     pub fn request(&self, ffmpeg: Option<&PathBuf>, preview: bool) -> CaptionRequest {
         CaptionRequest {
+            scene: None,
             effect: None,
             source: self.source.clone().into(),
             subtitles: self.subtitles.clone().into(),

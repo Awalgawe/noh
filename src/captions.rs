@@ -76,6 +76,10 @@ pub struct CaptionRequest {
     /// by the GPU engine with no libass fallback. None draws Classique.
     #[serde(default)]
     pub effect: Option<crate::project::EffectChoice>,
+    /// A motion scene drawn instead of the captions (it draws the lyrics
+    /// itself), by the GPU engine with no fallback; exclusive with `effect`.
+    #[serde(default)]
+    pub scene: Option<crate::scene_request::SceneChoice>,
 }
 
 impl CaptionRequest {
@@ -111,6 +115,17 @@ impl CaptionRequest {
         }
         if let Some(effect) = &self.effect {
             effect.check("validate_captions")?;
+        }
+        if let Some(scene) = &self.scene {
+            if self.effect.is_some() {
+                return Err(error(
+                    "error.scene_with_effect",
+                    "validate_captions",
+                    None,
+                    "A scene draws the lyrics itself: it cannot be combined with a caption effect.",
+                ));
+            }
+            scene.validate()?;
         }
         Ok(())
     }
@@ -191,12 +206,45 @@ pub(crate) fn execute(
     let srt = read_srt(subtitles)?;
     let mut track = crate::subtitle_srt::parse(&srt, duration_ms)
         .map_err(|e| error("error.caption_track", "parse_captions", Some(subtitles), e))?;
-    // A chosen effect draws with the word times kept beside the subtitles, as in
-    // a project export; Classique and libass do not use them.
-    if request.effect.is_some() {
+    // A chosen effect or scene draws with the word times kept beside the
+    // subtitles, as in a project export; Classique and libass do not use them.
+    let words = if request.effect.is_some() || request.scene.is_some() {
         let words = crate::subtitle_words::read_beside(subtitles, &mut track);
         report.diagnostic(word_times_diagnostic(words));
+        words
+    } else {
+        0
+    };
+    // Read by the GPU path only.
+    #[cfg(not(feature = "effects"))]
+    let _ = words;
+    if request.scene.is_some() {
+        crate::scene_request::safe_area_required(
+            canvas.size().0,
+            canvas.size().1,
+            request.style.safe_area,
+        )?;
     }
+    // A clip of the source (a scene's rhythm judged on a few seconds).
+    let range = request
+        .scene
+        .as_ref()
+        .and_then(|s| s.range_ms)
+        .map(|[a, b]| (a as f64 / 1000.0, (b as f64 / 1000.0).min(media.video_end)));
+    if let Some((a, b)) = range
+        && a >= b
+    {
+        return Err(error(
+            "error.scene_request",
+            "validate_captions",
+            None,
+            format!(
+                "The clip starts after the video ends ({:.3} s).",
+                media.video_end
+            ),
+        ));
+    }
+    let span = range.map_or(media.duration, |(a, b)| b - a);
     snapshot.verify()?;
     // Classique draws the cues (Task 43): checked whatever draws them, libass's
     // own limits (layout, centiseconds) only if libass does.
@@ -254,8 +302,7 @@ pub(crate) fn execute(
             .and_then(|s| s.parse::<f64>().ok())
             && value.is_finite()
         {
-            let percent =
-                1 + (98.0 * (value / 1_000_000.0 / media.duration).clamp(0.0, 1.0)) as u32;
+            let percent = 1 + (98.0 * (value / 1_000_000.0 / span).clamp(0.0, 1.0)) as u32;
             report.progress(percent, "caption.rendering");
         }
     };
@@ -293,12 +340,19 @@ pub(crate) fn execute(
                     .into_iter()
                     .chain(request.preview.then(|| preview_scale(&canvas)))
                     .collect();
+                let (input, limit) = match range {
+                    Some((a, b)) => (
+                        vec!["-ss".to_string(), format!("{a:.6}")],
+                        vec!["-t".to_string(), format!("{:.6}", b - a)],
+                    ),
+                    None => (Vec::new(), Vec::new()),
+                };
                 let job = crate::caption_gpu::Job {
                     ffmpeg: ffmpeg.to_path_buf(),
                     source: source.to_path_buf(),
                     workspace: workspace.clone(),
-                    input: Vec::new(),
-                    limit: Vec::new(),
+                    input,
+                    limit,
                     filter: format!("{head},scale={}:{},setsar=1", canvas.width, canvas.height),
                     finish: (!finish.is_empty()).then(|| finish.join(",")),
                     size: (canvas.width, canvas.height),
@@ -306,9 +360,20 @@ pub(crate) fn execute(
                     track: track.clone(),
                     style: request.style,
                     effect: request.effect.clone(),
+                    scene: request
+                        .scene
+                        .as_ref()
+                        .map(|choice| crate::caption_gpu::SceneJob {
+                            scene: choice.scene.clone(),
+                            start: range.map_or(0.0, |r| r.0),
+                            span,
+                            duration: media.duration,
+                            fps: media.video.fps,
+                            words,
+                        }),
                     encode: encode_args(request.preview, copy_audio, encoder),
                     deadline: timeout,
-                    end: Some(media.video_end),
+                    end: Some(range.map_or(media.video_end, |(a, b)| b - a)),
                 };
                 let failed = (
                     "error.caption_backend",
@@ -547,6 +612,11 @@ pub(crate) struct Canvas {
     alignment: u8,
 }
 impl Canvas {
+    /// The canvas size in pixels (the source's displayed size, made even).
+    pub(crate) fn size(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
     /// The canvas size and the pre-wrap width (read by the Classique parity tests).
     #[cfg(test)]
     pub(crate) fn wrap(&self) -> (u32, u32, f32, f32) {
@@ -969,6 +1039,7 @@ mod tests {
 
     fn request() -> CaptionRequest {
         CaptionRequest {
+            scene: None,
             effect: None,
             source: "source.mp4".into(),
             subtitles: "captions.srt".into(),

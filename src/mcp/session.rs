@@ -93,6 +93,7 @@ enum Operation {
     Captions(crate::captions::CaptionRequest),
     Short(crate::shorts::ShortRequest),
     Project(crate::project::ProjectRequest),
+    Scene(crate::scene_request::SceneRequest),
 }
 
 impl Session {
@@ -251,6 +252,45 @@ impl Session {
             .map(|reply| StartReply { lyrics, ..reply })
     }
 
+    pub fn scene_check(
+        &self,
+        input: super::scene::SceneCheckInput,
+    ) -> Result<StartReply, SessionError> {
+        check_request_size(&input)?;
+        let truth = input.truth;
+        let mut request = input.into_request(&self.0.default_ffmpeg)?;
+        self.ready_to_start()?;
+        let lyrics = resolve_lyrics(&mut request.subtitles, truth)?;
+        self.start(Operation::Scene(request))
+            .map(|reply| StartReply { lyrics, ..reply })
+    }
+
+    pub fn scene_look(
+        &self,
+        input: super::scene::SceneLookInput,
+    ) -> Result<StartReply, SessionError> {
+        check_request_size(&input)?;
+        let truth = input.truth;
+        let mut request = input.into_request(&self.0.default_ffmpeg)?;
+        self.ready_to_start()?;
+        let lyrics = resolve_lyrics(&mut request.subtitles, truth)?;
+        self.start(Operation::Scene(request))
+            .map(|reply| StartReply { lyrics, ..reply })
+    }
+
+    pub fn scene_clip(
+        &self,
+        input: super::scene::SceneClipInput,
+    ) -> Result<StartReply, SessionError> {
+        check_request_size(&input)?;
+        let truth = input.truth;
+        let mut request = input.into_request(&self.0.default_ffmpeg)?;
+        self.ready_to_start()?;
+        let lyrics = resolve_lyrics(&mut request.subtitles, truth)?;
+        self.start(Operation::Captions(request))
+            .map(|reply| StartReply { lyrics, ..reply })
+    }
+
     /// The start's own refusals (closed, busy), checked before the subtitles
     /// and their lyrics file are touched: a refused start writes nothing.
     fn ready_to_start(&self) -> Result<(), SessionError> {
@@ -345,6 +385,7 @@ impl Session {
             Operation::Captions(request) => Job::burn_with_cancel(request, worker, cancel, || {}),
             Operation::Short(request) => Job::short_with_cancel(request, worker, cancel, || {}),
             Operation::Project(request) => Job::project_with_cancel(request, worker, cancel, || {}),
+            Operation::Scene(request) => Job::scene_with_cancel(request, worker, cancel, || {}),
         });
         {
             let mut state = self.0.shared.state.lock().unwrap();
@@ -1156,6 +1197,7 @@ mod tests {
                     language: "auto".into(),
                 }),
                 4 => Operation::Captions(crate::captions::CaptionRequest {
+                    scene: None,
                     effect: None,
                     source: folder.path().join("missing.mp4"),
                     subtitles: folder.path().join("missing.srt"),
