@@ -36,6 +36,8 @@ pub mod lyrics_input;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 pub mod media;
+#[cfg(feature = "motion")]
+pub mod motion;
 pub mod plan;
 #[cfg(feature = "gui")]
 pub mod playback;

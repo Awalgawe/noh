@@ -36,7 +36,7 @@ $python = (Get-Command python).Source
 if ($LASTEXITCODE -ne 0) { throw 'Software OpenGL could not be deployed' }
 $failure = $null
 try {
-    $arguments = @('test', '--locked', '--offline', '--profile', 'qa', '--features', 'gui,mcp',
+    $arguments = @('test', '--locked', '--offline', '--profile', 'qa', '--features', 'gui,mcp,motion',
         '--lib', '--bins', '--tests', '--', '--ignored', '--test-threads=1') + $names
     & cargo @arguments *> $log
     $exit = $LASTEXITCODE
