@@ -9,6 +9,12 @@ builds are not public releases.
 
 ### Fixes
 
+- NOH keeps up while its window is minimized. Before, the window took in
+  nothing until it was shown again: an export's progress stood still and its
+  end was shown only then, a short or an export with captions on the video
+  that was still being prepared started only then, and a lyrics change was
+  written only then. An export already running went on to the end in every
+  case.
 - Closing NOH no longer leaves a video decoder running behind it: closing
   waits up to two seconds for the decoders still running to be stopped. On
   Windows the decoders, the encoders and the downloads NOH starts also end

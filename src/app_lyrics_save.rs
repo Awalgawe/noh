@@ -966,6 +966,26 @@ mod tests {
     }
 
     #[test]
+    fn a_minimized_window_still_writes_a_due_change() {
+        // A minimized window gets only `App::logic`, no ui: the frame it runs
+        // then writes the due change, as a drawn frame does.
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = app_with_track(folder.path());
+        app.resources_checked();
+        let source = folder.path().join("song.srt");
+        app.trust_lyrics(source.clone());
+        app.edit_track(|t| edit::set_text(t, 0, "Edited while minimized"));
+        app.lyrics_save.write_at = Some(Instant::now() - WRITE_DELAY);
+        app.hidden_frame(&egui::Context::default());
+        assert!(!app.has_unsaved_lyrics() && app.lyrics_save.write_at.is_none());
+        assert!(
+            std::fs::read_to_string(&source)
+                .unwrap()
+                .contains("Edited while minimized")
+        );
+    }
+
+    #[test]
     fn the_first_edit_asks_and_cancelling_takes_the_edit_back() {
         let folder = tempfile::tempdir().unwrap();
         let mut app = app_with_track(folder.path());

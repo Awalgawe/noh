@@ -546,21 +546,7 @@ impl NohApp {
             }
             Some(_) => {}
         }
-        if let Some(s) = &mut self.project.edit {
-            if self.project.track.path.as_ref() != Some(&s.path) {
-                // Another subtitle file (generated, replaced or removed): its edits end.
-                self.project.edit = None;
-                self.lyrics_edit = Default::default();
-                self.lyrics_edit.last_style = Some(self.style_snap());
-            } else if self.project.track.revision != s.base_revision {
-                // Changed (or gone) outside NOH: the edits stay, and say so.
-                s.outside_changed = true;
-                s.base_revision = self.project.track.revision;
-            }
-        }
-        // A new load says how the .srt and the lyrics file stand.
-        self.lyrics_pair_frame();
-        self.lyrics_autosave(ctx);
+        self.lyrics_background(ctx);
         // Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z), unless typing.
         // A lyrics question open: no key edits behind it.
         // During a sync game every key is the game's (app_lyrics_screen/game.rs).
@@ -589,6 +575,28 @@ impl NohApp {
                 self.redo();
             }
         }
+    }
+
+    /// The part of `lyrics_edit_frame` that needs no keyboard: the session
+    /// follows its subtitle file, a new load settles the .srt and the lyrics
+    /// file, a due change is written. It also runs while the window is
+    /// minimized, when no ui runs (`App::logic`).
+    pub(super) fn lyrics_background(&mut self, ctx: &egui::Context) {
+        if let Some(s) = &mut self.project.edit {
+            if self.project.track.path.as_ref() != Some(&s.path) {
+                // Another subtitle file (generated, replaced or removed): its edits end.
+                self.project.edit = None;
+                self.lyrics_edit = Default::default();
+                self.lyrics_edit.last_style = Some(self.style_snap());
+            } else if self.project.track.revision != s.base_revision {
+                // Changed (or gone) outside NOH: the edits stay, and say so.
+                s.outside_changed = true;
+                s.base_revision = self.project.track.revision;
+            }
+        }
+        // A new load says how the .srt and the lyrics file stand.
+        self.lyrics_pair_frame();
+        self.lyrics_autosave(ctx);
     }
 
     /// The lyrics' lock: a job runs that is not a transcription (which leaves
