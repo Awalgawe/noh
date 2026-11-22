@@ -1178,7 +1178,162 @@ fn motion_gpu_checks() {
     layers_at_full_opacity_stack_like_one_pass();
     dissolve_is_the_same_at_every_pixel_scale();
     frames_match_the_prototype();
+    a_layer_of_text_and_shapes_fades_as_one_picture();
+    shapes_past_the_stencil_range_are_all_drawn();
+    a_frame_after_a_failed_group_is_whole();
     compositor_memory();
+    shape_timings();
+}
+
+/// The worst legal shape frames, timed as the prototype timed them (at 1916 x
+/// 1080, 96 frames from 0 s, the cutting measured around the shape cache, the
+/// GPU by a timer query, here around the whole frame drawn again with its
+/// shapes already cut: the shapes' pass, its resolve, its stacking and the
+/// final encoding). Times are reported, never checked in CI (plan § 6.2: they
+/// are measured by hand). The plan's bars (cutting ≤ 1 ms and GPU ≤ 2 ms at
+/// p95) hold on the reference machine and are checked only when
+/// NOH_MOTION_BENCH=1 is set for that measurement, in a release build (a debug
+/// build's GPU figures include the processor time spent inside the query).
+fn shape_timings() {
+    use super::paint::{Painter, draw_frame};
+    use crate::fx::compose::Compositor;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
+    use glow::HasContext;
+    let p95 = |v: &mut Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        (v[(v.len() * 95).div_ceil(100) - 1], v[v.len() - 1])
+    };
+    for name in [
+        "worst_shapes",
+        "worst_hard_fills",
+        "worst_strokes",
+        "worst_shape_area",
+    ] {
+        let mut gpu =
+            GlRenderer::headless(1916, 1080, 1916.0, 1080.0, Output::PremulGamma).unwrap();
+        let gl = gpu.context().clone();
+        let mut comp = Compositor::new(&gpu).unwrap();
+        let mut painter = Painter::new(1916, 1080, fonts());
+        let scene = load_at(&fixture(&format!("{name}.rhai")), 1916, 1080).unwrap();
+        let query = unsafe { gl.create_query().unwrap() };
+        let (mut cut, mut gpu_ms) = (Vec::new(), Vec::new());
+        for i in 0..96 {
+            let t = f64::from(i) / 24.0;
+            let f = scene.frame(t).unwrap();
+            // Once to cut (timed on the processor), once more with the shapes
+            // found cut, timed on the GPU: the query then holds little but the
+            // GPU's own work.
+            let s = draw_frame(&mut gpu, &mut painter, &mut comp, &f.draws, &f.layers, t).unwrap();
+            unsafe { gl.finish() };
+            unsafe { gl.begin_query(glow::TIME_ELAPSED, query) };
+            draw_frame(&mut gpu, &mut painter, &mut comp, &f.draws, &f.layers, t).unwrap();
+            unsafe { gl.end_query(glow::TIME_ELAPSED) };
+            let ns = unsafe { gl.get_query_parameter_u64(query, glow::QUERY_RESULT) };
+            cut.push(s.tess_ms);
+            gpu_ms.push(ns as f64 / 1e6);
+        }
+        unsafe { gl.delete_query(query) };
+        let ((cut95, cut_max), (gpu95, gpu_max)) = (p95(&mut cut), p95(&mut gpu_ms));
+        eprintln!(
+            "{name}: cutting p95 {cut95:.3} ms (worst {cut_max:.3}), GPU p95 {gpu95:.3} ms (worst {gpu_max:.3})"
+        );
+        if std::env::var_os("NOH_MOTION_BENCH").is_some_and(|v| v == "1") {
+            if cfg!(debug_assertions) {
+                panic!("NOH_MOTION_BENCH needs a release build");
+            }
+            assert!(cut95 <= 1.0, "{name}: cutting p95 {cut95:.3} ms over 1 ms");
+            assert!(gpu95 <= 2.0, "{name}: GPU p95 {gpu95:.3} ms over 2 ms");
+        }
+    }
+}
+
+/// A frame that failed inside a group (a pass refused) leaves the group open:
+/// the next frame still stacks on its own stack, not on the group's.
+fn a_frame_after_a_failed_group_is_whole() {
+    use crate::fx::compose::{Compositor, Fill, Shape};
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
+    let gpu = GlRenderer::headless(64, 64, 64.0, 64.0, Output::PremulGamma).unwrap();
+    let mut comp = Compositor::new(&gpu).unwrap();
+    let tri = [[0.0, 0.0], [64.0, 0.0], [0.0, 64.0]];
+    let white = [Shape {
+        fill: &tri,
+        paint: Fill::Solid([1.0; 4]),
+        stroke: &[],
+        stroke_color: [1.0; 4],
+        opacity: 1.0,
+    }];
+    comp.begin();
+    comp.begin_group().unwrap();
+    comp.draw_shapes(&white, (64.0, 64.0), 1.0).unwrap();
+    // The frame fails here: no end_group, no finish.
+    comp.begin();
+    comp.draw_shapes(&white, (64.0, 64.0), 1.0).unwrap();
+    comp.finish();
+    let px = comp.read();
+    assert_eq!(
+        &px[(8 * 64 + 8) * 4..][..4],
+        &[255; 4],
+        "the next frame was lost"
+    );
+}
+
+/// The shapes' pass stamps each primitive in an 8-bit stencil, and GL clamps a
+/// larger stamp to 255: past 255 it must start over, or a primitive past the
+/// 255th would not paint over another one past it (a frame may hold 256 paths,
+/// each a fill and a stroke). The last of 300 shapes lies on the one before it.
+fn shapes_past_the_stencil_range_are_all_drawn() {
+    use crate::fx::compose::{Compositor, Fill, Shape};
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
+    let gpu = GlRenderer::headless(256, 256, 256.0, 256.0, Output::PremulGamma).unwrap();
+    let mut comp = Compositor::new(&gpu).unwrap();
+    // Squares of 8 pixels on a grid of 12, one shape each; the 300th on the 299th.
+    let cell = |i: usize| ((i % 20) * 12, (i / 20) * 12);
+    let squares: Vec<[[f32; 2]; 6]> = (0..300)
+        .map(|i| {
+            let (x, y) = cell(i.min(298));
+            let (x, y) = (x as f32, y as f32);
+            let (x1, y1) = (x + 8.0, y + 8.0);
+            [[x, y], [x1, y], [x, y1], [x1, y], [x1, y1], [x, y1]]
+        })
+        .collect();
+    let shapes: Vec<Shape> = squares
+        .iter()
+        .enumerate()
+        .map(|(i, q)| Shape {
+            fill: q,
+            paint: Fill::Solid(match i {
+                298 => [1.0, 0.0, 0.0, 1.0],
+                299 => [0.0, 1.0, 0.0, 1.0],
+                _ => [1.0; 4],
+            }),
+            stroke: &[],
+            stroke_color: [1.0; 4],
+            opacity: 1.0,
+        })
+        .collect();
+    comp.begin();
+    comp.draw_shapes(&shapes, (256.0, 256.0), 1.0).unwrap();
+    comp.finish();
+    let px = comp.read();
+    let at = |i: usize| {
+        let (x, y) = cell(i);
+        let o = ((y + 4) * 256 + x + 4) * 4;
+        [px[o], px[o + 1], px[o + 2], px[o + 3]]
+    };
+    let missing = (0..298).filter(|&i| at(i) != [255; 4]).count();
+    eprintln!(
+        "300 shapes in one pass: {missing} of the first 298 not drawn; the 300th over the 299th: {:?}",
+        at(298)
+    );
+    assert_eq!(missing, 0);
+    assert_eq!(
+        at(298),
+        [0, 255, 0, 255],
+        "the 300th shape did not paint over the 299th"
+    );
 }
 
 /// What the compositor holds on the GPU: its two targets, as counted; and, where
@@ -1196,21 +1351,75 @@ fn compositor_memory() {
         (gl.get_error() == glow::NO_ERROR).then_some(i64::from(v))
     };
     let before = free();
-    let comp = Compositor::new(&gpu).unwrap();
+    let mut comp = Compositor::new(&gpu).unwrap();
     unsafe { gl.finish() };
     let after = free();
-    assert_eq!(comp.bytes(), 1920 * 1080 * 12);
-    match (before, after) {
-        (Some(b), Some(a)) => eprintln!(
-            "compositor at 1920 x 1080: {} MiB counted, {} MiB taken as the driver reports",
-            comp.bytes() / (1024 * 1024),
-            (b - a) / 1024
+    let px = 1920 * 1080;
+    assert_eq!(comp.bytes(), px * 12);
+    let report = |what: &str, bytes: usize, taken: Option<i64>| match taken {
+        Some(kb) => eprintln!(
+            "{what} at 1920 x 1080: {} MiB counted, {} MiB taken as the driver reports",
+            bytes / (1024 * 1024),
+            kb / 1024
         ),
-        _ => eprintln!(
-            "compositor at 1920 x 1080: {} MiB counted (the driver gives no memory info)",
-            comp.bytes() / (1024 * 1024)
+        None => eprintln!(
+            "{what} at 1920 x 1080: {} MiB counted (the driver gives no memory info)",
+            bytes / (1024 * 1024)
         ),
+    };
+    let taken = |b: Option<i64>, a: Option<i64>| b.zip(a).map(|(b, a)| b - a);
+    report("compositor", comp.bytes(), taken(before, after));
+    // A group and a shapes' pass are made at their first use.
+    let before = free();
+    comp.begin();
+    comp.begin_group().unwrap();
+    let tri = [[0.0, 0.0], [100.0, 0.0], [0.0, 100.0]];
+    comp.draw_shapes(
+        &[crate::fx::compose::Shape {
+            fill: &tri,
+            paint: crate::fx::compose::Fill::Solid([1.0; 4]),
+            stroke: &[],
+            stroke_color: [1.0; 4],
+            opacity: 1.0,
+        }],
+        (1920.0, 1080.0),
+        1.0,
+    )
+    .unwrap();
+    comp.end_group(1.0);
+    comp.finish();
+    unsafe { gl.finish() };
+    let after = free();
+    assert_eq!(comp.bytes(), px * (12 + 8 + 56));
+    report(
+        "group and shapes' pass",
+        comp.bytes() - px * 12,
+        taken(before, after),
+    );
+}
+
+/// A layer that holds both text and shapes is stacked as one group: faded, it
+/// is the same picture at a lower opacity (premultiplied, every byte scaled),
+/// where its overlapping draws do not show through each other.
+fn a_layer_of_text_and_shapes_fades_as_one_picture() {
+    let draws = "let l = layer();\n\
+         l.add(rect(0.5, 0.3).at(0.5, 0.5).color(\"#101828\"));\n\
+         l.add(circle(0.5, 0.5, 0.2).fill(\"#C8102E\"));\n\
+         l.add(text(\"OVER\").size(0.12).at(0.5, 0.5).color(\"#F2E8D8\"));\n";
+    let scene = |opacity: f32| {
+        format!("fn frame(t, ctx) {{\n{draws}l.opacity({opacity:.1});\ndraw(l);\n}}\n")
+    };
+    let full = render(&scene(1.0), 1916, 1080, (1916, 1080), 1.0);
+    let half = render(&scene(0.5), 1916, 1080, (1916, 1080), 1.0);
+    let mut worst = 0u8;
+    for (f, h) in full.iter().zip(&half) {
+        let want = (*f as f32 * 0.5).round() as u8;
+        worst = worst.max(want.abs_diff(*h));
     }
+    eprintln!(
+        "a layer of text and shapes at half opacity: worst {worst}/255 from the full picture halved"
+    );
+    assert!(worst <= 1, "the faded layer differs by {worst}/255");
 }
 
 /// Layers at full opacity stack like one pass: each pass is read from the
@@ -1303,21 +1512,34 @@ fn dissolve_is_the_same_at_every_pixel_scale() {
 /// layers at full opacity the reference is the prototype's
 /// one-pass image (`-old`): its layered one (`-new`) carries the 8-bit error of
 /// its passes (its own log: 11 bytes off by 3 at 2.5 s), which NOH no longer has.
+/// Shapes alone match byte for byte. Where the text of `shapes` lies over its
+/// gradient band, the prototype's layered image is the only reference (its
+/// one-pass image has no shapes) and it carries the 8-bit read of its text
+/// pass: up to 5 levels there, every such byte between rows 866 and 903, the
+/// text's line. Shown once by hand: reading NOH's engine pass through 8 bits as
+/// the prototype did (encode, round to 1/255, decode) brings both instants to
+/// 1/255; clamping the colour without the rounding leaves them at 4 and 5.
 fn frames_match_the_prototype() {
     let Some(dir) = std::env::var_os("NOH_MOTION_PROTOTYPE_REF").map(std::path::PathBuf::from)
     else {
         eprintln!("NOH_MOTION_PROTOTYPE_REF not set: nothing compared with the prototype");
         return;
     };
-    for (name, t, which) in [
-        ("layers", 0.5, "new"),
-        ("layers", 1.0, "new"),
-        ("layers", 2.5, "old"),
-        ("worst_particles", 5.0, "new"),
-        ("worst_particles", 6.0, "new"),
-        ("text_passes", 0.5, "new"),
-        ("text_passes", 1.0, "new"),
-        ("text_passes", 2.5, "new"),
+    for (name, t, which, most) in [
+        ("layers", 0.5, "new", 2),
+        ("layers", 1.0, "new", 2),
+        ("layers", 2.5, "old", 2),
+        ("worst_particles", 5.0, "new", 2),
+        ("worst_particles", 6.0, "new", 2),
+        ("text_passes", 0.5, "new", 2),
+        ("text_passes", 1.0, "new", 2),
+        ("text_passes", 2.5, "new", 2),
+        ("shapes", 0.5, "new", 2),
+        ("shapes", 1.5, "new", 5),
+        ("shapes", 3.0, "new", 5),
+        ("worst_hard_fills", 5.0, "new", 2),
+        ("worst_strokes", 5.0, "new", 2),
+        ("worst_shape_area", 5.0, "new", 2),
     ] {
         let ours = render(
             &fixture(&format!("{name}.rhai")),
@@ -1337,8 +1559,8 @@ fn frames_match_the_prototype() {
             "{name} at {t:.2} ({which}): worst {worst}/255, {differing} bytes differ, {above2} by more than 2"
         );
         assert!(
-            above2 == 0,
-            "{name} at {t}: {above2} bytes off by more than 2 (worst {worst})"
+            worst <= most,
+            "{name} at {t}: off by {worst}/255, more than {most} ({above2} bytes by more than 2)"
         );
     }
 }

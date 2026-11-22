@@ -2,23 +2,27 @@
 //! layout and the coverage glyph atlas (the path the shipped styles use),
 //! rectangles, and stateless particles (a particle's place is a function of its
 //! age, never integrated). Each pass of the frame (a layer, or a run of loose
-//! draws) is one frame of the engine, stacked by `crate::fx::compose`.
+//! draws) is one frame of the engine, stacked by `crate::fx::compose`; a run of
+//! vector shapes is a pass of the compositor's own, and a layer holding several
+//! runs is stacked as one group so that it still fades as one picture.
 //!
 //! The engine's glyph shader runs `MOTION_HOOKS`, written by NOH (never by an
 //! author). The hook tells elements apart by the « progress » channel, a
 //! contract between this painter and that hook only: 0..1 is a text or a
 //! rectangle and its dissolve, 2 a dust particle, 3 a petal.
 use super::draw::{
-    Block, Draw, EmitterDraw, MAX_DRAWS, MAX_PARTICLES, MAX_TEXT_SCALE, Source, Span, arrange, hex,
-    layout_key, passes,
+    Block, Draw, EmitterDraw, MAX_DRAWS, MAX_PARTICLES, MAX_TEXT_SCALE, Source, Span, arrange,
+    groups, hex, layout_key, runs,
 };
-use crate::fx::compose::Compositor;
+use super::shapes::{Paint, PathDraw, ShapeCache, Tess};
+use crate::fx::compose::{Compositor, Fill, Shape};
 use crate::fx::gl::GlRenderer;
 use crate::fx::shaders::{COV_ATLAS, Inst, Upload};
 use crate::fx::text::{Atlas, Fonts};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 /// Share of the coverage atlas a scene's letters may fill: the shelf packer
 /// wastes room, and a full atlas would drop letters.
@@ -191,6 +195,10 @@ pub struct PaintStats {
     pub particles: usize,
     /// Layouts made during this call (zero once the scene is prepared).
     pub layouts: usize,
+    /// Vector shapes drawn.
+    pub paths: usize,
+    /// Time spent cutting shapes into triangles (or finding them cut), in ms.
+    pub tess_ms: f64,
 }
 
 /// What preparing a scene made: its layouts, the letters rasterised, and the
@@ -210,6 +218,8 @@ pub struct Painter {
     cache: HashMap<String, Rc<LaidBlock>>,
     /// Layout key -> the scale its letters are rasterised for.
     raster: HashMap<String, f32>,
+    /// Shapes already cut into triangles, by content.
+    shapes: ShapeCache,
 }
 
 impl Painter {
@@ -223,6 +233,7 @@ impl Painter {
             h: h as f32,
             cache: HashMap::new(),
             raster: HashMap::new(),
+            shapes: ShapeCache::default(),
         }
     }
 
@@ -626,15 +637,111 @@ pub fn draw_frame(
 ) -> Result<PaintStats, String> {
     let mut total = PaintStats::default();
     comp.begin();
-    for (range, opacity) in passes(draws.len(), layers) {
-        let (glow, main, s) = painter.paint(&*gpu, &draws[range], t)?;
-        gpu.frame(&glow, 1.0, &main, false)?;
-        comp.stack(gpu.layer_texture(), opacity);
-        total.glyphs += s.glyphs;
-        total.rects += s.rects;
-        total.particles += s.particles;
-        total.layouts += s.layouts;
+    let canvas = (painter.w, painter.h);
+    for (range, layer) in groups(draws.len(), layers) {
+        let group = &draws[range];
+        let runs = runs(group);
+        let opacity = layer.map_or(1.0, |i| layers[i].opacity);
+        // A layer made of several passes is stacked on its own first, so that
+        // it fades as one picture.
+        let grouped = layer.is_some() && runs.len() > 1;
+        if grouped {
+            comp.begin_group()?;
+        }
+        let o = if grouped { 1.0 } else { opacity };
+        for (r, is_path) in runs {
+            let run = &group[r];
+            if is_path {
+                let paths: Vec<&PathDraw> = run
+                    .iter()
+                    .filter_map(|d| match d {
+                        Draw::Path(p) => Some(p),
+                        _ => None,
+                    })
+                    .collect();
+                let cut = std::time::Instant::now();
+                let tess = paths
+                    .iter()
+                    .map(|p| painter.shapes.get(p, canvas.0, canvas.1))
+                    .collect::<Result<Vec<Arc<Tess>>, String>>()?;
+                total.tess_ms += cut.elapsed().as_secs_f64() * 1000.0;
+                let shapes = paths
+                    .iter()
+                    .zip(&tess)
+                    .map(|(p, t)| shape(p, t, canvas.0, canvas.1))
+                    .collect::<Result<Vec<Shape>, String>>()?;
+                comp.draw_shapes(&shapes, canvas, o)?;
+                total.paths += shapes.len();
+                continue;
+            }
+            let (glow, main, s) = painter.paint(&*gpu, run, t)?;
+            gpu.frame(&glow, 1.0, &main, false)?;
+            comp.stack(gpu.layer_texture(), o);
+            total.glyphs += s.glyphs;
+            total.rects += s.rects;
+            total.particles += s.particles;
+            total.layouts += s.layouts;
+        }
+        if grouped {
+            comp.end_group(opacity);
+        }
     }
     comp.finish();
     Ok(total)
+}
+
+/// A path's paint and triangles as the compositor draws them. Colours stay
+/// display-encoded (the compositor mixes gradient stops that way); a solid fill
+/// and a stroke are opaque, the path's opacity applies to both.
+fn shape<'a>(p: &PathDraw, t: &'a Tess, w: f32, h: f32) -> Result<Shape<'a>, String> {
+    let rgb = |c: &str| {
+        hex(c).map(|c| {
+            [
+                c[0] as f32 / 255.0,
+                c[1] as f32 / 255.0,
+                c[2] as f32 / 255.0,
+            ]
+        })
+    };
+    let paint = match (&p.fill, p.gradient_px(w, h)) {
+        (_, Some((mode, a, b, r, stops))) => {
+            let stops = stops
+                .iter()
+                .map(|(o, c, alpha)| rgb(c).map(|c| (*o, [c[0], c[1], c[2], *alpha])))
+                .collect::<Result<Vec<_>, String>>()?;
+            if mode == 1 {
+                Fill::Linear {
+                    from: a,
+                    to: b,
+                    stops,
+                }
+            } else {
+                Fill::Radial {
+                    center: a,
+                    radius: r,
+                    stops,
+                }
+            }
+        }
+        (Paint::Solid(c), None) => {
+            let c = rgb(c)?;
+            Fill::Solid([c[0], c[1], c[2], 1.0])
+        }
+        // No fill: the path has no fill triangles.
+        _ => Fill::Solid([1.0; 4]),
+    };
+    let stroke_color = match &p.stroke {
+        Some((c, _)) => {
+            let c = rgb(c)?;
+            [c[0], c[1], c[2], 1.0]
+        }
+        None => [1.0; 4],
+    };
+    Ok(Shape {
+        fill: &t.fill,
+        paint,
+        stroke: &t.stroke,
+        stroke_color,
+        opacity: p.opacity,
+    })
 }
