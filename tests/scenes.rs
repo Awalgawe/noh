@@ -51,6 +51,13 @@ fn frame(t, ctx) {
 }
 ";
 
+/// An empty layer whose shader paints the whole frame red, half transparent.
+const SHADED: &str = "// noh-motion 0
+fn frame(t, ctx) { draw(layer().shader(\"fill\").resolution(\"full\").param(0, 0.5)); }
+";
+const FILL: &str =
+    "fn layer(i: LayerIn) -> vec4<f32> { return vec4<f32>(i.k0.x, 0.0, 0.0, i.k0.x); }";
+
 fn media(f: &Fixture) {
     f.ff(args![
         "-f",
@@ -78,6 +85,9 @@ fn media(f: &Fixture) {
     std::fs::write(f.path("song.noh-motion.rhai"), SCENE).unwrap();
     std::fs::write(f.path("too_many.noh-motion.rhai"), TOO_MANY).unwrap();
     std::fs::write(f.path("from_one.noh-motion.rhai"), FROM_ONE).unwrap();
+    std::fs::write(f.path("shaded.noh-motion.rhai"), SHADED).unwrap();
+    std::fs::create_dir(f.path("shaded.noh-motion.shaders")).unwrap();
+    std::fs::write(f.path("shaded.noh-motion.shaders").join("fill.wgsl"), FILL).unwrap();
 }
 
 fn wait(job: &Job) -> Vec<Event> {
@@ -95,8 +105,8 @@ fn wait(job: &Job) -> Vec<Event> {
     }
 }
 
-fn scene_job(f: &Fixture, mode: SceneMode, out: &str, scene: &str) -> Vec<Event> {
-    let request = SceneRequest {
+fn request(f: &Fixture, mode: SceneMode, out: &str, scene: &str) -> SceneRequest {
+    SceneRequest {
         scene: f.path(scene),
         source: f.path("source.mp4"),
         subtitles: f.path("reviewed.srt"),
@@ -108,9 +118,12 @@ fn scene_job(f: &Fixture, mode: SceneMode, out: &str, scene: &str) -> Vec<Event>
         bare: false,
         grid: true,
         output: f.path(out),
-    };
+    }
+}
+
+fn scene_job(f: &Fixture, mode: SceneMode, out: &str, scene: &str) -> Vec<Event> {
     let job = Job::scene_with_cancel(
-        request,
+        request(f, mode, out, scene),
         f.exe.clone(),
         Arc::new(AtomicBool::new(false)),
         || {},
@@ -251,6 +264,67 @@ fn scene_jobs_check_look_burn_clip_and_refuse() {
         !levels.is_empty() && levels.iter().all(|&g| g > 230),
         "{levels:?}"
     );
+
+    // A layer shader: checked, compiled and timed in the worker, then drawn in
+    // a still (bare: over the video alone, but drawn) and in a burn.
+    ok(&scene_job(
+        &f,
+        SceneMode::Check,
+        "shaded-check",
+        "shaded.noh-motion.rhai",
+    ));
+    let report: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(f.path("shaded-check").join("report.json")).unwrap())
+            .unwrap();
+    assert_eq!(report["shaders"][0]["name"], "fill", "{report}");
+    assert!(
+        report["shaders"][0]["full_frame_ms"].as_f64().is_some(),
+        "{report}"
+    );
+    assert_eq!(report["max"]["shader_layers"], 1, "{report}");
+    ok(&scene_job(
+        &f,
+        SceneMode::Stills { at_ms: vec![500] },
+        "shaded-still",
+        "shaded.noh-motion.rhai",
+    ));
+    let bare = SceneRequest {
+        bare: true,
+        grid: false,
+        ..request(
+            &f,
+            SceneMode::Stills { at_ms: vec![500] },
+            "shaded-bare",
+            "shaded.noh-motion.rhai",
+        )
+    };
+    ok(&wait(&Job::scene_with_cancel(
+        bare,
+        f.exe.clone(),
+        Arc::new(AtomicBool::new(false)),
+        || {},
+    )));
+    let open = |dir: &str| {
+        image::open(f.path(dir).join("frame-01-500ms.png"))
+            .unwrap()
+            .to_rgb8()
+    };
+    let (shaded, video) = (open("shaded-still"), open("shaded-bare"));
+    // Half-transparent red over the video: 127 + v / 2 in red, v / 2 elsewhere
+    // (away from the grid's lines, every tenth of the frame).
+    for (x, y) in [(10, 10), (330, 190), (630, 350)] {
+        let (s, v) = (shaded.get_pixel(x, y).0, video.get_pixel(x, y).0);
+        let want = [127 + v[0] / 2, v[1] / 2, v[2] / 2];
+        for c in 0..3 {
+            assert!(s[c].abs_diff(want[c]) <= 2, "{s:?} over {v:?} at {x},{y}");
+        }
+    }
+    ok(&burn(
+        &f,
+        "shaded.noh-motion.rhai",
+        Some([0, 1000]),
+        "shaded.mp4",
+    ));
 
     // Refused at the instant it goes over the cap: nothing published.
     let why = refused(&scene_job(

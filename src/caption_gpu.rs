@@ -58,6 +58,8 @@ pub(crate) struct SceneJob {
     pub fps: f64,
     /// Cues whose word times were read beside the subtitles.
     pub words: usize,
+    /// Whether the source has sound (its energy and onsets).
+    pub sound: bool,
 }
 
 /// Why the GPU did not export.
@@ -273,6 +275,7 @@ fn run_scene(
     let inputs = song::gather(
         &job.ffmpeg,
         &job.source,
+        scene.sound,
         job.size,
         scene.duration,
         &job.track,
@@ -288,17 +291,23 @@ fn run_scene(
         ))
     })?;
     let src = layer::read_scene(&scene.scene).map_err(refused)?;
-    let thread = ScriptThread::start(src, inputs.inputs, inputs.audio, false).map_err(refused)?;
-    let fps = if scene.fps.is_finite() && scene.fps > 0.0 {
-        scene.fps.min(120.0)
-    } else {
-        30.0
+    let shaders = crate::motion::shader::read_beside(&scene.scene).map_err(refused)?;
+    let mut song_inputs = inputs.inputs;
+    song_inputs.shaders = shaders.iter().map(|(n, _)| n.clone()).collect();
+    let thread = ScriptThread::start(src, song_inputs, inputs.audio, false).map_err(refused)?;
+    let mut notes = inputs.notes;
+    let fps = match crate::motion::validate::known_fps(scene.fps) {
+        Some(fps) => fps,
+        None => {
+            notes.push(crate::motion::validate::UNKNOWN_FPS.into());
+            crate::motion::validate::FALLBACK_FPS
+        }
     };
     let checked = thread
         .validate(grid(scene.start, scene.start + scene.span, fps))
         .map_err(refused)?;
-    let overlay = layer::MotionLayer::new(thread, job.size, scene.start).map_err(refused)?;
-    let notes = inputs.notes;
+    let overlay =
+        layer::MotionLayer::new(thread, job.size, scene.start, shaders).map_err(refused)?;
     let (w, h) = job.size;
     let first = job.first();
     let workspace = job.workspace.clone();

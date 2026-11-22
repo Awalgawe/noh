@@ -49,8 +49,21 @@ pub struct Checker {
 pub fn pass_count(f: &Frame) -> usize {
     super::draw::groups(f.draws.len(), &f.layers)
         .iter()
-        .map(|(r, _)| super::draw::runs(&f.draws[r.clone()]).len())
+        .map(|(r, layer)| {
+            // A layer's shader is one pass more, over its content (or alone).
+            let shader = layer.is_some_and(|i| f.layers[i].shader.is_some());
+            super::draw::runs(&f.draws[r.clone()]).len() + usize::from(shader)
+        })
         .sum()
+}
+
+/// The shader layers of a frame and the pixels they compute, in frames (a
+/// half-resolution layer computes a quarter of the frame).
+pub fn shader_load(f: &Frame) -> (usize, f32) {
+    let specs = f.layers.iter().filter_map(|l| l.shader.as_ref());
+    specs.fold((0, 0.0), |(n, a), s| {
+        (n + 1, a + if s.full { 1.0 } else { 0.25 })
+    })
 }
 
 /// The share of the box `[x0, y0, x1, y1]` (fractions of the frame) that falls
@@ -186,6 +199,19 @@ impl Checker {
         }
         if f.layers.iter().any(|l| !l.opacity.is_finite()) {
             return Err(at("a layer's opacity is not finite".into()));
+        }
+        let (shaders, shader_area) = shader_load(f);
+        if shaders > super::shader::MAX_SHADER_LAYERS {
+            return Err(at(format!(
+                "{shaders} shader layers exceed {}",
+                super::shader::MAX_SHADER_LAYERS
+            )));
+        }
+        if shader_area > super::shader::MAX_SHADER_AREA {
+            return Err(at(format!(
+                "shader layers computing {shader_area:.2} frames of pixels exceed {} (full resolution counts 1, half a quarter)",
+                super::shader::MAX_SHADER_AREA
+            )));
         }
         let mut c = Counts {
             passes,

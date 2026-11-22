@@ -16,6 +16,16 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 pub const SCRIPT_P95_MS: f64 = 2.0;
 pub const SCRIPT_WORST_MS: f64 = 4.0;
 
+/// The frame rate the validation grid falls back on when the source does not
+/// say its own, and what the report then says.
+pub const FALLBACK_FPS: f64 = 30.0;
+pub const UNKNOWN_FPS: &str = "the video's frame rate is unknown: the scene was checked at 30 frames per second; every exported frame is still checked";
+
+/// A source's nominal frame rate when it is known (capped at 120).
+pub fn known_fps(fps: f64) -> Option<f64> {
+    (fps.is_finite() && fps > 0.0).then(|| fps.min(120.0))
+}
+
 /// The instants of an output that starts at `from`, ends before `to` and runs at
 /// `fps` frames per second: what a montage or a short draws.
 pub fn grid(from: f64, to: f64, fps: f64) -> Vec<f64> {
@@ -42,6 +52,9 @@ pub struct Report {
     pub max_shape_area: f32,
     pub max_calls: u32,
     pub max_reads: u32,
+    /// Shader layers in a frame, and the pixels they compute (in frames).
+    pub max_shader_layers: usize,
+    pub max_shader_area: f32,
     pub blocks: usize,
     pub peak_text_scale: f32,
     /// Measured on this machine: reported only.
@@ -206,6 +219,9 @@ pub fn validate(
         rep.max_draws = rep.max_draws.max(f.draws.len());
         rep.max_calls = rep.max_calls.max(f.calls);
         rep.max_reads = rep.max_reads.max(f.reads);
+        let (shaders, shader_area) = super::check::shader_load(&f);
+        rep.max_shader_layers = rep.max_shader_layers.max(shaders);
+        rep.max_shader_area = rep.max_shader_area.max(shader_area);
         times.push(f.run_ms);
         kept.push(fingerprint(&f));
     }

@@ -370,6 +370,7 @@ pub(crate) fn execute(
                             duration: media.duration,
                             fps: media.video.fps,
                             words,
+                            sound: media.audio_codec.is_some(),
                         }),
                     encode: encode_args(request.preview, copy_audio, encoder),
                     deadline: timeout,

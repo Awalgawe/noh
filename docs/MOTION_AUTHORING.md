@@ -68,9 +68,8 @@ Scenes over a montage (a song and several clips) come later.
 
 ## What NOH does not draw yet
 
-`video()` (reframing the picture) and layer shaders come in later versions: a scene
-that calls them is refused with that reason. The picture under the scene is the
-video as it is.
+`video()` (reframing the picture) comes in a later version: a scene that calls it is
+refused with that reason. The picture under the scene is the video as it is.
 
 ## The language
 
@@ -230,6 +229,99 @@ between the layers.
 A layer is a handle: `let b = a;` gives a second name for the same layer, not a copy.
 A layer does not go in a layer. Make it inside `frame`, every frame.
 
+## Layer shaders
+
+A layer can run a shader you write: a small program, run once for every pixel of the
+frame, that computes the layer's colour there. It can read what the layer holds (its
+texts, shapes, particles), or hold nothing and draw everything itself (a generative
+background). It never sees the video.
+
+**Where.** Beside the scene file `<song>.noh-motion.rhai`, a folder
+`<song>.noh-motion.shaders/` holds the shaders, one per file, `name.wgsl` (at most 8
+files, 8 KB each). In the scene:
+
+```rhai
+fn frame(t, ctx) {
+    // A generative background: an empty layer, the shader draws everything.
+    draw(layer().shader("field").param(0, smooth(0.0, 2.0, t)));
+
+    // A treatment of a text: the shader reads the layer's content.
+    let words = layer().shader("soft");
+    words.add(text("sample").size(0.08).at(0.5, 0.5).color("#CCCCCC"));
+    draw(words.opacity(0.9));
+}
+```
+
+| Builder | Meaning |
+|---|---|
+| `.shader(name)` | The file `name.wgsl` in the shaders folder |
+| `.resolution(r)` | `half` (the default: a quarter of the pixels, read back smoothly) or `full` |
+| `.param(k, v)` | One of eight free numbers, `k` from 0 to 7, that the shader reads as `i.k0.x … i.k1.w` |
+
+An empty layer with a shader is drawn. Every shader is checked with the scene, before
+anything is drawn: one outside the rules below is refused with its name and the
+reason. NOH then compiles each one with the graphics driver and draws it once **in
+its worker process**, never in the window first: a driver that fails on a shader
+stops the worker, and the job says so (`error.scene_worker_stopped`). The check's
+`report.json` gives each shader's reads, cost and what one full frame of it costs on
+this machine.
+
+**What you write.** WGSL. A file defines one function, and may define helpers:
+
+```wgsl
+fn layer(i: LayerIn) -> vec4<f32> {
+  let c = textureSampleLevel(content, samp, i.uv, 0.0);
+  return c * (0.5 + 0.5 * sin(i.time + i.uv.x * 6.0));
+}
+```
+
+What it receives, and nothing else:
+
+| Name | Type | What |
+|---|---|---|
+| `i.uv` | `vec2<f32>` | The pixel's place, 0 to 1 across and down the frame (0, 0 top left) |
+| `i.px` | `vec2<f32>` | The same in pixels of the layer (half resolution: half the frame's) |
+| `i.size` | `vec2<f32>` | The layer's size in pixels. One pixel in `uv` is `1.0 / i.size` |
+| `i.time` | `f32` | The time of the scene, seconds |
+| `i.energy` | `f32` | Loudness, 0 to 1, smoothed (as `energy(t)`) |
+| `i.onset_age` | `f32` | Seconds since the last sudden rise of the sound (as `onset_age(t)`) |
+| `i.k0`, `i.k1` | `vec4<f32>` | The eight numbers set with `.param(k, v)`: `k0.x` is 0, `k0.y` 1 … `k1.w` 7 |
+| `content`, `samp` | texture, sampler | The layer's own content, to read with `textureSampleLevel(content, samp, uv, 0.0)` |
+
+Everything else of WGSL that runs per pixel is there: `let`, `var`, `if`, `switch`,
+your own functions, and the built-in functions (`sin`, `mix`, `smoothstep`, `length`,
+`dot`, `pow`, `exp`, `clamp`, `fract`…).
+
+Colours are in linear light and premultiplied: an opaque red is `vec4(1, 0, 0, 1)`, a
+half-transparent red is `vec4(0.5, 0, 0, 0.5)`. The content reads that way too. A
+colour picked as `#RRGGBB` is in display encoding: turn each channel `c` (0 to 1) into
+linear light with `pow(c, 2.2)` (close enough). Whatever you return is made safe: a
+value that is not a number becomes transparent, colours are kept between 0 and 1 and
+never above their opacity. An index out of range, or `textureLoad` outside the
+texture, is brought back into range: it reads something, never garbage.
+
+Use `textureSampleLevel(…, 0.0)`, not `textureSample`: the latter picks its detail
+from neighbouring pixels, which is undefined inside a branch that some pixels skip.
+The check says so when it sees one there.
+
+**The rules.**
+
+| Rule | Value |
+|---|---|
+| Loops (`for`, `while`, `loop`) | none: write the steps out, or call a helper several times |
+| Helper functions | 16 at most (besides `layer`), never calling themselves |
+| Reads of `content` per pixel | 12 at most, counted through calls (a helper that reads twice, called three times, is six) |
+| Cost per pixel | 2 500 at most, counted through calls: each operation costs the components of its result (a number 1, a `vec4` 4, a `mat4x4` 16, a product with a matrix four times that); both sides of a branch count |
+| Arrays | 64 elements at most |
+| Bindings, globals, entry points of your own | none |
+| Shader layers per frame | 4; their pixels at most 1.5 frames (a full-resolution layer is 1, a half-resolution one a quarter) |
+
+A shader layer is one more pass (see the passes limit).
+
+**In the window.** NOH's preview does not draw shader layers by default: it shows the
+scene without them and says so (a driver reset in the window could not be seen
+there). Stills, clips and the export draw them.
+
 ## Particles
 
 `particles(d)` are born from the ink of the text `d` as it is laid out and placed
@@ -297,7 +389,7 @@ frame drawn; a scene beyond them is refused with the instant and the reason.
 |---|---|
 | Operations per frame (roughly one per expression) | 6 000 |
 | Draws per frame | 256, those inside layers included |
-| Passes per frame | 8: each layer, each run of loose draws between two layers, and within either each run of shapes and each run of other draws |
+| Passes per frame | 8: each layer, each run of loose draws between two layers, and within either each run of shapes and each run of other draws; a layer's shader is one more |
 | Shapes | 64 paths per frame; 256 points written per path; a filled path at most 128 points once its curves are flattened, and 512 such points per frame; 1 024 segments per frame once flattened; their boxes cover at most 4 frames |
 | Particles | 2 000 per emitter, 4 000 on screen |
 | Letters drawn in a frame | 6 000, every pass counted: a shadow, an outline and a glowing edge each draw the letter once more |
@@ -312,6 +404,7 @@ frame drawn; a scene beyond them is refused with the instant and the reason.
 | Nesting | 24 levels of calls; expressions 64 deep (32 inside functions) |
 | The scene file | 32 KB |
 | The scene's letters | must fit the glyph atlas: few very large sizes |
+| Layer shaders | 8 files of 8 KB beside the scene; 4 shader layers per frame, 1.5 frames of their pixels; per shader 12 reads and a cost of 2 500 per pixel, 16 helpers, no loop |
 
 Said but not refused: a text that leaves the frame or the safe area, two texts that
 overlap while both are well visible (more than half opaque, less than half

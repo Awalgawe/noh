@@ -29,6 +29,8 @@ fn fail(code: &str, path: Option<&Path>, detail: impl ToString) -> EngineError {
 /// its script thread and validated at the output's frames.
 struct Loaded {
     thread: ScriptThread,
+    /// The layer shaders beside the scene, validated.
+    shaders: Vec<(String, String)>,
     report: Report,
     notes: Vec<String>,
     size: (u32, u32),
@@ -73,12 +75,13 @@ fn load(request: &SceneRequest, report: &mut Reporter<'_>) -> Result<Loaded, Eng
     })?;
     let words = crate::subtitle_words::read_beside(&request.subtitles, &mut track);
     let Song {
-        inputs,
+        mut inputs,
         audio,
-        notes,
+        mut notes,
     } = gather(
         &request.ffmpeg,
         &request.source,
+        media.audio_codec.is_some(),
         size,
         duration,
         &track,
@@ -88,12 +91,17 @@ fn load(request: &SceneRequest, report: &mut Reporter<'_>) -> Result<Loaded, Eng
     .map_err(|e| fail("error.scene_input", Some(&request.source), e))?;
     let src = read_scene(&request.scene)
         .map_err(|e| fail("error.scene_refused", Some(&request.scene), e))?;
+    let shaders = super::shader::read_beside(&request.scene)
+        .map_err(|e| fail("error.scene_refused", Some(&request.scene), e))?;
+    inputs.shaders = shaders.iter().map(|(n, _)| n.clone()).collect();
     let thread = ScriptThread::start(src, inputs, audio, true)
         .map_err(|e| fail("error.scene_refused", Some(&request.scene), e))?;
-    let fps = if media.video.fps.is_finite() && media.video.fps > 0.0 {
-        media.video.fps.min(120.0)
-    } else {
-        30.0
+    let fps = match super::validate::known_fps(media.video.fps) {
+        Some(fps) => fps,
+        None => {
+            notes.push(super::validate::UNKNOWN_FPS.into());
+            super::validate::FALLBACK_FPS
+        }
     };
     report.progress(5, "scene.checking");
     let checked = thread
@@ -101,6 +109,7 @@ fn load(request: &SceneRequest, report: &mut Reporter<'_>) -> Result<Loaded, Eng
         .map_err(|e| fail("error.scene_refused", Some(&request.scene), e))?;
     Ok(Loaded {
         thread,
+        shaders,
         report: checked,
         notes,
         size,
@@ -133,6 +142,7 @@ fn report_json(r: &Report) -> serde_json::Value {
             "paths": r.max_paths, "segments": r.max_segments, "shape_area": r.max_shape_area,
             "calls": r.max_calls, "reads": r.max_reads,
             "text_blocks": r.blocks, "peak_text_scale": r.peak_text_scale,
+            "shader_layers": r.max_shader_layers, "shader_area": r.max_shader_area,
         },
         "limits": {
             "ops": super::script::MAX_OPS, "draws": super::draw::MAX_DRAWS,
@@ -140,6 +150,8 @@ fn report_json(r: &Report) -> serde_json::Value {
             "area": super::draw::MAX_AREA, "blurs": super::draw::MAX_BLURS,
             "passes": super::draw::MAX_PASSES, "calls": super::script::MAX_CALLS,
             "text_blocks": super::draw::MAX_BLOCKS,
+            "shader_layers": super::shader::MAX_SHADER_LAYERS,
+            "shader_area": super::shader::MAX_SHADER_AREA,
         },
         "script_ms": { "p95": r.script_ms_p95, "worst": r.script_ms_worst, "worst_at": r.script_ms_worst_at },
         "warnings": r.warnings,
@@ -199,12 +211,46 @@ fn check(request: &SceneRequest, l: Loaded, dir: &Path) -> Result<(), EngineErro
     // The whole frame on this machine, for information: script, painting, GPU.
     match GlRenderer::headless(w, h, w as f32, h as f32, Output::PremulGamma) {
         Ok(mut gpu) => {
-            let mut layer = MotionLayer::new(l.thread, l.size, 0.0)
+            let mut layer = MotionLayer::new(l.thread, l.size, 0.0, l.shaders)
                 .map_err(|e| fail("error.scene_render", None, e))?;
             layer
                 .setup(&mut gpu)
-                .map_err(|e| fail("error.scene_render", None, e))?;
+                .map_err(|e| fail("error.scene_refused", None, e))?;
             let gl = gpu.context().clone();
+            // Each layer shader: compiled by the driver above (in this worker,
+            // never in the window), drawn once, then once more over the whole
+            // frame, timed: what one full frame of it costs on this machine.
+            let names: Vec<String> = layer
+                .shader_set()
+                .map(|s| s.list().iter().map(|(n, _)| n.to_string()).collect())
+                .unwrap_or_default();
+            let mut listed = Vec::new();
+            for name in &names {
+                layer.draw_shader_alone(&mut gpu, name).map_err(|e| {
+                    fail("error.scene_refused", None, format!("shader {name:?}: {e}"))
+                })?;
+                unsafe { glow::HasContext::finish(&*gl) };
+                let a = Instant::now();
+                layer.draw_shader_alone(&mut gpu, name).map_err(|e| {
+                    fail("error.scene_refused", None, format!("shader {name:?}: {e}"))
+                })?;
+                unsafe { glow::HasContext::finish(&*gl) };
+                let ms = a.elapsed().as_secs_f64() * 1000.0;
+                let c = layer
+                    .shader_set()
+                    .and_then(|s| s.get(name))
+                    .expect("listed");
+                listed.push(json!({
+                    "name": name,
+                    "reads": c.checked.reads,
+                    "cost": c.checked.cost,
+                    "helpers": c.checked.helpers,
+                    "warnings": c.checked.warnings,
+                    "compile_ms": c.compile_ms,
+                    "full_frame_ms": ms,
+                }));
+            }
+            out["shaders"] = json!(listed);
             // One frame first, untimed: the engine's first draw compiles and
             // uploads what every later one reuses.
             layer
@@ -476,11 +522,11 @@ fn look(
                 format!("This computer cannot draw scenes ({e})."),
             )
         })?;
-    let mut layer =
-        MotionLayer::new(l.thread, size, 0.0).map_err(|e| fail("error.scene_render", None, e))?;
+    let mut layer = MotionLayer::new(l.thread, size, 0.0, l.shaders)
+        .map_err(|e| fail("error.scene_render", None, e))?;
     layer
         .setup(&mut gpu)
-        .map_err(|e| fail("error.scene_render", None, e))?;
+        .map_err(|e| fail("error.scene_refused", None, e))?;
     let mut files = Vec::new();
     let mut frames = Vec::new();
     for (i, &t) in instants.iter().enumerate() {
@@ -499,7 +545,11 @@ fn look(
         }
         let name = format!("frame-{:02}-{}ms.png", i + 1, ms(t));
         write(dir, &name, &png(&rgb, size)?)?;
-        files.push(json!({ "t": t, "file": name }));
+        files.push(json!({
+            "t": t, "file": name,
+            "shader_layers": layer.stats.shader_layers,
+            "hidden_shader_layers": layer.stats.hidden_shader_layers,
+        }));
         frames.push(rgb);
         report.progress(10 + (85 * (i + 1) / instants.len()) as u32, "scene.looking");
     }
