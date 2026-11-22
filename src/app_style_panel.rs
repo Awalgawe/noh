@@ -383,7 +383,7 @@ fn current(effect: &Effect, choice: &Choice, p: &Param) -> J {
 
 impl super::NohApp {
     /// The effect definition for a choice, from the catalogue.
-    fn effect_of(&mut self, choice: &Choice) -> Option<Effect> {
+    pub(super) fn effect_of(&mut self, choice: &Choice) -> Option<Effect> {
         self.effects
             .catalog()
             .find(&choice.id)
@@ -448,7 +448,7 @@ impl super::NohApp {
 
     /// As the lyrics menu did: showing, hiding or restyling shown captions
     /// invalidates the preview and the last exports' "up to date" status.
-    fn after_style_change(&mut self, before: (bool, noh::captions::CaptionStyle)) {
+    pub(super) fn after_style_change(&mut self, before: (bool, noh::captions::CaptionStyle)) {
         if before.0 != self.project.apply_subtitles
             || (self.project.apply_subtitles && before.1 != self.project.caption_style)
         {

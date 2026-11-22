@@ -11,8 +11,11 @@ builds are not public releases.
 
 - An agent can open NOH windows and drive them while you watch
   (`noh_app_open`, `noh_app_do`, `noh_app_state`, `noh_app_look`,
-  `noh_app_close`): it adds media, edits lyrics lines, chooses the effect, the
-  short's range and safe area, moves the playhead and looks at the window. It
+  `noh_app_close`): it adds, removes and orders media, sets fades, edits lyrics
+  lines, chooses the effect and its settings, the short's range, framing and safe
+  area, the destination, exports or cancels, moves the playhead and looks at the
+  window. It answers NOH's questions; an answer that drops work or rewrites a
+  file needs your agreement, asked in the conversation. It
   knows where you are on the timeline, and never takes the playhead from you
   while you navigate. In such a window you can play, pause and
   move through the video, and point out a clip or a lyrics line; editing is the

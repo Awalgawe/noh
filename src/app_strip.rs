@@ -936,19 +936,36 @@ impl NohApp {
         self.invalidated();
     }
 
+    /// Remove the clip `id` (its ✕, Delete, or the agent). True if it was there.
+    pub(super) fn remove_clip(&mut self, id: u64) -> bool {
+        let before = self.clips.len();
+        self.clips.retain(|c| c.id != id);
+        let removed = self.clips.len() != before;
+        if removed {
+            self.invalidated();
+        }
+        removed
+    }
+
+    /// Move the clip at `from` to `to` (a drag, Alt+arrows, or the agent).
+    pub(super) fn move_clip(&mut self, from: usize, to: usize) -> bool {
+        if from == to || from >= self.clips.len() {
+            return false;
+        }
+        let clip = self.clips.remove(from);
+        self.clips.insert(to.min(self.clips.len()), clip);
+        self.invalidated();
+        true
+    }
+
     fn apply_tile_action(&mut self, action: TileAction, ctx: &egui::Context) {
         match action {
             TileAction::Add => self.pick_visuals(ctx),
             TileAction::Remove(id) => {
-                self.clips.retain(|c| c.id != id);
-                self.invalidated();
+                self.remove_clip(id);
             }
             TileAction::Move(from, to) => {
-                if from != to && from < self.clips.len() {
-                    let clip = self.clips.remove(from);
-                    self.clips.insert(to.min(self.clips.len()), clip);
-                    self.invalidated();
-                }
+                self.move_clip(from, to);
             }
             TileAction::Duration(id, value) => {
                 self.set_image_duration(id, value);

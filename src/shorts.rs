@@ -24,6 +24,8 @@ const MAX_DIMENSION: f64 = 16384.0;
 const MAX_SCALED_PIXELS: u64 = 64_000_000;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "mcp", derive(rmcp::schemars::JsonSchema))]
+#[cfg_attr(feature = "mcp", schemars(crate = "rmcp::schemars"))]
 #[serde(rename_all = "snake_case")]
 pub enum Framing {
     /// Preserve the complete picture, centered on a black vertical canvas.

@@ -120,6 +120,30 @@ pub enum Answer {
     KeepSrt,
     /// lyrics_truth: decide later (the lyrics stay unopened or read-only).
     Later,
+    /// first_edit: write the change to a new .srt at `path` (a free absolute
+    /// path), which becomes the attached lyrics; the original is kept.
+    WorkOnCopy,
+    /// lyrics_action: go on with the lyrics action, dropping the unsaved
+    /// changes (needs user_confirmed). unsaved_on_close: quit without saving
+    /// (needs user_confirmed). close_while_working: stop the job and quit
+    /// (needs user_confirmed).
+    Discard,
+    /// unsaved_on_close: save, then quit.
+    Save,
+    /// save_failed: try the write again.
+    Retry,
+    /// save_failed: close the message (the change stays unsaved).
+    Dismiss,
+}
+
+impl Answer {
+    /// Whether this answer drops work or rewrites a file the person has.
+    pub fn destructive(self) -> bool {
+        matches!(
+            self,
+            Answer::ModifySrt | Answer::KeepLyrics | Answer::KeepSrt | Answer::Discard
+        )
+    }
 }
 
 /// A gesture of the agent. Each calls what the matching click calls.
@@ -172,12 +196,74 @@ pub enum Action {
     },
     Play {},
     Pause {},
-    /// Answer the open question (`state.question`).
+    /// Answer the open question (`state.question`). `path`: for work_on_copy.
     Answer {
         answer: Answer,
         #[serde(default)]
         user_confirmed: bool,
+        #[serde(default)]
+        path: Option<std::path::PathBuf>,
     },
+    /// Remove a clip from the montage, by its id.
+    RemoveClip {
+        clip_id: u64,
+    },
+    /// Move a clip to `to_index` in the montage (0 first).
+    MoveClip {
+        clip_id: u64,
+        to_index: usize,
+    },
+    /// The picture fades in seconds (0: none) and whether the clips' own sound
+    /// is mixed in; what is absent stays as it is.
+    SetFades {
+        #[serde(default)]
+        fade_in_seconds: Option<f64>,
+        #[serde(default)]
+        fade_out_seconds: Option<f64>,
+        #[serde(default)]
+        clip_audio: Option<bool>,
+    },
+    /// Convert every clip (true), or only those that need it (false, automatic).
+    SetConvertAll {
+        convert_all: bool,
+    },
+    /// The chosen effect's preset and settings (`noh_list_effects`), Classique's
+    /// size and placement, and whether the captions are drawn on the video.
+    SetEffectSettings {
+        #[serde(default)]
+        preset: Option<String>,
+        #[serde(default)]
+        values: std::collections::BTreeMap<String, serde_json::Value>,
+        #[serde(default)]
+        size: Option<crate::captions::CaptionSize>,
+        #[serde(default)]
+        placement: Option<crate::captions::CaptionPlacement>,
+        #[serde(default)]
+        show_on_video: Option<bool>,
+    },
+    /// The short's framing and whether its loop restarts the montage.
+    SetFraming {
+        #[serde(default)]
+        framing: Option<crate::shorts::Framing>,
+        #[serde(default)]
+        restart_loops: Option<bool>,
+    },
+    /// Where the export goes: an absolute .mp4 path; `short_name`, the short's
+    /// file name in the same folder.
+    SetDestination {
+        #[serde(default)]
+        path: Option<std::path::PathBuf>,
+        #[serde(default)]
+        short_name: Option<String>,
+    },
+    /// Export the montage, or the short (`short`). Started or not, the answer
+    /// says; the progress and the end follow in `state`.
+    Export {
+        #[serde(default)]
+        short: bool,
+    },
+    /// Cancel the job running.
+    Cancel {},
 }
 
 /// A line read by a window.
