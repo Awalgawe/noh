@@ -4,7 +4,8 @@
 //! by the engine and stacked by the compositor (`paint::draw_frame`), the same
 //! drawing as every other path.
 use super::draw::Block;
-use super::paint::{MOTION_HOOKS, Painter, draw_frame};
+use super::paint::{MOTION_HOOKS, Painter, Shaders, draw_frame_with};
+use super::shader::ShaderSet;
 use super::thread::ScriptThread;
 use crate::fx::compose::Compositor;
 use crate::fx::export::Overlay;
@@ -41,11 +42,31 @@ pub struct MotionLayer {
     /// Added to each frame's time: the scene's clock (a clip of the source
     /// starts at zero on FFmpeg's clock, later on the song's).
     offset: f64,
+    /// The layer shaders beside the scene, validated, and once set up their
+    /// programs, compiled on the engine's context (in the worker: the trial
+    /// compilation the window relies on).
+    sources: Vec<(String, String)>,
+    shaders: Option<ShaderSet>,
+    /// Whether shader layers are drawn (stills and the export) or left out
+    /// and counted (the window's preview by default).
+    show_shaders: bool,
+    /// What the last frame drew.
+    pub stats: super::paint::PaintStats,
 }
 
+/// GL_CONTEXT_LOST: what every call answers once the driver has reset a
+/// robust context.
+const CONTEXT_LOST: u32 = 0x0507;
+
 impl MotionLayer {
-    /// The overlay of a scene validated on `thread`, for frames of `w` x `h`.
-    pub fn new(thread: ScriptThread, (w, h): (u32, u32), offset: f64) -> Result<Self, String> {
+    /// The overlay of a scene validated on `thread`, for frames of `w` x `h`,
+    /// with the shaders read beside it (`shader::read_beside`).
+    pub fn new(
+        thread: ScriptThread,
+        (w, h): (u32, u32),
+        offset: f64,
+        sources: Vec<(String, String)>,
+    ) -> Result<Self, String> {
         let fonts = Rc::new(RefCell::new(Fonts::load()?));
         let blocks = thread.blocks()?;
         Ok(Self {
@@ -54,8 +75,65 @@ impl MotionLayer {
             comp: None,
             blocks,
             offset,
+            sources,
+            shaders: None,
+            show_shaders: true,
+            stats: Default::default(),
         })
     }
+
+    /// Leave shader layers out (counted in `stats`), or draw them.
+    pub fn show_shaders(&mut self, show: bool) {
+        self.show_shaders = show;
+    }
+
+    /// The compiled shaders, once set up.
+    pub fn shader_set(&self) -> Option<&ShaderSet> {
+        self.shaders.as_ref()
+    }
+
+    /// Draw one frame made of an empty layer running shader `name` at full
+    /// resolution (the check's trial draw and its timing).
+    pub fn draw_shader_alone(&mut self, gpu: &mut GlRenderer, name: &str) -> Result<(), String> {
+        let span = super::draw::Span {
+            first: 0,
+            len: 0,
+            opacity: 1.0,
+            shader: Some(super::draw::ShaderSpec {
+                name: name.into(),
+                full: true,
+                k: [0.0; 8],
+            }),
+        };
+        let set = self
+            .shaders
+            .as_ref()
+            .ok_or("the shaders are not compiled")?;
+        let comp = self
+            .comp
+            .as_mut()
+            .ok_or("the scene's overlay is not set up")?;
+        let shaders = Shaders::Draw {
+            set,
+            energy: 0.5,
+            onset_age: 0.25,
+        };
+        draw_frame_with(gpu, &mut self.painter, comp, &[], &[span], 0.0, shaders)?;
+        lost(gpu)
+    }
+}
+
+/// An error if the driver reset the context (a robust context reports it).
+fn lost(gpu: &GlRenderer) -> Result<(), String> {
+    use glow::HasContext;
+    let e = unsafe { gpu.context().get_error() };
+    if e == CONTEXT_LOST {
+        return Err(
+            "the graphics driver was reset while drawing the scene (a layer shader may be too heavy for this computer)"
+                .into(),
+        );
+    }
+    Ok(())
 }
 
 impl MotionLayer {
@@ -72,7 +150,9 @@ impl Overlay for MotionLayer {
         self.comp = Some(Compositor::new(gpu)?);
         // Every letter the validation saw, at the largest scale it reached.
         self.painter.prepare(&*gpu, &self.blocks)?;
-        Ok(())
+        // The shaders are compiled here, on the drawing context.
+        self.shaders = Some(ShaderSet::compile(gpu.context(), &self.sources)?);
+        lost(gpu)
     }
 
     fn draw(&mut self, gpu: &mut GlRenderer, t: f64) -> Result<glow::Texture, String> {
@@ -82,7 +162,29 @@ impl Overlay for MotionLayer {
             .comp
             .as_mut()
             .ok_or("the scene's overlay is not set up")?;
-        draw_frame(gpu, &mut self.painter, comp, &f.draws, &f.layers, t)?;
+        let set = self
+            .shaders
+            .as_ref()
+            .ok_or("the shaders are not compiled")?;
+        let shaders = if self.show_shaders {
+            Shaders::Draw {
+                set,
+                energy: f.energy,
+                onset_age: f.onset_age,
+            }
+        } else {
+            Shaders::Hide
+        };
+        self.stats = draw_frame_with(
+            gpu,
+            &mut self.painter,
+            comp,
+            &f.draws,
+            &f.layers,
+            t,
+            shaders,
+        )?;
+        lost(gpu)?;
         Ok(comp.texture())
     }
 }

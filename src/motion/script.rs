@@ -17,7 +17,8 @@
 use super::Inputs;
 use super::audio::Audio;
 use super::draw::{
-    BoxF, Draw, EmitterDraw, MAX_DRAWS, Outline, RectDraw, Shadow, Source, Span, TextDraw, WordMod,
+    BoxF, Draw, EmitterDraw, MAX_DRAWS, Outline, RectDraw, ShaderSpec, Shadow, Source, Span,
+    TextDraw, WordMod,
 };
 use crate::fx::text::Fonts;
 use rhai::{AST, Dynamic, Engine, EvalAltResult, Scope};
@@ -100,6 +101,7 @@ pub const FUNCTIONS: &[&str] = &[
     "onset_count",
     "opacity",
     "outline",
+    "param",
     "particles",
     "particles_in",
     "path",
@@ -109,6 +111,7 @@ pub const FUNCTIONS: &[&str] = &[
     "pow",
     "quad_to",
     "radial",
+    "resolution",
     "rate",
     "rect",
     "rise",
@@ -118,6 +121,7 @@ pub const FUNCTIONS: &[&str] = &[
     "scale",
     "seed",
     "shadow",
+    "shader",
     "shape",
     "sin",
     "size",
@@ -142,7 +146,7 @@ pub const FUNCTIONS: &[&str] = &[
 ];
 /// Functions a scene may name that answer « not in NOH yet »: reframing the
 /// picture and layer shaders.
-pub const NOT_YET: &[&str] = &["param", "resolution", "shader", "video"];
+pub const NOT_YET: &[&str] = &["video"];
 /// Property reads (`ctx.w`, `c.text`, `b.x0`…), as the engine names them.
 pub const READS: &[&str] = &[
     "get$bits",
@@ -228,6 +232,7 @@ pub struct ScriptScene {
     out: Rc<RefCell<Vec<Draw>>>,
     /// Which runs of them are layers.
     layers: Rc<RefCell<Vec<Span>>>,
+    audio: Rc<super::audio::Audio>,
 }
 
 /// A path as the script holds it: a handle, like a layer, so that building a
@@ -368,7 +373,6 @@ fn register_shapes(e: &mut Engine, w: f32, h: f32) {
 /// refused with this reason when it is checked.
 const NOT_YET_VIDEO: &str =
     "video() is not in NOH yet: reframing the picture comes in a later version";
-const NOT_YET_SHADER: &str = "layer shaders are not in NOH yet: they come in a later version";
 
 fn register_not_yet(e: &mut Engine) {
     e.register_fn("video", || -> Res<()> { Err(NOT_YET_VIDEO.into()) });
@@ -377,7 +381,10 @@ fn register_not_yet(e: &mut Engine) {
 /// A layer as the script holds it: a handle, so that copying it costs nothing
 /// whatever it contains. `draw(layer)` hands over what it holds at that moment.
 #[derive(Clone, Default)]
-pub struct LayerV(Rc<RefCell<(Vec<Draw>, f32)>>);
+pub struct LayerV(Rc<RefCell<LayerState>>);
+
+/// A layer's draws, its opacity and its shader.
+type LayerState = (Vec<Draw>, f32, Option<ShaderSpec>);
 
 fn layer_add(l: &mut LayerV, d: Draw) -> Res<LayerV> {
     let mut inner = l.0.borrow_mut();
@@ -389,17 +396,48 @@ fn layer_add(l: &mut LayerV, d: Draw) -> Res<LayerV> {
     Ok(l.clone())
 }
 
-fn register_layer(e: &mut Engine) {
+fn register_layer(e: &mut Engine, shaders: Rc<Vec<String>>) {
     e.register_type_with_name::<LayerV>("Layer");
-    e.register_fn("layer", || LayerV(Rc::new(RefCell::new((Vec::new(), 1.0)))));
-    e.register_fn("shader", |_: &mut LayerV, _: &str| -> Res<LayerV> {
-        Err(NOT_YET_SHADER.into())
+    e.register_fn("layer", || {
+        LayerV(Rc::new(RefCell::new((Vec::new(), 1.0, None))))
     });
-    e.register_fn("resolution", |_: &mut LayerV, _: &str| -> Res<LayerV> {
-        Err(NOT_YET_SHADER.into())
+    e.register_fn("shader", move |l: &mut LayerV, name: &str| -> Res<LayerV> {
+        if !shaders.iter().any(|s| s == name) {
+            return Err(
+                format!("no shader {name:?} beside the scene (in its .shaders folder)").into(),
+            );
+        }
+        l.0.borrow_mut().2 = Some(ShaderSpec {
+            name: name.into(),
+            full: false,
+            k: [0.0; 8],
+        });
+        Ok(l.clone())
     });
-    e.register_fn("param", |_: &mut LayerV, _: i64, _: f64| -> Res<LayerV> {
-        Err(NOT_YET_SHADER.into())
+    e.register_fn("resolution", |l: &mut LayerV, r: &str| -> Res<LayerV> {
+        let full = match r {
+            "half" => false,
+            "full" => true,
+            _ => return Err(format!("resolution {r:?} unknown (half, full)").into()),
+        };
+        match &mut l.0.borrow_mut().2 {
+            Some(s) => s.full = full,
+            None => return Err("resolution() follows shader()".into()),
+        }
+        Ok(l.clone())
+    });
+    e.register_fn("param", |l: &mut LayerV, k: i64, v: f64| -> Res<LayerV> {
+        if !(0..8).contains(&k) {
+            return Err("param() takes an index from 0 to 7".into());
+        }
+        if !v.is_finite() {
+            return Err("param() takes a finite number".into());
+        }
+        match &mut l.0.borrow_mut().2 {
+            Some(s) => s.k[k as usize] = v as f32,
+            None => return Err("param() follows shader()".into()),
+        }
+        Ok(l.clone())
     });
     e.register_fn("add", |l: &mut LayerV, d: TextDraw| {
         layer_add(l, Draw::Text(d))
@@ -433,6 +471,10 @@ pub struct Frame {
     pub reads: u32,
     /// Milliseconds running the script: measured, reported, never a reason to refuse.
     pub run_ms: f64,
+    /// The sound at this instant, for layer shaders: loudness (0 to 1) and
+    /// seconds since the last sudden rise.
+    pub energy: f32,
+    pub onset_age: f32,
 }
 
 pub fn ease_named(curve: &str, x: f64) -> f64 {
@@ -868,7 +910,7 @@ impl ScriptScene {
         register_text(&mut engine);
         register_rect(&mut engine);
         register_emitter(&mut engine);
-        register_layer(&mut engine);
+        register_layer(&mut engine, Rc::new(inp.shaders.clone()));
         register_not_yet(&mut engine);
         register_shapes(&mut engine, inp.w as f32, inp.h as f32);
         let out: Rc<RefCell<Vec<Draw>>> = Rc::default();
@@ -895,10 +937,12 @@ impl ScriptScene {
                 first,
                 len: inner.0.len(),
                 opacity: inner.1,
+                shader: inner.2.clone(),
             });
             Ok(())
         });
         let audio_onsets = audio.onsets().to_vec();
+        let kept = audio.clone();
         let a = audio.clone();
         engine.register_fn("energy", move |t: f64| a.energy_at(t));
         let a = audio;
@@ -1001,6 +1045,7 @@ impl ScriptScene {
             reads,
             out,
             layers,
+            audio: kept,
         })
     }
 
@@ -1028,6 +1073,8 @@ impl ScriptScene {
             calls: self.calls.get(),
             reads: self.reads.get(),
             run_ms,
+            energy: self.audio.energy_at(t) as f32,
+            onset_age: self.audio.onset_age(t).min(1e6) as f32,
         })
     }
 }

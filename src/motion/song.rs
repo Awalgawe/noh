@@ -139,11 +139,14 @@ pub fn decode_sound(ffmpeg: &Path, source: &Path) -> Result<Option<Vec<f32>>, St
     ))
 }
 
-/// The inputs of a scene drawn over `source` (`w` x `h`, `duration` seconds)
-/// with `track` (word times read beside it for `words` of its cues).
+/// The inputs of a scene drawn over `source` (`w` x `h`, `duration` seconds;
+/// `sound`: whether it has an audio stream) with `track` (word times read
+/// beside it for `words` of its cues).
+#[allow(clippy::too_many_arguments)]
 pub fn gather(
     ffmpeg: &Path,
     source: &Path,
+    sound: bool,
     (w, h): (u32, u32),
     duration: f64,
     track: &SubtitleTrack,
@@ -151,7 +154,14 @@ pub fn gather(
     safe: SafeArea,
 ) -> Result<Song, String> {
     let mut notes = Vec::new();
-    let audio = match decode_sound(ffmpeg, source)? {
+    // FFmpeg refuses an output with no stream: a video without sound is not
+    // decoded at all.
+    let samples = if sound {
+        decode_sound(ffmpeg, source)?
+    } else {
+        None
+    };
+    let audio = match samples {
         Some(samples) => Audio::analyse(&samples, ANALYSIS_HZ),
         None => {
             notes.push("the video has no sound: energy is 0 and there is no onset".into());
@@ -177,6 +187,7 @@ pub fn gather(
             cues,
             words_estimated,
             safe: safe_fractions(safe, w, h),
+            shaders: Vec::new(),
         },
         audio,
         notes,

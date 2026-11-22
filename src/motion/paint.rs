@@ -199,6 +199,22 @@ pub struct PaintStats {
     pub paths: usize,
     /// Time spent cutting shapes into triangles (or finding them cut), in ms.
     pub tess_ms: f64,
+    /// Layer shaders run, and shader layers left out (`Shaders::Hide`).
+    pub shader_layers: usize,
+    pub hidden_shader_layers: usize,
+}
+
+/// What becomes of the frame's shader layers.
+pub enum Shaders<'a> {
+    /// Left out whole, and counted (the preview's default: a driver reset in
+    /// the window cannot be seen there; stills and the export draw them).
+    Hide,
+    /// Drawn with these programs and the sound at that instant.
+    Draw {
+        set: &'a super::shader::ShaderSet,
+        energy: f32,
+        onset_age: f32,
+    },
 }
 
 /// What preparing a scene made: its layouts, the letters rasterised, and the
@@ -624,9 +640,8 @@ impl Painter {
     }
 }
 
-/// One frame of a scene drawn into `comp`: each pass painted, drawn by the
-/// engine (whose hooks must be `MOTION_HOOKS`), and stacked. On an error the
-/// compositor's output is not finished: the caller leaves the overlay out.
+/// One frame of a scene drawn into `comp`, its shader layers left out (see
+/// `draw_frame_with`).
 pub fn draw_frame(
     gpu: &mut GlRenderer,
     painter: &mut Painter,
@@ -635,6 +650,22 @@ pub fn draw_frame(
     layers: &[Span],
     t: f64,
 ) -> Result<PaintStats, String> {
+    draw_frame_with(gpu, painter, comp, draws, layers, t, Shaders::Hide)
+}
+
+/// One frame of a scene drawn into `comp`: each pass painted, drawn by the
+/// engine (whose hooks must be `MOTION_HOOKS`), and stacked; a shader layer's
+/// content is stacked on its own, then its shader runs over it. On an error
+/// the compositor's output is not finished: the caller leaves the overlay out.
+pub fn draw_frame_with(
+    gpu: &mut GlRenderer,
+    painter: &mut Painter,
+    comp: &mut Compositor,
+    draws: &[Draw],
+    layers: &[Span],
+    t: f64,
+    shaders: Shaders<'_>,
+) -> Result<PaintStats, String> {
     let mut total = PaintStats::default();
     comp.begin();
     let canvas = (painter.w, painter.h);
@@ -642,9 +673,22 @@ pub fn draw_frame(
         let group = &draws[range];
         let runs = runs(group);
         let opacity = layer.map_or(1.0, |i| layers[i].opacity);
+        let spec = layer.and_then(|i| layers[i].shader.as_ref());
+        let program = match (spec, &shaders) {
+            (None, _) => None,
+            (Some(_), Shaders::Hide) => {
+                total.hidden_shader_layers += 1;
+                continue;
+            }
+            (Some(spec), Shaders::Draw { set, .. }) => Some(
+                set.get(&spec.name)
+                    .ok_or_else(|| format!("shader {:?} is not compiled", spec.name))?,
+            ),
+        };
         // A layer made of several passes is stacked on its own first, so that
-        // it fades as one picture.
-        let grouped = layer.is_some() && runs.len() > 1;
+        // it fades as one picture; a layer with a shader always is (the shader
+        // reads it).
+        let grouped = layer.is_some() && (runs.len() > 1 || spec.is_some());
         if grouped {
             comp.begin_group()?;
         }
@@ -682,7 +726,22 @@ pub fn draw_frame(
             total.particles += s.particles;
             total.layouts += s.layouts;
         }
-        if grouped {
+        if let (
+            Some(spec),
+            Some(c),
+            Shaders::Draw {
+                energy, onset_age, ..
+            },
+        ) = (spec, program, &shaders)
+        {
+            let k = spec.k;
+            let u = [
+                0.0, 0.0, t as f32, *energy, *onset_age, 0.0, 0.0, 0.0, k[0], k[1], k[2], k[3],
+                k[4], k[5], k[6], k[7],
+            ];
+            comp.end_group_shader(c.prog, c.ubo_binding, spec.full, u, opacity)?;
+            total.shader_layers += 1;
+        } else if grouped {
             comp.end_group(opacity);
         }
     }

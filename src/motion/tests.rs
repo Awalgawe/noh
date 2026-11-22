@@ -26,6 +26,7 @@ fn inputs(w: u32, h: u32) -> Inputs {
         }],
         words_estimated: false,
         safe: [0.0, 0.0, 1.0, 1.0],
+        shaders: Vec::new(),
     }
 }
 
@@ -149,7 +150,7 @@ fn the_author_page_names_every_function() {
 
 **Experimental"
     ));
-    assert!(page.contains("`video()`") && page.contains("layer shaders"));
+    assert!(page.contains("`video()`") && page.contains("## Layer shaders"));
 }
 
 /// One hostile script per bound of the sandbox.
@@ -226,14 +227,113 @@ fn what_noh_does_not_have_yet_is_refused_with_the_reason() {
         "fn frame(t, ctx) { draw(video().scale(1.2)); }",
         "video() is not in NOH yet",
     );
+}
+
+/// A layer's shader is named among the files beside the scene; its settings
+/// follow it, within their ranges.
+#[test]
+fn a_layer_shader_is_named_beside_the_scene_and_its_settings_follow_it() {
     refused(
         "fn frame(t, ctx) { let l = layer().shader(\"glow\"); draw(l); }",
-        "layer shaders are not in NOH yet",
+        "no shader \"glow\" beside the scene",
     );
     refused(
         "fn frame(t, ctx) { draw(layer().param(0, 1.0)); }",
-        "layer shaders are not in NOH yet",
+        "param() follows shader()",
     );
+    let mut inp = inputs(640, 360);
+    inp.shaders = vec!["glow".into()];
+    let scene = ScriptScene::load(
+        &with_header(
+            "fn frame(t, ctx) { draw(layer().shader(\"glow\").resolution(\"full\").param(7, 2.5)); }",
+        ),
+        &inp,
+        Rc::new(Audio::silent()),
+        fonts(),
+        false,
+    )
+    .unwrap();
+    let f = scene.frame(0.0).unwrap();
+    let spec = f.layers[0].shader.as_ref().unwrap();
+    assert_eq!(
+        (spec.name.as_str(), spec.full, spec.k[7]),
+        ("glow", true, 2.5)
+    );
+    // An empty layer with a shader is a pass of its own.
+    assert_eq!(super::check::pass_count(&f), 1);
+    for (bad, why) in [
+        (
+            "layer().shader(\"glow\").param(8, 1.0)",
+            "index from 0 to 7",
+        ),
+        (
+            "layer().shader(\"glow\").resolution(\"quarter\")",
+            "unknown (half, full)",
+        ),
+        // A number that is not finite reaches no shader.
+        (
+            "layer().shader(\"glow\").param(0, 0.0 / 0.0)",
+            "a finite number",
+        ),
+    ] {
+        let s = ScriptScene::load(
+            &with_header(&format!("fn frame(t, ctx) {{ draw({bad}); }}")),
+            &inp,
+            Rc::new(Audio::silent()),
+            fonts(),
+            false,
+        )
+        .unwrap();
+        let e = s.frame(0.0).unwrap_err();
+        assert!(e.contains(why), "{bad}: {e}");
+    }
+    // A shader layer goes in no layer, as no layer does.
+    let nested = "fn frame(t, ctx) { let l = layer(); l.add(layer().shader(\"glow\")); draw(l); }";
+    let s = ScriptScene::load(
+        &with_header(nested),
+        &inp,
+        Rc::new(Audio::silent()),
+        fonts(),
+        false,
+    )
+    .unwrap();
+    assert!(s.frame(0.0).is_err(), "a shader layer nested in a layer");
+    // Over the counted caps: five shader layers (the layers' cap), two at full
+    // resolution (2 frames of pixels, over the 1.5 cap).
+    for (src, why) in [
+        (
+            "fn frame(t, ctx) { for k in 0..5 { draw(layer().shader(\"glow\")); } }",
+            "shader layers exceed",
+        ),
+        (
+            "fn frame(t, ctx) { for i in 0..2 { draw(layer().shader(\"glow\").resolution(\"full\")); } }",
+            "frames of pixels exceed",
+        ),
+    ] {
+        let s = ScriptScene::load(
+            &with_header(src),
+            &inp,
+            Rc::new(Audio::silent()),
+            fonts(),
+            false,
+        )
+        .unwrap();
+        let mut checker = Checker::new(fonts(), 640, 360);
+        let e = checker.check(&s.frame(0.0).unwrap(), 0.0).unwrap_err();
+        assert!(e.contains(why), "{src}: {e}");
+    }
+    // At the pixel cap exactly (one full, two halves) it passes.
+    let at_cap = "fn frame(t, ctx) { draw(layer().shader(\"glow\").resolution(\"full\"));                   for i in 0..2 { draw(layer().shader(\"glow\")); } }";
+    let s = ScriptScene::load(
+        &with_header(at_cap),
+        &inp,
+        Rc::new(Audio::silent()),
+        fonts(),
+        false,
+    )
+    .unwrap();
+    let mut checker = Checker::new(fonts(), 640, 360);
+    checker.check(&s.frame(0.0).unwrap(), 0.0).unwrap();
 }
 
 /// A scene names the format it is written for on its first line; another
@@ -557,6 +657,7 @@ fn layers_are_counted_and_capped() {
         first,
         len,
         opacity: 1.0,
+        shader: None,
     };
     assert_eq!(passes(0, &[]).len(), 0);
     assert_eq!(passes(5, &[]), vec![(0..5, 1.0)]);
@@ -1076,6 +1177,7 @@ pub(crate) fn motion_gpu_checks() {
     shapes_past_the_stencil_range_are_all_drawn();
     a_frame_after_a_failed_group_is_whole();
     the_export_overlay_is_the_m2_render();
+    shader_layers_draw_or_hide();
     compositor_memory();
     shape_timings();
 }
@@ -1167,7 +1269,7 @@ fn the_export_overlay_is_the_m2_render() {
         thread.validate(grid(0.0, 2.0, 24.0)).unwrap();
         let mut gpu =
             GlRenderer::headless(1916, 1080, 1916.0, 1080.0, Output::PremulGamma).unwrap();
-        let mut layer = MotionLayer::new(thread, (1916, 1080), 0.0).unwrap();
+        let mut layer = MotionLayer::new(thread, (1916, 1080), 0.0, Vec::new()).unwrap();
         layer.setup(&mut gpu).unwrap();
         layer.draw(&mut gpu, t).unwrap();
         let ours = layer.read();
@@ -1178,6 +1280,166 @@ fn the_export_overlay_is_the_m2_render() {
         );
         assert_eq!(differing, 0, "{name} at {t}");
     }
+}
+
+/// A fixture scene with the shaders beside it, through the export's path (the
+/// script thread, its validation, `MotionLayer` with the shaders compiled on
+/// the engine's context): the overlay at `t` and what the frame drew.
+fn render_scene(name: &str, t: f64, show: bool) -> (Vec<u8>, super::paint::PaintStats) {
+    use super::layer::MotionLayer;
+    use super::thread::ScriptThread;
+    use crate::fx::export::Overlay;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/motion")
+        .join(format!("{name}.rhai"));
+    let shaders = super::shader::read_beside(&path).unwrap();
+    let mut inp = inputs(1916, 1080);
+    inp.shaders = shaders.iter().map(|(n, _)| n.clone()).collect();
+    let thread = ScriptThread::start(
+        fixture(&format!("{name}.rhai")),
+        inp,
+        Audio::silent(),
+        false,
+    )
+    .unwrap();
+    thread.validate(grid(0.0, 2.0, 24.0)).unwrap();
+    let mut gpu = GlRenderer::headless(1916, 1080, 1916.0, 1080.0, Output::PremulGamma).unwrap();
+    let mut layer = MotionLayer::new(thread, (1916, 1080), 0.0, shaders).unwrap();
+    layer.show_shaders(show);
+    layer.setup(&mut gpu).unwrap();
+    layer.draw(&mut gpu, t).unwrap();
+    (layer.read(), layer.stats)
+}
+
+/// Layer shaders: drawn, they match the prototype's images (when its dumps are
+/// given) and the worst legal frames are timed on request; hidden (the
+/// preview's default), their layers leave nothing and are counted. Compared:
+/// `glow` at 1 s (its background shader reads the sound's energy, silent here
+/// and the song's in the prototype's dump: at 2 s they part, so it is left out)
+/// and the worst legal shader frames, which read their content 12 times: the
+/// prototype read that content through 8 bits, NOH in half floats, up to 12
+/// levels apart. Shown once by hand: reading NOH's engine passes through 8 bits
+/// as the prototype did brings both to 0 bytes apart.
+fn shader_layers_draw_or_hide() {
+    // Half-transparent red everywhere: premultiplied, display-encoded.
+    let (fill, stats) = render_scene("fill", 0.5, true);
+    assert_eq!(stats.shader_layers, 1);
+    let mid = ((540 * 1916 + 958) * 4) as usize;
+    eprintln!(
+        "fill: {:?} at the middle, {:?} at the corner",
+        &fill[mid..mid + 4],
+        &fill[fill.len() - 4..]
+    );
+    for at in [0, mid, fill.len() - 4] {
+        let p = &fill[at..at + 4];
+        assert!(
+            p[3].abs_diff(128) <= 1 && p[1] == 0 && p[2] == 0,
+            "{p:?} at byte {at}"
+        );
+    }
+    let (shown, stats) = render_scene("glow", 1.0, true);
+    assert_eq!(stats.shader_layers, 2, "{stats:?}");
+    assert!(shown.iter().skip(3).step_by(4).any(|&a| a > 0));
+    let (hidden, stats) = render_scene("glow", 1.0, false);
+    assert_eq!(
+        (stats.shader_layers, stats.hidden_shader_layers),
+        (0, 2),
+        "{stats:?}"
+    );
+    assert!(
+        hidden.iter().all(|&b| b == 0),
+        "a hidden shader layer drew something"
+    );
+    if let Some(dir) = std::env::var_os("NOH_MOTION_PROTOTYPE_REF").map(std::path::PathBuf::from) {
+        for (name, t, most) in [
+            ("glow", 1.0, 2),
+            ("worst_shader_both", 0.5, 12),
+            ("worst_shader_random", 0.5, 12),
+        ] {
+            let (ours, _) = render_scene(name, t, true);
+            let theirs = std::fs::read(dir.join(format!("{name}-{t:.2}-new.rgba"))).unwrap();
+            let (worst, differing) = worst_difference(&ours, &theirs);
+            let above2 = ours
+                .iter()
+                .zip(&theirs)
+                .filter(|(a, b)| a.abs_diff(**b) > 2)
+                .count();
+            eprintln!(
+                "{name} at {t:.2} (shaders): worst {worst}/255, {differing} bytes differ, {above2} by more than 2"
+            );
+            assert!(worst <= most, "{name} at {t}: off by {worst}/255");
+        }
+    }
+    if std::env::var_os("NOH_MOTION_BENCH").is_some() {
+        for name in [
+            "worst_shader_scalar",
+            "worst_shader_vector",
+            "worst_shader_random",
+            "worst_shader_both",
+        ] {
+            shader_timing(name);
+        }
+    }
+}
+
+/// GPU time of a worst legal shader frame, between two GPU timestamps around a
+/// frame drawn again (its programs compiled, its letters laid), 48 frames. Not
+/// a TIME_ELAPSED query: the engine runs one of its own inside each frame, and
+/// two cannot be open at once.
+fn shader_timing(name: &str) {
+    use super::layer::MotionLayer;
+    use super::thread::ScriptThread;
+    use crate::fx::export::Overlay;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
+    use glow::HasContext;
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/motion")
+        .join(format!("{name}.rhai"));
+    let shaders = super::shader::read_beside(&path).unwrap();
+    let mut inp = inputs(1916, 1080);
+    inp.shaders = shaders.iter().map(|(n, _)| n.clone()).collect();
+    let thread = ScriptThread::start(
+        fixture(&format!("{name}.rhai")),
+        inp,
+        Audio::silent(),
+        false,
+    )
+    .unwrap();
+    thread.validate(grid(0.0, 2.0, 24.0)).unwrap();
+    let mut gpu = GlRenderer::headless(1916, 1080, 1916.0, 1080.0, Output::PremulGamma).unwrap();
+    let gl = gpu.context().clone();
+    let mut layer = MotionLayer::new(thread, (1916, 1080), 0.0, shaders).unwrap();
+    layer.setup(&mut gpu).unwrap();
+    let (q0, q1) = unsafe { (gl.create_query().unwrap(), gl.create_query().unwrap()) };
+    let mut ms = Vec::new();
+    for i in 0..48 {
+        let t = f64::from(i) / 24.0;
+        layer.draw(&mut gpu, t).unwrap();
+        unsafe { gl.finish() };
+        unsafe { gl.query_counter(q0, glow::TIMESTAMP) };
+        layer.draw(&mut gpu, t).unwrap();
+        unsafe { gl.query_counter(q1, glow::TIMESTAMP) };
+        let (a, b) = unsafe {
+            (
+                gl.get_query_parameter_u64(q0, glow::QUERY_RESULT),
+                gl.get_query_parameter_u64(q1, glow::QUERY_RESULT),
+            )
+        };
+        ms.push(b.saturating_sub(a) as f64 / 1e6);
+    }
+    unsafe {
+        gl.delete_query(q0);
+        gl.delete_query(q1);
+    }
+    ms.sort_by(f64::total_cmp);
+    eprintln!(
+        "{name}: whole frame on the GPU p95 {:.3} ms, worst {:.3} ms",
+        ms[(ms.len() * 95).div_ceil(100) - 1],
+        ms[ms.len() - 1]
+    );
 }
 
 /// A frame that failed inside a group (a pass refused) leaves the group open:

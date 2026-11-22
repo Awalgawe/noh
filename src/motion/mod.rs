@@ -26,6 +26,7 @@ pub mod layer;
 pub mod paint;
 pub mod run;
 pub mod script;
+pub mod shader;
 pub mod shapes;
 pub mod song;
 pub mod thread;
@@ -62,4 +63,6 @@ pub struct Inputs {
     pub words_estimated: bool,
     /// The surface text should stay in: x0, y0, x1, y1, fractions of the frame.
     pub safe: [f32; 4],
+    /// The layer shaders beside the scene, by name (validated before loading).
+    pub shaders: Vec<String>,
 }

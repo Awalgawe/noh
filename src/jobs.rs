@@ -821,13 +821,26 @@ fn run_with_command(
         }
         // Stop any surviving descendants before deleting supervisor-owned files.
         child.0.start_kill().ok();
+        // A scene's layer shaders are compiled and drawn in the worker first,
+        // so that a driver that fails on one takes the worker down, not the
+        // window: say so.
+        let draws_scene = scene.is_some() || captions.is_some_and(|c| c.scene.is_some());
         let result = result.ok_or_else(|| {
-            EngineError::new(
-                "error.engine",
-                "worker",
-                Some(worker),
-                "Worker exited without a result",
-            )
+            if draws_scene {
+                EngineError::new(
+                    "error.scene_worker_stopped",
+                    "worker",
+                    Some(worker),
+                    "The worker stopped while drawing the scene: a layer shader may have made the graphics driver fail. Nothing was published.",
+                )
+            } else {
+                EngineError::new(
+                    "error.engine",
+                    "worker",
+                    Some(worker),
+                    "Worker exited without a result",
+                )
+            }
         })??;
         if !status.unwrap().success() {
             return Err(EngineError::new(

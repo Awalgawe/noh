@@ -276,7 +276,7 @@ pub struct MotionInfo {
 /// The motion section of noh_list_effects, in a build that draws scenes.
 #[cfg(feature = "motion")]
 pub fn motion_info() -> Option<MotionInfo> {
-    use crate::motion::{draw, script, shapes};
+    use crate::motion::{draw, script, shader, shapes};
     let words = |v: &[&str]| v.iter().map(|s| s.to_string()).collect();
     let limits = [
         ("operations_per_frame", script::MAX_OPS as f64),
@@ -308,6 +308,16 @@ pub fn motion_info() -> Option<MotionInfo> {
         ("string_bytes", script::MAX_STRING as f64),
         ("call_levels", script::MAX_CALL_LEVELS as f64),
         ("scene_file_bytes", script::MAX_SOURCE as f64),
+        ("shader_files", shader::MAX_FILES as f64),
+        ("shader_file_bytes", shader::MAX_SOURCE as f64),
+        ("shader_layers_per_frame", shader::MAX_SHADER_LAYERS as f64),
+        (
+            "shader_pixels_per_frame_in_frames",
+            f64::from(shader::MAX_SHADER_AREA),
+        ),
+        ("shader_reads_per_pixel", shader::MAX_READS as f64),
+        ("shader_cost_per_pixel", shader::MAX_COST as f64),
+        ("shader_helpers", shader::MAX_HELPERS as f64),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v))
@@ -315,7 +325,7 @@ pub fn motion_info() -> Option<MotionInfo> {
     Some(MotionInfo {
         status: "experimental: the format may change without notice".into(),
         first_line: format!("// noh-motion {}", script::FORMAT),
-        file_name: "<song>.noh-motion.rhai, beside the song and its lyrics".into(),
+        file_name: "<song>.noh-motion.rhai, beside the song and its lyrics; its layer shaders in <song>.noh-motion.shaders/".into(),
         language: "a small subset of Rhai (see the guide)".into(),
         functions: words(script::FUNCTIONS),
         not_yet: words(script::NOT_YET),

@@ -131,7 +131,12 @@ the same way, then draws frames with the export's engine over the video:
 `measure` (each text's box, JSON). `grid` draws the frame's edges, a line every
 tenth and the safe area; `bare` shows the video alone. `noh_scene_clip` and
 `noh_burn_subtitles` with `motion: {"scene": …}` draw the scene instead of the
-captions (refused with `effect`, `size` or `placement`); OpenGL is required
+captions (refused with `effect`, `size` or `placement`). A scene's layer shaders
+(WGSL files in `<scene>.shaders/`, at most 8) are validated with the scene, then
+compiled and drawn once in the worker; a driver that dies on one stops the worker
+and the job fails with `error.scene_worker_stopped`, nothing published. The worker's
+OpenGL context is robust where the driver offers it: a GPU reset during an export
+fails it cleanly. OpenGL is required
 (`error.motion_gl_unavailable`), there is no libass fallback. The video's sound
 gives the scene's energy and onsets; its size is the canvas. A vertical video
 requires `safe_area` (`error.safe_area_required`): the agent asks the user which

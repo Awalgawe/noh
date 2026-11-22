@@ -11,7 +11,9 @@
 //! drawn with 4 samples per pixel and resolved; and a group, the passes of one
 //! layer stacked on their own first, so that the layer still fades as one
 //! picture when it holds both text and shapes. Both use targets made at their
-//! first use only.
+//! first use only. A group can also be closed by an author's layer shader
+//! (`crate::motion::shader`), run over the group's content at full or half
+//! resolution, its result stacked like any pass.
 use super::gl::GlRenderer;
 use glow::HasContext;
 use std::sync::Arc;
@@ -51,6 +53,29 @@ void main() {
 struct Target {
     tex: glow::Texture,
     fbo: glow::Framebuffer,
+}
+
+/// A half-resolution pass put on the full-resolution stack: read with
+/// bilinear filtering.
+const FS_UP: &str = "#version 330 core
+uniform sampler2D src;
+uniform float opacity;
+uniform vec2 out_size;
+out vec4 o;
+void main() {
+  o = texture(src, gl_FragCoord.xy / out_size) * opacity;
+}";
+
+/// The layer shaders' pass, made at its first use: their full and half
+/// resolution targets, the uniform block they read, a filtering sampler, and
+/// the program that puts a half-resolution result on the stack.
+struct ShaderTargets {
+    full: Target,
+    half: Target,
+    half_size: (i32, i32),
+    ubo: glow::Buffer,
+    linear: glow::Sampler,
+    up: glow::Program,
 }
 
 /// Samples per pixel of the shapes' pass.
@@ -177,6 +202,7 @@ pub struct Compositor {
     group: Option<Target>,
     in_group: bool,
     shapes: Option<ShapePass>,
+    shaders: Option<ShaderTargets>,
 }
 
 fn err<E: std::fmt::Debug>(what: &'static str) -> impl Fn(E) -> String {
@@ -295,6 +321,7 @@ impl Compositor {
                 group: None,
                 in_group: false,
                 shapes: None,
+                shaders: None,
             })
         }
     }
@@ -312,7 +339,11 @@ impl Compositor {
         } else {
             0
         };
-        px * (8 + 4) + group + shapes
+        // A full-resolution and a half-resolution half-float target.
+        let shaders = self.shaders.as_ref().map_or(0, |s| {
+            px * 8 + (s.half_size.0 as usize * s.half_size.1 as usize) * 8
+        });
+        px * (8 + 4) + group + shapes + shaders
     }
 
     /// Where passes are stacked: the open group's stack, or the frame's.
@@ -396,6 +427,136 @@ impl Compositor {
         }
         self.draw(self.target(), self.stack_prog, layer);
         unsafe { gl.disable(glow::BLEND) };
+    }
+
+    fn make_shader_targets(&self) -> Result<ShaderTargets, String> {
+        let gl = &self.gl;
+        let half_size = ((self.w + 1) / 2, (self.h + 1) / 2);
+        unsafe {
+            let full = target(gl, self.w, self.h, glow::RGBA16F, glow::HALF_FLOAT)?;
+            let half = target(
+                gl,
+                half_size.0,
+                half_size.1,
+                glow::RGBA16F,
+                glow::HALF_FLOAT,
+            )?;
+            let ubo = gl.create_buffer().map_err(err("buffer"))?;
+            gl.bind_buffer(glow::UNIFORM_BUFFER, Some(ubo));
+            gl.buffer_data_size(glow::UNIFORM_BUFFER, 64, glow::DYNAMIC_DRAW);
+            gl.bind_buffer(glow::UNIFORM_BUFFER, None);
+            let linear = gl.create_sampler().map_err(err("sampler"))?;
+            for (k, v) in [
+                (glow::TEXTURE_MIN_FILTER, glow::LINEAR),
+                (glow::TEXTURE_MAG_FILTER, glow::LINEAR),
+                (glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE),
+                (glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE),
+            ] {
+                gl.sampler_parameter_i32(linear, k, v as i32);
+            }
+            let up = program(gl, FS_UP)?;
+            Ok(ShaderTargets {
+                full,
+                half,
+                half_size,
+                ubo,
+                linear,
+                up,
+            })
+        }
+    }
+
+    /// Closes the open group by running a layer shader over its content, at
+    /// full or half resolution, and puts the result on the frame's stack faded
+    /// by `opacity`. `prog` and `ubo_binding` come from the shader's
+    /// compilation; `u` is its uniform block (size, time, energy, onset age,
+    /// then the eight numbers): the size is filled in here.
+    pub fn end_group_shader(
+        &mut self,
+        prog: glow::Program,
+        ubo_binding: u32,
+        full: bool,
+        mut u: [f32; 16],
+        opacity: f32,
+    ) -> Result<(), String> {
+        if !self.in_group {
+            return Err("a layer shader closes a group: none is open".into());
+        }
+        self.in_group = false;
+        if self.shaders.is_none() {
+            self.shaders = Some(self.make_shader_targets()?);
+        }
+        let content = self.group.as_ref().ok_or("no group target")?.tex;
+        let s = self.shaders.as_ref().expect("made above");
+        let (tw, th) = if full { (self.w, self.h) } else { s.half_size };
+        let out = if full { &s.full } else { &s.half };
+        (u[0], u[1]) = (tw as f32, th as f32);
+        let gl = &self.gl;
+        unsafe {
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(out.fbo));
+            gl.viewport(0, 0, tw, th);
+            gl.disable(glow::SCISSOR_TEST);
+            gl.disable(glow::BLEND);
+            gl.disable(glow::STENCIL_TEST);
+            gl.disable(glow::DEPTH_TEST);
+            gl.disable(glow::FRAMEBUFFER_SRGB);
+            gl.use_program(Some(prog));
+            gl.bind_buffer(glow::UNIFORM_BUFFER, Some(s.ubo));
+            gl.buffer_sub_data_u8_slice(glow::UNIFORM_BUFFER, 0, bytemuck::cast_slice(&u));
+            gl.bind_buffer_base(glow::UNIFORM_BUFFER, ubo_binding, Some(s.ubo));
+            gl.active_texture(glow::TEXTURE0);
+            gl.bind_texture(glow::TEXTURE_2D, Some(content));
+            gl.bind_sampler(0, Some(s.linear));
+            gl.bind_vertex_array(Some(self.vao));
+            gl.draw_arrays(glow::TRIANGLES, 0, 3);
+            gl.bind_vertex_array(None);
+            gl.bind_sampler(0, None);
+            gl.bind_texture(glow::TEXTURE_2D, None);
+            gl.bind_buffer_base(glow::UNIFORM_BUFFER, ubo_binding, None);
+            gl.bind_buffer(glow::UNIFORM_BUFFER, None);
+            gl.use_program(None);
+            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+            let e = gl.get_error();
+            if e != glow::NO_ERROR {
+                return Err(format!("GL error 0x{e:x} in a layer shader"));
+            }
+        }
+        if full {
+            let tex = out.tex;
+            self.stack(tex, opacity);
+            return Ok(());
+        }
+        // Half resolution: read with filtering onto the full-resolution stack.
+        let (tex, up, linear) = (out.tex, s.up, s.linear);
+        unsafe {
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.stack.fbo));
+            gl.viewport(0, 0, self.w, self.h);
+            gl.enable(glow::BLEND);
+            gl.blend_equation(glow::FUNC_ADD);
+            gl.blend_func(glow::ONE, glow::ONE_MINUS_SRC_ALPHA);
+            gl.use_program(Some(up));
+            gl.uniform_1_f32(
+                gl.get_uniform_location(up, "opacity").as_ref(),
+                opacity.clamp(0.0, 1.0),
+            );
+            gl.uniform_2_f32(
+                gl.get_uniform_location(up, "out_size").as_ref(),
+                self.w as f32,
+                self.h as f32,
+            );
+            gl.active_texture(glow::TEXTURE0);
+            gl.bind_texture(glow::TEXTURE_2D, Some(tex));
+            gl.bind_sampler(0, Some(linear));
+            gl.bind_vertex_array(Some(self.vao));
+            gl.draw_arrays(glow::TRIANGLES, 0, 3);
+            gl.bind_vertex_array(None);
+            gl.bind_sampler(0, None);
+            gl.bind_texture(glow::TEXTURE_2D, None);
+            gl.use_program(None);
+            gl.disable(glow::BLEND);
+            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+        }
+        Ok(())
     }
 
     fn make_shape_pass(&self) -> Result<ShapePass, String> {
@@ -668,6 +829,15 @@ impl Drop for Compositor {
             if let Some(g) = self.group.take() {
                 self.gl.delete_framebuffer(g.fbo);
                 self.gl.delete_texture(g.tex);
+            }
+            if let Some(s) = self.shaders.take() {
+                for t in [&s.full, &s.half] {
+                    self.gl.delete_framebuffer(t.fbo);
+                    self.gl.delete_texture(t.tex);
+                }
+                self.gl.delete_buffer(s.ubo);
+                self.gl.delete_sampler(s.linear);
+                self.gl.delete_program(s.up);
             }
             if let Some(s) = self.shapes.take() {
                 self.gl.delete_framebuffer(s.ms_fbo);

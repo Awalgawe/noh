@@ -58,6 +58,17 @@ pub struct Span {
     pub first: usize,
     pub len: usize,
     pub opacity: f32,
+    /// The author's shader run over the layer's content, if any.
+    pub shader: Option<ShaderSpec>,
+}
+
+/// A layer's shader: a file beside the scene, its resolution, its eight numbers.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShaderSpec {
+    pub name: String,
+    /// Full resolution, or half (a quarter of the pixels, read back smoothly).
+    pub full: bool,
+    pub k: [f32; 8],
 }
 
 /// The frame's draws cut into the passes that draw them, in order: each layer
@@ -78,7 +89,8 @@ pub fn groups(n: usize, layers: &[Span]) -> Vec<(std::ops::Range<usize>, Option<
         if s.first > at {
             out.push((at..s.first, None));
         }
-        if s.len > 0 {
+        // An empty layer draws nothing, unless its shader draws it all.
+        if s.len > 0 || s.shader.is_some() {
             out.push((s.first..s.first + s.len, Some(i)));
         }
         at = s.first + s.len;
