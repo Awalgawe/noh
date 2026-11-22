@@ -553,6 +553,10 @@ impl NohApp {
     /// playhead, else the first). The monitor shows the whole video there.
     /// « Modifier » on the lyrics chip and a click on the lyrics lane open it.
     pub(super) fn open_lyrics_screen(&mut self, cue: Option<usize>) {
+        // A driven window's lyrics are the agent's to edit: no screen opens.
+        if self.driven_locked() {
+            return;
+        }
         let Some(track) = self.lyrics_track() else {
             return;
         };

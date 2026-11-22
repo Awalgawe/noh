@@ -1573,6 +1573,12 @@ impl NohApp {
         right.add_enabled_ui(!locked, |ui| self.fades_button(ui));
         self.volume_button(&mut right, snapshot.as_ref());
         layout.right = right.min_rect();
+        // A driven window: the view, the navigation group and the volume
+        // stay the person's (app_driven.rs); the fades do not.
+        self.driven_allow(layout.group, super::app_driven::Zone::Navigate);
+        if let Some(view) = layout.view {
+            self.driven_allow(view, super::app_driven::Zone::Navigate);
+        }
         layout
     }
 
@@ -2063,7 +2069,8 @@ impl NohApp {
             }
             None => response,
         };
-        egui::Popup::from_toggle_button_response(&response)
+        self.driven_allow(response.rect, super::app_driven::Zone::Navigate);
+        let popup = egui::Popup::from_toggle_button_response(&response)
             .id(egui::Id::new("volume-popup"))
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show(|ui| {
@@ -2075,6 +2082,9 @@ impl NohApp {
                     self.mini_set_volume(self.mini_preview.volume);
                 }
             });
+        if let Some(popup) = popup {
+            self.driven_allow(popup.response.rect, super::app_driven::Zone::Navigate);
+        }
     }
     /// What the volume slider does.
     pub(super) fn mini_set_volume(&mut self, volume: f32) {

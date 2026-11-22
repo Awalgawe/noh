@@ -1585,6 +1585,7 @@ impl NohApp {
     /// prepared export, the checks, the copies and the preview's state. It
     /// changes nothing on screen by itself.
     pub(super) fn advance(&mut self, ctx: &egui::Context) {
+        self.driven_frame(ctx);
         self.receive();
         self.retry_generation(ctx);
         self.autoupdate_frame(ctx);
@@ -1592,6 +1593,15 @@ impl NohApp {
         self.receive_shorts(ctx);
         self.prepare_views(ctx);
         self.poll_mini_preview(ctx);
+    }
+    /// A job of the window runs (or is being stopped).
+    pub(super) fn busy(&self) -> bool {
+        self.project.busy()
+            || self.job.is_some()
+            || self.cancelling
+            || self.subtitles.running
+            || self.captions.running.is_some()
+            || self.shorts.running.is_some()
     }
     /// A frame of a window eframe sees as minimized, or as occluded where winit
     /// reports it (macOS, X11): eframe runs `logic` alone, no ui and no
@@ -1610,13 +1620,9 @@ impl NohApp {
             self.capture_frame(&ctx);
             return gallery;
         }
+        self.driven_begin();
         self.advance(&ctx);
-        let busy = self.project.busy()
-            || self.job.is_some()
-            || self.cancelling
-            || self.subtitles.running
-            || self.captions.running.is_some()
-            || self.shorts.running.is_some();
+        let busy = self.busy();
         let compact = ui.available_width() - 32.0 < style::COMPACT_BELOW;
         if busy && ctx.input(|i| i.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -1809,6 +1815,7 @@ impl NohApp {
                     });
                 });
         }
+        self.driven_overlay(&ctx);
         self.capture_frame(&ctx);
         if busy {
             ctx.request_repaint_after(Duration::from_millis(250));
@@ -1838,8 +1845,11 @@ impl eframe::App for NohApp {
         self.seek_capture_input(ctx, input);
         self.drag_capture_input(ctx, input);
         self.lane_tip_capture_input(input);
+        // Last: what a capture injects goes through the same filter.
+        self.driven_input(input);
     }
     fn on_exit(&mut self, gl: Option<&eframe::glow::Context>) {
+        self.driven_exit();
         // Stops the copy in progress and waits for its encoder to be gone.
         self.mini_preview.warmer.take();
         self.autoupdate_exit();

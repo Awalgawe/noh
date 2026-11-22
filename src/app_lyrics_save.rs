@@ -246,8 +246,31 @@ impl NohApp {
 
     /// A lyrics question or message is open: lane keys wait.
     pub(super) fn lyrics_question_open(&self) -> bool {
+        self.lyrics_question_kind().is_some()
+    }
+
+    /// Tests: the first-edit question closed without an answer, the edit kept
+    /// and still unsaved.
+    #[cfg(test)]
+    pub(super) fn set_first_edit_aside(&mut self) {
+        self.lyrics_save.asking = false;
+        self.lyrics_save.cancel_edit = false;
+    }
+
+    /// Which lyrics question or message is open, for a driven window's agent.
+    pub(super) fn lyrics_question_kind(&self) -> Option<&'static str> {
         let s = &self.lyrics_save;
-        s.asking || s.closing || s.pending.is_some() || s.failed.is_some()
+        if s.asking {
+            Some("first_edit")
+        } else if s.closing {
+            Some("unsaved_on_close")
+        } else if s.pending.is_some() {
+            Some("lyrics_action")
+        } else if s.failed.is_some() {
+            Some("save_failed")
+        } else {
+            None
+        }
     }
 
     /// Set a failed write's mark for the lyrics attached now.

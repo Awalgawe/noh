@@ -915,6 +915,91 @@ impl From<EngineError> for SessionError {
     }
 }
 
+/// noh_app_open: a NOH window the agent drives.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AppOpenInput {
+    /// What the window is for, shown to the person in the window (one line,
+    /// at most 80 characters kept).
+    #[schemars(length(min = 1))]
+    pub title: String,
+}
+
+/// noh_app_close: one of this session's windows.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AppCloseInput {
+    #[schemars(length(min = 1))]
+    pub app_id: String,
+}
+
+/// Where a driven window stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AppState {
+    /// Started, not ready yet.
+    Opening,
+    /// Driven by the agent.
+    Open,
+    /// The person stopped the piloting: an ordinary NOH, theirs.
+    Released,
+    /// Not reading for 5 s: requests wait; its work may still run.
+    Lost,
+    /// Closed by the agent or by the person.
+    Closed,
+    /// Ended without closing (a crash, or killed).
+    Exited,
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct AppSummary {
+    pub app_id: String,
+    pub title: String,
+    pub state: AppState,
+    pub pid: u32,
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct AppOpenReply {
+    pub version: u32,
+    pub app_id: String,
+    pub state: AppState,
+    pub pid: u32,
+    /// The NOH version the window runs.
+    pub app_version: String,
+    /// Every window of this session, this one included.
+    pub windows: Vec<AppSummary>,
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct AppCloseReply {
+    pub version: u32,
+    pub app_id: String,
+    pub state: AppState,
+    /// The window's process had ended when the reply was sent.
+    pub exited: bool,
+}
+
+/// Why a window tool did nothing.
+#[derive(Clone, Debug, PartialEq, Serialize, JsonSchema, thiserror::Error)]
+#[error("{detail}")]
+pub struct AppError {
+    pub code: String,
+    pub detail: String,
+    /// The figures of a refused open; the question a window has open.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<serde_json::Value>,
+}
+impl AppError {
+    pub fn new(code: &str, detail: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            detail: detail.into(),
+            details: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
