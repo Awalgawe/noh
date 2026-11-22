@@ -219,13 +219,67 @@ fn a_too_slow_script_is_refused_on_operations() {
     );
 }
 
-/// Reframing and layer shaders are later versions: a scene using them is
-/// refused with that reason, not with « function not found ».
+/// The picture's framing: one per frame, its settings within their ranges, never
+/// in a layer; one that leaves black at an edge is said, not refused.
 #[test]
-fn what_noh_does_not_have_yet_is_refused_with_the_reason() {
+fn the_picture_is_framed_once_per_frame_within_its_ranges() {
+    let scene = load(
+        "fn frame(t, ctx) { draw(video().scale(1.2).focus(0.6, 0.4).at(0.5, 0.5).rot(0.1)\
+         .crop(0.0, 0.0, 1.0, 1.0)); }",
+    )
+    .unwrap();
+    let v = scene.frame(0.0).unwrap().video.unwrap();
+    assert_eq!((v.scale, v.focus, v.rot), (1.2, [0.6, 0.4], 0.1));
+    // Without video(), no framing.
+    assert!(
+        load("fn frame(t, ctx) { }")
+            .unwrap()
+            .frame(0.0)
+            .unwrap()
+            .video
+            .is_none()
+    );
     refused(
-        "fn frame(t, ctx) { draw(video().scale(1.2)); }",
-        "video() is not in NOH yet",
+        "fn frame(t, ctx) { draw(video()); draw(video()); }",
+        "one video() per frame",
+    );
+    refused(
+        "fn frame(t, ctx) { draw(video().scale(1.6)); }",
+        "video scale",
+    );
+    refused(
+        "fn frame(t, ctx) { draw(video().rot(0.5)); }",
+        "video rotation",
+    );
+    refused(
+        "fn frame(t, ctx) { draw(video().scale(0.0 / 0.0)); }",
+        "not finite",
+    );
+    refused(
+        "fn frame(t, ctx) { draw(video().scale(0.1)); }",
+        "video scale",
+    );
+    refused(
+        "fn frame(t, ctx) { draw(video().focus(1.2, 0.5)); }",
+        "video focus (0 to 1) or position (-0.5 to 1.5) out of range",
+    );
+    refused(
+        "fn frame(t, ctx) { draw(video().at(0.5, 1.6)); }",
+        "video focus (0 to 1) or position (-0.5 to 1.5) out of range",
+    );
+    refused(
+        "fn frame(t, ctx) { draw(video().crop(0.5, 0.0, 0.52, 1.0)); }",
+        "video crop out of range",
+    );
+    rejected("fn frame(t, ctx) { let l = layer(); l.add(video()); draw(l); }");
+    // A framing that leaves black is said, never refused.
+    let r = run("fn frame(t, ctx) { draw(video().scale(0.8)); }").unwrap();
+    assert!(
+        r.layout_warnings
+            .iter()
+            .any(|w| w.contains("does not cover the frame")),
+        "{:?}",
+        r.layout_warnings
     );
 }
 
@@ -1178,6 +1232,7 @@ pub(crate) fn motion_gpu_checks() {
     a_frame_after_a_failed_group_is_whole();
     the_export_overlay_is_the_m2_render();
     shader_layers_draw_or_hide();
+    the_paths_frame_the_picture_alike();
     compositor_memory();
     shape_timings();
 }
@@ -1282,6 +1337,193 @@ fn the_export_overlay_is_the_m2_render() {
     }
 }
 
+/// The same framing in every path (« the same framing, not the same pixels »):
+/// the export resamples the source's planes on the GPU (`YuvMix`), the libmpv
+/// preview draws its picture through the framing's quad (`QuadPainter`), a look
+/// resamples its frame on the CPU (`reframe::resample`); all from one framing.
+/// Without a framing the export's bytes are unchanged, and the identity framing
+/// gives them back exactly.
+fn the_paths_frame_the_picture_alike() {
+    use super::reframe::{Framing, VideoDraw, resample};
+    use crate::fx::compose::Compositor;
+    use crate::fx::gl::{GlRenderer, Matrix, Reframe, YuvMix};
+    use crate::fx::quad::QuadPainter;
+    use crate::fx::shaders::Output;
+    use glow::HasContext;
+    let (w, h) = (640usize, 360usize);
+    // A picture with structure everywhere: gradients and a checker.
+    let rgb: Vec<u8> = (0..w * h)
+        .flat_map(|i| {
+            let (x, y) = (i % w, i / w);
+            let check = if (x / 16 + y / 16) % 2 == 0 { 40 } else { 0 };
+            [
+                (x * 200 / w + check) as u8,
+                (y * 200 / h + check) as u8,
+                ((x + y) * 120 / (w + h) + 60) as u8,
+            ]
+        })
+        .collect();
+    // Its planes (BT.601, limited range), chroma averaged over 2 x 2.
+    let luma = |p: &[u8]| {
+        (16.0
+            + (219.0 / 255.0)
+                * (0.299 * f32::from(p[0]) + 0.587 * f32::from(p[1]) + 0.114 * f32::from(p[2])))
+        .round() as u8
+    };
+    let y: Vec<u8> = rgb.chunks(3).map(luma).collect();
+    let (cw, ch) = (w / 2, h / 2);
+    let mut u = Vec::with_capacity(cw * ch);
+    let mut v = Vec::with_capacity(cw * ch);
+    for cy in 0..ch {
+        for cx in 0..cw {
+            let (mut r, mut g, mut b) = (0.0, 0.0, 0.0);
+            for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                let p = &rgb[((cy * 2 + dy) * w + cx * 2 + dx) * 3..][..3];
+                (r, g, b) = (
+                    r + f32::from(p[0]) / 4.0,
+                    g + f32::from(p[1]) / 4.0,
+                    b + f32::from(p[2]) / 4.0,
+                );
+            }
+            let yp = 0.299 * r + 0.587 * g + 0.114 * b;
+            u.push((128.0 + (224.0 / 255.0) * (b - yp) / 1.772).round() as u8);
+            v.push((128.0 + (224.0 / 255.0) * (r - yp) / 1.402).round() as u8);
+        }
+    }
+    let i420: Vec<u8> = [y.clone(), u.clone(), v.clone()].concat();
+    let video = VideoDraw {
+        scale: 1.3,
+        at: [0.45, 0.55],
+        focus: [0.6, 0.4],
+        rot: 0.2,
+        crop: [0.05, 0.0, 0.95, 1.0],
+    };
+    let f = video.framing((w as f32, h as f32), (w as f32, h as f32));
+    let reframe = |f: &Framing| Reframe {
+        inv: f.inverse(),
+        center: f.center,
+        focus: f.focus,
+        crop: f.crop,
+    };
+    let gpu =
+        GlRenderer::headless(w as u32, h as u32, w as f32, h as f32, Output::PremulGamma).unwrap();
+    let mut comp = Compositor::new(&gpu).unwrap();
+    comp.begin();
+    comp.finish();
+    let clear = comp.texture();
+    let mut mix = YuvMix::new(&gpu, Matrix::Bt601).unwrap();
+    let mut run = |r: Option<Reframe>| {
+        mix.set_reframe(r);
+        mix.submit(&i420, clear, 0).unwrap();
+        let mut out = vec![0u8; i420.len()];
+        mix.fetch(0, &mut out).unwrap();
+        out
+    };
+    // No framing, and the identity framing: the bytes as they came.
+    let plain = run(None);
+    assert_eq!(plain, i420, "a transparent overlay changed the picture");
+    assert_eq!(
+        run(Some(reframe(&Framing::identity((w as f32, h as f32))))),
+        i420
+    );
+    // The export's planes against the CPU's, through the same framing.
+    let framed = run(Some(reframe(&f)));
+    let want_y = resample(&y, 1, &f, &[16]);
+    let half = f.for_plane(2.0);
+    let want_u = resample(&u, 1, &half, &[128]);
+    let want_v = resample(&v, 1, &half, &[128]);
+    let worst = |a: &[u8], b: &[u8]| a.iter().zip(b).map(|(x, y)| x.abs_diff(*y)).max().unwrap();
+    let (wy, wu, wv) = (
+        worst(&framed[..w * h], &want_y),
+        worst(&framed[w * h..w * h + cw * ch], &want_u),
+        worst(&framed[w * h + cw * ch..], &want_v),
+    );
+    eprintln!("reframed planes, GPU vs CPU: Y {wy}/255, U {wu}/255, V {wv}/255");
+    assert!(wy <= 2 && wu <= 2 && wv <= 2, "Y {wy} U {wu} V {wv}");
+    // The libmpv preview's path: its picture through the framing's quad.
+    let gl = gpu.context().clone();
+    let painter = QuadPainter::new(&gl).unwrap();
+    let (src, dst, fbo) = unsafe {
+        let rgba: Vec<u8> = rgb
+            .chunks(3)
+            .flat_map(|p| [p[0], p[1], p[2], 255])
+            .collect();
+        let make = |data: Option<&[u8]>| {
+            let t = gl.create_texture().unwrap();
+            gl.bind_texture(glow::TEXTURE_2D, Some(t));
+            gl.tex_image_2d(
+                glow::TEXTURE_2D,
+                0,
+                glow::RGBA8 as i32,
+                w as i32,
+                h as i32,
+                0,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelUnpackData::Slice(data),
+            );
+            t
+        };
+        let src = make(Some(&rgba));
+        let dst = make(None);
+        let fbo = gl.create_framebuffer().unwrap();
+        gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
+        gl.framebuffer_texture_2d(
+            glow::FRAMEBUFFER,
+            glow::COLOR_ATTACHMENT0,
+            glow::TEXTURE_2D,
+            Some(dst),
+            0,
+        );
+        gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+        (src, dst, fbo)
+    };
+    painter
+        .draw(Some(fbo), (w as i32, h as i32), src, f.quad())
+        .unwrap();
+    let mut shown = vec![0u8; w * h * 4];
+    unsafe {
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(fbo));
+        gl.read_pixels(
+            0,
+            0,
+            w as i32,
+            h as i32,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            glow::PixelPackData::Slice(Some(&mut shown)),
+        );
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None);
+        gl.delete_framebuffer(fbo);
+        gl.delete_texture(src);
+        gl.delete_texture(dst);
+    }
+    let want = resample(&rgb, 3, &f, &[0, 0, 0]);
+    // Away from the quad's edges, where rasterising and the crop test may
+    // decide a pixel differently.
+    let mut worst_rgb = 0u8;
+    for py in 0..h {
+        for px in 0..w {
+            let edge = [-1.5f32, 0.0, 1.5].iter().any(|d| {
+                [[*d, 0.0], [0.0, *d]].iter().any(|o| {
+                    let s = f.to_source([px as f32 + 0.5 + o[0], py as f32 + 0.5 + o[1]]);
+                    let c = f.crop;
+                    s[0] < c[0] || s[1] < c[1] || s[0] > c[2] || s[1] > c[3]
+                })
+            });
+            if edge {
+                continue;
+            }
+            for c in 0..3 {
+                worst_rgb = worst_rgb
+                    .max(shown[(py * w + px) * 4 + c].abs_diff(want[(py * w + px) * 3 + c]));
+            }
+        }
+    }
+    eprintln!("reframed preview quad vs CPU: worst {worst_rgb}/255 away from its edges");
+    assert!(worst_rgb <= 2, "{worst_rgb}");
+}
+
 /// A fixture scene with the shaders beside it, through the export's path (the
 /// script thread, its validation, `MotionLayer` with the shaders compiled on
 /// the engine's context): the overlay at `t` and what the frame drew.
@@ -1373,6 +1615,7 @@ fn shader_layers_draw_or_hide() {
         }
     }
     if std::env::var_os("NOH_MOTION_BENCH").is_some() {
+        reframe_timing();
         for name in [
             "worst_shader_scalar",
             "worst_shader_vector",
@@ -1381,6 +1624,70 @@ fn shader_layers_draw_or_hide() {
         ] {
             shader_timing(name);
         }
+    }
+}
+
+/// GPU time of the export's mix of a 1920 x 1080 frame, without and with a
+/// reframing (between two GPU timestamps around the submission, 48 frames
+/// each): what reframing adds to an export.
+fn reframe_timing() {
+    use super::reframe::VideoDraw;
+    use crate::fx::compose::Compositor;
+    use crate::fx::gl::{GlRenderer, Matrix, Reframe, YuvMix};
+    use crate::fx::shaders::Output;
+    use glow::HasContext;
+    let (w, h) = (1920usize, 1080usize);
+    let gpu =
+        GlRenderer::headless(w as u32, h as u32, w as f32, h as f32, Output::PremulGamma).unwrap();
+    let gl = gpu.context().clone();
+    let mut comp = Compositor::new(&gpu).unwrap();
+    comp.begin();
+    comp.finish();
+    let clear = comp.texture();
+    let mut mix = YuvMix::new(&gpu, Matrix::Bt709).unwrap();
+    let i420: Vec<u8> = (0..mix.frame_bytes())
+        .map(|i| (i * 7 % 251) as u8)
+        .collect();
+    let f = VideoDraw {
+        scale: 1.4,
+        rot: 0.2,
+        ..VideoDraw::default()
+    }
+    .framing((w as f32, h as f32), (w as f32, h as f32));
+    let r = Reframe {
+        inv: f.inverse(),
+        center: f.center,
+        focus: f.focus,
+        crop: f.crop,
+    };
+    let (q0, q1) = unsafe { (gl.create_query().unwrap(), gl.create_query().unwrap()) };
+    let mut out = vec![0u8; i420.len()];
+    for (label, reframe) in [("without", None), ("with", Some(r))] {
+        mix.set_reframe(reframe);
+        let mut ms = Vec::new();
+        for _ in 0..48 {
+            unsafe { gl.finish() };
+            unsafe { gl.query_counter(q0, glow::TIMESTAMP) };
+            mix.submit(&i420, clear, 0).unwrap();
+            unsafe { gl.query_counter(q1, glow::TIMESTAMP) };
+            mix.fetch(0, &mut out).unwrap();
+            let (a, b) = unsafe {
+                (
+                    gl.get_query_parameter_u64(q0, glow::QUERY_RESULT),
+                    gl.get_query_parameter_u64(q1, glow::QUERY_RESULT),
+                )
+            };
+            ms.push(b.saturating_sub(a) as f64 / 1e6);
+        }
+        ms.sort_by(f64::total_cmp);
+        eprintln!(
+            "mix of a 1920 x 1080 frame {label} reframing: GPU p95 {:.3} ms",
+            ms[(ms.len() * 95).div_ceil(100) - 1]
+        );
+    }
+    unsafe {
+        gl.delete_query(q0);
+        gl.delete_query(q1);
     }
 }
 

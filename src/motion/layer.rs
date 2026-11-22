@@ -52,6 +52,9 @@ pub struct MotionLayer {
     show_shaders: bool,
     /// What the last frame drew.
     pub stats: super::paint::PaintStats,
+    /// How the last frame framed the picture, and the frame's size.
+    video: Option<super::reframe::VideoDraw>,
+    size: (u32, u32),
 }
 
 /// GL_CONTEXT_LOST: what every call answers once the driver has reset a
@@ -79,12 +82,19 @@ impl MotionLayer {
             shaders: None,
             show_shaders: true,
             stats: Default::default(),
+            video: None,
+            size: (w, h),
         })
     }
 
     /// Leave shader layers out (counted in `stats`), or draw them.
     pub fn show_shaders(&mut self, show: bool) {
         self.show_shaders = show;
+    }
+
+    /// How the last frame drawn framed the picture.
+    pub fn video(&self) -> Option<&super::reframe::VideoDraw> {
+        self.video.as_ref()
     }
 
     /// The compiled shaders, once set up.
@@ -185,6 +195,21 @@ impl Overlay for MotionLayer {
             shaders,
         )?;
         lost(gpu)?;
+        self.video = f.video;
         Ok(comp.texture())
+    }
+
+    fn reframe(&self) -> Option<crate::fx::gl::Reframe> {
+        // Same format: the output is the source's size.
+        let size = (self.size.0 as f32, self.size.1 as f32);
+        self.video.as_ref().map(|v| {
+            let f = v.framing(size, size);
+            crate::fx::gl::Reframe {
+                inv: f.inverse(),
+                center: f.center,
+                focus: f.focus,
+                crop: f.crop,
+            }
+        })
     }
 }

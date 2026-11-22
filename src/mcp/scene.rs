@@ -318,6 +318,14 @@ pub fn motion_info() -> Option<MotionInfo> {
         ("shader_reads_per_pixel", shader::MAX_READS as f64),
         ("shader_cost_per_pixel", shader::MAX_COST as f64),
         ("shader_helpers", shader::MAX_HELPERS as f64),
+        (
+            "video_scale_max",
+            f64::from(crate::motion::reframe::MAX_VIDEO_SCALE),
+        ),
+        (
+            "video_rot_max",
+            f64::from(crate::motion::reframe::MAX_VIDEO_ROT),
+        ),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v))

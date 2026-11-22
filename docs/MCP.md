@@ -131,7 +131,10 @@ the same way, then draws frames with the export's engine over the video:
 `measure` (each text's box, JSON). `grid` draws the frame's edges, a line every
 tenth and the safe area; `bare` shows the video alone. `noh_scene_clip` and
 `noh_burn_subtitles` with `motion: {"scene": …}` draw the scene instead of the
-captions (refused with `effect`, `size` or `placement`). A scene's layer shaders
+captions (refused with `effect`, `size` or `placement`). A scene can reframe the
+picture at the video's own size (`video()`: zoom up to 1.5, a light turn, a crop):
+the export resamples the full-size picture before the mix, a look reframes its frame
+the same way at the same instant. A scene's layer shaders
 (WGSL files in `<scene>.shaders/`, at most 8) are validated with the scene, then
 compiled and drawn once in the worker; a driver that dies on one stops the worker
 and the job fails with `error.scene_worker_stopped`, nothing published. The worker's

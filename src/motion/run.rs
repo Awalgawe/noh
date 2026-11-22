@@ -533,7 +533,12 @@ fn look(
         layer
             .draw(&mut gpu, t)
             .map_err(|e| fail("error.scene_refused", None, e))?;
-        let under = source_frame(request, t, size)?;
+        let mut under = source_frame(request, t, size)?;
+        // The picture as the export frames it at this instant (`video()`).
+        if let Some(v) = layer.video() {
+            let f = v.framing((w as f32, h as f32), (w as f32, h as f32));
+            under = super::reframe::resample(&under, 3, &f, &[0, 0, 0]);
+        }
         // Bare: the video alone, to compose on it.
         let mut rgb = if request.bare {
             under

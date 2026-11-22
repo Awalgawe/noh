@@ -66,11 +66,6 @@ In this version a scene is drawn over one video (a caption burn): the video's so
 gives the energy and onsets, its length is the song's, its size is the canvas.
 Scenes over a montage (a song and several clips) come later.
 
-## What NOH does not draw yet
-
-`video()` (reframing the picture) comes in a later version: a scene that calls it is
-refused with that reason. The picture under the scene is the video as it is.
-
 ## The language
 
 Scenes are written in a small subset of Rhai: numbers, booleans, strings, `let`,
@@ -207,6 +202,33 @@ more than about a hundred builders in one expression is too deep for the languag
 write `p.line_to(…);` as statements. Shapes are smoothed on their edges (4 samples
 per pixel). A run of shapes drawn one after the other is one pass; text and shapes
 interleaved make a pass each (see the passes limit).
+
+## The picture
+
+`video()` frames the video picture; `draw(v)` hands it over. Without it, the picture
+is the video as it is. The output keeps the video's own size in this version (a
+vertical output made from a wide video comes later).
+
+| Builder | Default | Meaning |
+|---|---|---|
+| `.focus(x, y)` | 0.5, 0.5 | The point of the video (fractions of the video picture) that is put at `at` |
+| `.at(x, y)` | 0.5, 0.5 | Where that point goes in the frame |
+| `.scale(v)` | 1 | 1 = the video just covers the frame; from 0.25 to 1.5 |
+| `.rot(v)` | 0 | Radians, clockwise, about that point; at most 0.35 |
+| `.crop(x0, y0, x1, y1)` | 0, 0, 1, 1 | The part of the video drawn (fractions of the video picture) |
+
+```rhai
+// Framed a little tighter; the framing slides from left to right between 10 and 12 s.
+let x = mixf(0.4, 0.6, smooth(10.0, 12.0, t));
+draw(video().scale(1.2).focus(x, 0.5));
+```
+
+One per frame; it is always drawn beneath everything else, wherever the call is. It
+cannot go in a layer. Where the picture does not reach (scale under 1, a crop, a turn
+without enough zoom) the frame is black, and the check says so. A turn needs some zoom
+to keep the corners covered: about 1 + the angle times the frame's width over its
+height. The export reframes the video at its full size; the preview reframes its own
+smaller picture the same way, at the same instants.
 
 ## Layers
 

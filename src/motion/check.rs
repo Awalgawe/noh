@@ -200,6 +200,9 @@ impl Checker {
         if f.layers.iter().any(|l| !l.opacity.is_finite()) {
             return Err(at("a layer's opacity is not finite".into()));
         }
+        if let Some(v) = &f.video {
+            v.check().map_err(at)?;
+        }
         let (shaders, shader_area) = shader_load(f);
         if shaders > super::shader::MAX_SHADER_LAYERS {
             return Err(at(format!(
