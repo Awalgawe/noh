@@ -51,6 +51,10 @@ impl Seg {
 /// A colour stop: offset (0 to 1), colour, opacity.
 pub type Stop = (f32, String, f32);
 
+/// A fill's gradient in canvas pixels: 1 linear or 2 radial, its from or
+/// centre, its to, its radius, its stops.
+pub type GradientPx<'a> = (u8, [f32; 2], [f32; 2], f32, &'a [Stop]);
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Paint {
     None,
@@ -201,6 +205,24 @@ impl PathDraw {
             px + self.scale * (c * dx - s * dy) + self.offset[0] * w,
             py + self.scale * (s * dx + c * dy) + self.offset[1] * h,
         ]
+    }
+
+    /// The fill's gradient in canvas pixels, moved with the path.
+    pub fn gradient_px(&self, w: f32, h: f32) -> Option<GradientPx<'_>> {
+        let short = w.min(h);
+        match &self.fill {
+            Paint::Linear(a, b, st) => {
+                Some((1, self.place(*a, w, h), self.place(*b, w, h), 0.0, st))
+            }
+            Paint::Radial(c, r, st) => Some((
+                2,
+                self.place(*c, w, h),
+                [0.0; 2],
+                r * short * self.scale,
+                st,
+            )),
+            _ => None,
+        }
     }
 }
 
