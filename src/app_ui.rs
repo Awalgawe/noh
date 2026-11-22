@@ -1581,6 +1581,26 @@ impl NohApp {
                 ui.clip_rect()
             })
     }
+    /// What each frame does before it draws: the job's events, the start of a
+    /// prepared export, the checks, the copies and the preview's state. It
+    /// changes nothing on screen by itself.
+    pub(super) fn advance(&mut self, ctx: &egui::Context) {
+        self.receive();
+        self.retry_generation(ctx);
+        self.autoupdate_frame(ctx);
+        self.receive_captions(ctx);
+        self.receive_shorts(ctx);
+        self.prepare_views(ctx);
+        self.poll_mini_preview(ctx);
+    }
+    /// A frame of a window eframe sees as minimized, or as occluded where winit
+    /// reports it (macOS, X11): eframe runs `logic` alone, no ui and no
+    /// painting. The work goes on all the same: a prepared export starts, its
+    /// events are taken, a lyrics change is written.
+    pub(super) fn hidden_frame(&mut self, ctx: &egui::Context) {
+        self.lyrics_background(ctx);
+        self.advance(ctx);
+    }
     pub(super) fn draw(&mut self, ui: &mut egui::Ui) -> egui::scroll_area::ScrollAreaOutput<()> {
         let ctx = ui.ctx().clone();
         let l = self.locale.language;
@@ -1590,13 +1610,7 @@ impl NohApp {
             self.capture_frame(&ctx);
             return gallery;
         }
-        self.receive();
-        self.retry_generation(&ui.ctx().clone());
-        self.autoupdate_frame(&ctx);
-        self.receive_captions(&ctx);
-        self.receive_shorts(&ctx);
-        self.prepare_views(&ctx);
-        self.poll_mini_preview(&ctx);
+        self.advance(&ctx);
         let busy = self.project.busy()
             || self.job.is_some()
             || self.cancelling
@@ -1836,11 +1850,16 @@ impl eframe::App for NohApp {
         self.effects.release();
     }
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        // While the window is hidden no ui runs and nothing is painted. A
-        // montage libmpv plays goes on only if its pictures are taken: this is
-        // then the only place that can do it.
-        if ctx.input(|i| i.viewport().visible()) == Some(false)
-            && let Some(scrubber) = &self.mini_preview.scrubber
+        // While eframe sees the window as minimized (or as occluded, where
+        // winit reports it) no ui runs and nothing is painted (eframe's
+        // logic-only frames); what `draw` does before it draws is done here.
+        if ctx.input(|i| i.viewport().visible()) != Some(false) {
+            return;
+        }
+        self.hidden_frame(ctx);
+        // A montage libmpv plays goes on only if its pictures are taken: this
+        // is then the only place that can do it.
+        if let Some(scrubber) = &self.mini_preview.scrubber
             && scrubber.plays()
             && let Some(gl) = frame.gl()
         {

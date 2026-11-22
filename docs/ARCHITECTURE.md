@@ -36,6 +36,12 @@ state. Destination identity is separate from render-setting identity.
 `app_diagnosis` coalesces background checks; obsolete replies cannot replace a
 newer request. `app_ui` composes media, lyrics, monitor, timeline, selection and
 export controls on one screen. Settings holds technical configuration.
+Each frame first takes the job's events, starts a prepared export, runs the
+checks and follows the copies (`advance`), then draws. A window eframe sees as
+minimized, or as occluded where winit reports it (macOS and X11), draws
+nothing: eframe then runs `App::logic` alone, which does the same work and
+writes a due lyrics change, so a prepared export still starts and its progress
+and end are taken while the window is away. Checked on Windows, minimized.
 
 The desktop preview can prepare lightweight working copies. Export uses the
 original sources. Waveform decoding and reductions run in a bounded worker;
@@ -65,7 +71,7 @@ and the interface's, which renders libmpv's pictures. libmpv waits for the
 render thread, so nothing may be asked of libmpv while a lock the interface
 takes is held. `scrub::live` holds the state both sides share and knows
 nothing of libmpv: a call into libmpv under its lock cannot be written. While
-the window is hidden no ui runs and nothing is painted; `App::logic` then
+the window is hidden no ui runs and nothing is painted; `App::logic` then also
 serves libmpv's render context, or the playing would stop at the next cut.
 
 libmpv 0.40 and 0.41 ask OpenGL for a sync object after each picture drawn
