@@ -199,6 +199,8 @@ struct Window {
     outbox: Option<Outbox>,
     version: Option<String>,
     answers: HashMap<u64, (Option<serde_json::Value>, Option<driven::Refusal>)>,
+    /// The window's latest `state`, by revision.
+    view: Option<(u64, serde_json::Value)>,
     released: bool,
     closed_by_person: bool,
     closed_by_agent: bool,
@@ -356,6 +358,7 @@ impl Apps {
                 outbox: Some(Outbox::spawn("noh-app-writer", launched.input, QUEUE)),
                 version: None,
                 answers: HashMap::new(),
+                view: None,
                 released: false,
                 closed_by_person: false,
                 closed_by_agent: false,
@@ -440,10 +443,13 @@ impl Apps {
         })
     }
 
-    /// Close a window the agent still drives. Pending lyrics are written
-    /// first; nothing is ever discarded: a question open, or one the save
-    /// would ask, is answered with `app.question_open` and nothing closes.
-    pub fn close(&self, app_id: &str) -> Result<AppCloseReply, AppError> {
+    /// Send the request `make(id)` to a window the agent still drives and
+    /// wait for its answer: the result, or the window's refusal as an error.
+    fn ask(
+        &self,
+        app_id: &str,
+        make: impl FnOnce(u64) -> ToApp,
+    ) -> Result<serde_json::Value, AppError> {
         let shared = &self.0;
         let timing = shared.timing;
         let mut state = shared.state.lock().unwrap();
@@ -458,7 +464,7 @@ impl Apps {
             AppState::Open => {}
             other => return Err(not_driven(other, window.closed_by_person)),
         }
-        match window.send(&ToApp::Close { id: request }) {
+        match window.send(&make(request)) {
             Ok(()) => {}
             Err(Unsent::Full) => return Err(not_driven(AppState::Lost, false)),
             Err(Unsent::Gone) => return Err(not_driven(AppState::Exited, false)),
@@ -470,10 +476,12 @@ impl Apps {
             if let Some(answer) = window.answers.remove(&request) {
                 break Some(answer);
             }
-            if window.pipe_ended || window.exit.is_some() {
-                return Err(not_driven(window.state(&timing), window.closed_by_person));
-            }
-            if window.released || window.closed_by_person || window.lost(&timing) {
+            if window.pipe_ended
+                || window.exit.is_some()
+                || window.released
+                || window.closed_by_person
+                || window.lost(&timing)
+            {
                 return Err(not_driven(window.state(&timing), window.closed_by_person));
             }
             let now = Instant::now();
@@ -486,7 +494,7 @@ impl Apps {
                 .unwrap()
                 .0;
         };
-        let Some((_, refusal)) = answer else {
+        let Some((result, refusal)) = answer else {
             return Err(AppError::new(
                 "app.no_answer",
                 format!(
@@ -502,9 +510,19 @@ impl Apps {
                 details: refusal.details,
             });
         }
+        Ok(result.unwrap_or(serde_json::Value::Null))
+    }
+
+    /// Close a window the agent still drives. Pending lyrics are written
+    /// first; nothing is ever discarded: a question open, or one the save
+    /// would ask, is answered with `app.question_open` and nothing closes.
+    pub fn close(&self, app_id: &str) -> Result<AppCloseReply, AppError> {
+        self.ask(app_id, |id| ToApp::Close { id })?;
+        let shared = &self.0;
+        let mut state = shared.state.lock().unwrap();
         let window = find(&mut state.windows, app_id).expect("windows are not removed");
         window.closed_by_agent = true;
-        let deadline = Instant::now() + timing.exit;
+        let deadline = Instant::now() + shared.timing.exit;
         loop {
             let window = find(&mut state.windows, app_id).expect("windows are not removed");
             window.refresh();
@@ -531,6 +549,88 @@ impl Apps {
             state: AppState::Closed,
             exited,
         })
+    }
+
+    /// One gesture in a window the agent drives (`noh_app_do`).
+    pub fn act(&self, app_id: &str, action: driven::Action) -> Result<AppDoReply, AppError> {
+        let result = self.ask(app_id, |id| ToApp::Act { id, action })?;
+        Ok(AppDoReply {
+            version: 1,
+            app_id: app_id.into(),
+            revision: result["revision"].as_u64().unwrap_or(0),
+            result,
+        })
+    }
+
+    /// A PNG of what a driven window shows (`noh_app_look`).
+    pub fn look(&self, input: AppLookInput) -> Result<AppLookReply, AppError> {
+        if !input.output.is_absolute()
+            || input
+                .output
+                .extension()
+                .is_none_or(|e| !e.eq_ignore_ascii_case("png"))
+        {
+            return Err(AppError::new(
+                "app.output_invalid",
+                "output must be an absolute path ending in .png.",
+            ));
+        }
+        if input.output.exists() {
+            return Err(AppError::new(
+                "app.output_exists",
+                "output already exists; nothing is ever overwritten.",
+            ));
+        }
+        let result = self.ask(&input.app_id, |id| ToApp::Look {
+            id,
+            scope: input.scope.unwrap_or_default(),
+            at_ms: input.at_ms,
+            output: input.output.clone(),
+        })?;
+        Ok(AppLookReply {
+            version: 1,
+            app_id: input.app_id,
+            output: input.output,
+            width: result["width"].as_u64().unwrap_or(0) as u32,
+            height: result["height"].as_u64().unwrap_or(0) as u32,
+            at_ms: result["at_ms"].as_u64(),
+        })
+    }
+
+    /// What a window shows, as data (`noh_app_state`): waits up to `wait_ms`
+    /// (30 s at most) for a revision after `after_revision`.
+    pub fn view(&self, input: AppStateInput) -> Result<AppStateReply, AppError> {
+        let shared = &self.0;
+        let timing = shared.timing;
+        let wait = Duration::from_millis(input.wait_ms.unwrap_or(0).min(30_000));
+        let deadline = Instant::now() + wait;
+        let mut state = shared.state.lock().unwrap();
+        loop {
+            let window =
+                find(&mut state.windows, &input.app_id).ok_or_else(|| unknown(&input.app_id))?;
+            window.refresh();
+            let revision = window.view.as_ref().map_or(0, |(r, _)| *r);
+            let current = window.state(&timing);
+            let newer = input.after_revision.is_none_or(|after| revision > after);
+            let now = Instant::now();
+            if newer || now >= deadline || !matches!(current, AppState::Open | AppState::Lost) {
+                return Ok(AppStateReply {
+                    version: 1,
+                    app_id: input.app_id,
+                    state: current,
+                    revision,
+                    view: window
+                        .view
+                        .as_ref()
+                        .map_or(serde_json::Value::Null, |(_, v)| v.clone()),
+                });
+            }
+            state = shared
+                .changed
+                .wait_timeout(state, (deadline - now).min(Duration::from_millis(100)))
+                .unwrap()
+                .0;
+        }
     }
 
     /// The session ends: no window opens any more; each window still reading
@@ -582,6 +682,11 @@ impl Apps {
             }
             ToServer::Released => window.released = true,
             ToServer::Closed => window.closed_by_person = true,
+            ToServer::State { revision, state } => {
+                if window.view.as_ref().is_none_or(|(r, _)| revision > *r) {
+                    window.view = Some((revision, state));
+                }
+            }
         }
         self.0.changed.notify_all();
     }
@@ -995,6 +1100,140 @@ mod tests {
         assert!(!*h.processes.lock().unwrap()[0].killed.lock().unwrap());
         assert_eq!(h.apps.open("After").unwrap_err().code, "app.session_ended");
         assert_eq!(h.apps.close("app-1").unwrap_err().code, "app.session_ended");
+    }
+
+    #[test]
+    fn gestures_state_and_looks_go_through_the_window() {
+        let h = harness(
+            |mut input, mut output, _| {
+                ready(&mut output);
+                send(
+                    &mut output,
+                    &ToServer::State {
+                        revision: 1,
+                        state: serde_json::json!({ "range": null }),
+                    },
+                );
+                while let Some(message) = next(&mut input) {
+                    match message {
+                        driven::Inbound::Message(ToApp::Act { id, action }) => {
+                            assert!(matches!(action, driven::Action::SetRange { .. }));
+                            send(
+                                &mut output,
+                                &ToServer::State {
+                                    revision: 2,
+                                    state: serde_json::json!({ "range": { "start_ms": 1000 } }),
+                                },
+                            );
+                            send(
+                                &mut output,
+                                &ToServer::Done {
+                                    id,
+                                    result: Some(serde_json::json!({ "revision": 2 })),
+                                    error: None,
+                                },
+                            );
+                        }
+                        driven::Inbound::Message(ToApp::Look {
+                            id, output: path, ..
+                        }) => {
+                            send(
+                                &mut output,
+                                &ToServer::Done {
+                                    id,
+                                    result: Some(serde_json::json!({
+                                        "width": 640, "height": 360, "at_ms": 5000,
+                                        "path": path,
+                                    })),
+                                    error: None,
+                                },
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+            },
+            roomy(),
+            None,
+        );
+        h.apps.open("Acts").unwrap();
+        let first = h
+            .apps
+            .view(AppStateInput {
+                app_id: "app-1".into(),
+                after_revision: None,
+                wait_ms: Some(2_000),
+            })
+            .unwrap();
+        // A first state may still be on its way: wait for revision 1.
+        let first = if first.revision == 0 {
+            h.apps
+                .view(AppStateInput {
+                    app_id: "app-1".into(),
+                    after_revision: Some(0),
+                    wait_ms: Some(2_000),
+                })
+                .unwrap()
+        } else {
+            first
+        };
+        assert_eq!(first.revision, 1);
+        let done = h
+            .apps
+            .act(
+                "app-1",
+                driven::Action::SetRange {
+                    start_ms: Some(1_000),
+                    end_ms: Some(5_000),
+                },
+            )
+            .unwrap();
+        assert_eq!(done.revision, 2);
+        let after = h
+            .apps
+            .view(AppStateInput {
+                app_id: "app-1".into(),
+                after_revision: Some(1),
+                wait_ms: Some(2_000),
+            })
+            .unwrap();
+        assert_eq!(after.revision, 2);
+        assert_eq!(after.view["range"]["start_ms"], 1000);
+        // Nothing newer: the wait ends at its bound with the same revision.
+        let start = Instant::now();
+        let same = h
+            .apps
+            .view(AppStateInput {
+                app_id: "app-1".into(),
+                after_revision: Some(2),
+                wait_ms: Some(200),
+            })
+            .unwrap();
+        assert_eq!(same.revision, 2);
+        assert!(start.elapsed() >= Duration::from_millis(200));
+        // A look: the path is checked here first, then the window answers.
+        let folder = tempfile::tempdir().unwrap();
+        let look = |output: PathBuf| AppLookInput {
+            app_id: "app-1".into(),
+            scope: None,
+            at_ms: Some(5_000),
+            output,
+        };
+        assert_eq!(
+            h.apps.look(look("relative.png".into())).unwrap_err().code,
+            "app.output_invalid"
+        );
+        let taken = folder.path().join("taken.png");
+        std::fs::write(&taken, b"x").unwrap();
+        assert_eq!(
+            h.apps.look(look(taken)).unwrap_err().code,
+            "app.output_exists"
+        );
+        let reply = h.apps.look(look(folder.path().join("look.png"))).unwrap();
+        assert_eq!(
+            (reply.width, reply.height, reply.at_ms),
+            (640, 360, Some(5000))
+        );
     }
 
     #[test]

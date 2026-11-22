@@ -40,6 +40,144 @@ pub enum ToApp {
     Close { id: u64 },
     /// The agent's session ended: the window stays open, as an ordinary NOH.
     SessionEnd,
+    /// One gesture of the agent, applied between two frames as the click it
+    /// stands for; answered by `done` with the state revision it led to.
+    Act { id: u64, action: Action },
+    /// A PNG of what the window shows, written to `output` (a free path).
+    Look {
+        id: u64,
+        #[serde(default)]
+        scope: LookScope,
+        /// Move the playhead there first, as `seek` would; else the screen as it is.
+        #[serde(default)]
+        at_ms: Option<u64>,
+        output: std::path::PathBuf,
+    },
+}
+
+/// What `look` captures.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "mcp", derive(rmcp::schemars::JsonSchema))]
+#[cfg_attr(feature = "mcp", schemars(crate = "rmcp::schemars"))]
+#[serde(rename_all = "snake_case")]
+pub enum LookScope {
+    /// The whole window, as the person sees it.
+    #[default]
+    Window,
+    /// The monitor alone (the preview, captions drawn over it).
+    Monitor,
+}
+
+/// A change to one lyrics line, by its rank in the lyrics (0 first).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "mcp", derive(rmcp::schemars::JsonSchema))]
+#[cfg_attr(feature = "mcp", schemars(crate = "rmcp::schemars"))]
+#[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
+pub enum LineEdit {
+    SetText {
+        index: usize,
+        text: String,
+    },
+    /// Move one edge to `ms` (song time); the line keeps a minimum length.
+    SetStart {
+        index: usize,
+        ms: u64,
+    },
+    SetEnd {
+        index: usize,
+        ms: u64,
+    },
+    /// Move the whole line by `delta_ms`.
+    Shift {
+        index: usize,
+        delta_ms: i64,
+    },
+    /// A new line starting at `ms`, in a gap long enough for it.
+    Add {
+        ms: u64,
+        text: String,
+    },
+    Delete {
+        index: usize,
+    },
+}
+
+/// One answer to a question of the application. Answers that rewrite or
+/// replace a file need `user_confirmed`: ask the person in the conversation
+/// first.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "mcp", derive(rmcp::schemars::JsonSchema))]
+#[cfg_attr(feature = "mcp", schemars(crate = "rmcp::schemars"))]
+#[serde(rename_all = "snake_case")]
+pub enum Answer {
+    /// first_edit: change the .srt in place (the original is not kept).
+    ModifySrt,
+    /// first_edit: nothing is written, the edit that asked is taken back.
+    Cancel,
+    /// lyrics_truth: keep the lyrics file, rewrite the .srt from it.
+    KeepLyrics,
+    /// lyrics_truth: keep the .srt, rewrite the lyrics file from it.
+    KeepSrt,
+    /// lyrics_truth: decide later (the lyrics stay unopened or read-only).
+    Later,
+}
+
+/// A gesture of the agent. Each calls what the matching click calls.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "mcp", derive(rmcp::schemars::JsonSchema))]
+#[cfg_attr(feature = "mcp", schemars(crate = "rmcp::schemars"))]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Action {
+    /// Add files as a drop would: videos and pictures to the montage, a WAV
+    /// as the song, an .srt or lyrics file as the lyrics. Absolute paths.
+    Add {
+        paths: Vec<std::path::PathBuf>,
+    },
+    /// A picture's duration in the montage, by its clip id (`state.clips`).
+    SetPhotoDuration {
+        clip_id: u64,
+        seconds: f64,
+    },
+    /// One lyrics line. `based_on`: the lyrics revision read in `state`; if
+    /// the lyrics were reloaded since (changed on disk), nothing is changed.
+    EditLine {
+        edit: LineEdit,
+        #[serde(default)]
+        based_on: Option<u64>,
+    },
+    /// Undo or redo the last lyrics change.
+    Undo {},
+    Redo {},
+    /// The caption effect, by id and preset (`noh_list_effects`); no id for none.
+    ChooseEffect {
+        #[serde(default)]
+        id: Option<String>,
+        #[serde(default)]
+        preset: Option<String>,
+    },
+    /// The short's safe area.
+    SetSafeArea {
+        area: crate::safe_area::SafeArea,
+    },
+    /// The short's interval on the song; both absent to remove it.
+    SetRange {
+        #[serde(default)]
+        start_ms: Option<u64>,
+        #[serde(default)]
+        end_ms: Option<u64>,
+    },
+    /// Move the playhead (paused there). Waits while the person navigates.
+    Seek {
+        ms: u64,
+    },
+    Play {},
+    Pause {},
+    /// Answer the open question (`state.question`).
+    Answer {
+        answer: Answer,
+        #[serde(default)]
+        user_confirmed: bool,
+    },
 }
 
 /// A line read by a window.
@@ -91,6 +229,11 @@ pub enum ToServer {
     Released,
     /// The person closed the window.
     Closed,
+    /// What the window shows, as data; only the latest counts.
+    State {
+        revision: u64,
+        state: serde_json::Value,
+    },
 }
 
 /// One line for `message`, version included, newline-terminated.
@@ -413,6 +556,38 @@ mod tests {
         ] {
             assert_eq!(parse_to_server(&line(&message)), Some(message));
         }
+    }
+
+    #[test]
+    fn gestures_and_looks_round_trip_and_reject_unknown_fields() {
+        let act = ToApp::Act {
+            id: 2,
+            action: Action::EditLine {
+                edit: LineEdit::SetText {
+                    index: 3,
+                    text: "New words".into(),
+                },
+                based_on: Some(4),
+            },
+        };
+        assert_eq!(parse_to_app(&line(&act)), Some(Inbound::Message(act)));
+        let look = ToApp::Look {
+            id: 3,
+            scope: LookScope::Monitor,
+            at_ms: Some(1500),
+            output: "look.png".into(),
+        };
+        assert_eq!(parse_to_app(&line(&look)), Some(Inbound::Message(look)));
+        // An unknown field in an action is not served: it answers unsupported.
+        assert_eq!(
+            parse_to_app(br#"{"v":1,"type":"act","id":5,"action":{"type":"play","speed":2}}"#),
+            Some(Inbound::Unsupported { id: Some(5) })
+        );
+        let state = ToServer::State {
+            revision: 9,
+            state: serde_json::json!({ "duration_ms": 1000 }),
+        };
+        assert_eq!(parse_to_server(&line(&state)), Some(state));
     }
 
     #[test]

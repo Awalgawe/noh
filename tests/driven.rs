@@ -5,6 +5,11 @@
 //! process with piped input and output and no job, as an MCP client starts
 //! its server; a window that inherited the server's output would keep the
 //! client's pipe open after the server ends.
+#[path = "../tools/process.rs"]
+mod process;
+#[macro_use]
+#[allow(dead_code)]
+mod support;
 use serde_json::{Value, json};
 use std::{
     io::{BufRead, BufReader, Write},
@@ -23,8 +28,11 @@ struct Server {
 }
 
 impl Server {
-    fn start() -> Self {
+    fn start(ffmpeg: Option<&std::path::Path>) -> Self {
         let mut command = Command::new(env!("CARGO_BIN_EXE_noh-mcp"));
+        if let Some(ffmpeg) = ffmpeg {
+            command.env("NOH_FFMPEG", ffmpeg);
+        }
         command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -89,6 +97,23 @@ impl Server {
         let reply = self.call("tools/call", json!({"name":name,"arguments":arguments}));
         reply["result"]["structuredContent"].clone()
     }
+
+    /// The window's state once `ready` says so, waiting up to 30 s.
+    fn state_until(&mut self, app_id: &str, ready: impl Fn(&Value) -> bool) -> Value {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let mut revision = 0;
+        loop {
+            let reply = self.tool(
+                "noh_app_state",
+                json!({"app_id":app_id,"after_revision":revision,"wait_ms":2000}),
+            );
+            revision = reply["revision"].as_u64().unwrap_or(revision);
+            if ready(&reply["view"]) {
+                return reply["view"].clone();
+            }
+            assert!(Instant::now() < deadline, "state never ready: {reply}");
+        }
+    }
 }
 
 impl Drop for Server {
@@ -132,7 +157,7 @@ fn a_window_closes_when_asked_and_one_left_open_outlives_the_session() {
         eprintln!("SKIPPED: no display for a NOH window");
         return;
     }
-    let mut server = Server::start();
+    let mut server = Server::start(None);
     let opened = server.tool("noh_app_open", json!({"title":"Integration test"}));
     assert_eq!(opened["state"], "open", "{opened}");
     let first = opened["pid"].as_u64().unwrap() as u32;
@@ -173,4 +198,98 @@ fn a_window_closes_when_asked_and_one_left_open_outlives_the_session() {
     assert!(ended, "the client never saw the server's output end");
     assert!(exited, "the server did not exit");
     assert!(still_open, "the window did not outlive the session");
+}
+
+fn no_display() -> bool {
+    cfg!(target_os = "linux")
+        && std::env::var_os("DISPLAY").is_none()
+        && std::env::var_os("WAYLAND_DISPLAY").is_none()
+}
+
+/// A short prepared by gestures, as an agent would: media added, the range,
+/// the safe area, the playhead, a look at T; the times each took.
+#[test]
+fn a_short_is_prepared_by_gestures_and_looked_at() {
+    if no_display() {
+        eprintln!("SKIPPED: no display for a NOH window");
+        return;
+    }
+    let f = support::Fixture::new();
+    let video = f.path("clip.mp4");
+    f.ff(args![
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=s=320x180:r=25:d=4",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        &video
+    ]);
+    let song = f.wav("song.wav", 8.0);
+    let lines = f.path("lines.srt");
+    std::fs::write(
+        &lines,
+        "1\n00:00:01,000 --> 00:00:03,000\nFirst test line\n\n2\n00:00:04,000 --> 00:00:06,000\nSecond test line\n\n",
+    )
+    .unwrap();
+    let mut server = Server::start(Some(&f.ffmpeg));
+    let opened = server.tool("noh_app_open", json!({"title":"Scenario"}));
+    let app_id = opened["app_id"].as_str().expect("opened").to_owned();
+    let timed = |server: &mut Server, action: Value| {
+        let start = Instant::now();
+        let reply = server.tool("noh_app_do", json!({"app_id":app_id,"action":action}));
+        assert!(reply.get("error").is_none(), "{action}: {reply}");
+        start.elapsed()
+    };
+    timed(
+        &mut server,
+        json!({"type":"add","paths":[video, song, lines]}),
+    );
+    let view = server.state_until(&app_id, |v| {
+        v["clips"]
+            .as_array()
+            .is_some_and(|c| c.len() == 1 && c[0]["seconds"].is_number())
+            && v["song"]["seconds"].is_number()
+            && v["lyrics"]["count"] == 2
+            && v["duration_ms"].as_u64().unwrap_or(0) > 0
+    });
+    assert_eq!(view["lyrics"]["lines"][1]["text"], "Second test line");
+    let range = timed(
+        &mut server,
+        json!({"type":"set_range","start_ms":1000,"end_ms":5000}),
+    );
+    timed(&mut server, json!({"type":"set_safe_area","area":"tiktok"}));
+    let seek = timed(&mut server, json!({"type":"seek","ms":4500}));
+    let view = server.state_until(&app_id, |v| v["user_position"]["ms"] == 4500);
+    assert_eq!(view["range"]["start_ms"], 1000);
+    assert_eq!(view["safe_area"], "tiktok");
+    assert_eq!(view["user_position"]["line"]["index"], 1);
+    let output = f.path("look.png");
+    let start = Instant::now();
+    let look = server.tool(
+        "noh_app_look",
+        json!({"app_id":app_id,"scope":"window","output":output}),
+    );
+    let look_here = start.elapsed();
+    assert!(look["width"].as_u64().unwrap_or(0) > 0, "{look}");
+    let at = f.path("look-at.png");
+    let start = Instant::now();
+    let look_at = server.tool(
+        "noh_app_look",
+        json!({"app_id":app_id,"scope":"monitor","at_ms":2000,"output":at}),
+    );
+    let look_at_time = start.elapsed();
+    assert_eq!(look_at["at_ms"], 2000, "{look_at}");
+    let picture = image::open(&at).unwrap();
+    assert_eq!(
+        u64::from(picture.width()),
+        look_at["width"].as_u64().unwrap()
+    );
+    eprintln!(
+        "MEASURE set_range {range:?}, seek {seek:?}, look here {look_here:?}, look at T {look_at_time:?}"
+    );
+    let closed = server.tool("noh_app_close", json!({"app_id":app_id}));
+    assert_eq!(closed["state"], "closed", "{closed}");
 }

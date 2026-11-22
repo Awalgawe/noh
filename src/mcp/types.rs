@@ -980,6 +980,80 @@ pub struct AppCloseReply {
     pub exited: bool,
 }
 
+/// noh_app_do: one gesture in a driven window.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AppDoInput {
+    #[schemars(length(min = 1))]
+    pub app_id: String,
+    pub action: crate::driven::Action,
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct AppDoReply {
+    pub version: u32,
+    pub app_id: String,
+    /// The window's state revision once the gesture was applied.
+    pub revision: u64,
+    /// What the window answered.
+    pub result: serde_json::Value,
+}
+
+/// noh_app_state: what a driven window shows.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AppStateInput {
+    #[schemars(length(min = 1))]
+    pub app_id: String,
+    /// Return once the revision is later than this one.
+    #[serde(default)]
+    pub after_revision: Option<u64>,
+    /// How long to wait for that, at most 30000.
+    #[serde(default)]
+    #[schemars(range(max = 30000))]
+    pub wait_ms: Option<u64>,
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct AppStateReply {
+    pub version: u32,
+    pub app_id: String,
+    pub state: AppState,
+    pub revision: u64,
+    /// The window's state as it last sent it: clips, song, lyrics, effect,
+    /// range, export readiness, job, open question, `user_position`.
+    pub view: serde_json::Value,
+}
+
+/// noh_app_look: a PNG of a driven window.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AppLookInput {
+    #[schemars(length(min = 1))]
+    pub app_id: String,
+    /// `window` (default) or `monitor`.
+    #[serde(default)]
+    pub scope: Option<crate::driven::LookScope>,
+    /// Move the playhead there first (as `seek`); absent: the screen as it is,
+    /// where the person is.
+    #[serde(default)]
+    pub at_ms: Option<u64>,
+    /// A free absolute path ending in .png.
+    pub output: PathBuf,
+}
+
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct AppLookReply {
+    pub version: u32,
+    pub app_id: String,
+    pub output: PathBuf,
+    pub width: u32,
+    pub height: u32,
+    /// The playhead when the picture was taken.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub at_ms: Option<u64>,
+}
+
 /// Why a window tool did nothing.
 #[derive(Clone, Debug, PartialEq, Serialize, JsonSchema, thiserror::Error)]
 #[error("{detail}")]

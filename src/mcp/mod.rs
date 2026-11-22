@@ -199,6 +199,24 @@ impl Server {
         app_blocking(move || apps.close(&input.app_id)).await
     }
 
+    #[tool(name = "noh_app_do", description = "One gesture in a NOH window you drive, applied as the matching click: add files (as a drop), a picture's duration, a lyrics line (set_text, set_start, set_end, shift, add, delete; based_on = the lyrics revision you read, refused with app.state_changed if they were reloaded since), undo, redo, the caption effect, the safe area, the short's range, seek, play, pause, or an answer to the open question. Seek, play and pause wait while the person navigates (up to 3 s after their last gesture) and are then refused with app.user_navigating and retry_after_ms; never take the playhead from the person. Answers that rewrite or replace a file (modify_srt, keep_lyrics, keep_srt) need user_confirmed: ask the person in the conversation first. Returns the state revision the gesture led to.", output_schema = schema_for_output::<AppReply<AppDoReply>>())]
+    async fn app_do(&self, Parameters(input): Parameters<AppDoInput>) -> CallToolResult {
+        let apps = self.apps.clone();
+        app_blocking(move || apps.act(&input.app_id, input.action)).await
+    }
+
+    #[tool(name = "noh_app_state", description = "What a NOH window you drive shows, as data: clips (with their ids), song, lyrics (path, revision, lines), effect, safe area, range, whether the export is ready, the job running, the open question with its kind, whether the window is minimized, and user_position: where the person is (playhead, playing, view, clip and lyrics line under the playhead, what they clicked to point it out). When the person says « here » or « this one », read user_position first. Optionally waits up to 30000 ms for a revision after after_revision.", output_schema = schema_for_output::<AppReply<AppStateReply>>())]
+    async fn app_state(&self, Parameters(input): Parameters<AppStateInput>) -> CallToolResult {
+        let apps = self.apps.clone();
+        app_blocking(move || apps.view(input)).await
+    }
+
+    #[tool(name = "noh_app_look", description = "A PNG of a NOH window you drive, written to a free absolute .png path (no image bytes are returned): the whole window or the monitor alone. Without at_ms, the screen as it is, where the person is; with at_ms, the playhead moves there first, as seek does (it waits while the person navigates), and stays there. This is NOH's preview (light copies, captions drawn over), not the exported pixels. Refused while the window is minimized (app.hidden).", output_schema = schema_for_output::<AppReply<AppLookReply>>())]
+    async fn app_look(&self, Parameters(input): Parameters<AppLookInput>) -> CallToolResult {
+        let apps = self.apps.clone();
+        app_blocking(move || apps.look(input)).await
+    }
+
     #[tool(name = "noh_cancel", description = "Request cooperative cancellation of a session job. A publication already committed remains succeeded. Poll noh_job for the terminal state.", output_schema = schema_for_output::<Reply<JobReply>>())]
     async fn cancel(&self, Parameters(input): Parameters<CancelInput>) -> CallToolResult {
         let session = self.session.clone();
@@ -335,9 +353,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn thirteen_tools_have_strict_inputs_and_explicit_output_schemas() {
+    fn sixteen_tools_have_strict_inputs_and_explicit_output_schemas() {
         let tools = Server::router().list_all();
-        assert_eq!(tools.len(), 13);
+        assert_eq!(tools.len(), 16);
         let transcribe = tools
             .iter()
             .find(|tool| tool.name == "noh_transcribe")

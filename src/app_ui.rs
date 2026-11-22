@@ -1846,7 +1846,7 @@ impl eframe::App for NohApp {
         self.drag_capture_input(ctx, input);
         self.lane_tip_capture_input(input);
         // Last: what a capture injects goes through the same filter.
-        self.driven_input(input);
+        self.driven_input(ctx, input);
     }
     fn on_exit(&mut self, gl: Option<&eframe::glow::Context>) {
         self.driven_exit();

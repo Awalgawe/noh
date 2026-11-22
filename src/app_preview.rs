@@ -1242,6 +1242,9 @@ impl NohApp {
         if let Some(texture) = texture {
             paint_texture(ui, monitor, texture);
         }
+        // A driven window's `look`: the monitor, and whether its picture is
+        // the playhead's.
+        self.driven_note_monitor(monitor, !loading && !still_loading);
         self.mini_preview.painted = (has_texture, false);
         let scrub_visible = self.mini_preview.scrub_visible();
         self.mini_preview.painted_scrub = scrub_visible;
@@ -1575,9 +1578,9 @@ impl NohApp {
         layout.right = right.min_rect();
         // A driven window: the view, the navigation group and the volume
         // stay the person's (app_driven.rs); the fades do not.
-        self.driven_allow(layout.group, super::app_driven::Zone::Navigate);
+        self.driven_allow(layout.group, super::app_driven::Zone::Transport);
         if let Some(view) = layout.view {
-            self.driven_allow(view, super::app_driven::Zone::Navigate);
+            self.driven_allow(view, super::app_driven::Zone::Transport);
         }
         layout
     }

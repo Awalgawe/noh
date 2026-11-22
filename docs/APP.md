@@ -74,7 +74,9 @@ An agent connected to NOH's MCP server can open NOH windows itself and work in
 them while you watch. Such a window shows the agent's badge at the top and says
 so in its title. You can play, pause, move through the video on the ruler, zoom
 the timeline and change the volume; a click on a clip or a lyrics line points it
-out to the agent. Everything else is the agent's: ask it in the conversation.
+out to the agent, which also knows where you are on the timeline, so « here »
+means your position. While you move through the video the agent does not move
+the playhead. Everything else is the agent's: ask it in the conversation.
 **Stop driving** in the badge, or closing the window, makes it an ordinary NOH
 window again, yours. When the agent's session ends the window stays open as an
 ordinary NOH.

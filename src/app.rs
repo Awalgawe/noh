@@ -6,6 +6,7 @@ mod app_capture;
 mod app_destination;
 mod app_diagnosis;
 mod app_driven;
+mod app_driven_act;
 mod app_effects;
 mod app_font_rows;
 mod app_icons;

@@ -28,8 +28,11 @@ const FAREWELL: Duration = Duration::from_secs(4);
 /// What the person may reach in a driven window, by the rectangle drawn last.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Zone {
-    /// Clicks and drags pass: transport, view toggle, volume, zoom, overview.
+    /// Clicks and drags pass: volume, zoom, overview.
     Navigate,
+    /// The transport group and the view toggle: they pass, and the person
+    /// then navigates (the playhead is theirs for a while).
+    Transport,
     /// The ruler: a click or a drag moves the playhead.
     Seek,
     /// A clip or a lyrics line: a press and its release become one click.
@@ -59,6 +62,8 @@ pub(super) struct Gate {
     held: Option<Held>,
     /// A question of the application is open: it is the agent's.
     question_open: bool,
+    /// A press on the playhead's controls passed since this was last taken.
+    pub navigated: bool,
 }
 
 impl Gate {
@@ -106,7 +111,11 @@ impl Gate {
                     self.held = Some(match zone {
                         Some(Zone::Badge) if primary => Held::Pass,
                         _ if self.question_open || !primary => Held::Blocked,
-                        Some(Zone::Navigate | Zone::Seek) => Held::Pass,
+                        Some(Zone::Transport | Zone::Seek) => {
+                            self.navigated = true;
+                            Held::Pass
+                        }
+                        Some(Zone::Navigate) => Held::Pass,
                         Some(Zone::Designate) => Held::Designate { pos, modifiers },
                         _ => Held::Blocked,
                     });
@@ -200,6 +209,22 @@ pub(super) struct Driven {
     ready_sent: bool,
     /// The agent asked to close: the next close request is its own.
     closing_by_agent: bool,
+    pub ctx: egui::Context,
+    /// The revision of the last `state` sent.
+    pub revision: u64,
+    pub last_core: String,
+    pub last_position: String,
+    pub last_sent: Option<Instant>,
+    /// The person's last navigation gesture, and who moved the playhead last.
+    pub nav_at: Option<Instant>,
+    pub controller: super::app_driven_act::Controller,
+    /// Playhead gestures waiting while the person navigates.
+    pub pending: Vec<super::app_driven_act::Pending>,
+    /// The monitor painted last, and whether its picture is the playhead's.
+    pub monitor: Option<(Rect, bool)>,
+    pub look: Option<super::app_driven_act::LookJob>,
+    /// When the agent last changed something (the badge marks it).
+    pub acted_at: Option<Instant>,
 }
 
 impl Driven {
@@ -238,6 +263,17 @@ impl Driven {
             outbox: Outbox::spawn("driven-writer", output, 64),
             ready_sent: false,
             closing_by_agent: false,
+            ctx: ctx.clone(),
+            revision: 0,
+            last_core: String::new(),
+            last_position: String::new(),
+            last_sent: None,
+            nav_at: None,
+            controller: Default::default(),
+            pending: Vec::new(),
+            monitor: None,
+            look: None,
+            acted_at: None,
         }
     }
 
@@ -249,6 +285,10 @@ impl Driven {
     fn send(&self, message: &ToServer) {
         // The server may be gone: the window carries on regardless.
         let _ = self.outbox.send(message);
+    }
+
+    pub(super) fn outbox_send(&self, message: &ToServer) -> Result<(), noh::driven::Unsent> {
+        self.outbox.send(message)
     }
 }
 
@@ -316,10 +356,23 @@ impl NohApp {
                         });
                     }
                 }
+                Incoming::Message(Inbound::Message(ToApp::Act { id, action })) => {
+                    self.driven_act(ctx, id, action);
+                }
+                Incoming::Message(Inbound::Message(ToApp::Look {
+                    id,
+                    scope,
+                    at_ms,
+                    output,
+                })) => self.driven_look(ctx, id, scope, at_ms, output),
                 Incoming::Message(Inbound::Unsupported { id: None }) => {}
                 Incoming::Disconnected => self.end_piloting(ctx, true),
             }
         }
+        // The agent's playhead gestures waiting for the person; then what the
+        // window shows, if it changed.
+        self.driven_pending(ctx);
+        self.driven_state(false);
         let Some(d) = &mut self.driven else {
             return;
         };
@@ -349,7 +402,33 @@ impl NohApp {
         d.phase = Phase::Released(Instant::now());
         d.gate.held = None;
         d.send(&ToServer::Released);
+        self.driven_drop_requests();
         self.driven_title(ctx);
+    }
+
+    /// The agent's requests still waiting are refused: the window is no
+    /// longer the agent's.
+    fn driven_drop_requests(&mut self) {
+        let Some(d) = &mut self.driven else {
+            return;
+        };
+        let ids: Vec<u64> = d
+            .pending
+            .drain(..)
+            .map(|p| p.id)
+            .chain(d.look.take().map(|j| j.id))
+            .collect();
+        for id in ids {
+            d.send(&ToServer::Done {
+                id,
+                result: None,
+                error: Some(Refusal::new(
+                    "app.released_by_user",
+                    "The person stopped the piloting: this window is theirs now.",
+                )),
+            });
+        }
+        self.driven_state(true);
     }
 
     /// The agent's session ended, said or not: the window is an ordinary NOH.
@@ -365,6 +444,8 @@ impl NohApp {
             cut,
         };
         d.gate.held = None;
+        d.pending.clear();
+        d.look = None;
         self.driven_title(ctx);
     }
 
@@ -481,7 +562,8 @@ impl NohApp {
     }
 
     /// `raw_input_hook`, while driven.
-    pub(super) fn driven_input(&mut self, input: &mut egui::RawInput) {
+    pub(super) fn driven_input(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
+        self.driven_screenshot(ctx, input);
         let question_open = self.open_question().is_some();
         let Some(d) = &mut self.driven else {
             return;
@@ -492,6 +574,10 @@ impl NohApp {
         d.gate.question_open = question_open;
         if let Some(pos) = d.gate.filter(input) {
             d.bubble = Some((pos, Instant::now()));
+        }
+        if std::mem::take(&mut d.gate.navigated) {
+            d.nav_at = Some(Instant::now());
+            d.controller = super::app_driven_act::Controller::Person;
         }
     }
 
@@ -525,6 +611,13 @@ impl NohApp {
             _ => (String::new(), false),
         };
         let bubble = d.bubble;
+        // A brief mark on the badge at each change the agent makes.
+        let marked = d
+            .acted_at
+            .is_some_and(|at| now < at + Duration::from_millis(600));
+        if marked {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
         let mut stop_clicked = false;
         let mut badge_rect = None;
         if !text.is_empty() {
@@ -538,7 +631,7 @@ impl NohApp {
                     let t = style::tokens(ui);
                     egui::Frame::new()
                         .fill(t.surface_2)
-                        .stroke(egui::Stroke::new(1.5, t.focus))
+                        .stroke(egui::Stroke::new(if marked { 3.0 } else { 1.5 }, t.focus))
                         .corner_radius(style::radius::M)
                         .inner_margin(egui::Margin::symmetric(10, 4))
                         .show(ui, |ui| {
@@ -587,6 +680,7 @@ impl NohApp {
         if let Some(d) = &mut self.driven {
             d.gate.finish();
         }
+        self.driven_look_frame(ctx);
     }
 }
 
@@ -747,6 +841,8 @@ mod tests {
         ctx: egui::Context,
         to_app: Option<std::io::PipeWriter>,
         from_app: mpsc::Receiver<ToServer>,
+        /// The `state` lines, apart.
+        states: mpsc::Receiver<ToServer>,
         _folder: tempfile::TempDir,
     }
 
@@ -798,26 +894,33 @@ mod tests {
             let (server_reads, app_writes) = std::io::pipe().unwrap();
             app.driven = Some(Driven::new("Test window", app_reads, app_writes, &ctx));
             let (tx, rx) = mpsc::channel();
+            let (state_tx, state_rx) = mpsc::channel();
             driven::spawn_reader(
                 "test-server",
                 server_reads,
                 driven::MAX_TO_SERVER,
-                move |line| {
-                    if let Some(message) = driven::parse_to_server(&line) {
+                move |line| match driven::parse_to_server(&line) {
+                    Some(state @ ToServer::State { .. }) => {
+                        let _ = state_tx.send(state);
+                    }
+                    Some(message) => {
                         let _ = tx.send(message);
                     }
+                    None => {}
                 },
                 || {},
             );
-            (Some(server_writes), rx)
+            (Some(server_writes), (rx, state_rx))
         } else {
-            (None, mpsc::channel().1)
+            (None, (mpsc::channel().1, mpsc::channel().1))
         };
+        let (from_app, states) = from_app;
         let mut w = Window {
             app,
             ctx,
             to_app,
             from_app,
+            states,
             _folder: folder,
         };
         for _ in 0..3 {
@@ -1192,6 +1295,311 @@ mod tests {
         assert_eq!(
             w.from_app.recv_timeout(Duration::from_secs(2)).ok(),
             Some(ToServer::Closed)
+        );
+    }
+
+    impl Window {
+        /// The latest `state` the window sent, frames running meanwhile.
+        fn latest_state(&mut self) -> serde_json::Value {
+            // Position-only changes leave at most every 250 ms: frames for longer.
+            let until = Instant::now() + Duration::from_millis(400);
+            let mut last = None;
+            while Instant::now() < until {
+                self.frame(vec![]);
+                while let Ok(ToServer::State { state, .. }) = self.states.try_recv() {
+                    last = Some(state);
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            last.expect("a state")
+        }
+        fn act(&mut self, id: u64, action: driven::Action) -> ToServer {
+            self.send(&ToApp::Act { id, action });
+            self.next().expect("an answer")
+        }
+    }
+
+    fn refusal_code(answer: &ToServer) -> Option<&str> {
+        match answer {
+            ToServer::Done { error: Some(e), .. } => Some(e.code.as_str()),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn gestures_apply_and_the_state_follows() {
+        use driven::{Action, LineEdit};
+        let mut w = window(true);
+        let state = w.latest_state();
+        assert_eq!(state["lyrics"]["count"], 2);
+        assert_eq!(state["clips"].as_array().unwrap().len(), 2);
+        assert_eq!(state["piloting"], "driving");
+        // A range, a lyrics line, a picture's duration.
+        let answer = w.act(
+            1,
+            Action::SetRange {
+                start_ms: Some(2_000),
+                end_ms: Some(8_000),
+            },
+        );
+        assert!(
+            matches!(
+                answer,
+                ToServer::Done {
+                    id: 1,
+                    error: None,
+                    ..
+                }
+            ),
+            "{answer:?}"
+        );
+        assert_eq!(
+            w.app.project.range.map(|r| (r.start_ms, r.end_ms)),
+            Some((2_000, 8_000))
+        );
+        let source = w.app.project.track.path.clone().unwrap();
+        w.app.trust_lyrics(source);
+        let revision = w.app.project.track.revision;
+        let answer = w.act(
+            2,
+            Action::EditLine {
+                edit: LineEdit::SetText {
+                    index: 1,
+                    text: "Second line, changed".into(),
+                },
+                based_on: Some(revision),
+            },
+        );
+        assert!(
+            matches!(
+                answer,
+                ToServer::Done {
+                    id: 2,
+                    error: None,
+                    ..
+                }
+            ),
+            "{answer:?}"
+        );
+        // A stale revision is refused, and nothing changes.
+        let answer = w.act(
+            3,
+            Action::EditLine {
+                edit: LineEdit::Delete { index: 0 },
+                based_on: Some(revision + 7),
+            },
+        );
+        assert_eq!(refusal_code(&answer), Some("app.state_changed"));
+        assert_eq!(w.app.lyrics_track().unwrap().cues.len(), 2);
+        let answer = w.act(4, Action::Undo {});
+        assert!(
+            matches!(answer, ToServer::Done { error: None, .. }),
+            "{answer:?}"
+        );
+        assert_eq!(
+            w.app.lyrics_track().unwrap().cues[1].text,
+            "Second test line"
+        );
+        let answer = w.act(
+            5,
+            Action::SetPhotoDuration {
+                clip_id: 99,
+                seconds: 3.0,
+            },
+        );
+        assert_eq!(refusal_code(&answer), Some("app.refused"));
+        // The answer names the revision of a state that shows the change.
+        let answer = w.act(
+            6,
+            Action::SetRange {
+                start_ms: Some(1_000),
+                end_ms: Some(6_000),
+            },
+        );
+        let ToServer::Done {
+            result: Some(result),
+            ..
+        } = answer
+        else {
+            panic!("{answer:?}")
+        };
+        let revision = result["revision"].as_u64().unwrap();
+        let mut seen = None;
+        while let Ok(ToServer::State { revision: r, state }) =
+            w.states.recv_timeout(Duration::from_millis(200))
+        {
+            if r == revision {
+                seen = Some(state);
+            }
+        }
+        assert_eq!(seen.unwrap()["range"]["start_ms"], 1_000);
+    }
+
+    #[test]
+    fn the_agent_waits_while_the_person_navigates_then_gives_way() {
+        use driven::Action;
+        let mut w = window(true);
+        // The agent seeks: applied at once.
+        let answer = w.act(1, Action::Seek { ms: 4_000 });
+        assert!(
+            matches!(answer, ToServer::Done { error: None, .. }),
+            "{answer:?}"
+        );
+        assert_eq!(w.app.mini_preview.cursor_ms, 4_000);
+        // The person clicks on the ruler: the playhead is theirs.
+        let ruler = w.ruler();
+        let at = Pos2::new(w.at(15_000, 0.0).x, ruler.center().y);
+        w.click(at);
+        let theirs = w.app.mini_preview.cursor_ms;
+        assert!((14_500..15_500).contains(&theirs), "{theirs}");
+        let position = w.latest_state()["user_position"].clone();
+        assert_eq!(position["navigating"], true);
+        assert_eq!(position["line"]["index"], 1);
+        // The agent's seek waits, and is applied once the 3 s are over.
+        let start = Instant::now();
+        let answer = w.act(2, Action::Seek { ms: 2_000 });
+        assert!(
+            matches!(answer, ToServer::Done { error: None, .. }),
+            "{answer:?}"
+        );
+        assert!(
+            start.elapsed() >= Duration::from_millis(2_000),
+            "{:?}",
+            start.elapsed()
+        );
+        assert_eq!(w.app.mini_preview.cursor_ms, 2_000);
+        // A gesture of the person within the wait restarts it: refused.
+        w.click(at);
+        w.send(&ToApp::Act {
+            id: 3,
+            action: Action::Seek { ms: 1_000 },
+        });
+        // Queued while the person navigates...
+        for _ in 0..5 {
+            w.frame(vec![]);
+        }
+        std::thread::sleep(Duration::from_millis(1_300));
+        // ...who navigates again before the wait is over.
+        w.click(at);
+        let answer = w.next().expect("an answer");
+        assert_eq!(
+            refusal_code(&answer),
+            Some("app.user_navigating"),
+            "{answer:?}"
+        );
+        let ToServer::Done { error: Some(e), .. } = answer else {
+            unreachable!()
+        };
+        let details = e.details.unwrap();
+        assert!(details["retry_after_ms"].as_u64().is_some(), "{details}");
+        assert_eq!(details["user_position"]["navigating"], true);
+        assert!((14_500..15_500).contains(&w.app.mini_preview.cursor_ms));
+    }
+
+    #[test]
+    fn a_look_writes_a_png_and_never_over_a_file() {
+        let mut w = window(true);
+        let folder = tempfile::tempdir().unwrap();
+        let output = folder.path().join("look.png");
+        w.send(&ToApp::Look {
+            id: 7,
+            scope: driven::LookScope::Monitor,
+            at_ms: Some(3_000),
+            output: output.clone(),
+        });
+        // Headless: no screenshot comes back by itself; answer the window's
+        // request as eframe does.
+        let mut answered = false;
+        for _ in 0..200 {
+            let mut events = vec![];
+            if let Some(job) = w.app.driven.as_ref().and_then(|d| d.look.as_ref())
+                && job.look.requested
+            {
+                events.push(Event::Screenshot {
+                    viewport_id: egui::ViewportId::ROOT,
+                    user_data: egui::UserData::new(job.id),
+                    image: std::sync::Arc::new(egui::ColorImage::filled(
+                        [980, 850],
+                        egui::Color32::from_rgb(10, 20, 30),
+                    )),
+                });
+                answered = true;
+            }
+            w.frame(events);
+            if answered {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(answered, "the look asked for a screenshot");
+        let answer = w.next().expect("an answer");
+        let ToServer::Done {
+            id: 7,
+            result: Some(result),
+            error: None,
+        } = answer
+        else {
+            panic!("{answer:?}")
+        };
+        assert_eq!(w.app.mini_preview.cursor_ms, 3_000);
+        let monitor = w.app.driven.as_ref().unwrap().monitor.unwrap().0;
+        assert_eq!(result["width"], monitor.width().round() as u64);
+        let decoded = image::open(&output).unwrap();
+        assert_eq!(decoded.width() as u64, result["width"].as_u64().unwrap());
+        // The same path again: refused, the file untouched.
+        let before = std::fs::read(&output).unwrap();
+        w.send(&ToApp::Look {
+            id: 8,
+            scope: driven::LookScope::Window,
+            at_ms: None,
+            output: output.clone(),
+        });
+        let answer = w.next().expect("an answer");
+        assert_eq!(refusal_code(&answer), Some("app.output_invalid"));
+        assert_eq!(std::fs::read(&output).unwrap(), before);
+    }
+
+    #[test]
+    fn a_destructive_answer_needs_the_person_s_confirmation() {
+        use driven::{Action, Answer};
+        let mut w = window(true);
+        w.app
+            .edit_track(|t| noh::subtitle_edit::set_text(t, 0, "Changed by the agent"));
+        assert_eq!(w.app.open_question(), Some("first_edit"));
+        let answer = w.act(
+            1,
+            Action::Answer {
+                answer: Answer::ModifySrt,
+                user_confirmed: false,
+            },
+        );
+        assert_eq!(refusal_code(&answer), Some("app.confirmation_required"));
+        assert_eq!(w.app.open_question(), Some("first_edit"));
+        let answer = w.act(
+            2,
+            Action::Answer {
+                answer: Answer::KeepSrt,
+                user_confirmed: true,
+            },
+        );
+        assert_eq!(refusal_code(&answer), Some("app.no_such_question"));
+        let answer = w.act(
+            3,
+            Action::Answer {
+                answer: Answer::ModifySrt,
+                user_confirmed: true,
+            },
+        );
+        assert!(
+            matches!(answer, ToServer::Done { error: None, .. }),
+            "{answer:?}"
+        );
+        assert_eq!(w.app.open_question(), None);
+        let source = w.app.project.track.path.clone().unwrap();
+        assert!(
+            std::fs::read_to_string(source)
+                .unwrap()
+                .contains("Changed by the agent")
         );
     }
 

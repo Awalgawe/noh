@@ -57,6 +57,9 @@ cargo --offline dev verify --media --mcp --offline
 | `noh_cancel` | `job_id` | Cancellation request/current status |
 | `noh_list_effects` | none | The caption effects `effect.id` can name, their presets and settings, the folders read and refused |
 | `noh_app_open` | `title` | A NOH window the agent drives: `app_id`, its state and every window of this session |
+| `noh_app_do` | `app_id`, `action` | One gesture in the window; the state revision it led to |
+| `noh_app_state` | `app_id`; optional `after_revision`, `wait_ms` | What the window shows, as data, with `user_position` |
+| `noh_app_look` | `app_id`, `output`; optional `scope`, `at_ms` | A PNG of the window or its monitor, written to a free path |
 | `noh_app_close` | `app_id` | The window closed, or why nothing was closed |
 
 `noh_transcribe` processes an explicitly selected local audio file or the first
@@ -260,6 +263,25 @@ for other programs. At most 8 windows per server, 4 when graphics memory cannot
 be read. A refusal (`app.cap_reached`) gives the figures. Windows the person took
 back or closed by hand still count while they run: they are still this server's
 children.
+
+The agent acts with `noh_app_do`: `add` (files, as a drop), `set_photo_duration`,
+`edit_line` (`set_text`, `set_start`, `set_end`, `shift`, `add`, `delete`, with an
+optional `based_on` lyrics revision: lyrics reloaded since are not changed,
+`app.state_changed`), `undo`, `redo`, `choose_effect`, `set_safe_area`,
+`set_range`, `seek`, `play`, `pause` and `answer` (the open question; answers that
+rewrite or replace a file need `user_confirmed`, after asking the person). Each
+gesture calls what the matching click calls and answers with the state revision
+it led to. `noh_app_state` gives what the window shows, as data, by revision (it
+can wait up to 30 s for a newer one); position-only changes during playback are
+sent at most 4 times a second. Its `user_position` says where the person is: the
+playhead, playing or not, the view, the clip and lyrics line under the playhead,
+and what they clicked to point it out. The playhead is shared: while the person
+navigates, and for 3 s after their last gesture on it (or as long as they play),
+the agent's `seek`, `play`, `pause` and `look` at a time wait, then are refused
+with `app.user_navigating` and `retry_after_ms`. `noh_app_look` writes a PNG of
+the window or of its monitor to a free path: the screen as it is, or after moving
+the playhead to `at_ms`. It shows NOH's preview, not the exported pixels, and is
+refused while the window is minimized (`app.hidden`).
 
 `noh_app_close` writes pending lyrics changes first and never discards
 anything: with a question open in the window, or one the write needs (the first
