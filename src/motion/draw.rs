@@ -133,7 +133,7 @@ impl Block {
     }
 
     /// The anchor in the block's box, in canvas pixels from its top-left corner.
-    fn anchor_px(&self, width: f32, height: f32, baseline: f32) -> (f32, f32) {
+    pub(crate) fn anchor_px(&self, width: f32, height: f32, baseline: f32) -> (f32, f32) {
         let fx = match self.anchor.as_str() {
             "baseline" => 0.5,
             "baseline_left" => 0.0,
@@ -389,7 +389,7 @@ impl EmitterDraw {
     }
 
     /// Indices of the particles that may be alive at `t` (first..=last), if any.
-    fn births(&self, t: f64) -> Option<(u32, u32)> {
+    pub(crate) fn births(&self, t: f64) -> Option<(u32, u32)> {
         let (rate, life) = (self.rate.max(0.0) as f64, self.life.max(0.01) as f64);
         if rate <= 0.0 || t < self.start || t > self.end + life {
             return None;

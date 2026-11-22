@@ -3,6 +3,7 @@
 //! by the preview and the export, and the export's YUV mix and Matroska writer.
 //! No egui code lives here; the GUI draws the compositor's output itself.
 pub mod catalog;
+pub mod compose;
 pub mod export;
 pub mod gl;
 pub mod line;

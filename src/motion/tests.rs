@@ -1038,3 +1038,307 @@ fn the_example_scenes_count_what_the_prototype_counted() {
         );
     }
 }
+
+/// The hooks NOH gives the engine for scenes stay inside the plugin profile.
+#[test]
+fn the_motion_hooks_are_inside_the_plugin_shader_profile() {
+    crate::fx::plugin_shader::validate(super::paint::MOTION_HOOKS).unwrap();
+}
+
+/// An atlas that uploads nowhere: enough to lay out, rasterise and pack letters.
+struct NoGpu;
+impl crate::fx::shaders::Upload for NoGpu {
+    fn upload_cov(&self, _: u32, _: u32, _: u32, _: u32, _: &[u8]) {}
+    fn upload_msdf(&self, _: u32, _: u32, _: u32, _: u32, _: &[u8]) {}
+}
+
+/// A text the validation never saw (an instant off the grid) is laid out and
+/// rasterised on its first frame, whole; a scene whose letters would not fit
+/// the glyph atlas is refused when it is prepared.
+#[test]
+fn a_text_first_seen_after_validation_is_drawn_whole_and_a_full_atlas_is_refused() {
+    use super::paint::Painter;
+    let mut p = Painter::new(1920, 1080, fonts());
+    let scene = load_at(
+        "fn frame(t, ctx) { draw(text(\"never validated\").size(0.08).scale(2.0)); }",
+        1920,
+        1080,
+    )
+    .unwrap();
+    let f = scene.frame(0.0).unwrap();
+    let (_, main, stats) = p.paint(&NoGpu, &f.draws, 0.0).unwrap();
+    assert_eq!(stats.glyphs, "nevervalidated".len());
+    assert_eq!((main.len(), stats.layouts), (stats.glyphs, 1));
+    // Large letters at four times their size, in many sizes: past the budget.
+    let needs: Vec<(Block, f32)> = (0..60)
+        .map(|i| {
+            let mut b = Block::new("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+            b.size = 0.2 + i as f32 * 0.002;
+            (b, 4.0)
+        })
+        .collect();
+    let e = Painter::new(1920, 1080, fonts())
+        .prepare(&NoGpu, &needs)
+        .unwrap_err();
+    assert!(e.contains("glyph atlas"), "{e}");
+}
+
+/// A frame whose new letters fill the glyph atlas makes it start over: that
+/// frame is refused, so that no letter laid before the reset (in the frame or
+/// in the painter's cache) is drawn with its old place in the atlas; the next
+/// frame lays its letters again, in the fresh atlas.
+#[test]
+fn a_frame_that_fills_the_glyph_atlas_is_refused_and_the_next_lays_its_letters_again() {
+    use super::paint::Painter;
+    let mut p = Painter::new(1920, 1080, fonts());
+    let kept = load_at(
+        "fn frame(t, ctx) { draw(text(\"kept\").size(0.08)); }",
+        1920,
+        1080,
+    )
+    .unwrap()
+    .frame(0.0)
+    .unwrap();
+    let mut needs = Vec::new();
+    if let super::draw::Draw::Text(td) = &kept.draws[0] {
+        needs.push((td.block.clone(), 1.0));
+    }
+    p.prepare(&NoGpu, &needs).unwrap();
+    assert_eq!(p.paint(&NoGpu, &kept.draws, 0.0).unwrap().2.layouts, 0);
+    // Letters the size of the frame at four times their size, never prepared:
+    // the atlas fills within a few of them.
+    let mut refused = None;
+    for (k, c) in ('A'..='Z').enumerate() {
+        let f = load_at(
+            &format!("fn frame(t, ctx) {{ draw(text(\"kept\").size(0.08)); draw(text(\"{c}{c}\").size(1.0).scale(4.0)); }}"),
+            1920,
+            1080,
+        )
+        .unwrap()
+        .frame(0.0)
+        .unwrap();
+        if let Err(e) = p.paint(&NoGpu, &f.draws, 0.0) {
+            refused = Some((k, e));
+            break;
+        }
+    }
+    let (k, e) = refused.expect("the atlas never filled up");
+    assert!(e.contains("glyph atlas filled up"), "{e}");
+    assert!(
+        k > 0,
+        "refused at the first large letter: the atlas was not tested full"
+    );
+    // The prepared text is laid again (not drawn from the stale cache).
+    assert_eq!(p.paint(&NoGpu, &kept.draws, 0.0).unwrap().2.layouts, 1);
+}
+
+/// Draws a scene's frame through the engine and the compositor.
+fn render(src: &str, w: u32, h: u32, canvas: (u32, u32), t: f64) -> Vec<u8> {
+    use super::paint::{MOTION_HOOKS, Painter, draw_frame};
+    use crate::fx::compose::Compositor;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
+    let mut gpu =
+        GlRenderer::headless(w, h, canvas.0 as f32, canvas.1 as f32, Output::PremulGamma).unwrap();
+    gpu.set_hooks(Some(MOTION_HOOKS), [0.0; 16]).unwrap();
+    let mut comp = Compositor::new(&gpu).unwrap();
+    let mut painter = Painter::new(canvas.0, canvas.1, fonts());
+    let scene = load_at(src, canvas.0, canvas.1).unwrap();
+    // As a real render does: validate, then prepare every layout at the
+    // largest scale it reaches.
+    let mut checker = Checker::new(fonts(), canvas.0, canvas.1);
+    validate(
+        &scene,
+        &mut checker,
+        &fonts(),
+        &grid(0.0, 2.0, 24.0),
+        [0.0, 0.0, 1.0, 1.0],
+        canvas,
+    )
+    .unwrap();
+    painter.prepare(&gpu, &checker.blocks()).unwrap();
+    let f = scene.frame(t).unwrap();
+    draw_frame(&mut gpu, &mut painter, &mut comp, &f.draws, &f.layers, t).unwrap();
+    comp.read()
+}
+
+fn worst_difference(a: &[u8], b: &[u8]) -> (u8, usize) {
+    assert_eq!(a.len(), b.len());
+    a.iter().zip(b).fold((0, 0), |(w, n), (x, y)| {
+        let d = x.abs_diff(*y);
+        (w.max(d), n + usize::from(d > 0))
+    })
+}
+
+/// The checks that draw through OpenGL, in one test: the engine's hidden context
+/// belongs to the thread that made it first.
+#[test]
+#[ignore = "needs OpenGL 3.3"]
+fn motion_gpu_checks() {
+    layers_at_full_opacity_stack_like_one_pass();
+    dissolve_is_the_same_at_every_pixel_scale();
+    frames_match_the_prototype();
+    compositor_memory();
+}
+
+/// What the compositor holds on the GPU: its two targets, as counted; and, where
+/// the driver tells (NVIDIA's memory info), what the driver saw taken.
+fn compositor_memory() {
+    use crate::fx::compose::Compositor;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
+    use glow::HasContext;
+    const AVAILABLE_KB: u32 = 0x9049; // GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX
+    let gpu = GlRenderer::headless(1920, 1080, 1920.0, 1080.0, Output::PremulGamma).unwrap();
+    let gl = gpu.context().clone();
+    let free = || unsafe {
+        let v = gl.get_parameter_i32(AVAILABLE_KB);
+        (gl.get_error() == glow::NO_ERROR).then_some(i64::from(v))
+    };
+    let before = free();
+    let comp = Compositor::new(&gpu).unwrap();
+    unsafe { gl.finish() };
+    let after = free();
+    assert_eq!(comp.bytes(), 1920 * 1080 * 12);
+    match (before, after) {
+        (Some(b), Some(a)) => eprintln!(
+            "compositor at 1920 x 1080: {} MiB counted, {} MiB taken as the driver reports",
+            comp.bytes() / (1024 * 1024),
+            (b - a) / 1024
+        ),
+        _ => eprintln!(
+            "compositor at 1920 x 1080: {} MiB counted (the driver gives no memory info)",
+            comp.bytes() / (1024 * 1024)
+        ),
+    }
+}
+
+/// Layers at full opacity stack like one pass: each pass is read from the
+/// engine's half-float layer, so cutting a scene into layers costs at most one
+/// level of 255 (the prototype, reading 8-bit passes, was off by 3).
+fn layers_at_full_opacity_stack_like_one_pass() {
+    // Past 2 s every layer is at full opacity; the flat scene draws the same
+    // draws, in the same order, with no layer.
+    let layered = render(&fixture("layers.rhai"), 1916, 1080, (1916, 1080), 2.5);
+    let flat = render(
+        "fn frame(t, ctx) {\n\
+         draw(rect(0.7, 0.22).at(0.5, 0.5).color(\"#101828\").opacity(0.8));\n\
+         draw(rect(0.7, 0.012).at(0.5, 0.39).color(\"#C8102E\"));\n\
+         draw(text(\"FIRST\").size(0.14).at(0.46, 0.5).color(\"#F2E8D8\"));\n\
+         draw(text(\"LIGHT\").size(0.14).at(0.54, 0.52).color(\"#C8102E\"));\n\
+         draw(text(\"three layers\").size(0.03).at(0.5, 0.66).opacity(0.7)); }",
+        1916,
+        1080,
+        (1916, 1080),
+        2.5,
+    );
+    let (worst, differing) = worst_difference(&layered, &flat);
+    eprintln!("layers vs one pass: worst {worst}/255, {differing} bytes differ");
+    assert!(worst <= 1, "worst {worst}/255 on {differing} bytes");
+}
+
+/// Mean alpha of each block of `n` x `n` pixels.
+fn blocks(px: &[u8], w: usize, h: usize, n: usize) -> Vec<f64> {
+    let mut out = Vec::new();
+    for by in 0..h / n {
+        for bx in 0..w / n {
+            let mut s = 0u64;
+            for y in by * n..(by + 1) * n {
+                for x in bx * n..(bx + 1) * n {
+                    s += u64::from(px[(y * w + x) * 4 + 3]);
+                }
+            }
+            out.push(s as f64 / (n * n) as f64);
+        }
+    }
+    out
+}
+
+/// A dissolving title dissolves alike at two pixel scales of the same canvas
+/// (the preview draws the export's canvas at the monitor's size): its noise
+/// comes from where the pixel is on the canvas, not from the glyph atlas.
+/// Compared block by block (16 canvas pixels, a few grains of the noise): a
+/// noise laid differently would leave other blocks dissolved; a 0.05 change of
+/// the dissolve is the scale of difference the check must stay under.
+fn dissolve_is_the_same_at_every_pixel_scale() {
+    let at = |d: f64| {
+        format!(
+            "fn frame(t, ctx) {{ draw(text(\"DISSOLVE\").size(0.3).dissolve({d:.2}).color(\"#FFFFFF\")); }}"
+        )
+    };
+    let big = blocks(
+        &render(&at(0.45), 1280, 720, (1280, 720), 0.0),
+        1280,
+        720,
+        16,
+    );
+    let small = blocks(&render(&at(0.45), 640, 360, (1280, 720), 0.0), 640, 360, 8);
+    let shifted = blocks(
+        &render(&at(0.50), 1280, 720, (1280, 720), 0.0),
+        1280,
+        720,
+        16,
+    );
+    let mean = |a: &[f64], b: &[f64]| {
+        let (s, n) = a
+            .iter()
+            .zip(b)
+            .filter(|(x, y)| **x > 0.0 || **y > 0.0)
+            .fold((0.0, 0), |(s, n), (x, y)| (s + (x - y).abs(), n + 1));
+        s / f64::from(n.max(1))
+    };
+    let scales = mean(&big, &small);
+    let step = mean(&big, &shifted);
+    eprintln!(
+        "dissolve: two pixel scales differ by {scales:.2}/255 per block; dissolve 0.45 vs 0.50 by {step:.2}/255"
+    );
+    assert!(scales < step / 2.0, "scales {scales}, step {step}");
+}
+
+/// What NOH draws matches what the prototype drew, scene by scene, at the
+/// prototype's size (its `--compare … --dump` images; their folder is given by
+/// NOH_MOTION_PROTOTYPE_REF, a local check: the images are not in the
+/// repository). Dissolving text is left out: its noise now comes from the
+/// canvas, not from the atlas, so it is a different noise by design. With
+/// layers at full opacity the reference is the prototype's
+/// one-pass image (`-old`): its layered one (`-new`) carries the 8-bit error of
+/// its passes (its own log: 11 bytes off by 3 at 2.5 s), which NOH no longer has.
+fn frames_match_the_prototype() {
+    let Some(dir) = std::env::var_os("NOH_MOTION_PROTOTYPE_REF").map(std::path::PathBuf::from)
+    else {
+        eprintln!("NOH_MOTION_PROTOTYPE_REF not set: nothing compared with the prototype");
+        return;
+    };
+    for (name, t, which) in [
+        ("layers", 0.5, "new"),
+        ("layers", 1.0, "new"),
+        ("layers", 2.5, "old"),
+        ("worst_particles", 5.0, "new"),
+        ("worst_particles", 6.0, "new"),
+        ("text_passes", 0.5, "new"),
+        ("text_passes", 1.0, "new"),
+        ("text_passes", 2.5, "new"),
+    ] {
+        let ours = render(
+            &fixture(&format!("{name}.rhai")),
+            1916,
+            1080,
+            (1916, 1080),
+            t,
+        );
+        let theirs = std::fs::read(dir.join(format!("{name}-{t:.2}-{which}.rgba"))).unwrap();
+        let (worst, differing) = worst_difference(&ours, &theirs);
+        let above2 = ours
+            .iter()
+            .zip(&theirs)
+            .filter(|(a, b)| a.abs_diff(**b) > 2)
+            .count();
+        eprintln!(
+            "{name} at {t:.2} ({which}): worst {worst}/255, {differing} bytes differ, {above2} by more than 2"
+        );
+        assert!(
+            above2 == 0,
+            "{name} at {t}: {above2} bytes off by more than 2 (worst {worst})"
+        );
+    }
+}
