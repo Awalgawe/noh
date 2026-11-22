@@ -11,12 +11,14 @@
 //!   a list of instants, checked, then asked again in another order.
 //! - `thread`: the one thread that loads and evaluates a scene, with a stack of
 //!   a fixed size, the same in the export worker and in the window.
+//! - `paint`: a frame's draws as instances of the engine (`crate::fx`), its
+//!   passes stacked by `crate::fx::compose`.
 //!
-//! Nothing here draws: painting belongs to `crate::fx`. Reframing the picture and
-//! layer shaders are refused for now, with the reason.
+//! Reframing the picture and layer shaders are refused for now, with the reason.
 pub mod audio;
 pub mod check;
 pub mod draw;
+pub mod paint;
 pub mod script;
 pub mod shapes;
 pub mod thread;
