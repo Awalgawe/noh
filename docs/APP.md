@@ -79,7 +79,8 @@ means your position. While you move through the video the agent does not move
 the playhead. Everything else is the agent's: ask it in the conversation.
 **Stop driving** in the badge, or closing the window, makes it an ordinary NOH
 window again, yours. When the agent's session ends the window stays open as an
-ordinary NOH.
+ordinary NOH. If such a window fails, it shows no error dialog (nobody may be
+there to close it): the agent is told why, and `startup.log` keeps the reason.
 
 ## Before closing
 

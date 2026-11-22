@@ -384,13 +384,20 @@ impl Apps {
         );
         let deadline = Instant::now() + shared.timing.ready;
         let mut state = shared.state.lock().unwrap();
+        // The process may be seen ended before its last lines are read (a
+        // `failed` with its reason): its output's end is then waited for, a
+        // moment at most; the reader marks it once every line is read.
+        let mut ended_at: Option<Instant> = None;
         loop {
             let window = find(&mut state.windows, &id).expect("an opening window is kept");
             window.refresh();
+            if window.exit.is_some() && ended_at.is_none() {
+                ended_at = Some(Instant::now());
+            }
             if window.version.is_some()
                 || window.failure.is_some()
                 || window.pipe_ended
-                || window.exit.is_some()
+                || ended_at.is_some_and(|at| at.elapsed() >= Duration::from_secs(1))
             {
                 break;
             }
@@ -978,6 +985,29 @@ mod tests {
         assert!(start.elapsed() >= timing().ready);
         assert!(*h.processes.lock().unwrap()[0].killed.lock().unwrap());
         assert!(h.apps.windows().is_empty());
+    }
+
+    #[test]
+    fn a_failure_read_after_the_exit_still_says_why() {
+        // The process is seen ended before the reader has the `failed` line.
+        let h = harness(
+            |input, mut output, process| {
+                *process.exit.lock().unwrap() = Some(Some(1));
+                thread::sleep(Duration::from_millis(200));
+                send(
+                    &mut output,
+                    &ToServer::Failed {
+                        reason: "OpenGL 2.0 is not available".into(),
+                    },
+                );
+                drop(output);
+                let _ = input.bytes().count();
+            },
+            roomy(),
+            None,
+        );
+        let error = h.apps.open("Late reason").unwrap_err();
+        assert_eq!(error.code, "app.start_failed", "{error:?}");
     }
 
     #[test]
