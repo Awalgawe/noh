@@ -1661,6 +1661,7 @@ mod tests {
         assert!(ok(&w.act(7, Action::SetConvertAll { convert_all: true })));
         assert!(!w.app.partial);
         // The short's framing and loops.
+        let short_revision = w.app.project.short_revision;
         let answer = w.act(
             8,
             Action::SetFraming {
@@ -1671,6 +1672,10 @@ mod tests {
         assert!(ok(&answer), "{answer:?}");
         assert_eq!(w.app.project.framing, noh::shorts::Framing::Crop);
         assert!(w.app.project.restart_loops);
+        assert_ne!(
+            w.app.project.short_revision, short_revision,
+            "the short is a new one"
+        );
         // The destination: an absolute .mp4 in a folder that exists.
         let folder = tempfile::tempdir().unwrap();
         let path = folder.path().join("final.mp4");

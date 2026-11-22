@@ -643,11 +643,18 @@ impl NohApp {
                 framing,
                 restart_loops,
             } => {
+                let before = (self.project.restart_loops, self.project.framing);
                 if let Some(framing) = framing {
                     self.project.framing = framing;
                 }
                 if let Some(on) = restart_loops {
                     self.project.restart_loops = on;
+                }
+                // As the range row does: only the short changes, one revision.
+                if before != (self.project.restart_loops, self.project.framing) {
+                    self.project.short_revision = self.project.short_revision.wrapping_add(1);
+                    self.project.failure = None;
+                    self.project.outcome = None;
                 }
                 self.driven_mark();
                 Ok(serde_json::Value::Null)
