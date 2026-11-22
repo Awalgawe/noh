@@ -53,8 +53,11 @@ With NOH's MCP tools (or the same options on the command line, `docs/CLI.md`):
    instead of the captions (the scene draws the lyrics itself).
 
 For a **vertical** video, the safe area of the platform is required: ask the user
-which platform the video is for (propose YouTube Shorts); the scene reads it as
-`ctx.safe_x0` … `ctx.safe_y1`.
+which platform the video is for (propose YouTube Shorts). If you cannot ask yet,
+draft with `universal` (the strictest: it fits all three platforms) and ask before
+the export. The scene reads it as `ctx.safe_x0` … `ctx.safe_y1`; `report.json`,
+`look.json` and `measure.json` give its values for the video (fractions of the
+frame).
 
 NOH runs one job at a time: a look started while an export runs is refused
 (busy); start it again when the export is done.
@@ -84,7 +87,8 @@ no files. A call to anything not listed here is refused when the scene is checke
 - A small table is written with `pick(i, a, b, c)`: the i-th value (2 to 5 decimal
   values, or 2 to 4 strings; the last one when `i` is beyond them).
 - Maths: `sin`, `cos`, `abs`, `sqrt`, `exp`, `floor`, `round`, `pow(x, y)`,
-  `min(a, b)`, `max(a, b)`, `pi()`, written `x.sin()` or `sin(x)`.
+  `atan2(y, x)` (the angle of a direction, in radians), `min(a, b)`, `max(a, b)`,
+  `pi()`, written `x.sin()` or `sin(x)`.
 - Shaping: `clampf(x, lo, hi)`, `mixf(a, b, x)`, `smooth(a, b, x)` (0 before `a`, 1
   after `b`, eased between), `ease(name, x)` with `x` in 0..1 and `name` among
   `linear`, `ease_in`, `ease_out`, `ease_in_out`, `ease_in_cubic`, `ease_out_cubic`,
@@ -130,6 +134,9 @@ changes that variable.
 
 Per word (`k` counts words from 0, at most 32 per text): `.word(k, opacity, dy,
 scale)` (`dy` in em, positive down), `.word_dissolve(k, v)`, `.word_color(k, c)`.
+A word's own dissolve replaces the text's `.dissolve` for that word (it does not
+add to it): to dissolve a whole line whose words have their own dissolve, fold the
+line's value into each word's.
 
 The block's box is as wide as its widest line and as high as its lines (the line
 height times the size, so it holds the room above and below the letters). Words of
@@ -262,9 +269,11 @@ Keep handing the particles over until the last one has left (`b + life`, or the
   `onset(i)`: their times. There is no tempo and no beat grid. A video without sound
   has energy 0 and no onset, and the check says so.
 
-Word times come from the lyrics file beside the subtitles where it has them; the
-check says when they are **estimated** (spread over the line by letter count):
-estimated times are not good enough for tight word-by-word effects.
+Word times come from the lyrics file NOH keeps beside the subtitles
+(`<name>.noh-lyrics.json`, created beside an `.srt` given alone), where they were
+measured: by NOH's own lyrics screen or a transcription. Elsewhere the check says they
+are **estimated** (spread over the line by letter count): good enough for soft
+word-by-word effects, not for tight ones.
 
 ```rhai
 fn line(t, i, y) {

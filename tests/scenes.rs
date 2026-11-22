@@ -177,6 +177,11 @@ fn scene_jobs_check_look_burn_clip_and_refuse() {
     assert!(report["frames"].as_u64().unwrap() >= 70, "{report}");
     assert!(report["max"]["paths"].as_u64().unwrap() >= 1, "{report}");
     assert!(report["frame_ms"]["p95"].as_f64().is_some(), "{report}");
+    assert_eq!(report["safe_area"]["name"], "none", "{report}");
+    assert_eq!(
+        report["safe_area"]["x0_y0_x1_y1"],
+        serde_json::json!([0.0, 0.0, 1.0, 1.0])
+    );
 
     // Looks: stills, a strip with its sheet, a measure.
     ok(&scene_job(
