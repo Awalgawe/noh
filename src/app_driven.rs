@@ -981,7 +981,10 @@ mod tests {
         }
         /// The next message from the window, frames running meanwhile.
         fn next(&mut self) -> Option<ToServer> {
-            let deadline = Instant::now() + Duration::from_secs(5);
+            self.next_within(Duration::from_secs(5))
+        }
+        fn next_within(&mut self, limit: Duration) -> Option<ToServer> {
+            let deadline = Instant::now() + limit;
             loop {
                 self.frame(vec![]);
                 if let Ok(message) = self.from_app.recv_timeout(Duration::from_millis(20)) {
@@ -1557,6 +1560,44 @@ mod tests {
         let answer = w.next().expect("an answer");
         assert_eq!(refusal_code(&answer), Some("app.output_invalid"));
         assert_eq!(std::fs::read(&output).unwrap(), before);
+    }
+
+    #[test]
+    fn a_job_a_question_and_a_lost_picture_are_answered() {
+        use driven::Action;
+        let mut w = window(true);
+        // A job running: what the interface locks is refused.
+        w.app.cancelling = true;
+        let answer = w.act(
+            1,
+            Action::SetRange {
+                start_ms: Some(1_000),
+                end_ms: Some(4_000),
+            },
+        );
+        assert_eq!(refusal_code(&answer), Some("app.job_running"));
+        w.app.cancelling = false;
+        // A question open: no files are added under it.
+        w.app
+            .edit_track(|t| noh::subtitle_edit::set_text(t, 0, "Changed by the agent"));
+        let folder = tempfile::tempdir().unwrap();
+        let other = folder.path().join("other.srt");
+        std::fs::write(&other, "1\n00:00:01,000 --> 00:00:02,000\nOther\n\n").unwrap();
+        let answer = w.act(2, Action::Add { paths: vec![other] });
+        assert_eq!(refusal_code(&answer), Some("app.question_open"));
+        // A look whose picture never comes fails, and the next one is served.
+        let output = folder.path().join("never.png");
+        w.send(&ToApp::Look {
+            id: 3,
+            scope: driven::LookScope::Window,
+            at_ms: None,
+            output,
+        });
+        let start = Instant::now();
+        let answer = w.next_within(Duration::from_secs(8)).expect("an answer");
+        assert_eq!(refusal_code(&answer), Some("app.look_failed"), "{answer:?}");
+        assert!(start.elapsed() >= Duration::from_secs(4));
+        assert!(w.app.driven.as_ref().unwrap().look.is_none());
     }
 
     #[test]

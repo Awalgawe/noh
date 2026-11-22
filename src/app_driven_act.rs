@@ -18,6 +18,9 @@ pub(super) const NAVIGATION: Duration = Duration::from_secs(3);
 const POSITION_EVERY: Duration = Duration::from_millis(250);
 /// How long `look` with `at_ms` waits for the picture at T.
 const SETTLE: Duration = Duration::from_secs(2);
+/// A look whose screenshot has not come by then fails (the window was
+/// minimized after the request, or no picture came).
+const LOOK_LIMIT: Duration = Duration::from_secs(5);
 /// A `state` line stays well under the server's line limit.
 const STATE_BYTES: usize = 60 * 1024;
 /// Lyrics lines listed in `state`, and the characters kept of each.
@@ -58,6 +61,8 @@ pub(super) struct Look {
     pub frames: u8,
     /// The screenshot was asked for.
     pub requested: bool,
+    /// When the look started waiting for its picture.
+    pub started: Instant,
 }
 
 pub(super) struct LookJob {
@@ -144,6 +149,7 @@ impl NohApp {
             settle_until: None,
             frames: 0,
             requested: false,
+            started: Instant::now(),
         };
         if at_ms.is_some() {
             self.driven_queue(ctx, id, Playhead::Look(look));
@@ -165,9 +171,23 @@ impl NohApp {
         self.driven_pending(ctx);
     }
 
-    /// Each frame: the playhead gestures waiting for the person, then the
-    /// look under way.
+    /// Each frame: a look that waited too long for its picture fails; the
+    /// playhead gestures waiting for the person are applied or refused.
     pub(super) fn driven_pending(&mut self, ctx: &egui::Context) {
+        let stale = self
+            .driven
+            .as_ref()
+            .and_then(|d| d.look.as_ref())
+            .is_some_and(|job| job.look.started.elapsed() >= LOOK_LIMIT);
+        if stale && let Some(job) = self.driven.as_mut().and_then(|d| d.look.take()) {
+            self.driven_answer(
+                job.id,
+                Err(refusal(
+                    "app.look_failed",
+                    "No picture came in time (the window may have been minimized). Try again.",
+                )),
+            );
+        }
         let Some(d) = &mut self.driven else {
             return;
         };
@@ -240,6 +260,7 @@ impl NohApp {
                     self.driven_mark();
                     look.settle_until = Some(Instant::now() + SETTLE);
                 }
+                look.started = Instant::now();
                 if let Some(d) = &mut self.driven {
                     d.look = Some(LookJob { id, look });
                 }
@@ -355,16 +376,34 @@ impl NohApp {
         action: Action,
     ) -> Result<serde_json::Value, Refusal> {
         let refused = |message: &str| Err(refusal("app.refused", message));
+        // What the interface locks while a job runs is refused too.
+        let locked_by_job = matches!(
+            action,
+            Action::Add { .. }
+                | Action::SetPhotoDuration { .. }
+                | Action::ChooseEffect { .. }
+                | Action::SetSafeArea { .. }
+                | Action::SetRange { .. }
+        );
+        if locked_by_job && self.busy() {
+            return Err(refusal(
+                "app.job_running",
+                "A job is running: this cannot change until it ends or is cancelled.",
+            ));
+        }
         match action {
             Action::Add { paths } => {
                 if paths.is_empty() || paths.iter().any(|p| !p.is_absolute() || !p.exists()) {
                     return refused("Every path must be absolute and exist.");
                 }
-                if self.busy() {
-                    return Err(refusal(
-                        "app.job_running",
-                        "A job is running: files cannot be added now.",
-                    ));
+                if let Some(kind) = self.open_question() {
+                    // A drop could replace the lyrics the question is about.
+                    let mut refusal = refusal(
+                        "app.question_open",
+                        "A question is open in the window: answer it before adding files.",
+                    );
+                    refusal.details = Some(serde_json::json!({ "question": kind }));
+                    return Err(refusal);
                 }
                 self.drop_files(paths, ctx);
                 self.driven_mark();
