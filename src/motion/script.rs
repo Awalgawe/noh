@@ -57,6 +57,7 @@ pub const FUNCTIONS: &[&str] = &[
     "align",
     "anchor",
     "at",
+    "atan2",
     "caps",
     "circle",
     "clampf",
@@ -696,6 +697,8 @@ fn register_basics(e: &mut Engine) {
     e.register_fn("floor", |x: f64| x.floor());
     e.register_fn("round", |x: f64| x.round());
     e.register_fn("pow", |x: f64, y: f64| x.powf(y));
+    // The angle of the point (x, y) from the x axis, in radians (−π to π).
+    e.register_fn("atan2", |y: f64, x: f64| y.atan2(x));
     e.register_fn("min", |a: f64, b: f64| a.min(b));
     e.register_fn("max", |a: f64, b: f64| a.max(b));
     e.register_fn("pi", || std::f64::consts::PI);

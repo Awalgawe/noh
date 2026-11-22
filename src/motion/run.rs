@@ -148,6 +148,15 @@ fn report_json(r: &Report) -> serde_json::Value {
     })
 }
 
+/// The safe area the scene reads (`ctx.safe_x0` … `ctx.safe_y1`), named and as
+/// fractions of the frame.
+fn safe_json(request: &SceneRequest, (w, h): (u32, u32)) -> serde_json::Value {
+    json!({
+        "name": serde_json::to_value(request.safe_area).unwrap_or_default(),
+        "x0_y0_x1_y1": super::song::safe_fractions(request.safe_area, w, h),
+    })
+}
+
 /// The instants of a check timed whole: where the counted maxima and the worst
 /// script frame fell, then spread evenly, `TIMED_FRAMES` at most.
 fn timed_instants(l: &Loaded) -> Vec<f64> {
@@ -183,6 +192,7 @@ fn check(request: &SceneRequest, l: Loaded, dir: &Path) -> Result<(), EngineErro
     out["canvas"] = json!([l.size.0, l.size.1]);
     out["interval_s"] = json!([l.from, l.to]);
     out["fps"] = json!(l.fps);
+    out["safe_area"] = safe_json(request, l.size);
     out["notes"] = json!(l.notes);
     let instants = timed_instants(&l);
     let (w, h) = l.size;
@@ -451,7 +461,7 @@ fn look(
             dir,
             "measure.json",
             &json!({
-                "canvas": [size.0, size.1], "safe_area": safe,
+                "canvas": [size.0, size.1], "safe_area": safe_json(request, size),
                 "boxes": "fractions of the frame: x0, y0, x1, y1, before any rotation",
                 "frames": frames, "notes": l.notes,
             }),
@@ -495,6 +505,7 @@ fn look(
     }
     let mut out = json!({
         "canvas": [w, h], "frames": files, "bare": request.bare, "grid": request.grid,
+        "safe_area": safe_json(request, size),
         "notes": l.notes, "warnings": l.report.warnings, "layout_warnings": l.report.layout_warnings,
     });
     if matches!(
