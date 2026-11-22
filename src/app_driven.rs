@@ -329,6 +329,8 @@ impl NohApp {
             return;
         };
         let incoming: Vec<Incoming> = d.inbox.try_iter().collect();
+        // A stalled look ends before a new one is asked for.
+        self.driven_look_expire();
         for message in incoming {
             match message {
                 Incoming::Message(Inbound::Message(ToApp::Close { id })) => {

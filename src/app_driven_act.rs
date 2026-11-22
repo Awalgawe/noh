@@ -156,6 +156,7 @@ impl NohApp {
         } else if let Some(d) = &mut self.driven {
             d.look = Some(LookJob { id, look });
             ctx.request_repaint();
+            ctx.request_repaint_after(LOOK_LIMIT);
         }
     }
 
@@ -171,9 +172,17 @@ impl NohApp {
         self.driven_pending(ctx);
     }
 
-    /// Each frame: a look that waited too long for its picture fails; the
-    /// playhead gestures waiting for the person are applied or refused.
-    pub(super) fn driven_pending(&mut self, ctx: &egui::Context) {
+    /// Each frame, before the agent's new messages: a look that waited too
+    /// long for its picture fails (a repaint is asked for at its limit, so an
+    /// idle or minimized window gets there too).
+    pub(super) fn driven_look_expire(&mut self) {
+        if let Some(d) = &self.driven
+            && let Some(job) = &d.look
+            && let Some(left) = LOOK_LIMIT.checked_sub(job.look.started.elapsed())
+        {
+            // Each frame re-arms it: a frame drawn meanwhile consumes the request.
+            d.ctx.request_repaint_after(left);
+        }
         let stale = self
             .driven
             .as_ref()
@@ -188,6 +197,11 @@ impl NohApp {
                 )),
             );
         }
+    }
+
+    /// Each frame: the playhead gestures waiting for the person are applied
+    /// or refused.
+    pub(super) fn driven_pending(&mut self, ctx: &egui::Context) {
         let Some(d) = &mut self.driven else {
             return;
         };
@@ -265,6 +279,7 @@ impl NohApp {
                     d.look = Some(LookJob { id, look });
                 }
                 ctx.request_repaint();
+                ctx.request_repaint_after(LOOK_LIMIT);
                 None
             }
         }
