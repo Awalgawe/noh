@@ -123,6 +123,20 @@ impl Drop for Server {
     }
 }
 
+/// A window that cannot start on this machine for want of OpenGL (GitHub's
+/// Windows runners have no OpenGL 2.0, tests/startup_log.rs): the open must
+/// then fail at once and say so, and the rest of the test cannot run.
+fn cannot_draw(opened: &Value) -> bool {
+    let failed = opened["error"]["code"] == "app.start_failed"
+        && opened["error"]["detail"]
+            .as_str()
+            .is_some_and(|d| d.to_lowercase().contains("opengl"));
+    if failed {
+        eprintln!("SKIPPED: no OpenGL for a NOH window here: {opened}");
+    }
+    failed
+}
+
 fn running(pid: u32) -> bool {
     if cfg!(windows) {
         let out = Command::new("tasklist")
@@ -158,7 +172,13 @@ fn a_window_closes_when_asked_and_one_left_open_outlives_the_session() {
         return;
     }
     let mut server = Server::start(None);
+    let started = Instant::now();
     let opened = server.tool("noh_app_open", json!({"title":"Integration test"}));
+    if cannot_draw(&opened) {
+        // Told at once, not after the wait for `ready`.
+        assert!(started.elapsed() < Duration::from_secs(12), "{opened}");
+        return;
+    }
     assert_eq!(opened["state"], "open", "{opened}");
     let first = opened["pid"].as_u64().unwrap() as u32;
     let app_id = opened["app_id"].as_str().unwrap().to_owned();
@@ -236,6 +256,9 @@ fn a_short_is_prepared_by_gestures_and_looked_at() {
     .unwrap();
     let mut server = Server::start(Some(&f.ffmpeg));
     let opened = server.tool("noh_app_open", json!({"title":"Scenario"}));
+    if cannot_draw(&opened) {
+        return;
+    }
     let app_id = opened["app_id"].as_str().expect("opened").to_owned();
     let timed = |server: &mut Server, action: Value| {
         let start = Instant::now();

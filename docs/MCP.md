@@ -260,7 +260,9 @@ Windows free graphics memory, are measured at each open; each window already
 open keeps a margin up to its budget (550 MiB of memory, 250 MiB of graphics
 memory), and 2 GiB or 15 % of the memory (1 GiB of graphics memory) stays free
 for other programs. At most 8 windows per server, 4 when graphics memory cannot
-be read. A refusal (`app.cap_reached`) gives the figures. Windows the person took
+be read. A refusal (`app.cap_reached`) gives the figures. A window that cannot
+start on this computer (no OpenGL 2.0, no display) ends without a dialog and the
+open fails with `app.start_failed` and its reason. Windows the person took
 back or closed by hand still count while they run: they are still this server's
 children.
 

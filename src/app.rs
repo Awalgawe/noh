@@ -794,9 +794,12 @@ fn main() -> eframe::Result {
     }
     // Opened by the agent (noh-mcp): its arguments are no files.
     let driven_title = app_driven::arguments(std::env::args_os());
+    let driven = driven_title.is_some();
     if driven_title.is_some() {
         // No helper this window starts may hold its channel.
         noh::driven::keep_standard_handles_private();
+        // A failed start is told to the server, never in a dialog.
+        app_startup::quiet();
     }
     // From here every step is written to startup.log: a start that dies leaves its last one.
     app_startup::begin();
@@ -1038,7 +1041,18 @@ fn main() -> eframe::Result {
     match &outcome {
         Ok(()) => app_startup::note("closed normally"),
         // The window never opened, or its event loop ended on an error: say why before exiting.
-        Err(error) => app_startup::failed(&error.to_string()),
+        Err(error) => {
+            if driven {
+                // Said before anything else: the server is waiting for `ready`.
+                use std::io::Write;
+                let line = noh::driven::line(&noh::driven::ToServer::Failed {
+                    reason: error.to_string(),
+                });
+                let mut out = std::io::stdout();
+                let _ = out.write_all(&line).and_then(|()| out.flush());
+            }
+            app_startup::failed(&error.to_string());
+        }
     }
     outcome
 }

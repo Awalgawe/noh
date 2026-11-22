@@ -229,6 +229,10 @@ pub enum ToServer {
     Released,
     /// The person closed the window.
     Closed,
+    /// The window could not start (no OpenGL 2.0, no display…): it ends
+    /// without showing the dialog an ordinary start shows, since nobody may
+    /// be there to close it.
+    Failed { reason: String },
     /// What the window shows, as data; only the latest counts.
     State {
         revision: u64,

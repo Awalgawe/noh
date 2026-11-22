@@ -27,7 +27,9 @@ const KEPT_ENDED: usize = 16;
 /// How long the server waits, at most.
 #[derive(Clone, Copy, Debug)]
 pub struct Timing {
-    /// For a new window's `ready` (note §3.3: 3 s).
+    /// For a new window's `ready`. The note asked for 3 s; a first start
+    /// after an install (antivirus scan, cold disk) can take longer, so 15 s
+    /// (decided by the pair). A window that cannot start says so at once.
     pub ready: Duration,
     /// For a window's answer to a request.
     pub answer: Duration,
@@ -42,7 +44,7 @@ pub struct Timing {
 impl Default for Timing {
     fn default() -> Self {
         Self {
-            ready: Duration::from_secs(3),
+            ready: Duration::from_secs(15),
             answer: Duration::from_secs(10),
             exit: Duration::from_secs(5),
             lost: Duration::from_secs(5),
@@ -202,6 +204,8 @@ struct Window {
     /// The window's latest `state`, by revision.
     view: Option<(u64, serde_json::Value)>,
     released: bool,
+    /// Why the window could not start, as it said.
+    failure: Option<String>,
     closed_by_person: bool,
     closed_by_agent: bool,
     overflowed: bool,
@@ -360,6 +364,7 @@ impl Apps {
                 answers: HashMap::new(),
                 view: None,
                 released: false,
+                failure: None,
                 closed_by_person: false,
                 closed_by_agent: false,
                 overflowed: false,
@@ -382,7 +387,11 @@ impl Apps {
         loop {
             let window = find(&mut state.windows, &id).expect("an opening window is kept");
             window.refresh();
-            if window.version.is_some() || window.pipe_ended || window.exit.is_some() {
+            if window.version.is_some()
+                || window.failure.is_some()
+                || window.pipe_ended
+                || window.exit.is_some()
+            {
                 break;
             }
             let now = Instant::now();
@@ -398,6 +407,14 @@ impl Apps {
         let window = find(&mut state.windows, &id).expect("an opening window is kept");
         let version = window.version.clone();
         let failure = match &version {
+            None if window.failure.is_some() => {
+                let reason = window.failure.clone().unwrap_or_default();
+                Some(AppError {
+                    code: "app.start_failed".into(),
+                    detail: format!("The NOH window could not start: {reason}"),
+                    details: Some(serde_json::json!({ "reason": reason })),
+                })
+            }
             None => {
                 let exit = window.exit;
                 Some(AppError {
@@ -681,6 +698,7 @@ impl Apps {
                 }
             }
             ToServer::Released => window.released = true,
+            ToServer::Failed { reason } => window.failure = Some(reason),
             ToServer::Closed => window.closed_by_person = true,
             ToServer::State { revision, state } => {
                 if window.view.as_ref().is_none_or(|(r, _)| revision > *r) {
@@ -959,6 +977,30 @@ mod tests {
         assert_eq!(error.code, "app.no_ready");
         assert!(start.elapsed() >= timing().ready);
         assert!(*h.processes.lock().unwrap()[0].killed.lock().unwrap());
+        assert!(h.apps.windows().is_empty());
+    }
+
+    #[test]
+    fn a_window_that_cannot_start_says_why_at_once() {
+        let h = harness(
+            |input, mut output, process| {
+                send(
+                    &mut output,
+                    &ToServer::Failed {
+                        reason: "OpenGL 2.0 is not available".into(),
+                    },
+                );
+                *process.exit.lock().unwrap() = Some(Some(1));
+                let _ = input.bytes().count();
+            },
+            roomy(),
+            None,
+        );
+        let start = Instant::now();
+        let error = h.apps.open("No graphics").unwrap_err();
+        assert_eq!(error.code, "app.start_failed");
+        assert!(error.detail.contains("OpenGL 2.0"), "{}", error.detail);
+        assert!(start.elapsed() < timing().ready);
         assert!(h.apps.windows().is_empty());
     }
 
