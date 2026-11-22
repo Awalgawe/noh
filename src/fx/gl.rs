@@ -1196,6 +1196,14 @@ impl GlRenderer {
         &self.gl
     }
 
+    /// The engine's own layer after the last `frame`: premultiplied colour in
+    /// linear light, half float, the glow included, before the resolve to the
+    /// 8-bit output. A caller that stacks several frames (the motion scene
+    /// compositor) reads it, so that each pass keeps its precision.
+    pub fn layer_texture(&self) -> glow::Texture {
+        self.layer.tex
+    }
+
     /// The resolved output texture (preview: egui draws it as a native texture).
     pub fn output_texture(&self) -> glow::Texture {
         self.output.tex
