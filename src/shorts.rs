@@ -308,6 +308,7 @@ pub(crate) fn execute(
         let start_text = format!("{start:.3}");
         let span_text = format!("{span:.3}");
         let job = crate::caption_gpu::Job {
+            scene: None,
             ffmpeg: ffmpeg.to_path_buf(),
             source: source.to_path_buf(),
             workspace: workspace.clone(),

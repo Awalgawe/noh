@@ -69,6 +69,7 @@ fn main() {
                 })
             } else {
                 Operation::Captions(CaptionRequest {
+                    scene: None,
                     effect: None,
                     source: source.clone(),
                     subtitles: srt.clone(),
@@ -372,6 +373,7 @@ if (!$ready.WaitOne(10000)) { throw 'Child handshake timed out' }
             })
         } else if phase.starts_with("caption.") {
             Operation::Captions(CaptionRequest {
+                scene: None,
                 effect: None,
                 source: source.clone(),
                 subtitles: source.clone(),

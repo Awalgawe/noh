@@ -3,7 +3,7 @@
 use super::audio::Audio;
 use super::check::Checker;
 use super::draw::{Block, MAX_AREA, MAX_BLURS, MAX_GLYPHS, MAX_PARTICLES, MAX_PASSES, measure};
-use super::script::{MAX_CALLS, MAX_OPS, ScriptScene};
+use super::script::{FUNCTIONS, MAX_CALLS, MAX_OPS, NOT_YET, RANGE_LIBRARY, READS, ScriptScene};
 use super::thread::{STACK, ScriptThread};
 use super::validate::{Report, grid, validate};
 use super::{Cue, Inputs};
@@ -114,135 +114,7 @@ fn the_example_scenes_pass() {
 #[test]
 fn a_script_can_call_these_functions_and_no_other() {
     let scene = load("fn frame(t, ctx) { }").unwrap();
-    let expected = [
-        "abs",
-        "at",
-        "clampf",
-        "color",
-        "cos",
-        "cue",
-        "cue_at",
-        "cue_count",
-        "dissolve",
-        "draw",
-        "during",
-        "ease",
-        "edge",
-        "energy",
-        "exp",
-        "face",
-        "floor",
-        "glow",
-        "len",
-        "life",
-        "line_height",
-        "lower",
-        "max",
-        "min",
-        "mixf",
-        "onset",
-        "onset_age",
-        "onset_count",
-        "opacity",
-        "outline",
-        "particles",
-        "particles_in",
-        "pi",
-        "pow",
-        "range",
-        "rate",
-        "rect",
-        "rise",
-        "rot",
-        "round",
-        "scale",
-        "seed",
-        "shadow",
-        "shape",
-        "sin",
-        "size",
-        "smooth",
-        "spin",
-        "sqrt",
-        "swirl",
-        "text",
-        "to_float",
-        "to_int",
-        "upper",
-        "width",
-        "wind",
-        "word",
-        "word_color",
-        "word_dissolve",
-        // layout, measuring, small tables
-        "align",
-        "anchor",
-        "gone_by",
-        "measure",
-        "pick",
-        "tracking",
-        "word_box",
-        // layers; their shaders and the picture answer « not in NOH yet »
-        "add",
-        "layer",
-        "shader",
-        "resolution",
-        "param",
-        "video",
-        // shapes
-        "path",
-        "move_to",
-        "line_to",
-        "quad_to",
-        "cubic_to",
-        "close",
-        "circle",
-        "ellipse",
-        "rounded_rect",
-        "line",
-        "fill",
-        "linear",
-        "radial",
-        "stop",
-        "stroke",
-        "caps",
-        "trim",
-        "pivot",
-        "offset",
-        // property reads of the context, a cue, a word and a measured box
-        "get$duration",
-        "get$end",
-        "get$h",
-        "get$i",
-        "get$start",
-        "get$text",
-        "get$w",
-        "get$words",
-        "get$safe_x0",
-        "get$safe_x1",
-        "get$safe_y0",
-        "get$safe_y1",
-        "get$src_w",
-        "get$src_h",
-        "get$x0",
-        "get$x1",
-        "get$y0",
-        "get$y1",
-        // the range iterators (`for i in 0..n`), the one piece of the library kept
-        "bits",
-        "chars",
-        "contains",
-        "end",
-        "get$bits",
-        "get$chars",
-        "get$is_empty",
-        "get$is_exclusive",
-        "get$is_inclusive",
-        "is_empty",
-        "is_exclusive",
-        "is_inclusive",
-        "start",
-    ];
+    let expected: Vec<&str> = [FUNCTIONS, NOT_YET, READS, RANGE_LIBRARY].concat();
     let callable = scene.callable();
     let extra: Vec<&String> = callable
         .iter()
@@ -256,6 +128,28 @@ fn a_script_can_call_these_functions_and_no_other() {
         extra.is_empty() && missing.is_empty(),
         "extra {extra:?}, missing {missing:?}"
     );
+}
+
+/// The author page (served to agents by noh_list_effects) names every function
+/// a scene can call, and says the ones NOH does not draw yet are refused.
+#[test]
+fn the_author_page_names_every_function() {
+    let page = include_str!("../../docs/MOTION_AUTHORING.md");
+    let missing: Vec<&&str> = FUNCTIONS
+        .iter()
+        .filter(|n| {
+            !(page.contains(&format!("`{n}"))
+                || page.contains(&format!(".{n}("))
+                || page.contains(&format!("{n}(")))
+        })
+        .collect();
+    assert!(missing.is_empty(), "not on the author page: {missing:?}");
+    assert!(page.starts_with(
+        "# Writing a motion scene
+
+**Experimental"
+    ));
+    assert!(page.contains("`video()`") && page.contains("layer shaders"));
 }
 
 /// One hostile script per bound of the sandbox.
@@ -1170,17 +1064,18 @@ fn worst_difference(a: &[u8], b: &[u8]) -> (u8, usize) {
     })
 }
 
-/// The checks that draw through OpenGL, in one test: the engine's hidden context
-/// belongs to the thread that made it first.
-#[test]
-#[ignore = "needs OpenGL 3.3"]
-fn motion_gpu_checks() {
+/// The checks of motion scenes that draw through OpenGL. The engine's hidden
+/// context belongs to the thread that made it first, and the engine's own GPU
+/// checks share this test binary: these run inside `fx::tests::gpu_checks`, on
+/// its thread, never as a test of their own.
+pub(crate) fn motion_gpu_checks() {
     layers_at_full_opacity_stack_like_one_pass();
     dissolve_is_the_same_at_every_pixel_scale();
     frames_match_the_prototype();
     a_layer_of_text_and_shapes_fades_as_one_picture();
     shapes_past_the_stencil_range_are_all_drawn();
     a_frame_after_a_failed_group_is_whole();
+    the_export_overlay_is_the_m2_render();
     compositor_memory();
     shape_timings();
 }
@@ -1189,17 +1084,21 @@ fn motion_gpu_checks() {
 /// 1080, 96 frames from 0 s, the cutting measured around the shape cache, the
 /// GPU by a timer query, here around the whole frame drawn again with its
 /// shapes already cut: the shapes' pass, its resolve, its stacking and the
-/// final encoding). Times are reported, never checked in CI (plan § 6.2: they
-/// are measured by hand). The plan's bars (cutting ≤ 1 ms and GPU ≤ 2 ms at
-/// p95) hold on the reference machine and are checked only when
-/// NOH_MOTION_BENCH=1 is set for that measurement, in a release build (a debug
-/// build's GPU figures include the processor time spent inside the query).
+/// final encoding). Measured by hand only (plan § 6.2: no time in CI): with
+/// NOH_MOTION_BENCH set they are reported, and with NOH_MOTION_BENCH=1, in a
+/// release build, the plan's bars (cutting ≤ 1 ms and GPU ≤ 2 ms at p95, on the
+/// reference machine) are checked (a debug build's GPU figures include the
+/// processor time spent inside the query).
 fn shape_timings() {
     use super::paint::{Painter, draw_frame};
     use crate::fx::compose::Compositor;
     use crate::fx::gl::GlRenderer;
     use crate::fx::shaders::Output;
     use glow::HasContext;
+    let Some(bench) = std::env::var_os("NOH_MOTION_BENCH") else {
+        eprintln!("NOH_MOTION_BENCH not set: shape timings not measured");
+        return;
+    };
     let p95 = |v: &mut Vec<f64>| {
         v.sort_by(f64::total_cmp);
         (v[(v.len() * 95).div_ceil(100) - 1], v[v.len() - 1])
@@ -1238,13 +1137,46 @@ fn shape_timings() {
         eprintln!(
             "{name}: cutting p95 {cut95:.3} ms (worst {cut_max:.3}), GPU p95 {gpu95:.3} ms (worst {gpu_max:.3})"
         );
-        if std::env::var_os("NOH_MOTION_BENCH").is_some_and(|v| v == "1") {
+        if bench == "1" {
             if cfg!(debug_assertions) {
                 panic!("NOH_MOTION_BENCH needs a release build");
             }
             assert!(cut95 <= 1.0, "{name}: cutting p95 {cut95:.3} ms over 1 ms");
             assert!(gpu95 <= 2.0, "{name}: GPU p95 {gpu95:.3} ms over 2 ms");
         }
+    }
+}
+
+/// The export's overlay (`layer::MotionLayer`: the scene on its script thread,
+/// validated, its letters prepared from that validation) is byte for byte the
+/// frame `render` draws, the M2 drawing that the prototype comparison holds.
+fn the_export_overlay_is_the_m2_render() {
+    use super::layer::MotionLayer;
+    use super::thread::ScriptThread;
+    use crate::fx::export::Overlay;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
+    for (name, t) in [
+        ("layers.rhai", 1.0),
+        ("text_passes.rhai", 1.0),
+        ("shapes.rhai", 1.5),
+    ] {
+        let src = with_header(&fixture(name));
+        let thread =
+            ScriptThread::start(src.clone(), inputs(1916, 1080), Audio::silent(), false).unwrap();
+        thread.validate(grid(0.0, 2.0, 24.0)).unwrap();
+        let mut gpu =
+            GlRenderer::headless(1916, 1080, 1916.0, 1080.0, Output::PremulGamma).unwrap();
+        let mut layer = MotionLayer::new(thread, (1916, 1080), 0.0).unwrap();
+        layer.setup(&mut gpu).unwrap();
+        layer.draw(&mut gpu, t).unwrap();
+        let ours = layer.read();
+        let m2 = render(&src, 1916, 1080, (1916, 1080), t);
+        let (worst, differing) = worst_difference(&ours, &m2);
+        eprintln!(
+            "{name} at {t}: export overlay vs M2 render, worst {worst}/255, {differing} bytes"
+        );
+        assert_eq!(differing, 0, "{name} at {t}");
     }
 }
 

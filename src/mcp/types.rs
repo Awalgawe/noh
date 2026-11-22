@@ -363,6 +363,11 @@ pub struct CaptionsInput {
     /// A caption effect instead of Classique (see noh_list_effects).
     #[serde(default)]
     pub effect: Option<EffectInput>,
+    /// Experimental: a motion scene drawn instead of the captions (it draws the
+    /// lyrics itself); refused with effect, size or placement. See
+    /// noh_list_effects (`motion`) and noh_scene_check.
+    #[serde(default)]
+    pub motion: Option<super::scene::MotionInput>,
     /// Render the same complete composition, then reduce resolution and quality.
     #[serde(default)]
     pub preview: bool,
@@ -447,6 +452,18 @@ impl CaptionsInput {
         default_ffmpeg: &Path,
     ) -> Result<crate::captions::CaptionRequest, SessionError> {
         use crate::captions::CaptionRequest;
+        let scene = match self.motion {
+            Some(motion) => {
+                if self.effect.is_some() || self.size.is_some() || self.placement.is_some() {
+                    return Err(SessionError::new(
+                        "mcp.invalid_request",
+                        "A scene draws the lyrics itself: leave effect, size and placement out.",
+                    ));
+                }
+                Some(motion.choice()?)
+            }
+            None => None,
+        };
         let (style, effect) = caption_choice(
             self.safe_area,
             self.size,
@@ -455,6 +472,7 @@ impl CaptionsInput {
             false,
         )?;
         let request = CaptionRequest {
+            scene,
             effect,
             source: absolute(&self.source)?,
             subtitles: absolute(&self.subtitles)?,
@@ -731,6 +749,11 @@ pub struct EffectsReply {
     pub effects: Vec<EffectListed>,
     /// Folders that are not valid effects, and why.
     pub refused: Vec<EffectRefused>,
+    /// Experimental motion scenes (noh_scene_check, noh_scene_look,
+    /// noh_scene_clip, `motion` in noh_burn_subtitles): the format, the functions,
+    /// the caps and the author guide. Absent from a build that cannot draw scenes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub motion: Option<super::scene::MotionInfo>,
 }
 #[derive(Clone, Debug, Serialize, JsonSchema)]
 pub struct EffectFolder {
@@ -811,6 +834,7 @@ impl From<crate::effect_choice::Listing> for EffectsReply {
                     reason: r.reason.clone(),
                 })
                 .collect(),
+            motion: super::scene::motion_info(),
         }
     }
 }

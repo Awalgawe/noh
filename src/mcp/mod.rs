@@ -1,6 +1,7 @@
 //! Optional local MCP adapter; media work remains in the shared job controller.
 pub mod apps;
 pub mod machine;
+pub mod scene;
 pub mod session;
 pub mod slot;
 mod transport;
@@ -13,6 +14,7 @@ use rmcp::{
     schemars::{self, JsonSchema},
     tool, tool_handler, tool_router,
 };
+use scene::{SceneCheckInput, SceneClipInput, SceneLookInput};
 use serde::Serialize;
 use session::Session;
 use std::{io, path::PathBuf, sync::Arc};
@@ -168,7 +170,25 @@ impl Server {
         blocking(move || session.project(input), |_| false).await
     }
 
-    #[tool(name = "noh_list_effects", description = "List the caption effects that `effect.id` can name in noh_burn_subtitles, noh_make_short and noh_export_project: each effect's presets and settings (type, choices, range, default), the folders NOH reads (bundled beside noh.exe, then the user's) and the folders it refused with their reason. Reads files only; starts no job.", output_schema = schema_for_output::<Reply<EffectsReply>>())]
+    #[tool(name = "noh_scene_check", description = "Experimental. Check a motion scene (a script file that draws the lyrics, shapes and particles over a video; its language, functions, caps and the author guide are in noh_list_effects, `motion`) against a video and its reviewed subtitles: every frame of the interval at the video's frame rate is evaluated, checked against the counted caps, and asked again in another order. Writes report.json into a new output folder: the first refused frame with its instant and reason (the job fails), or the counted maxima against the caps, warnings (text leaving the frame or the safe area, overlaps), what was not checked, the script's time and the whole frame's time on this machine (information, never a limit). A vertical video needs a safe_area: ask the user which platform the video is for, proposing YouTube Shorts. One job at a time: a check is refused (mcp.busy) while another job runs. In this version a scene is drawn over one video (a caption burn): its sound gives the energy and onsets, its length the song's, its size the canvas; scenes over a montage (a song WAV and several clips) come with the project export. Returns a job ID; poll noh_job.", output_schema = schema_for_output::<Reply<StartReply>>())]
+    async fn scene_check(&self, Parameters(input): Parameters<SceneCheckInput>) -> CallToolResult {
+        let session = self.session.clone();
+        blocking(move || session.scene_check(input), |_| false).await
+    }
+
+    #[tool(name = "noh_scene_look", description = "Experimental. See frames of a motion scene drawn by the export's engine over the video: stills (PNG frames at at_ms), strip (eight frames over one second and a sheet of them), sheet (count frames spread over the interval, and a sheet), or measure (where each text falls, as JSON, no picture). grid draws the frame's edges, a line every tenth of the frame and the safe area; bare shows the video alone, without the scene's draws, to compose on it. The scene is checked first, as noh_scene_check does; a refused scene fails the job. Files go into a new output folder with look.json listing them; open the PNGs to judge them. A vertical video needs a safe_area (ask the user's platform, proposing YouTube Shorts). One job at a time: a look is refused (mcp.busy) while another job runs. In this version a scene is drawn over one video (a caption burn): its sound gives the energy and onsets, its length the song's, its size the canvas; scenes over a montage (a song WAV and several clips) come with the project export. Returns a job ID; poll noh_job.", output_schema = schema_for_output::<Reply<StartReply>>())]
+    async fn scene_look(&self, Parameters(input): Parameters<SceneLookInput>) -> CallToolResult {
+        let session = self.session.clone();
+        blocking(move || session.scene_look(input), |_| false).await
+    }
+
+    #[tool(name = "noh_scene_clip", description = "Experimental. Render a short clip (at most 30 s, preview quality) of the video with a motion scene drawn over it, to judge a rhythm: the same drawing as noh_burn_subtitles with `motion`, on start_ms..end_ms of the source; the scene keeps the source's clock. Checked before it starts; nothing published on a refusal. Publishes a new MP4 without overwriting. Its frames are checked at the clip's own instants (start plus whole frames); lyrics times stay on the source's clock. A vertical video needs a safe_area (ask the user's platform). One job at a time: refused (mcp.busy) while another job runs. Returns a job ID; poll noh_job.", output_schema = schema_for_output::<Reply<StartReply>>())]
+    async fn scene_clip(&self, Parameters(input): Parameters<SceneClipInput>) -> CallToolResult {
+        let session = self.session.clone();
+        blocking(move || session.scene_clip(input), |_| false).await
+    }
+
+    #[tool(name = "noh_list_effects", description = "List the caption effects that `effect.id` can name in noh_burn_subtitles, noh_make_short and noh_export_project: each effect's presets and settings (type, choices, range, default), the folders NOH reads (bundled beside noh.exe, then the user's) and the folders it refused with their reason. In a build with motion scenes it also returns `motion`: the scene format line, every callable function, the caps, the font faces, the safe areas and the author guide (read it before writing a scene for noh_scene_check, noh_scene_look, noh_scene_clip or noh_burn_subtitles `motion`). Reads files only; starts no job.", output_schema = schema_for_output::<Reply<EffectsReply>>())]
     async fn list_effects(&self, Parameters(_): Parameters<ListEffectsInput>) -> CallToolResult {
         blocking(
             || Ok(EffectsReply::from(crate::effect_choice::list())),
@@ -233,6 +253,10 @@ impl Server {
     /// the bound, so the format is dropped from every input and output schema.
     fn router() -> ToolRouter<Self> {
         let mut router = Self::tool_router();
+        // A build without motion scenes does not offer their tools.
+        if !cfg!(feature = "motion") {
+            router.map.retain(|name, _| !name.starts_with("noh_scene_"));
+        }
         for route in router.map.values_mut() {
             let tool = &mut route.attr;
             tool.input_schema = Arc::new(without_unsigned_formats(&tool.input_schema));
@@ -361,7 +385,8 @@ mod tests {
     #[test]
     fn sixteen_tools_have_strict_inputs_and_explicit_output_schemas() {
         let tools = Server::router().list_all();
-        assert_eq!(tools.len(), 16);
+        // Sixteen, and the three scene tools when motion scenes are built in.
+        assert_eq!(tools.len(), if cfg!(feature = "motion") { 19 } else { 16 });
         let transcribe = tools
             .iter()
             .find(|tool| tool.name == "noh_transcribe")

@@ -30,6 +30,23 @@ const LINE_GRACE: Duration = Duration::from_secs(5);
 /// How long a failing FFmpeg may take to exit before it is killed.
 const SETTLE: Duration = Duration::from_secs(5);
 
+/// What draws the layer mixed into each frame.
+pub enum Layer {
+    /// A caption effect (the shipped styles and the effect plugins).
+    Plugin(Box<PluginScene>),
+    /// Anything else that draws an overlay on the engine's context (a motion
+    /// scene): set up once on the context, then asked for each frame's time.
+    Overlay(Box<dyn Overlay>),
+}
+
+/// An overlay drawn on the engine's context. `draw` returns a texture of the
+/// engine's output kind (premultiplied, display-encoded RGBA8, top row first,
+/// the frame's size), valid until the next call.
+pub trait Overlay {
+    fn setup(&mut self, gpu: &mut GlRenderer) -> Result<(), String>;
+    fn draw(&mut self, gpu: &mut GlRenderer, t: f64) -> Result<glow::Texture, String>;
+}
+
 /// What a path supplies; `run` owns the processes and the GPU work.
 pub struct Job {
     /// FFmpeg #1, complete except for its output: `run` appends the stats options
@@ -44,7 +61,7 @@ pub struct Job {
     pub width: u32,
     pub height: u32,
     pub matrix: Matrix,
-    pub scene: PluginScene,
+    pub scene: Layer,
     pub deadline: Duration,
     /// The video's known end on FFmpeg #1's clock (s): the last frame lasts until
     /// then, as in a single FFmpeg. None: FFmpeg #2 decides (the project's setts).
@@ -457,7 +474,7 @@ fn chain(
     w: u32,
     h: u32,
     matrix: Matrix,
-    mut scene: PluginScene,
+    mut scene: Layer,
     end: Option<f64>,
     stats_path: &Path,
     until: Instant,
@@ -467,7 +484,9 @@ fn chain(
     progress: &mut dyn FnMut(&str),
 ) -> Result<(ExitStatus, Stats), String> {
     let out = one.tree.0.stdout().take().ok_or("missing FFmpeg output")?;
-    if let Some(src) = scene.effect.shader.as_deref() {
+    if let Layer::Plugin(scene) = &scene
+        && let Some(src) = scene.effect.shader.as_deref()
+    {
         gpu.set_hooks(Some(src), scene.hook_user())?;
     }
     let mut mix = YuvMix::new(&gpu, matrix).map_err(|e| format!("OpenGL: {e}"))?;
@@ -475,8 +494,13 @@ fn chain(
     // An installed font is read before the first frame: an export never draws
     // with fonts « not read yet », only with the chosen one or, if it is missing,
     // the plugin's own face and a warning.
-    if scene.wants_installed_fonts() {
-        fonts.set_installed(std::sync::Arc::new(super::text::system_fonts(None)));
+    match &mut scene {
+        Layer::Plugin(scene) => {
+            if scene.wants_installed_fonts() {
+                fonts.set_installed(std::sync::Arc::new(super::text::system_fonts(None)));
+            }
+        }
+        Layer::Overlay(overlay) => overlay.setup(&mut gpu)?,
     }
     let setup_ms = setup.elapsed().as_secs_f64() * 1000.0;
     let size = mix.frame_bytes();
@@ -525,18 +549,24 @@ fn chain(
     loop {
         let t0 = Instant::now();
         let t = seconds(pts, &time_base)?;
-        let (glow_i, gain, main, _) = scene.frame(&mut fonts, &gpu, t);
-        if scene.overflowed() && overflow_at.is_none() {
-            overflow_at = Some(t);
-        }
-        if scene.too_wide() && too_wide_at.is_none() {
-            too_wide_at = Some(t);
-        }
-        gpu.frame(&glow_i, gain, &main, false)
-            .map_err(|e| format!("OpenGL: {e}"))?;
+        let layer = match &mut scene {
+            Layer::Plugin(scene) => {
+                let (glow_i, gain, main, _) = scene.frame(&mut fonts, &gpu, t);
+                if scene.overflowed() && overflow_at.is_none() {
+                    overflow_at = Some(t);
+                }
+                if scene.too_wide() && too_wide_at.is_none() {
+                    too_wide_at = Some(t);
+                }
+                gpu.frame(&glow_i, gain, &main, false)
+                    .map_err(|e| format!("OpenGL: {e}"))?;
+                gpu.output_texture()
+            }
+            Layer::Overlay(overlay) => overlay.draw(&mut gpu, t)?,
+        };
         let t1 = Instant::now();
         let slot = n % 2;
-        mix.submit(&buf, gpu.output_texture(), slot)
+        mix.submit(&buf, layer, slot)
             .map_err(|e| format!("OpenGL: {e}"))?;
         layer_ms.push((t1 - t0).as_secs_f64() * 1000.0);
         mix_ms.push(t1.elapsed().as_secs_f64() * 1000.0);
@@ -635,7 +665,10 @@ fn chain(
             fetch_ms: spread(fetch_ms),
             overflow_at,
             too_wide_at,
-            font_missing: scene.font_missing().map(str::to_string),
+            font_missing: match &scene {
+                Layer::Plugin(scene) => scene.font_missing().map(str::to_string),
+                Layer::Overlay(_) => None,
+            },
         },
     ))
 }

@@ -14,18 +14,25 @@
 //! - `paint`: a frame's draws as instances of the engine (`crate::fx`), its
 //!   passes stacked by `crate::fx::compose`.
 //!
+//! - `song`, `layer`, `run`: a scene over a source video, in the worker: its
+//!   inputs gathered from the job's files, its overlay for the export, and the
+//!   check and look jobs.
+//!
 //! Reframing the picture and layer shaders are refused for now, with the reason.
 pub mod audio;
 pub mod check;
 pub mod draw;
+pub mod layer;
 pub mod paint;
+pub mod run;
 pub mod script;
 pub mod shapes;
+pub mod song;
 pub mod thread;
 pub mod validate;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 /// One lyrics line as a scene reads it: its times in seconds on the song's
 /// clock, its text, and each word with its times.

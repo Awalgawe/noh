@@ -38,11 +38,26 @@ pub(crate) struct Job {
     /// from its folder once, its id checked again. None draws the built-in
     /// Classique with `style`.
     pub effect: Option<crate::project::EffectChoice>,
+    /// A motion scene drawn instead of the captions (no fallback).
+    pub scene: Option<SceneJob>,
     /// FFmpeg #2's encoder, audio and bitstream arguments, before `-progress`.
     pub encode: Vec<String>,
     pub deadline: Duration,
     /// The video's known end on FFmpeg #1's clock (the last frame's duration).
     pub end: Option<f64>,
+}
+
+/// A scene to draw: validated at the output's frames before FFmpeg starts.
+pub(crate) struct SceneJob {
+    pub scene: PathBuf,
+    /// Where FFmpeg #1's clock starts on the source's (a clip), and how long it runs.
+    pub start: f64,
+    pub span: f64,
+    /// The source's duration (the scene's song length) and nominal frame rate.
+    pub duration: f64,
+    pub fps: f64,
+    /// Cues whose word times were read beside the subtitles.
+    pub words: usize,
 }
 
 /// Why the GPU did not export.
@@ -130,6 +145,10 @@ pub(crate) fn run(
     failed: (&str, &str, &str),
     progress: impl FnMut(&str),
 ) -> Result<Done, Failure> {
+    #[cfg(feature = "motion")]
+    if job.scene.is_some() {
+        return run_scene(job, failed, progress);
+    }
     let (w, h) = job.size;
     let engine = |dir: Option<&std::path::Path>, e: String| {
         Failure::Engine(EngineError::new("error.effect", failed.1, dir, e))
@@ -191,7 +210,7 @@ pub(crate) fn run(
         width: w,
         height: h,
         matrix,
-        scene,
+        scene: fx::export::Layer::Plugin(Box::new(scene)),
         deadline,
         end,
     };
@@ -233,6 +252,125 @@ pub(crate) fn run(
     }
 }
 
+/// The scene's validation, then the export with its overlay. Refusals name the
+/// instant and the cap; nothing starts before the scene has passed.
+#[cfg(feature = "motion")]
+fn run_scene(
+    job: Job,
+    failed: (&str, &str, &str),
+    progress: impl FnMut(&str),
+) -> Result<Done, Failure> {
+    use crate::motion::{layer, song, thread::ScriptThread, validate::grid};
+    let refused = |e: String| {
+        Failure::Engine(EngineError::new(
+            "error.scene_refused",
+            failed.1,
+            job.scene.as_ref().map(|s| s.scene.as_path()),
+            e,
+        ))
+    };
+    let scene = job.scene.as_ref().unwrap();
+    let inputs = song::gather(
+        &job.ffmpeg,
+        &job.source,
+        job.size,
+        scene.duration,
+        &job.track,
+        scene.words,
+        job.style.safe_area,
+    )
+    .map_err(|e| {
+        Failure::Engine(EngineError::new(
+            "error.scene_input",
+            failed.1,
+            Some(&job.source),
+            e,
+        ))
+    })?;
+    let src = layer::read_scene(&scene.scene).map_err(refused)?;
+    let thread = ScriptThread::start(src, inputs.inputs, inputs.audio, false).map_err(refused)?;
+    let fps = if scene.fps.is_finite() && scene.fps > 0.0 {
+        scene.fps.min(120.0)
+    } else {
+        30.0
+    };
+    let checked = thread
+        .validate(grid(scene.start, scene.start + scene.span, fps))
+        .map_err(refused)?;
+    let overlay = layer::MotionLayer::new(thread, job.size, scene.start).map_err(refused)?;
+    let notes = inputs.notes;
+    let (w, h) = job.size;
+    let first = job.first();
+    let workspace = job.workspace.clone();
+    let matrix = if job.matrix == crate::color::Matrix::Bt601 {
+        fx::gl::Matrix::Bt601
+    } else {
+        fx::gl::Matrix::Bt709
+    };
+    let (deadline, end) = (job.deadline, job.end);
+    let export = fx::export::Job {
+        first,
+        second: Box::new(move |time_base, first| job.second(time_base, first)),
+        workspace,
+        width: w,
+        height: h,
+        matrix,
+        scene: fx::export::Layer::Overlay(Box::new(overlay)),
+        deadline,
+        end,
+    };
+    match fx::export::run(export, progress) {
+        Ok((status, _, stats)) if status.success() => Ok(Done {
+            overflow_at: None,
+            too_wide_at: None,
+            font_missing: None,
+            diagnostic: format!(
+                "Motion scene: {} frames checked before, {} drawn, engine set up in {:.0} ms on {}, time base {}, layer and mix p95 {:.2} ms per frame.{}{}",
+                checked.frames,
+                stats.frames,
+                stats.setup_ms,
+                stats.adapter,
+                stats.time_base,
+                stats.render_ms_p95,
+                if checked.layout_warnings.is_empty() {
+                    String::new()
+                } else {
+                    format!(" Layout: {}.", checked.layout_warnings.join("; "))
+                },
+                if notes.is_empty() {
+                    String::new()
+                } else {
+                    format!(" Notes: {}.", notes.join("; "))
+                },
+            ),
+        }),
+        Ok((_, log, _)) => {
+            let mut e = EngineError::new(failed.0, failed.1, None, failed.2);
+            e.technical = crate::engine::bounded(&log, 8192).into();
+            Err(Failure::Engine(e))
+        }
+        Err(f) if f.gl_unavailable => Err(Failure::Engine(EngineError::new(
+            "error.motion_gl_unavailable",
+            failed.1,
+            None,
+            format!("This computer cannot draw scenes ({}).", f.message),
+        ))),
+        Err(f) => {
+            let mut e = EngineError::new(
+                "error.scene_render",
+                failed.1,
+                None,
+                format!(
+                    "The scene could not be drawn: {}. Nothing was published.",
+                    f.message
+                ),
+            );
+            e.technical = crate::engine::bounded(&f.log, 8192).into();
+            Err(Failure::Engine(e))
+        }
+    }
+}
+
 /// The warning for letters drawn outside the safe area, or outside the picture
 /// when there is none (`safe`: a safe area applies), first at `at` seconds.
 pub(crate) fn overflow_warning(at: f64, safe: bool) -> String {
@@ -262,6 +400,7 @@ pub(crate) fn args(cmd: &Command) -> Vec<String> {
 #[cfg(test)]
 pub(crate) fn job_for_test(input: &[&str], finish: Option<&str>) -> Job {
     Job {
+        scene: None,
         ffmpeg: "ffmpeg".into(),
         source: "in.mp4".into(),
         workspace: ".".into(),

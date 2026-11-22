@@ -10,6 +10,7 @@
 use super::Inputs;
 use super::audio::Audio;
 use super::check::{Checker, Counts};
+use super::draw::Block;
 use super::script::{Frame, ScriptScene};
 use super::validate::{Report, validate};
 use crate::fx::text::Fonts;
@@ -28,6 +29,7 @@ type Reply<T> = mpsc::Sender<Result<T, String>>;
 enum Request {
     Frame(f64, Reply<(Frame, Counts)>),
     Validate(Vec<f64>, Reply<Report>),
+    Blocks(Reply<Vec<(Block, f32)>>),
 }
 
 pub struct ScriptThread {
@@ -78,6 +80,9 @@ fn serve(
                 );
                 let _ = reply.send(r);
             }
+            Request::Blocks(reply) => {
+                let _ = reply.send(Ok(checker.blocks()));
+            }
         }
     }
 }
@@ -122,6 +127,12 @@ impl ScriptThread {
     /// The validation pass at `instants`.
     pub fn validate(&self, instants: Vec<f64>) -> Result<Report, String> {
         self.ask(|r| Request::Validate(instants, r))
+    }
+
+    /// Every block of text the frames checked so far laid out, each with the
+    /// largest scale it reached: what a painter prepares after a validation.
+    pub fn blocks(&self) -> Result<Vec<(Block, f32)>, String> {
+        self.ask(Request::Blocks)
     }
 }
 
