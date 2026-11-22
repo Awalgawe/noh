@@ -65,6 +65,7 @@ pub const FUNCTIONS: &[&str] = &[
     "close",
     "color",
     "cos",
+    "crop",
     "cubic_to",
     "cue",
     "cue_at",
@@ -80,6 +81,7 @@ pub const FUNCTIONS: &[&str] = &[
     "face",
     "fill",
     "floor",
+    "focus",
     "glow",
     "gone_by",
     "layer",
@@ -137,6 +139,7 @@ pub const FUNCTIONS: &[&str] = &[
     "tracking",
     "trim",
     "upper",
+    "video",
     "width",
     "wind",
     "word",
@@ -146,7 +149,7 @@ pub const FUNCTIONS: &[&str] = &[
 ];
 /// Functions a scene may name that answer « not in NOH yet »: reframing the
 /// picture and layer shaders.
-pub const NOT_YET: &[&str] = &["video"];
+pub const NOT_YET: &[&str] = &[];
 /// Property reads (`ctx.w`, `c.text`, `b.x0`…), as the engine names them.
 pub const READS: &[&str] = &[
     "get$bits",
@@ -232,6 +235,8 @@ pub struct ScriptScene {
     out: Rc<RefCell<Vec<Draw>>>,
     /// Which runs of them are layers.
     layers: Rc<RefCell<Vec<Span>>>,
+    /// The frame's framing of the picture, if it asked for one.
+    video: Rc<RefCell<Option<super::reframe::VideoDraw>>>,
     audio: Rc<super::audio::Audio>,
 }
 
@@ -371,11 +376,34 @@ fn register_shapes(e: &mut Engine, w: f32, h: f32) {
 
 /// Features of the format that NOH does not have yet: a scene that uses one is
 /// refused with this reason when it is checked.
-const NOT_YET_VIDEO: &str =
-    "video() is not in NOH yet: reframing the picture comes in a later version";
-
-fn register_not_yet(e: &mut Engine) {
-    e.register_fn("video", || -> Res<()> { Err(NOT_YET_VIDEO.into()) });
+/// `video()`: how the frame frames the picture (`super::reframe`).
+fn register_video(e: &mut Engine) {
+    use super::reframe::VideoDraw;
+    e.register_type_with_name::<VideoDraw>("Video");
+    e.register_fn("video", VideoDraw::default);
+    e.register_fn("scale", |v: &mut VideoDraw, s: f64| {
+        v.scale = s as f32;
+        v.clone()
+    });
+    e.register_fn("at", |v: &mut VideoDraw, x: f64, y: f64| {
+        v.at = [x as f32, y as f32];
+        v.clone()
+    });
+    e.register_fn("focus", |v: &mut VideoDraw, x: f64, y: f64| {
+        v.focus = [x as f32, y as f32];
+        v.clone()
+    });
+    e.register_fn("rot", |v: &mut VideoDraw, r: f64| {
+        v.rot = r as f32;
+        v.clone()
+    });
+    e.register_fn(
+        "crop",
+        |v: &mut VideoDraw, x0: f64, y0: f64, x1: f64, y1: f64| {
+            v.crop = [x0 as f32, y0 as f32, x1 as f32, y1 as f32];
+            v.clone()
+        },
+    );
 }
 
 /// A layer as the script holds it: a handle, so that copying it costs nothing
@@ -475,6 +503,8 @@ pub struct Frame {
     /// seconds since the last sudden rise.
     pub energy: f32,
     pub onset_age: f32,
+    /// How the frame frames the picture (`None`: the picture as it is).
+    pub video: Option<super::reframe::VideoDraw>,
 }
 
 pub fn ease_named(curve: &str, x: f64) -> f64 {
@@ -911,7 +941,7 @@ impl ScriptScene {
         register_rect(&mut engine);
         register_emitter(&mut engine);
         register_layer(&mut engine, Rc::new(inp.shaders.clone()));
-        register_not_yet(&mut engine);
+        register_video(&mut engine);
         register_shapes(&mut engine, inp.w as f32, inp.h as f32);
         let out: Rc<RefCell<Vec<Draw>>> = Rc::default();
         let o = out.clone();
@@ -924,6 +954,16 @@ impl ScriptScene {
         engine.register_fn("draw", move |d: PathV| {
             let snap = d.0.borrow().clone();
             push(&o, Draw::Path(snap))
+        });
+        let video: Rc<RefCell<Option<super::reframe::VideoDraw>>> = Rc::default();
+        let vs = video.clone();
+        engine.register_fn("draw", move |v: super::reframe::VideoDraw| -> Res<()> {
+            let mut slot = vs.borrow_mut();
+            if slot.is_some() {
+                return Err("one video() per frame".into());
+            }
+            *slot = Some(v);
+            Ok(())
         });
         let layers: Rc<RefCell<Vec<Span>>> = Rc::default();
         let (o, ls) = (out.clone(), layers.clone());
@@ -1045,6 +1085,7 @@ impl ScriptScene {
             reads,
             out,
             layers,
+            video,
             audio: kept,
         })
     }
@@ -1055,6 +1096,7 @@ impl ScriptScene {
         self.reads.set(0);
         self.out.borrow_mut().clear();
         self.layers.borrow_mut().clear();
+        self.video.borrow_mut().take();
         let started = std::time::Instant::now();
         let r: Dynamic = self
             .engine
@@ -1075,6 +1117,7 @@ impl ScriptScene {
             run_ms,
             energy: self.audio.energy_at(t) as f32,
             onset_age: self.audio.onset_age(t).min(1e6) as f32,
+            video: self.video.borrow_mut().take(),
         })
     }
 }

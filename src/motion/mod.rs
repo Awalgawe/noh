@@ -18,12 +18,14 @@
 //!   inputs gathered from the job's files, its overlay for the export, and the
 //!   check and look jobs.
 //!
-//! Reframing the picture and layer shaders are refused for now, with the reason.
+//! - `reframe`: the scene's `video()` as one framing function, applied by the
+//!   export to the source's planes and by the previews to their own images.
 pub mod audio;
 pub mod check;
 pub mod draw;
 pub mod layer;
 pub mod paint;
+pub mod reframe;
 pub mod run;
 pub mod script;
 pub mod shader;

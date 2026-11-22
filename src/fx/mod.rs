@@ -10,6 +10,7 @@ pub mod line;
 pub mod mkv;
 pub mod plugin;
 pub mod plugin_shader;
+pub mod quad;
 pub mod shaders;
 pub mod text;
 

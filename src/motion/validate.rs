@@ -74,7 +74,7 @@ pub struct Report {
 /// have the same one (keeping every frame whole would cost too much memory).
 fn fingerprint(f: &Frame) -> u64 {
     let mut h = DefaultHasher::new();
-    format!("{:?}{:?}", f.draws, f.layers).hash(&mut h);
+    format!("{:?}{:?}{:?}", f.draws, f.layers, f.video).hash(&mut h);
     h.finish()
 }
 
@@ -194,6 +194,16 @@ pub fn validate(
             (w as f32, h as f32),
             &mut notes,
         );
+        if let Some(v) = &f.video
+            && !v
+                .framing((w as f32, h as f32), (w as f32, h as f32))
+                .covers()
+        {
+            notes.add(
+                "the picture does not cover the frame (black shows at an edge)".into(),
+                t,
+            );
+        }
         if c.forced > 0 {
             notes.add(
                 "a filled path could not be cut cleanly (a triangle that is not an ear was taken): it may paint outside its shape".into(),

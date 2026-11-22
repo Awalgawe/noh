@@ -58,6 +58,12 @@ fn frame(t, ctx) { draw(layer().shader(\"fill\").resolution(\"full\").param(0, 0
 const FILL: &str =
     "fn layer(i: LayerIn) -> vec4<f32> { return vec4<f32>(i.k0.x, 0.0, 0.0, i.k0.x); }";
 
+/// A framing that zooms and slides over time: the picture moves under a still
+/// overlay-free scene.
+const FRAMED: &str = "// noh-motion 0
+fn frame(t, ctx) { draw(video().scale(1.2 + 0.1 * t).focus(0.3 + 0.1 * t, 0.5).rot(0.05)); }
+";
+
 fn media(f: &Fixture) {
     f.ff(args![
         "-f",
@@ -86,6 +92,7 @@ fn media(f: &Fixture) {
     std::fs::write(f.path("too_many.noh-motion.rhai"), TOO_MANY).unwrap();
     std::fs::write(f.path("from_one.noh-motion.rhai"), FROM_ONE).unwrap();
     std::fs::write(f.path("shaded.noh-motion.rhai"), SHADED).unwrap();
+    std::fs::write(f.path("framed.noh-motion.rhai"), FRAMED).unwrap();
     std::fs::create_dir(f.path("shaded.noh-motion.shaders")).unwrap();
     std::fs::write(f.path("shaded.noh-motion.shaders").join("fill.wgsl"), FILL).unwrap();
 }
@@ -325,6 +332,72 @@ fn scene_jobs_check_look_burn_clip_and_refuse() {
         Some([0, 1000]),
         "shaded.mp4",
     ));
+
+    // Reframing: a look jumps to 1.6 s, the export plays up to it; the frame
+    // the export encoded there is the look's still, within the encoder's loss.
+    let still = SceneRequest {
+        grid: false,
+        ..request(
+            &f,
+            SceneMode::Stills { at_ms: vec![1600] },
+            "framed-still",
+            "framed.noh-motion.rhai",
+        )
+    };
+    ok(&wait(&Job::scene_with_cancel(
+        still,
+        f.exe.clone(),
+        Arc::new(AtomicBool::new(false)),
+        || {},
+    )));
+    ok(&burn(&f, "framed.noh-motion.rhai", None, "framed.mp4"));
+    let looked = image::open(f.path("framed-still").join("frame-01-1600ms.png"))
+        .unwrap()
+        .to_rgb8()
+        .into_raw();
+    let played = f
+        .ff(args![
+            "-ss",
+            "1.6",
+            "-i",
+            f.path("framed.mp4"),
+            "-frames:v",
+            "1",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-"
+        ])
+        .stdout;
+    let source = f
+        .ff(args![
+            "-ss",
+            "1.6",
+            "-i",
+            f.path("source.mp4"),
+            "-frames:v",
+            "1",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-"
+        ])
+        .stdout;
+    let mean = |a: &[u8], b: &[u8]| {
+        a.iter()
+            .zip(b)
+            .map(|(x, y)| f64::from(x.abs_diff(*y)))
+            .sum::<f64>()
+            / a.len() as f64
+    };
+    let (same, moved) = (mean(&looked, &played), mean(&played, &source));
+    eprintln!("framed frame at 1.6 s: look vs export {same:.2}, export vs source {moved:.2}");
+    assert!(
+        same < 6.0 && moved > 3.0 * same,
+        "look vs export {same}, export vs source {moved}"
+    );
 
     // Refused at the instant it goes over the cap: nothing published.
     let why = refused(&scene_job(

@@ -47,6 +47,10 @@ pub enum Layer {
 pub trait Overlay {
     fn setup(&mut self, gpu: &mut GlRenderer) -> Result<(), String>;
     fn draw(&mut self, gpu: &mut GlRenderer, t: f64) -> Result<glow::Texture, String>;
+    /// How the last frame drawn reframes the picture under it (none: as decoded).
+    fn reframe(&self) -> Option<super::gl::Reframe> {
+        None
+    }
 }
 
 /// What a path supplies; `run` owns the processes and the GPU work.
@@ -564,7 +568,11 @@ fn chain(
                     .map_err(|e| format!("OpenGL: {e}"))?;
                 gpu.output_texture()
             }
-            Layer::Overlay(overlay) => overlay.draw(&mut gpu, t)?,
+            Layer::Overlay(overlay) => {
+                let texture = overlay.draw(&mut gpu, t)?;
+                mix.set_reframe(overlay.reframe());
+                texture
+            }
         };
         let t1 = Instant::now();
         let slot = n % 2;
