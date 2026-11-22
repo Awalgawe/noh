@@ -27,6 +27,8 @@ use std::{
 /// How long a frame may wait for its timestamp line, which FFmpeg writes before
 /// the frame: past this, the line is missing, not late.
 const LINE_GRACE: Duration = Duration::from_secs(5);
+/// What every GL call answers once a GPU reset has lost a robust context.
+const CONTEXT_LOST: u32 = 0x0507;
 /// How long a failing FFmpeg may take to exit before it is killed.
 const SETTLE: Duration = Duration::from_secs(5);
 
@@ -568,6 +570,15 @@ fn chain(
         let slot = n % 2;
         mix.submit(&buf, layer, slot)
             .map_err(|e| format!("OpenGL: {e}"))?;
+        // A GPU reset loses a robust context (`gl.rs`): every call then answers
+        // GL_CONTEXT_LOST, and the frames read back would be empty. Fail, so
+        // that nothing is published.
+        let e = unsafe { glow::HasContext::get_error(&**gpu.context()) };
+        if e == CONTEXT_LOST {
+            return Err("the graphics driver was reset during the export".into());
+        } else if e != glow::NO_ERROR {
+            return Err(format!("OpenGL: error 0x{e:x} after the mix"));
+        }
         layer_ms.push((t1 - t0).as_secs_f64() * 1000.0);
         mix_ms.push(t1.elapsed().as_secs_f64() * 1000.0);
         let _ = frames.free.send(buf);
