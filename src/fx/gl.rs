@@ -418,9 +418,18 @@ mod headless {
             .window_handle()
             .map_err(|e| format!("window handle: {e}"))?
             .as_raw();
-        // No version requested, like eframe: the driver's newest context.
-        let ctx_attrs = ContextAttributesBuilder::new().build(Some(raw));
-        let not_current = unsafe { display.create_context(&config, &ctx_attrs) }
+        // No version requested, like eframe: the driver's newest context. A
+        // robust one first, losing the context on a GPU reset, so that an export
+        // the reset interrupts fails cleanly instead of drawing garbage: every
+        // call then answers GL_CONTEXT_LOST, which `fx::export` checks after
+        // each frame's mix (and a motion scene after each frame). The driver's
+        // ordinary context when it offers no robust one.
+        let robust = ContextAttributesBuilder::new()
+            .with_robustness(glutin::context::Robustness::RobustLoseContextOnReset)
+            .build(Some(raw));
+        let plain = ContextAttributesBuilder::new().build(Some(raw));
+        let not_current = unsafe { display.create_context(&config, &robust) }
+            .or_else(|_| unsafe { display.create_context(&config, &plain) })
             .map_err(|e| format!("GL context: {e}"))?;
         let surf_attrs = window
             .build_surface_attributes(Default::default())
