@@ -94,7 +94,7 @@ jobs:
             a_chosen_effect_draws_the_short_and_warns_when_its_installed_font_is_missing
           )
           mkdir -p logs/platform
-          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a cargo test --locked --features gui,mcp --lib --tests -- \
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a cargo test --locked --features gui,mcp,motion --lib --tests -- \
             --ignored --test-threads=1 "${names[@]}" 2>&1 | tee logs/platform/effect-opengl-tests.log
           # A filter that matches nothing also exits 0: require each test to have run and passed once.
           for name in "${names[@]}"; do

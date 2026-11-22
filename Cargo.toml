@@ -12,6 +12,10 @@ gui = ["dep:eframe", "dep:rfd", "dep:open", "dep:rodio", "dep:libloading", "dep:
 # Caption effects engine (OpenGL): layout, plugins, GPU compositor and export mix.
 effects = ["dep:cosmic-text", "dep:fdsm", "dep:fdsm-ttf-parser", "dep:nalgebra", "dep:ttf-parser", "dep:naga", "dep:glow", "dep:glutin", "dep:glutin-winit", "dep:winit", "dep:bytemuck"]
 mcp = ["dep:rmcp", "dep:tokio", "dep:tokio-util"]
+# Motion scenes (experimental): the sandboxed scene script, its validation and
+# per-frame checks. The language is cut down at build time: no clock, no arrays
+# or indexing, no closures, no modules.
+motion = ["effects", "dep:rhai"]
 
 [dependencies]
 # The preview copies are named by SHA-256. rmcp already brings this release
@@ -51,10 +55,13 @@ glutin = { version = "=0.32.3", default-features = false, features = ["egl", "wg
 glutin-winit = { version = "=0.5.0", default-features = false, features = ["egl", "wgl"], optional = true }
 winit = { version = "0.30.13", default-features = false, features = ["rwh_06", "x11", "wayland"], optional = true }
 bytemuck = { version = "1", features = ["derive"], optional = true }
+rhai = { version = "=1.27.0", features = ["no_time", "no_index", "no_closure", "no_module"], optional = true }
 
 [dev-dependencies]
 assert_cmd = "2.2"
 sha2 = "0.10"
+# The test of the scene allow-list lists what a script can call.
+rhai = { version = "=1.27.0", features = ["metadata"] }
 
 # Native Wayland file drops and clipboard must share one data device.
 # Temporary upstream backports: winit#4729 and egui#8657, pinned for delivery.
