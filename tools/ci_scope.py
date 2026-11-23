@@ -44,7 +44,7 @@ SITE_ONLY = {
 
 # Caption-style plugins: the app reads `assets/effects/<id>/` beside itself at run time, so on a PR a
 # change there builds nothing; the light job checks it with a NOH already built (check_style_plugins.py).
-# Classique is compiled into the app (src/fx/catalog.rs), so a change to it builds everywhere. On main,
+# Classique is compiled into the app (src/style/catalog.rs), so a change to it builds everywhere. On main,
 # every plugin change selects every platform: the Rust tests that read the plugins run after each merge.
 EFFECTS = "assets/effects/"
 COMPILED_EFFECTS = {"classique"}

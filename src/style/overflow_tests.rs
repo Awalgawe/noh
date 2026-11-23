@@ -1,8 +1,8 @@
 //! Step A3 (Task 39): report letters drawn outside the safe surface; change nothing.
 use super::line::{Line, split_words};
 use super::plugin::{Effect, PluginScene, ink_outside};
-use super::shaders::Upload;
-use super::text::Fonts;
+use crate::fx::shaders::Upload;
+use crate::fx::text::Fonts;
 use std::path::Path;
 
 struct NoGpu;

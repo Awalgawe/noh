@@ -1,5 +1,5 @@
 //! The caption effect the command line and the MCP choose, by id only: its folder
-//! comes from the effect folders the application reads (`fx::catalog`), never
+//! comes from the effect folders the application reads (`style::catalog`), never
 //! from the request. Everything is checked before a job starts (id, preset, each
 //! value against its declared type) and nothing is corrected: a wrong request is
 //! refused with what was found instead.
@@ -58,7 +58,7 @@ pub fn resolve(
     project_preview: bool,
 ) -> Result<Chosen, EngineError> {
     #[cfg(feature = "effects")]
-    let roots = crate::fx::catalog::default_roots();
+    let roots = crate::style::catalog::default_roots();
     #[cfg(not(feature = "effects"))]
     let roots = Vec::new();
     resolve_in(wanted, style, flags, project_preview, &roots)
@@ -86,8 +86,8 @@ pub fn resolve_in(
     project_preview: bool,
     roots: &[PathBuf],
 ) -> Result<Chosen, EngineError> {
-    use crate::fx::catalog;
     use crate::project::{CLASSIC, EffectChoice};
+    use crate::style::catalog;
     let bad = |detail: String| refused("error.effect", detail);
     let id = wanted.id.trim();
     if id.is_empty() {
@@ -167,7 +167,7 @@ pub fn resolve_in(
 }
 
 #[cfg(feature = "effects")]
-fn check_preset(effect: &crate::fx::plugin::Effect, preset: Option<&str>) -> Result<(), String> {
+fn check_preset(effect: &crate::style::plugin::Effect, preset: Option<&str>) -> Result<(), String> {
     match preset {
         Some(p) if !effect.presets.iter().any(|(id, _)| id == p) => {
             let ids: Vec<&str> = effect.presets.iter().map(|(id, _)| id.as_str()).collect();
@@ -184,7 +184,7 @@ fn check_preset(effect: &crate::fx::plugin::Effect, preset: Option<&str>) -> Res
 /// Each given setting read by its declared type.
 #[cfg(feature = "effects")]
 fn typed(
-    effect: &crate::fx::plugin::Effect,
+    effect: &crate::style::plugin::Effect,
     given: &[(String, Given)],
 ) -> Result<std::collections::BTreeMap<String, J>, String> {
     let mut out = std::collections::BTreeMap::new();
@@ -242,11 +242,11 @@ pub fn parse(id: &str, kind: &str, text: &str) -> Result<J, String> {
 /// type, out of range, an installed family where no font is taken.
 #[cfg(feature = "effects")]
 fn validate(
-    effect: &crate::fx::plugin::Effect,
+    effect: &crate::style::plugin::Effect,
     preset: Option<&str>,
     values: &std::collections::BTreeMap<String, J>,
 ) -> Result<(), String> {
-    crate::fx::plugin::PluginScene::new(effect.clone(), 1920, 1080, Vec::new(), preset)
+    crate::style::plugin::PluginScene::new(effect.clone(), 1920, 1080, Vec::new(), preset)
         .with_values(values)
         .map(|_| ())
 }
@@ -323,7 +323,7 @@ pub struct Refused {
 /// The effects a request can name, from the folders the application reads.
 pub fn list() -> Listing {
     #[cfg(feature = "effects")]
-    let roots = crate::fx::catalog::default_roots();
+    let roots = crate::style::catalog::default_roots();
     #[cfg(not(feature = "effects"))]
     let roots = Vec::new();
     list_in(&roots)
@@ -346,7 +346,7 @@ pub fn list_in(roots: &[PathBuf]) -> Listing {
 
 #[cfg(feature = "effects")]
 pub fn list_in(roots: &[PathBuf]) -> Listing {
-    use crate::fx::{catalog, plugin::Effect};
+    use crate::style::{catalog, plugin::Effect};
     let found = catalog::scan(roots);
     let listed = |effect: &Effect, folder: Option<PathBuf>| Listed {
         id: effect.id.clone(),

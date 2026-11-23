@@ -1,12 +1,12 @@
 //! The scene language, its counted limits, the checks of every frame and the
 //! script thread. Every bound of the sandbox has a hostile script here.
 use super::audio::Audio;
-use super::check::Checker;
-use super::draw::{Block, MAX_AREA, MAX_BLURS, MAX_GLYPHS, MAX_PARTICLES, MAX_PASSES, measure};
 use super::script::{FUNCTIONS, MAX_CALLS, MAX_OPS, NOT_YET, RANGE_LIBRARY, READS, ScriptScene};
 use super::thread::{STACK, ScriptThread};
 use super::validate::{Report, grid, validate};
 use super::{Cue, Inputs};
+use crate::fx::check::Checker;
+use crate::fx::draw::{Block, MAX_AREA, MAX_BLURS, MAX_GLYPHS, MAX_PARTICLES, MAX_PASSES, measure};
 use crate::fx::text::Fonts;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -232,7 +232,7 @@ fn the_picture_is_framed_once_per_frame_within_its_ranges() {
          .crop(0.0, 0.0, 1.0, 1.0)); }",
     )
     .unwrap();
-    let v = scene.frame(0.0).unwrap().video.unwrap();
+    let v = scene.frame(0.0).unwrap().frame.video.unwrap();
     assert_eq!((v.scale, v.focus, v.rot), (1.2, [0.6, 0.4], 0.1));
     // Without video(), no framing.
     assert!(
@@ -318,7 +318,7 @@ fn a_layer_shader_is_named_beside_the_scene_and_its_settings_follow_it() {
         ("glow", true, 2.5)
     );
     // An empty layer with a shader is a pass of its own.
-    assert_eq!(super::check::pass_count(&f), 1);
+    assert_eq!(crate::fx::check::pass_count(&f), 1);
     for (bad, why) in [
         (
             "layer().shader(\"glow\").param(8, 1.0)",
@@ -695,7 +695,7 @@ fn shapes_are_bounded() {
 /// The shapes the cutting finds hardest are cut cleanly at the cap.
 #[test]
 fn hard_shapes_are_cut_cleanly() {
-    use super::shapes::{MAX_FILL_POINTS, ear_clip_counted, hard_polygons, self_crossing};
+    use crate::fx::shapes::{MAX_FILL_POINTS, ear_clip_counted, hard_polygons, self_crossing};
     for (name, poly) in hard_polygons(MAX_FILL_POINTS) {
         let px: Vec<[f32; 2]> = poly
             .iter()
@@ -710,7 +710,7 @@ fn hard_shapes_are_cut_cleanly() {
 /// Layers: counted as passes, capped, never nested, their draws counted.
 #[test]
 fn layers_are_counted_and_capped() {
-    use super::draw::{Span, passes};
+    use crate::fx::draw::{Span, passes};
     let s = |first, len| Span {
         first,
         len,
@@ -1095,7 +1095,7 @@ fn the_example_scenes_count_what_the_prototype_counted() {
 /// The hooks NOH gives the engine for scenes stay inside the plugin profile.
 #[test]
 fn the_motion_hooks_are_inside_the_plugin_shader_profile() {
-    crate::fx::plugin_shader::validate(super::paint::MOTION_HOOKS).unwrap();
+    crate::style::plugin_shader::validate(crate::fx::paint::MOTION_HOOKS).unwrap();
 }
 
 /// An atlas that uploads nowhere: enough to lay out, rasterise and pack letters.
@@ -1110,7 +1110,7 @@ impl crate::fx::shaders::Upload for NoGpu {
 /// the glyph atlas is refused when it is prepared.
 #[test]
 fn a_text_first_seen_after_validation_is_drawn_whole_and_a_full_atlas_is_refused() {
-    use super::paint::Painter;
+    use crate::fx::paint::Painter;
     let mut p = Painter::new(1920, 1080, fonts());
     let scene = load_at(
         "fn frame(t, ctx) { draw(text(\"never validated\").size(0.08).scale(2.0)); }",
@@ -1142,7 +1142,7 @@ fn a_text_first_seen_after_validation_is_drawn_whole_and_a_full_atlas_is_refused
 /// frame lays its letters again, in the fresh atlas.
 #[test]
 fn a_frame_that_fills_the_glyph_atlas_is_refused_and_the_next_lays_its_letters_again() {
-    use super::paint::Painter;
+    use crate::fx::paint::Painter;
     let mut p = Painter::new(1920, 1080, fonts());
     let kept = load_at(
         "fn frame(t, ctx) { draw(text(\"kept\").size(0.08)); }",
@@ -1153,7 +1153,7 @@ fn a_frame_that_fills_the_glyph_atlas_is_refused_and_the_next_lays_its_letters_a
     .frame(0.0)
     .unwrap();
     let mut needs = Vec::new();
-    if let super::draw::Draw::Text(td) = &kept.draws[0] {
+    if let crate::fx::draw::Draw::Text(td) = &kept.draws[0] {
         needs.push((td.block.clone(), 1.0));
     }
     p.prepare(&NoGpu, &needs).unwrap();
@@ -1187,9 +1187,9 @@ fn a_frame_that_fills_the_glyph_atlas_is_refused_and_the_next_lays_its_letters_a
 
 /// Draws a scene's frame through the engine and the compositor.
 fn render(src: &str, w: u32, h: u32, canvas: (u32, u32), t: f64) -> Vec<u8> {
-    use super::paint::{MOTION_HOOKS, Painter, draw_frame};
     use crate::fx::compose::Compositor;
     use crate::fx::gl::GlRenderer;
+    use crate::fx::paint::{MOTION_HOOKS, Painter, draw_frame};
     use crate::fx::shaders::Output;
     let mut gpu =
         GlRenderer::headless(w, h, canvas.0 as f32, canvas.1 as f32, Output::PremulGamma).unwrap();
@@ -1254,9 +1254,9 @@ pub(crate) fn motion_gpu_checks() {
 /// reference machine) are checked (a debug build's GPU figures include the
 /// processor time spent inside the query).
 fn shape_timings() {
-    use super::paint::{Painter, draw_frame};
     use crate::fx::compose::Compositor;
     use crate::fx::gl::GlRenderer;
+    use crate::fx::paint::{Painter, draw_frame};
     use crate::fx::shaders::Output;
     use glow::HasContext;
     let Some(bench) = std::env::var_os("NOH_MOTION_BENCH") else {
@@ -1391,10 +1391,10 @@ fn the_window_overlay_is_the_exports() {
 /// Without a framing the export's bytes are unchanged, and the identity framing
 /// gives them back exactly.
 fn the_paths_frame_the_picture_alike() {
-    use super::reframe::{Framing, VideoDraw, resample};
     use crate::fx::compose::Compositor;
     use crate::fx::gl::{GlRenderer, Matrix, Reframe, YuvMix};
     use crate::fx::quad::QuadPainter;
+    use crate::fx::reframe::{Framing, VideoDraw, resample};
     use crate::fx::shaders::Output;
     use glow::HasContext;
     let (w, h) = (640usize, 360usize);
@@ -1576,9 +1576,9 @@ fn the_paths_frame_the_picture_alike() {
 /// through the framing, as the CPU does, covering and centred or as the scene
 /// frames it; without a framing it refuses the picture.
 fn a_vertical_frame_is_made_from_a_wide_picture() {
-    use super::reframe::{VideoDraw, resample};
     use crate::fx::compose::Compositor;
     use crate::fx::gl::{GlRenderer, Matrix, Reframe, YuvMix};
+    use crate::fx::reframe::{VideoDraw, resample};
     use crate::fx::shaders::Output;
     let (sw, sh) = (640usize, 360usize);
     let (w, h) = (180usize, 320usize);
@@ -1649,7 +1649,7 @@ fn a_vertical_frame_is_made_from_a_wide_picture() {
 /// A fixture scene with the shaders beside it, through the export's path (the
 /// script thread, its validation, `MotionLayer` with the shaders compiled on
 /// the engine's context): the overlay at `t` and what the frame drew.
-fn render_scene(name: &str, t: f64, show: bool) -> (Vec<u8>, super::paint::PaintStats) {
+fn render_scene(name: &str, t: f64, show: bool) -> (Vec<u8>, crate::fx::paint::PaintStats) {
     use super::layer::MotionLayer;
     use super::thread::ScriptThread;
     use crate::fx::export::Overlay;
@@ -1658,7 +1658,7 @@ fn render_scene(name: &str, t: f64, show: bool) -> (Vec<u8>, super::paint::Paint
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/motion")
         .join(format!("{name}.rhai"));
-    let shaders = super::shader::read_beside(&path).unwrap();
+    let shaders = crate::fx::layer_shader::read_beside(&path).unwrap();
     let mut inp = inputs(1916, 1080);
     inp.shaders = shaders.iter().map(|(n, _)| n.clone()).collect();
     let thread = ScriptThread::start(
@@ -1753,9 +1753,9 @@ fn shader_layers_draw_or_hide() {
 /// reframing (between two GPU timestamps around the submission, 48 frames
 /// each): what reframing adds to an export.
 fn reframe_timing() {
-    use super::reframe::VideoDraw;
     use crate::fx::compose::Compositor;
     use crate::fx::gl::{GlRenderer, Matrix, Reframe, YuvMix};
+    use crate::fx::reframe::VideoDraw;
     use crate::fx::shaders::Output;
     use glow::HasContext;
     let (w, h) = (1920usize, 1080usize);
@@ -1827,7 +1827,7 @@ fn shader_timing(name: &str) {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/motion")
         .join(format!("{name}.rhai"));
-    let shaders = super::shader::read_beside(&path).unwrap();
+    let shaders = crate::fx::layer_shader::read_beside(&path).unwrap();
     let mut inp = inputs(1916, 1080);
     inp.shaders = shaders.iter().map(|(n, _)| n.clone()).collect();
     let thread = ScriptThread::start(

@@ -10,8 +10,8 @@
 use super::catalog::scan;
 use super::line::{Line, Word};
 use super::plugin::PluginScene;
-use super::shaders::Output;
-use super::text::Fonts;
+use crate::fx::shaders::Output;
+use crate::fx::text::Fonts;
 use std::path::{Path, PathBuf};
 
 /// The mockup's lines (index.html, LINES): sung word times in seconds; each cue
@@ -84,7 +84,7 @@ pub(crate) const INSTANTS_MS: [u32; 6] = [300, 900, 1500, 1900, 2800, 3700];
 #[test]
 #[ignore = "mockup stills: needs NOH_FX_STILLS, NOH_FX_STILLS_BG, FFmpeg on PATH and a GPU"]
 fn draw_the_plugins_on_the_mockup_lyrics() {
-    use super::gl::GlRenderer;
+    use crate::fx::gl::GlRenderer;
     let Some(dir) = std::env::var_os("NOH_FX_STILLS").map(PathBuf::from) else {
         return;
     };

@@ -3,12 +3,11 @@
 //! is refused on quantities that are the same on every machine, never on a
 //! measured time.
 use super::draw::{
-    Block, Draw, LETTER_QUAD_EM, MAX_AREA, MAX_BLOCKS, MAX_BLURS, MAX_DRAWS, MAX_GLYPHS,
+    Block, Draw, Frame, LETTER_QUAD_EM, MAX_AREA, MAX_BLOCKS, MAX_BLURS, MAX_DRAWS, MAX_GLYPHS,
     MAX_PARTICLES, MAX_PASSES, Source, layout_key, measure,
 };
-use super::script::{Frame, MAX_CALLS};
 use super::shapes::{PathDraw, ShapeCache, check_paths};
-use crate::fx::text::Fonts;
+use super::text::Fonts;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -180,17 +179,24 @@ impl Checker {
         (area, blurs.len())
     }
 
+    /// The first of the counted checks, on its own: a front end with caps of its
+    /// own (a script's costly calls) says them after this one and before the rest.
+    pub fn draws_cap(&self, f: &Frame, t: f64) -> Result<(), String> {
+        if f.draws.len() > MAX_DRAWS {
+            return Err(format!(
+                "at t={t:.3}: {} draws exceed {MAX_DRAWS}",
+                f.draws.len()
+            ));
+        }
+        Ok(())
+    }
+
     /// The counted checks of one frame at `t`. An error names the instant and the
     /// cap; the caller refuses the frame (export) or leaves its overlay out
     /// (preview).
     pub fn check(&mut self, f: &Frame, t: f64) -> Result<Counts, String> {
         let at = |e: String| format!("at t={t:.3}: {e}");
-        if f.draws.len() > MAX_DRAWS {
-            return Err(at(format!("{} draws exceed {MAX_DRAWS}", f.draws.len())));
-        }
-        if f.calls > MAX_CALLS {
-            return Err(at(format!("{} costly calls exceed {MAX_CALLS}", f.calls)));
-        }
+        self.draws_cap(f, t)?;
         let passes = pass_count(f);
         if passes > MAX_PASSES {
             return Err(at(format!(
@@ -204,16 +210,16 @@ impl Checker {
             v.check().map_err(at)?;
         }
         let (shaders, shader_area) = shader_load(f);
-        if shaders > super::shader::MAX_SHADER_LAYERS {
+        if shaders > super::layer_shader::MAX_SHADER_LAYERS {
             return Err(at(format!(
                 "{shaders} shader layers exceed {}",
-                super::shader::MAX_SHADER_LAYERS
+                super::layer_shader::MAX_SHADER_LAYERS
             )));
         }
-        if shader_area > super::shader::MAX_SHADER_AREA {
+        if shader_area > super::layer_shader::MAX_SHADER_AREA {
             return Err(at(format!(
                 "shader layers computing {shader_area:.2} frames of pixels exceed {} (full resolution counts 1, half a quarter)",
-                super::shader::MAX_SHADER_AREA
+                super::layer_shader::MAX_SHADER_AREA
             )));
         }
         let mut c = Counts {

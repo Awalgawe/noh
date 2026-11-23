@@ -263,7 +263,8 @@ mod engine {
         ffmpeg: &Path,
         track: &SubtitleTrack,
     ) -> Result<Prepared, String> {
-        use noh::motion::{layer, shader, song, validate};
+        use noh::fx::layer_shader as shader;
+        use noh::motion::{layer, song, validate};
         // Only the version the worker checked: the scene and its shaders as
         // they were then, before and after they are read here.
         let unchanged = || {

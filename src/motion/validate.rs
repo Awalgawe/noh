@@ -4,9 +4,9 @@
 //! It refuses on counted quantities only; measured time is reported, never a
 //! reason to refuse. It does not replace the check of each frame evaluated
 //! afterwards: between two of its instants a script may still exceed a cap.
-use super::check::{Checker, pass_count};
-use super::draw::{BoxF, Draw, layout_key, measure};
-use super::script::{Frame, MAX_CALLS, MAX_OPS, ScriptScene};
+use super::script::{MAX_CALLS, MAX_OPS, ScriptScene};
+use crate::fx::check::{Checker, pass_count};
+use crate::fx::draw::{BoxF, Draw, Frame, layout_key, measure};
 use crate::fx::text::Fonts;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -184,7 +184,7 @@ pub fn validate(
     let mut times = Vec::with_capacity(instants.len());
     for &t in instants {
         let f = scene.frame(t)?;
-        let c = checker.check(&f, t)?;
+        let c = f.check(checker, t)?;
         rotated += place_texts(
             &f,
             t,
@@ -229,7 +229,7 @@ pub fn validate(
         rep.max_draws = rep.max_draws.max(f.draws.len());
         rep.max_calls = rep.max_calls.max(f.calls);
         rep.max_reads = rep.max_reads.max(f.reads);
-        let (shaders, shader_area) = super::check::shader_load(&f);
+        let (shaders, shader_area) = crate::fx::check::shader_load(&f);
         rep.max_shader_layers = rep.max_shader_layers.max(shaders);
         rep.max_shader_area = rep.max_shader_area.max(shader_area);
         times.push(f.run_ms);

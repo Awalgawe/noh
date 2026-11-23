@@ -41,7 +41,7 @@ pub(super) fn stamp(path: &Path) -> Stamp {
     let m = std::fs::metadata(path).ok()?;
     m.is_file().then_some(())?;
     let mut files = vec![(String::new(), m.modified().ok()?, m.len())];
-    // The shaders beside it (`noh::motion::shader::read_beside`'s folder).
+    // The shaders beside it (`noh::fx::layer_shader::read_beside`'s folder).
     if let Ok(dir) = std::fs::read_dir(path.with_extension("shaders")) {
         let mut shaders: Vec<_> = dir
             .filter_map(|e| {

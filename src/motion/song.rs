@@ -26,7 +26,7 @@ pub struct Song {
 /// beside the subtitles where they exist (`words` cues), split by letters
 /// elsewhere.
 pub fn cues(track: &SubtitleTrack) -> Vec<Cue> {
-    crate::fx::line::from_track(track)
+    crate::style::line::from_track(track)
         .into_iter()
         .map(|l| Cue {
             start: l.start,

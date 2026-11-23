@@ -16,7 +16,7 @@ pub fn loads(
 ) -> Result<(), String> {
     // Read as the export and the scene tools read it: capped, UTF-8.
     let src = super::layer::read_scene(scene)?;
-    let shaders = super::shader::read_beside(scene)?
+    let shaders = crate::fx::layer_shader::read_beside(scene)?
         .into_iter()
         .map(|(name, _)| name)
         .collect();

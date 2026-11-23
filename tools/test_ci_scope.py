@@ -264,7 +264,7 @@ class PluginTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(platforms([path]), {"windows": True, "unix": True})
         # A plugin beside app code: the app builds everywhere and the light check runs with that build.
-        self.assertEqual(ci_scope.select(["assets/effects/neon/effect.json", "src/fx/plugin.rs"]),
+        self.assertEqual(ci_scope.select(["assets/effects/neon/effect.json", "src/style/plugin.rs"]),
                          {"windows": True, "unix": True, "plugins": True})
 
     def test_the_light_check_runs_when_its_own_files_change(self):

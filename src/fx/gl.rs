@@ -576,8 +576,7 @@ impl GlRenderer {
             let blur_dyn_h = ubo(&gl, &[0.0; 8])?;
             let blur_dyn_v = ubo(&gl, &[0.0; 8])?;
             let comp_layer = ubo(&gl, &[width as f32, height as f32, 1.0, 1.0])?;
-            let inst_src =
-                super::shaders::SHADER.replace("HOOKS", &super::plugin_shader::hooks(None));
+            let inst_src = super::shaders::SHADER.replace("HOOKS", &super::shaders::hooks(None));
             let inst_prog = program(&gl, &inst_src, "vs", "fs")?;
             let blur_prog = program(&gl, super::shaders::BLUR, "vs", "fs")?;
             let down_prog = program(&gl, super::shaders::DOWNSAMPLE, "vs", "fs")?;
@@ -650,9 +649,9 @@ impl GlRenderer {
         }
     }
 
-    /// Rebuild the glyph program with plugin hooks (validated beforehand by plugin_shader).
+    /// Rebuild the glyph program with plugin hooks (validated beforehand by whoever hands them over).
     pub fn set_hooks(&mut self, plugin_src: Option<&str>, user: [f32; 16]) -> Result<(), String> {
-        let src = super::shaders::SHADER.replace("HOOKS", &super::plugin_shader::hooks(plugin_src));
+        let src = super::shaders::SHADER.replace("HOOKS", &super::shaders::hooks(plugin_src));
         let prog = unsafe { program(&self.gl, &src, "vs", "fs") }
             .map_err(|e| format!("plugin shader rejected by OpenGL: {e}"))?;
         unsafe { self.gl.delete_program(self.inst_prog) };

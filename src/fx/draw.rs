@@ -2,7 +2,21 @@
 //! script engine, so that a frame can leave the thread that evaluated it), and
 //! the checks the painter would make, done without drawing: the same answer on
 //! every machine. Where text falls comes from the layout alone (no glyph image).
-use crate::fx::text::{Face, Fonts, PGlyph, layout};
+use super::text::{Face, Fonts, PGlyph, layout};
+
+/// One frame as host data: what to draw at an instant, whatever described it.
+#[derive(Clone, Debug)]
+pub struct Frame {
+    pub draws: Vec<Draw>,
+    /// The runs of `draws` that are layers, in order.
+    pub layers: Vec<Span>,
+    /// The sound at this instant, for layer shaders: loudness (0 to 1) and
+    /// seconds since the last sudden rise.
+    pub energy: f32,
+    pub onset_age: f32,
+    /// How the frame frames the picture (`None`: the picture as it is).
+    pub video: Option<super::reframe::VideoDraw>,
+}
 
 /// Format caps: a scene asking for more is refused, not slowed down.
 pub const MAX_DRAWS: usize = 256;

@@ -2,7 +2,7 @@
 //! layout and the coverage glyph atlas (the path the shipped styles use),
 //! rectangles, and stateless particles (a particle's place is a function of its
 //! age, never integrated). Each pass of the frame (a layer, or a run of loose
-//! draws) is one frame of the engine, stacked by `crate::fx::compose`; a run of
+//! draws) is one frame of the engine, stacked by `super::compose`; a run of
 //! vector shapes is a pass of the compositor's own, and a layer holding several
 //! runs is stacked as one group so that it still fades as one picture.
 //!
@@ -10,15 +10,15 @@
 //! author). The hook tells elements apart by the « progress » channel, a
 //! contract between this painter and that hook only: 0..1 is a text or a
 //! rectangle and its dissolve, 2 a dust particle, 3 a petal.
+use super::compose::{Compositor, Fill, Shape};
 use super::draw::{
     Block, Draw, EmitterDraw, MAX_DRAWS, MAX_PARTICLES, MAX_TEXT_SCALE, Source, Span, arrange,
     groups, hex, layout_key, runs,
 };
+use super::gl::GlRenderer;
+use super::shaders::{COV_ATLAS, Inst, Upload};
 use super::shapes::{Paint, PathDraw, ShapeCache, Tess};
-use crate::fx::compose::{Compositor, Fill, Shape};
-use crate::fx::gl::GlRenderer;
-use crate::fx::shaders::{COV_ATLAS, Inst, Upload};
-use crate::fx::text::{Atlas, Fonts};
+use super::text::{Atlas, Fonts};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -232,7 +232,7 @@ pub enum Shaders<'a> {
     Hide,
     /// Drawn with these programs and the sound at that instant.
     Draw {
-        set: &'a super::shader::ShaderSet,
+        set: &'a super::layer_shader::ShaderSet,
         energy: f32,
         onset_age: f32,
     },

@@ -3,13 +3,13 @@
 //! instant and the cap: the export fails, nothing is published), and are painted
 //! by the engine and stacked by the compositor (`paint::draw_frame`), the same
 //! drawing as every other path.
-use super::draw::Block;
-use super::paint::{MOTION_HOOKS, Painter, Shaders, draw_frame_with};
-use super::shader::ShaderSet;
 use super::thread::ScriptThread;
 use crate::fx::compose::Compositor;
+use crate::fx::draw::Block;
 use crate::fx::export::Overlay;
 use crate::fx::gl::GlRenderer;
+use crate::fx::layer_shader::ShaderSet;
+use crate::fx::paint::{MOTION_HOOKS, Painter, Shaders, draw_frame_with};
 use crate::fx::text::Fonts;
 use std::cell::RefCell;
 use std::path::Path;
@@ -51,10 +51,10 @@ pub struct MotionLayer {
     /// and counted (the window's preview by default).
     show_shaders: bool,
     /// What the last frame drew.
-    pub stats: super::paint::PaintStats,
+    pub stats: crate::fx::paint::PaintStats,
     /// How the last frame framed the picture, the frame's size and the source
     /// picture's.
-    video: Option<super::reframe::VideoDraw>,
+    video: Option<crate::fx::reframe::VideoDraw>,
     size: (u32, u32),
     source: (u32, u32),
 }
@@ -100,13 +100,13 @@ impl MotionLayer {
 
     /// The framing of the last frame drawn: the scene's `video()`, or covering
     /// and centred when the frame has another shape than the picture.
-    pub fn framing(&self) -> Option<super::reframe::Framing> {
+    pub fn framing(&self) -> Option<crate::fx::reframe::Framing> {
         let size = (self.size.0 as f32, self.size.1 as f32);
         let src = (self.source.0 as f32, self.source.1 as f32);
         match &self.video {
             Some(v) => Some(v.framing(size, src)),
             None if self.source != self.size => {
-                Some(super::reframe::VideoDraw::default().framing(size, src))
+                Some(crate::fx::reframe::VideoDraw::default().framing(size, src))
             }
             None => None,
         }
@@ -118,7 +118,7 @@ impl MotionLayer {
     }
 
     /// How the last frame drawn framed the picture.
-    pub fn video(&self) -> Option<&super::reframe::VideoDraw> {
+    pub fn video(&self) -> Option<&crate::fx::reframe::VideoDraw> {
         self.video.as_ref()
     }
 
@@ -136,11 +136,11 @@ impl MotionLayer {
     /// Draw one frame made of an empty layer running shader `name` at full
     /// resolution (the check's trial draw and its timing).
     pub fn draw_shader_alone(&mut self, gpu: &mut GlRenderer, name: &str) -> Result<(), String> {
-        let span = super::draw::Span {
+        let span = crate::fx::draw::Span {
             first: 0,
             len: 0,
             opacity: 1.0,
-            shader: Some(super::draw::ShaderSpec {
+            shader: Some(crate::fx::draw::ShaderSpec {
                 name: name.into(),
                 full: true,
                 k: [0.0; 8],
@@ -226,7 +226,7 @@ impl Overlay for MotionLayer {
             shaders,
         )?;
         lost(gpu)?;
-        self.video = f.video;
+        self.video = f.frame.video;
         Ok(comp.texture())
     }
 

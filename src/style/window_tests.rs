@@ -1,8 +1,8 @@
 //! Step A1 (Task 39): a window of lines (past, active, upcoming) with a lead time.
 use super::line::{Line, split_words};
 use super::plugin::{ACTIVE, Effect, NEXT, PAST, PluginScene};
-use super::shaders::{Inst, Upload};
-use super::text::Fonts;
+use crate::fx::shaders::{Inst, Upload};
+use crate::fx::text::Fonts;
 use std::path::Path;
 
 struct NoGpu;
@@ -229,9 +229,9 @@ fn karaoke_with_next_line_shows_it_below_smaller_and_paler() {
     // Ink height: the sprite minus its atlas padding (coverage 24 texels, MSDF range).
     let ink = |i: &Inst| {
         let pad = if i.params[0] == 1.0 {
-            super::shaders::MSDF_RANGE
+            crate::fx::shaders::MSDF_RANGE
         } else {
-            super::text::COV_PAD as f32
+            crate::fx::text::COV_PAD as f32
         } * i.params[3];
         (i.size[1] - 2.0 * pad) * i.xform[2]
     };

@@ -53,6 +53,8 @@ pub mod scrub;
 mod sequence;
 pub mod shorts;
 mod storage;
+#[cfg(feature = "effects")]
+pub mod style;
 pub mod subtitle_edit;
 pub mod subtitle_srt;
 pub mod subtitle_track;
