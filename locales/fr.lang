@@ -568,6 +568,7 @@ warning.effect_overflow=L’effet sort de la zone de sécurité du Short (premi�
 warning.effect_off_frame=Des sous-titres sortent de l’image (première fois à {0}).
 warning.effect_font_missing=La police « {0} » n’est pas installée : le texte est dessiné dans la police de l’effet.
 warning.effect_word_too_wide=Un mot est plus large que la zone du texte : il dépasse, NOH ne le coupe pas (première fois à {0}).
+warning.effect_heavy=L’effet dessine beaucoup à la fois : l’export peut être lent (première fois à {0}).
 effect.overflow=Cet effet sort de la zone de sécurité du Short.
 warning.effect_fallback=Votre carte graphique n’a pas pu dessiner l’effet : les sous-titres classiques ont été dessinés autrement.
 warning.caption_colors_old_ffmpeg=Ce FFmpeg dessine les sous-titres dans un ancien standard de couleurs : leurs couleurs peuvent être légèrement décalées (le rouge sort un peu plus clair). FFmpeg 7.1 ou plus récent les dessine exactement.

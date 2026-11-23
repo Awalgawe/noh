@@ -568,6 +568,7 @@ warning.effect_overflow=效果超出了短视频的安全区域（首次出现�
 warning.effect_off_frame=部分字幕超出了画面（首次出现在 {0}）。
 warning.effect_font_missing=未安装字体“{0}”：文字以效果自带的字体绘制。
 warning.effect_word_too_wide=有单词比文字区域更宽：它会超出区域，NOH 不会拆分单词（首次出现在 {0}）。
+warning.effect_heavy=效果一次绘制的内容很多：导出可能较慢（首次出现在 {0}）。
 effect.overflow=此效果超出了短视频的安全区域。
 warning.effect_fallback=显卡无法绘制该效果，经典字幕已改用其他方式绘制。
 warning.caption_colors_old_ffmpeg=此 FFmpeg 使用较旧的色彩标准绘制字幕，颜色可能略有偏差（红色会稍亮）。FFmpeg 7.1 或更高版本可准确绘制。

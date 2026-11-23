@@ -12,8 +12,8 @@
 //! rectangle and its dissolve, 2 a dust particle, 3 a petal.
 use super::compose::{Compositor, Fill, Shape};
 use super::draw::{
-    Block, Draw, EmitterDraw, MAX_DRAWS, MAX_PARTICLES, MAX_TEXT_SCALE, Source, Span, arrange,
-    groups, hex, layout_key, runs,
+    Block, Draw, EmitterDraw, Frame, MAX_DRAWS, MAX_PARTICLES, MAX_TEXT_SCALE, Run, Source, Span,
+    arrange, groups, hex, layout_key, runs,
 };
 use super::gl::GlRenderer;
 use super::shaders::{COV_ATLAS, Inst, Upload};
@@ -526,8 +526,9 @@ impl Painter {
                     main.append(&mut fills);
                 }
                 Draw::Emitter(e) => self.emit(gpu, e, t, &mut glow, &mut main, &mut stats)?,
-                // Shapes are drawn by their own pass, not by the engine.
-                Draw::Path(_) => {}
+                // Shapes are drawn by their own pass, not by the engine; prepared
+                // instances are handed to the engine as they are.
+                Draw::Path(_) | Draw::Prepared(_) => {}
             }
         }
         if self.atlas.stats.atlas_resets != resets {
@@ -663,6 +664,57 @@ impl Painter {
     }
 }
 
+/// What a frame that needs more than one call of the renderer is drawn with.
+pub struct Stage<'a> {
+    pub painter: &'a mut Painter,
+    pub comp: &'a mut Compositor,
+    pub shaders: Shaders<'a>,
+}
+
+/// Where a drawn frame is.
+pub enum Drawn {
+    /// In the renderer's own output (`GlRenderer::output_texture`); the rows
+    /// read back when asked for, and the renderer's times.
+    Direct(Vec<u8>, super::shaders::FrameTimes),
+    /// In the stage's compositor (`Compositor::texture`).
+    Stacked(PaintStats),
+}
+
+/// The frame's only draw, when the frame is one draw of prepared instances and
+/// nothing else: what takes the direct path.
+pub fn direct(f: &Frame) -> Option<&super::draw::Prepared> {
+    match (f.draws.as_slice(), f.layers.is_empty(), &f.video) {
+        ([Draw::Prepared(p)], true, None) => Some(p),
+        _ => None,
+    }
+}
+
+/// The one way a frame description is drawn, whatever described it.
+///
+/// A frame that is one draw of prepared instances (every caption style's
+/// frame) takes the direct path: one call of the renderer, no compositor, no
+/// pass more than before styles came through here, so the same pixels by
+/// construction. `read` asks for its rows back. Any other frame is painted and
+/// stacked on the `stage` (the glyph shader's hooks must then be
+/// `MOTION_HOOKS` for its text, rectangles and particles); without a stage it
+/// is refused.
+pub fn draw(
+    gpu: &mut GlRenderer,
+    f: &Frame,
+    t: f64,
+    read: bool,
+    stage: Option<Stage<'_>>,
+) -> Result<Drawn, String> {
+    if let Some(p) = direct(f) {
+        let (rows, times) = gpu.frame(&p.glow, p.gain, &p.main, read)?;
+        return Ok(Drawn::Direct(rows, times));
+    }
+    let Some(s) = stage else {
+        return Err("this frame needs the compositor, and none was given".into());
+    };
+    draw_frame_with(gpu, s.painter, s.comp, &f.draws, &f.layers, t, s.shaders).map(Drawn::Stacked)
+}
+
 /// One frame of a scene drawn into `comp`, its shader layers left out (see
 /// `draw_frame_with`).
 pub fn draw_frame(
@@ -716,9 +768,18 @@ pub fn draw_frame_with(
             comp.begin_group()?;
         }
         let o = if grouped { 1.0 } else { opacity };
-        for (r, is_path) in runs {
+        for (r, kind) in runs {
             let run = &group[r];
-            if is_path {
+            if kind == Run::Prepared {
+                for d in run {
+                    let Draw::Prepared(p) = d else { continue };
+                    gpu.frame(&p.glow, p.gain, &p.main, false)?;
+                    comp.stack(gpu.layer_texture(), o);
+                    total.glyphs += p.glyph_instances();
+                }
+                continue;
+            }
+            if kind == Run::Shapes {
                 let paths: Vec<&PathDraw> = run
                     .iter()
                     .filter_map(|d| match d {

@@ -57,6 +57,11 @@ pub trait Overlay {
     fn font_missing(&self) -> Option<String> {
         None
     }
+    /// The first of the engine's caps the last frame drawn is over, as a
+    /// sentence, for an overlay that draws all the same (a caption style).
+    fn over_caps(&self) -> Option<String> {
+        None
+    }
 }
 
 /// What a path supplies; `run` owns the processes and the GPU work.
@@ -116,6 +121,9 @@ pub struct Stats {
     /// The installed family the effect's font setting names and this machine
     /// lacks (drawn in the plugin's own face instead).
     pub font_missing: Option<String>,
+    /// Output time of the first frame over one of the engine's caps, and which
+    /// (drawn all the same).
+    pub over_caps: Option<(f64, String)>,
 }
 
 pub struct Failure {
@@ -546,6 +554,7 @@ fn chain(
     let mut n = 0usize;
     let mut overflow_at = None;
     let mut too_wide_at = None;
+    let mut over_caps = None;
     let to_us = |p: i64| seconds(p, &time_base).map(|s| (s * 1e6).round() as u64);
     loop {
         let t0 = Instant::now();
@@ -556,6 +565,11 @@ fn chain(
         }
         if scene.too_wide() && too_wide_at.is_none() {
             too_wide_at = Some(t);
+        }
+        if over_caps.is_none()
+            && let Some(why) = scene.over_caps()
+        {
+            over_caps = Some((t, why));
         }
         mix.set_reframe(scene.reframe());
         let t1 = Instant::now();
@@ -669,6 +683,7 @@ fn chain(
             overflow_at,
             too_wide_at,
             font_missing: scene.font_missing(),
+            over_caps,
         },
     ))
 }

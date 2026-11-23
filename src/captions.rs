@@ -400,6 +400,10 @@ pub(crate) fn execute(
                         if let Some(family) = &done.font_missing {
                             report.warning(&crate::caption_gpu::font_missing_warning(family));
                         }
+                        if let Some((at, why)) = &done.over_caps {
+                            report.warning(&crate::caption_gpu::heavy_warning(*at));
+                            report.diagnostic(format!("Caption effect over a cap: {why}."));
+                        }
                         report.diagnostic(done.diagnostic);
                         return Ok(());
                     }
