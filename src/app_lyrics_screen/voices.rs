@@ -546,7 +546,13 @@ impl NohApp {
                         });
                     };
                     for n in 1..=declared as u8 {
-                        row(ui, vec![n], v::name(track, n, l), &format!("Ctrl+{n}"), Some(n));
+                        row(
+                            ui,
+                            vec![n],
+                            v::name(track, n, l),
+                            &format!("Ctrl+{n}"),
+                            Some(n),
+                        );
                     }
                     ui.separator();
                     if declared >= 2 {

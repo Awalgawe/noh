@@ -5613,7 +5613,10 @@ mod tests {
         frame(
             &mut app,
             &ctx,
-            vec![key(Key::Num2, Modifiers::MAC_CMD | Modifiers::COMMAND | Modifiers::SHIFT)],
+            vec![key(
+                Key::Num2,
+                Modifiers::MAC_CMD | Modifiers::COMMAND | Modifiers::SHIFT,
+            )],
         );
         assert_eq!(voices_of(&app)[3], [1]);
         // Voice 3 is not declared: nothing changes, NOH says so.
