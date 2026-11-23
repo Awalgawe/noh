@@ -92,7 +92,7 @@ impl NohApp {
         }
         Some(Key {
             path: f.path.clone(),
-            stamp: inputs.stamp,
+            stamp: inputs.stamp.clone(),
             track: inputs.track,
             canvas: self.effect_canvas()?,
             safe: self
@@ -162,13 +162,16 @@ impl NohApp {
         let preparing = matches!(&self.motion.draw.at, Some((k, Stage::Preparing(_))) if *k == key);
         if let Some((k, Stage::Failed(why))) = &self.motion.draw.at
             && *k == key
+            && why != engine::CHANGED
         {
             let why = why.clone();
             badge(ui, monitor, l.text("motion.preview_failed"), &why);
             return false;
         }
         if !self.motion.draw.ready(&key) {
-            if preparing {
+            // A new version waits for its check: the style stays meanwhile.
+            let changed = matches!(&self.motion.draw.at, Some((k, Stage::Failed(w))) if *k == key && w == engine::CHANGED);
+            if preparing || changed {
                 badge(ui, monitor, l.text("motion.preparing"), "");
             }
             return false;
@@ -242,6 +245,10 @@ mod engine {
     use noh::subtitle_track::SubtitleTrack;
     use std::{cell::RefCell, collections::VecDeque, path::Path, sync::Arc, time::Instant};
 
+    /// Why the window does not prepare a scene whose files moved since the
+    /// worker checked them (the new version is checked first).
+    pub const CHANGED: &str = "the scene changed since its check: it is checked again first";
+
     /// A scene validated by the window, ready to draw.
     pub struct Prepared {
         thread: ScriptThread,
@@ -257,13 +264,24 @@ mod engine {
         track: &SubtitleTrack,
     ) -> Result<Prepared, String> {
         use noh::motion::{layer, shader, song, validate};
+        // Only the version the worker checked: the scene and its shaders as
+        // they were then, before and after they are read here.
+        let unchanged = || {
+            if super::super::app_motion::stamp(&key.path) == key.stamp {
+                Ok(())
+            } else {
+                Err(CHANGED.to_string())
+            }
+        };
+        unchanged()?;
+        let src = layer::read_scene(&key.path)?;
+        let shaders = shader::read_beside(&key.path)?;
+        unchanged()?;
         let seconds = f64::from_bits(key.seconds_bits);
         let words = track.cues.iter().filter(|c| c.words.is_some()).count();
         let gathered = song::gather(
             ffmpeg, wav, true, key.canvas, key.canvas, seconds, track, words, key.safe,
         )?;
-        let src = layer::read_scene(&key.path)?;
-        let shaders = shader::read_beside(&key.path)?;
         let mut inputs = gathered.inputs;
         inputs.shaders = shaders.iter().map(|(n, _)| n.clone()).collect();
         let thread = ScriptThread::start(src, inputs, gathered.audio, false)?;
@@ -458,6 +476,7 @@ mod engine {
     use std::path::Path;
 
     pub enum Prepared {}
+    pub const CHANGED: &str = "";
 
     pub fn prepare(_: &Key, _: &Path, _: &Path, _: &SubtitleTrack) -> Result<Prepared, String> {
         Err("This build of NOH cannot draw scenes.".into())
@@ -509,8 +528,8 @@ mod tests {
             cues: Vec::new(),
         };
         let key = |path: std::path::PathBuf| Key {
+            stamp: super::super::app_motion::stamp(&path),
             path,
-            stamp: None,
             track: 0,
             canvas: (640, 360),
             safe: noh::safe_area::SafeArea::None,
@@ -539,6 +558,43 @@ fn frame(t, ctx) { f(0); }
 fn frame(t, ctx) { draw(rect(0.1, 0.1).at(0.5, 0.5)); }
 ",
         );
-        assert!(engine::prepare(&key(fine), &song, &ffmpeg, &track).is_ok());
+        assert!(engine::prepare(&key(fine.clone()), &song, &ffmpeg, &track).is_ok());
+        // A version the worker did not check is not prepared: the scene file,
+        // or a shader beside it, changed after the key was taken.
+        let shaders = fine.with_extension("shaders");
+        std::fs::create_dir(&shaders).unwrap();
+        let shader = shaders.join("fill.wgsl");
+        std::fs::write(
+            &shader,
+            "fn layer(i: LayerIn) -> vec4<f32> { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }",
+        )
+        .unwrap();
+        let checked = key(fine.clone());
+        assert!(engine::prepare(&checked, &song, &ffmpeg, &track).is_ok());
+        std::fs::write(
+            &shader,
+            "fn layer(i: LayerIn) -> vec4<f32> { return vec4<f32>(1.0, 0.0, 0.0, 1.0); }",
+        )
+        .unwrap();
+        assert_eq!(
+            engine::prepare(&checked, &song, &ffmpeg, &track)
+                .err()
+                .as_deref(),
+            Some(engine::CHANGED)
+        );
+        let checked = key(fine.clone());
+        std::fs::write(
+            &fine,
+            "// noh-motion 0
+fn frame(t, ctx) { draw(rect(0.2, 0.2).at(0.5, 0.5)); }
+",
+        )
+        .unwrap();
+        assert_eq!(
+            engine::prepare(&checked, &song, &ffmpeg, &track)
+                .err()
+                .as_deref(),
+            Some(engine::CHANGED)
+        );
     }
 }

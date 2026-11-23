@@ -26,8 +26,10 @@ const POLL: Duration = Duration::from_secs(2);
 /// What a scene file beside the song is called after the song's stem.
 pub const SUFFIX: &str = ".noh-motion.rhai";
 
-/// A file's identity as the poll compares it.
-pub(super) type Stamp = Option<(SystemTime, u64)>;
+/// A scene's identity as the poll, the check and the window compare it: the
+/// scene file, then each file of its shaders folder (name, time, length),
+/// sorted. None: no scene file.
+pub(super) type Stamp = Option<Vec<(String, SystemTime, u64)>>;
 
 /// The scene a song would have beside it.
 pub fn beside(song: &Path) -> Option<PathBuf> {
@@ -35,10 +37,27 @@ pub fn beside(song: &Path) -> Option<PathBuf> {
     Some(song.with_file_name(format!("{stem}{SUFFIX}")))
 }
 
-fn stamp(path: &Path) -> Stamp {
+pub(super) fn stamp(path: &Path) -> Stamp {
     let m = std::fs::metadata(path).ok()?;
     m.is_file().then_some(())?;
-    Some((m.modified().ok()?, m.len()))
+    let mut files = vec![(String::new(), m.modified().ok()?, m.len())];
+    // The shaders beside it (`noh::motion::shader::read_beside`'s folder).
+    if let Ok(dir) = std::fs::read_dir(path.with_extension("shaders")) {
+        let mut shaders: Vec<_> = dir
+            .filter_map(|e| {
+                let e = e.ok()?;
+                let m = e.metadata().ok()?;
+                Some((
+                    e.file_name().to_string_lossy().into_owned(),
+                    m.modified().ok()?,
+                    m.len(),
+                ))
+            })
+            .collect();
+        shaders.sort();
+        files.extend(shaders);
+    }
+    Some(files)
 }
 
 /// What a check was made for: any change is another check.
@@ -266,7 +285,7 @@ impl NohApp {
             f.asked
                 && match &f.status {
                     Status::Usable { inputs, .. } | Status::Refused { inputs, .. } => self
-                        .motion_inputs(f.stamp)
+                        .motion_inputs(f.stamp.clone())
                         .is_some_and(|now| now != *inputs),
                     _ => false,
                 }
@@ -309,7 +328,7 @@ impl NohApp {
 
     /// What the poll saw beside the song.
     fn motion_seen(&mut self, path: PathBuf, now: Stamp) {
-        match (&mut self.motion.found, now) {
+        match (&mut self.motion.found, &now) {
             (_, None) => {
                 if self.motion.found.is_some() {
                     self.motion_forget();
@@ -335,7 +354,7 @@ impl NohApp {
         let Some(f) = &self.motion.found else {
             return;
         };
-        let Some(inputs) = self.motion_inputs(f.stamp) else {
+        let Some(inputs) = self.motion_inputs(f.stamp.clone()) else {
             return;
         };
         let Some((subtitles, _)) = self.captions_file() else {
@@ -488,7 +507,7 @@ impl NohApp {
             .unwrap_or_default()
             .to_string_lossy()
             .into_owned();
-        let ready = self.motion_inputs(f.stamp).is_some();
+        let ready = self.motion_inputs(f.stamp.clone()).is_some();
         ui.add_space(space::S);
         let (line, _) =
             ui.allocate_exact_size(egui::vec2(ui.available_width(), 1.0), egui::Sense::hover());
@@ -850,7 +869,7 @@ impl NohApp {
             .motion
             .found
             .as_ref()
-            .is_some_and(|f| self.motion_inputs(f.stamp).is_some());
+            .is_some_and(|f| self.motion_inputs(f.stamp.clone()).is_some());
         if motion != "found" && !self.motion.capture_clicked && ready {
             self.motion.capture_clicked = true;
             self.motion_check(ctx, true);

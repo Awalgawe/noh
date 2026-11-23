@@ -633,6 +633,14 @@ impl ProjectInput {
     ) -> Result<crate::project::ProjectRequest, SessionError> {
         let preview = self.preview;
         let motion = match self.motion {
+            // A preview render carries no captions (the app draws them live):
+            // with a scene it would carry no lyrics at all.
+            Some(_) if preview => {
+                return Err(SessionError::new(
+                    "error.scene_preview",
+                    "A scene draws over the export, not over a preview render: leave preview out.",
+                ));
+            }
             Some(motion) => {
                 let Some(c) = &self.captions else {
                     return Err(SessionError::new(
@@ -1482,6 +1490,13 @@ mod tests {
             .into_request(Path::new("ffmpeg"))
             .unwrap_err();
         assert_eq!(error.code, "mcp.invalid_request");
+        let mut previewed = json.clone();
+        previewed["preview"] = true.into();
+        let error = serde_json::from_value::<ProjectInput>(previewed)
+            .unwrap()
+            .into_request(Path::new("ffmpeg"))
+            .unwrap_err();
+        assert_eq!(error.code, "error.scene_preview");
         let mut sized = json;
         sized["captions"]["size"] = "large".into();
         let error = serde_json::from_value::<ProjectInput>(sized)
