@@ -1808,7 +1808,6 @@ mod tests {
             1,
             Action::Answer {
                 answer: Answer::WorkOnCopy,
-                user_confirmed: false,
                 path: Some("relative.srt".into()),
             },
         );
@@ -1817,7 +1816,6 @@ mod tests {
             2,
             Action::Answer {
                 answer: Answer::WorkOnCopy,
-                user_confirmed: false,
                 path: Some(copy.clone()),
             },
         );
@@ -1837,7 +1835,6 @@ mod tests {
                 3,
                 Action::Answer {
                     answer: Answer::KeepSrt,
-                    user_confirmed: true,
                     path: None,
                 }
             )),
@@ -1847,27 +1844,17 @@ mod tests {
             4,
             Action::Answer {
                 answer: Answer::Dismiss,
-                user_confirmed: false,
                 path: None,
             }
         )));
         assert_eq!(w.app.open_question(), None);
-        // Dropping unsaved changes needs the person's word.
+        // A lyrics action that would drop unsaved changes: cancel keeps them.
         w.app.lyrics_save.pending = Some(super::super::app_lyrics::PendingLyrics::Remove);
-        let answer = w.act(
-            5,
-            Action::Answer {
-                answer: Answer::Discard,
-                user_confirmed: false,
-                path: None,
-            },
-        );
-        assert_eq!(refusal_code(&answer), Some("app.confirmation_required"));
+        assert_eq!(w.app.open_question(), Some("lyrics_action"));
         assert!(ok(&w.act(
             6,
             Action::Answer {
                 answer: Answer::Cancel,
-                user_confirmed: false,
                 path: None,
             }
         )));
@@ -1904,10 +1891,14 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         assert!(!w.app.driven_holds_preparation());
-        // Nothing left: no project to check (no clips) and no waveform.
-        w.app.clips.clear();
+        // A check that failed is not run again for the same project: it no
+        // longer keeps the turn, which goes back.
         w.app.project.waveform_loading = false;
+        w.app.diagnosis_error = Some("diagnosis.cancelled".into());
         assert_eq!(turn(&mut w), Some(ToServer::Prepared));
+        // Nothing left either way for the rest of this test.
+        w.app.clips.clear();
+        w.app.diagnosis_error = None;
         assert!(w.app.driven_holds_preparation());
         // A job the agent started ends: the slot's owner is told.
         w.app.driven.as_mut().unwrap().agent_job = true;
@@ -1923,27 +1914,17 @@ mod tests {
     }
 
     #[test]
-    fn a_destructive_answer_needs_the_person_s_confirmation() {
+    fn a_destructive_answer_is_given_as_any_other() {
         use driven::{Action, Answer};
         let mut w = window(true);
         w.app
             .edit_track(|t| noh::subtitle_edit::set_text(t, 0, "Changed by the agent"));
-        assert_eq!(w.app.open_question(), Some("first_edit"));
-        let answer = w.act(
-            1,
-            Action::Answer {
-                answer: Answer::ModifySrt,
-                user_confirmed: false,
-                path: None,
-            },
-        );
-        assert_eq!(refusal_code(&answer), Some("app.confirmation_required"));
-        assert_eq!(w.app.open_question(), Some("first_edit"));
+        // The state names the question the agent answers.
+        assert_eq!(w.latest_state()["question"], "first_edit");
         let answer = w.act(
             2,
             Action::Answer {
                 answer: Answer::KeepSrt,
-                user_confirmed: true,
                 path: None,
             },
         );
@@ -1952,7 +1933,6 @@ mod tests {
             3,
             Action::Answer {
                 answer: Answer::ModifySrt,
-                user_confirmed: true,
                 path: None,
             },
         );

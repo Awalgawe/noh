@@ -533,6 +533,11 @@ fn what_holds_the_folder_is_grouped_by_the_program_that_started_it() {
         ]
     );
     assert!(holders(&[], own).is_empty());
+    // An ordinary window exporting: its worker is noh.exe too, and one window.
+    assert_eq!(
+        holders(&[p(80, 900, "noh.exe"), p(81, 80, "noh.exe")], own),
+        [Holder::Windows(1)]
+    );
     // A server with only the windows it opened for its agent (noh_app_open)
     // is idle: the windows count as windows, with their own FFmpeg.
     let driven = [
@@ -540,6 +545,8 @@ fn what_holds_the_folder_is_grouped_by_the_program_that_started_it() {
         p(71, 70, "noh.exe"),
         p(72, 70, "noh.exe"),
         p(73, 72, "ffmpeg.exe"),
+        // A driven window's own export worker belongs to it.
+        p(74, 72, "noh.exe"),
     ];
     assert_eq!(
         holders(&driven, own),

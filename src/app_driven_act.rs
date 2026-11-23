@@ -553,11 +553,7 @@ impl NohApp {
                 self.driven_mark();
                 Ok(serde_json::Value::Null)
             }
-            Action::Answer {
-                answer,
-                user_confirmed,
-                path,
-            } => self.driven_answer_question(ctx, answer, user_confirmed, path),
+            Action::Answer { answer, path } => self.driven_answer_question(ctx, answer, path),
             Action::RemoveClip { clip_id } => {
                 if self.remove_clip(clip_id) {
                     self.driven_mark();
@@ -755,18 +751,9 @@ impl NohApp {
         &mut self,
         ctx: &egui::Context,
         answer: Answer,
-        user_confirmed: bool,
         path: Option<PathBuf>,
     ) -> Result<serde_json::Value, Refusal> {
         let question = self.open_question();
-        if answer.destructive() && !user_confirmed {
-            let mut refusal = refusal(
-                "app.confirmation_required",
-                "This answer drops work or rewrites a file: ask the person in the conversation, then answer with user_confirmed.",
-            );
-            refusal.details = Some(serde_json::json!({ "question": question }));
-            return Err(refusal);
-        }
         let wrong = |q: Option<&str>, why: &str| {
             let mut refusal = refusal("app.no_such_question", why);
             refusal.details = Some(serde_json::json!({ "question": q }));
@@ -1065,8 +1052,13 @@ impl NohApp {
                 && noh::copies::state(c.item.path()) == noh::copies::State::Preparing
         });
         // The project's check, wanted or running, is part of the preparation.
+        // A check that failed or was cancelled is not run again for the same
+        // project (Preflight::update): it no longer keeps the turn.
         let check = self.inspecting
-            || (!self.busy() && !self.diagnosis_current() && self.diagnostic_request().is_some());
+            || (!self.busy()
+                && !self.diagnosis_current()
+                && self.diagnosis_error.is_none()
+                && self.diagnostic_request().is_some());
         copies || check || self.project.waveform_loading || self.project.waveform_wanted()
     }
 

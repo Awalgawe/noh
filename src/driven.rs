@@ -106,9 +106,10 @@ pub enum LineEdit {
     },
 }
 
-/// One answer to a question of the application. Answers that rewrite or
-/// replace a file need `user_confirmed`: ask the person in the conversation
-/// first.
+/// One answer to a question of the application, as its button gives it.
+/// The open question and its kind are in the state, so the agent knows what
+/// it answers; what NOH keeps for anyone (the replaced lyrics file kept
+/// beside, undo) it keeps here too.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "mcp", derive(rmcp::schemars::JsonSchema))]
 #[cfg_attr(feature = "mcp", schemars(crate = "rmcp::schemars"))]
@@ -128,9 +129,8 @@ pub enum Answer {
     /// path), which becomes the attached lyrics; the original is kept.
     WorkOnCopy,
     /// lyrics_action: go on with the lyrics action, dropping the unsaved
-    /// changes (needs user_confirmed). unsaved_on_close: quit without saving
-    /// (needs user_confirmed). close_while_working: stop the job and quit
-    /// (needs user_confirmed).
+    /// changes. unsaved_on_close: quit without saving. close_while_working:
+    /// stop the job and quit.
     Discard,
     /// unsaved_on_close: save, then quit.
     Save,
@@ -138,16 +138,6 @@ pub enum Answer {
     Retry,
     /// save_failed: close the message (the change stays unsaved).
     Dismiss,
-}
-
-impl Answer {
-    /// Whether this answer drops work or rewrites a file the person has.
-    pub fn destructive(self) -> bool {
-        matches!(
-            self,
-            Answer::ModifySrt | Answer::KeepLyrics | Answer::KeepSrt | Answer::Discard
-        )
-    }
 }
 
 /// A gesture of the agent. Each calls what the matching click calls.
@@ -203,8 +193,6 @@ pub enum Action {
     /// Answer the open question (`state.question`). `path`: for work_on_copy.
     Answer {
         answer: Answer,
-        #[serde(default)]
-        user_confirmed: bool,
         #[serde(default)]
         path: Option<std::path::PathBuf>,
     },

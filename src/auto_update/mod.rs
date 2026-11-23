@@ -637,11 +637,13 @@ pub fn holders(processes: &[Process], own: u32) -> Vec<Holder> {
         // process numbers) each process counts for itself.
         let mut root = process;
         let mut seen = std::collections::HashSet::from([process.pid]);
-        // A NOH window is a window, even one an MCP server opened for its agent
-        // (`noh_app_open`): it waits to be closed like any other.
-        while root.name != "noh.exe"
-            && let Some(parent) = by_pid.get(&root.parent)
-        {
+        // A NOH window an MCP server opened for its agent (`noh_app_open`) is
+        // a window, not its server's work; a window's own workers (noh.exe
+        // too) still belong to their window.
+        while let Some(parent) = by_pid.get(&root.parent) {
+            if root.name == "noh.exe" && parent.name == "noh-mcp.exe" {
+                break;
+            }
             if !seen.insert(parent.pid) {
                 root = process;
                 break;

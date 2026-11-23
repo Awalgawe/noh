@@ -641,7 +641,20 @@ impl Apps {
                 window.acted_at = Some(Instant::now());
             }
         }
-        if heavy && let Err(current) = self.0.slot.take(holder.clone()) {
+        if heavy
+            && let Err(current) = {
+                // Taken and marked under the windows' lock, before the gesture
+                // goes out: a job_done read at any time after finds it held.
+                let mut state = self.0.state.lock().unwrap();
+                let taken = self.0.slot.take(holder.clone());
+                if taken.is_ok()
+                    && let Some(window) = find(&mut state.windows, app_id)
+                {
+                    window.holds_slot = true;
+                }
+                taken
+            }
+        {
             let mut error = AppError::new(
                 "noh.busy_elsewhere",
                 format!(
@@ -663,9 +676,13 @@ impl Apps {
                 .as_ref()
                 .is_ok_and(|r| r["started"] == serde_json::Value::Bool(true));
             let mut state = self.0.state.lock().unwrap();
-            match find(&mut state.windows, app_id) {
-                Some(window) if started => window.holds_slot = true,
-                _ => self.0.slot.release(&holder),
+            if !started {
+                // Not started: given back, unless its job_done already did.
+                let held = find(&mut state.windows, app_id)
+                    .map_or(true, |window| std::mem::take(&mut window.holds_slot));
+                if held {
+                    self.0.slot.release(&holder);
+                }
             }
             schedule(&mut state, &self.0.slot);
         }
@@ -866,6 +883,23 @@ impl Apps {
 /// playing one first, then the one the agent acted in last; none while a heavy
 /// job holds the slot (the turn holder is paused, then resumed).
 fn schedule(state: &mut State, slot: &Slot) {
+    // A window holding the slot that is gone (forgotten, or its process
+    // ended) cannot say job_done any more: its slot is freed here.
+    if let Some(Holder::Window(id)) = slot.holder() {
+        let gone = match find(&mut state.windows, &id) {
+            None => true,
+            Some(window) => {
+                window.refresh();
+                window.exit.is_some()
+            }
+        };
+        if gone {
+            if let Some(window) = find(&mut state.windows, &id) {
+                window.holds_slot = false;
+            }
+            slot.release(&Holder::Window(id));
+        }
+    }
     if state.ended {
         return;
     }
@@ -1650,6 +1684,62 @@ mod tests {
         eventually("the slot given back once the process ended", || {
             h.slot.holder().is_none()
         });
+    }
+
+    #[test]
+    fn a_job_done_read_before_the_answer_never_leaves_the_slot_held() {
+        // The window's job ends at once: its job_done comes before its done.
+        let h = harness(
+            |mut input, mut output, _| {
+                ready(&mut output);
+                while let Some(message) = next(&mut input) {
+                    if let driven::Inbound::Message(ToApp::Act { id, .. }) = message {
+                        send(
+                            &mut output,
+                            &ToServer::JobDone {
+                                outcome: "failed".into(),
+                            },
+                        );
+                        thread::sleep(Duration::from_millis(50));
+                        send(
+                            &mut output,
+                            &ToServer::Done {
+                                id,
+                                result: Some(serde_json::json!({ "started": true })),
+                                error: None,
+                            },
+                        );
+                    }
+                }
+            },
+            roomy(),
+            None,
+        );
+        h.apps.open("Quick").unwrap();
+        assert!(
+            h.apps
+                .act("app-1", driven::Action::Export { short: false })
+                .is_ok()
+        );
+        assert_eq!(h.slot.holder(), None);
+    }
+
+    #[test]
+    fn a_holder_whose_process_ended_frees_the_slot_even_without_its_output_end() {
+        let finish = Arc::new(Mutex::new(false));
+        let prepares = Arc::new(Mutex::new(Vec::new()));
+        let quit = Arc::new(Mutex::new(false));
+        let h = harness(exporter(finish, prepares, quit.clone()), roomy(), None);
+        h.apps.open("Ends").unwrap();
+        assert!(
+            h.apps
+                .act("app-1", driven::Action::Export { short: false })
+                .is_ok()
+        );
+        // Its process is gone while its pipe stays open (a grandchild holding it).
+        *h.processes.lock().unwrap()[0].exit.lock().unwrap() = Some(None);
+        eventually("the scheduler frees the slot", || h.slot.holder().is_none());
+        *quit.lock().unwrap() = true;
     }
 
     #[test]
