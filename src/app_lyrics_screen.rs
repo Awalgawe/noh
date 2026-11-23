@@ -643,6 +643,10 @@ impl NohApp {
             // Who sings (voices mockup): two voices, the lines as a duet (1, 2,
             // both); the badge menu open on the line; the last voice asked to go.
             "-voices" | "-voices-menu" | "-voices-remove" => {
+                // Staged as the person's own lyrics: no first-edit question.
+                if let Some(path) = self.project.track.path.clone() {
+                    self.trust_lyrics(path);
+                }
                 self.edit_track(|t| {
                     t.voices = vec![noh::subtitle_track::Voice::default(); 2];
                     for (k, c) in t.cues.iter_mut().enumerate() {
