@@ -104,6 +104,20 @@ jobs:
               exit 1
             fi
           done
+      - name: Keep the CLI and the library tests for style plugin checks
+        # The PR validation's style plugin job runs them on a plugin change, without compiling.
+        if: matrix.os == 'ubuntu-24.04'
+        shell: bash
+        run: python3 tools/check_style_plugins.py pack --out "$RUNNER_TEMP/noh-plugin-check"
+      - name: Upload the style plugin check pack
+        if: matrix.os == 'ubuntu-24.04'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: noh-plugin-check-linux
+          path: ${{ runner.temp }}/noh-plugin-check/
+          if-no-files-found: error
+          # PRs use their own pack in the same run; main's serve the style-only PRs after it.
+          retention-days: ${{ github.event_name == 'pull_request' && 1 || 14 }}
       - name: Observe native Wayland drops, cancellation and clipboard
         if: runner.os == 'Linux'
         shell: bash
