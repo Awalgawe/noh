@@ -1064,7 +1064,10 @@ impl NohApp {
                 && c.error.is_none()
                 && noh::copies::state(c.item.path()) == noh::copies::State::Preparing
         });
-        copies || self.project.waveform_loading || self.project.waveform_wanted()
+        // The project's check, wanted or running, is part of the preparation.
+        let check = self.inspecting
+            || (!self.busy() && !self.diagnosis_current() && self.diagnostic_request().is_some());
+        copies || check || self.project.waveform_loading || self.project.waveform_wanted()
     }
 
     /// Each frame: ask for the turn when there is something to prepare; give

@@ -336,6 +336,11 @@ impl NohApp {
         {
             return;
         }
+        // A driven window checks its project at its preparation turn only
+        // (app_driven_act.rs): the check decodes media too.
+        if self.driven_holds_preparation() && !self.inspecting {
+            return;
+        }
         let request = self.diagnostic_request();
         let worker = self.worker.clone();
         let preflight = self

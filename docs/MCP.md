@@ -292,6 +292,16 @@ the window or of its monitor to a free path: the screen as it is, or after movin
 the playhead to `at_ms`. It shows NOH's preview, not the exported pixels, and is
 refused while the window is minimized (`app.hidden`).
 
+One heavy job runs at a time per server, its headless tools and its windows
+together: an agent's `export` is refused at once with `noh.busy_elsewhere`
+(naming the job or the window that works) while another job runs, and a
+headless start is refused with `mcp.busy` while a window's job runs. The slot
+is given back when the window says its job ended, or when its process is gone;
+a window that only stopped reading keeps it, since its export may still run.
+The windows prepare their light copies and their waveform one at a time: the
+one the person plays first, then the one the agent acted in last; none while a
+heavy job runs.
+
 `noh_app_close` writes pending lyrics changes first and never discards
 anything: with a question open in the window, or one the write needs (the first
 change of an .srt), nothing closes and `app.question_open` names it; a job
