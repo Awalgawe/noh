@@ -141,7 +141,9 @@ vertical frame needs `safe_area`. With `app_id`, a window the agent drives shows
 the person where the agent looks: its playhead moves to the first instant (a
 sheet: `from_ms`), waiting while the person navigates as `seek` does, and its
 monitor shows the frame's grid (with `grid`) and, on the short, the safe area,
-while the playhead stays there; a refusal of the window starts no job. The
+while the playhead stays there (the window's clock is its montage's: the same as
+the video's when it holds that video or its song); an invalid look moves no
+playhead, and a refusal of the window starts no job. The
 frames are still drawn by the export's engine, in the heavy-job slot. A scene's layer shaders
 (WGSL files in `<scene>.shaders/`, at most 8) are validated with the scene, then
 compiled and drawn once in the worker; a driver that dies on one stops the worker

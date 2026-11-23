@@ -126,8 +126,9 @@ pub struct SceneLookInput {
     /// look. Its playhead moves to the first instant (a sheet: from_ms) as
     /// seek does, waiting while the person navigates, and its monitor shows
     /// the frame's grid (with `grid`) and, on the short, the safe area, while
-    /// the playhead stays there. The frames are still drawn by the export's
-    /// engine, as a job of the heavy-job slot.
+    /// the playhead stays there. The window's clock is its montage's: the same
+    /// as the video's when the window holds that video or its song. The frames
+    /// are still drawn by the export's engine, as a job of the heavy-job slot.
     #[serde(default)]
     #[schemars(length(min = 1))]
     pub app_id: Option<String>,

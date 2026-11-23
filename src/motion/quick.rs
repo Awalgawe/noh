@@ -14,8 +14,8 @@ pub fn loads(
     size: (u32, u32),
     duration: f64,
 ) -> Result<(), String> {
-    let src =
-        std::fs::read_to_string(scene).map_err(|e| format!("the scene cannot be read: {e}"))?;
+    // Read as the export and the scene tools read it: capped, UTF-8.
+    let src = super::layer::read_scene(scene)?;
     let shaders = super::shader::read_beside(scene)?
         .into_iter()
         .map(|(name, _)| name)
@@ -64,10 +64,19 @@ mod tests {
         );
         assert!(loads(&broken, None, (640, 360), 10.0).is_err());
         let missing = dir.path().join("missing.rhai");
-        assert!(
-            loads(&missing, None, (640, 360), 10.0)
-                .unwrap_err()
-                .contains("cannot be read")
+        assert!(loads(&missing, None, (640, 360), 10.0).is_err());
+        // Over the cap the export reads scenes with: refused here too, unread.
+        let big = format!(
+            "// noh-motion 0
+fn frame(t, ctx) {{ }}
+{}",
+            " ".repeat(super::super::layer::MAX_SCENE_BYTES as usize)
         );
+        let too_big = write("big.rhai", &big);
+        assert_eq!(
+            loads(&too_big, None, (640, 360), 10.0),
+            super::super::layer::read_scene(&too_big).map(|_| ())
+        );
+        assert!(loads(&too_big, None, (640, 360), 10.0).is_err());
     }
 }

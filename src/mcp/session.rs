@@ -274,6 +274,17 @@ impl Session {
             .map(|reply| StartReply { lyrics, ..reply })
     }
 
+    /// A scene look's own refusals (its request, a job already running),
+    /// checked before a driven window is moved for it.
+    pub fn scene_look_ready(
+        &self,
+        input: &super::scene::SceneLookInput,
+    ) -> Result<(), SessionError> {
+        check_request_size(input)?;
+        input.clone().into_request(&self.0.default_ffmpeg)?;
+        self.ready_to_start()
+    }
+
     pub fn scene_look(
         &self,
         input: super::scene::SceneLookInput,
