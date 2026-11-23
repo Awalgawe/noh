@@ -1,0 +1,56 @@
+{
+  "engine": 1,
+  "id": "noh.scroll",
+  "name": {"fr": "Paroles qui défilent", "en": "Scrolling lyrics", "de": "Laufender Liedtext", "es": "Letra que se desplaza", "ja": "流れる歌詞", "ko": "흐르는 가사", "zh": "滚动歌词"},
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "target": "text",
+  "params": [
+    {"id": "sung", "type": "color", "default": "#FFFFFF", "level": 1, "label": {"fr": "Couleur chantée", "en": "Sung colour", "de": "Gesungene Farbe", "es": "Color cantado", "ja": "歌った部分の色", "ko": "부른 부분 색", "zh": "已唱颜色"}},
+    {"id": "size", "type": "choice", "default": "medium", "choices": ["small", "medium", "large"], "choice_labels": {"small": {"fr": "Petite", "en": "Small", "de": "Klein", "es": "Pequeño", "ja": "小", "ko": "작게", "zh": "小"}, "medium": {"fr": "Moyenne", "en": "Medium", "de": "Mittel", "es": "Mediano", "ja": "中", "ko": "보통", "zh": "中"}, "large": {"fr": "Grande", "en": "Large", "de": "Groß", "es": "Grande", "ja": "大", "ko": "크게", "zh": "大"}}, "level": 2, "label": {"fr": "Taille", "en": "Size", "de": "Größe", "es": "Tamaño", "ja": "サイズ", "ko": "크기", "zh": "大小"}},
+    {"id": "font", "type": "font", "default": "jost_extrabold", "level": 2, "label": {"fr": "Police", "en": "Font", "de": "Schrift", "es": "Fuente", "ja": "フォント", "ko": "글꼴", "zh": "字体"}}
+  ],
+  "presets": [
+    {"id": "white", "name": {"fr": "Blanc", "en": "White", "de": "Weiß", "es": "Blanco", "ja": "ホワイト", "ko": "화이트", "zh": "白色"}, "values": {"sung": "#FFFFFF"}},
+    {"id": "gold", "name": {"fr": "Doré", "en": "Gold", "de": "Gold", "es": "Dorado", "ja": "ゴールド", "ko": "골드", "zh": "金色"}, "values": {"sung": "#FFD34D"}}
+  ],
+  "layout": {
+    "mode": "line",
+    "font": "$font",
+    "size": {"mul": ["@short", {"landscape": {"mul": [0.066, {"choose": ["$size", {"small": 0.82, "medium": 1, "large": 1.2}]}, {"by_offset": [1, 0.84]}]}, "portrait": {"mul": [0.07, {"choose": ["$size", {"small": 0.8, "medium": 0.9, "large": 1}]}, {"by_offset": [1, 0.7]}]}}]},
+    "case": "none",
+    "line_height": 1.15,
+    "box": {
+      "x": 0.5,
+      "width": {"landscape": 0.88, "portrait": {"add": [0.9, {"mul": [0.06, "@safe"]}]}},
+      "y": {"landscape": 0.49, "portrait": {"sub": [0.5, {"mul": [0.1544, "@safe"]}]}},
+      "anchor": "center"
+    },
+    "align": "left",
+    "visible": "line",
+    "anchor": "unit",
+    "word_lead": 0.08,
+    "preroll": 0.4,
+    "hold": 10,
+    "window": {"before": 2, "after": 2, "lead": 10, "gap": 1.8, "glide": {"duration": 0.42, "curve": "ease_out_cubic"}}
+  },
+  "animate": [
+    {"unit": "line", "slot": "loop", "property": "opacity", "value": {"by_state": {"past": {"by_offset": [0.32, 0.32, {"landscape": 0.096, "portrait": 0}]}, "active": 1, "next": {"by_offset": [{"sub": [1, {"mul": [0.68, {"min": [1, "@line_index"]}]}]}, 0.32, {"landscape": 0.096, "portrait": 0}]}}}},
+    {"unit": "line", "slot": "enter", "property": "opacity", "duration": 0.42, "curve": "ease_out_cubic", "keys": [[0, {"by_offset": [{"sub": [1, {"mul": [0.68, {"min": [1, "@line_index"]}]}]}, 1]}], [1, 1]]},
+    {"unit": "line", "slot": "past", "property": "opacity", "duration": 0.42, "curve": "ease_out_cubic", "keys": [[0, {"by_offset": [1, 3.125, 1]}], [1, 1]]},
+    {"unit": "syllable", "slot": "loop", "property": "wipe_edge", "value": 0.4},
+    {"unit": "syllable", "slot": "active", "property": "wipe", "curve": "linear", "keys": [[0, 0], [1, 1]]},
+    {"unit": "syllable", "slot": "past", "property": "wipe", "value": 1},
+    {"unit": "syllable", "slot": "enter", "property": "offset_y", "duration": 0.15, "curve": "ease_out_cubic", "keys": [[0, 0], [1, -0.06]]},
+    {"unit": "syllable", "slot": "past", "property": "offset_y", "duration": 0.3, "curve": "ease_in_out", "keys": [[0, 0], [1, 0.06]]},
+    {"unit": "syllable", "slot": "future", "property": "glow", "value": 0},
+    {"unit": "syllable", "slot": "active", "property": "glow", "curve": "linear", "keys": [[0, 0], [0.5, 0], [1, {"min": [1, {"max": [0, {"mul": [{"sub": ["@word_duration", 1]}, 1000]}]}]}]]},
+    {"unit": "syllable", "slot": "past", "property": "glow", "duration": 0.3, "curve": "linear", "keys": [[0, {"min": [1, {"max": [0, {"mul": [{"sub": ["@word_duration", 1]}, 1000]}]}]}], [1, 0]]}
+  ],
+  "render": {
+    "passes": [
+      {"kind": "glow", "color": "#FFFFFF", "alpha": 0.22, "alpha2": 0.55, "gain": 1},
+      {"kind": "fill", "color": "#FFFFFF", "color2": "$sung", "alpha": 0.4, "alpha2": 1}
+    ]
+  }
+}
