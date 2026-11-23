@@ -484,6 +484,11 @@ impl NohApp {
             || self.cancelling
             || self.captions.running.is_some()
             || self.shorts.running.is_some()
+            // A driven window waiting for its preparation turn decodes no
+            // preview picture either (the plan's « playback waits for the
+            // copies »): its decoding would take the machine from the window
+            // that prepares or exports.
+            || self.driven_holds_preparation()
     }
     /// The monitor asks for no picture of the time it is on: for a capture's
     /// closing window, whose decoder would outlive it.
@@ -628,7 +633,7 @@ impl NohApp {
         // scrub picture is decoded then.
         // A driven window also waits for its preparation turn (app_driven_act.rs).
         if let Some(warmer) = &self.mini_preview.warmer {
-            warmer.hold(self.preview_blocked() || self.driven_holds_preparation());
+            warmer.hold(self.preview_blocked());
         }
         self.mini_preview.receive_thumbnails(ctx);
         if self.project.range.is_none() {

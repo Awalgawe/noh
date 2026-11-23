@@ -1891,12 +1891,25 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         assert!(!w.app.driven_holds_preparation());
-        // A check that failed is not run again for the same project: it no
-        // longer keeps the turn, which goes back.
+        // A check already asked for this project (here it failed) is not run
+        // again: it no longer keeps the turn, which goes back.
         w.app.project.waveform_loading = false;
         w.app.diagnosis_error = Some("diagnosis.cancelled".into());
+        w.app.preflight = Some(super::super::app_diagnosis::Preflight::dormant(
+            w.app.diagnostic_request(),
+        ));
         assert_eq!(turn(&mut w), Some(ToServer::Prepared));
-        // Nothing left either way for the rest of this test.
+        // A changed project would be checked again: that is pending anew.
+        w.app.fade_in = 0.5;
+        w.app.in_enabled = true;
+        assert!(
+            !w.app
+                .preflight
+                .as_ref()
+                .unwrap()
+                .asked(&w.app.diagnostic_request())
+        );
+        // Nothing left for the rest of this test.
         w.app.clips.clear();
         w.app.diagnosis_error = None;
         assert!(w.app.driven_holds_preparation());

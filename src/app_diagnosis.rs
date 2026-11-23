@@ -25,6 +25,14 @@ struct State {
     closed: bool,
 }
 type Shared = Arc<(Mutex<State>, Condvar)>;
+
+fn same_request(before: &Option<ExportRequest>, after: &Option<ExportRequest>) -> bool {
+    match (before, after) {
+        (Some(before), Some(after)) => before.same_render_settings(after),
+        (None, None) => true,
+        _ => false,
+    }
+}
 pub struct Preflight {
     shared: Shared,
     thread: Option<JoinHandle<()>>,
@@ -152,13 +160,15 @@ impl Preflight {
             ctx,
         }
     }
+    /// Whether `update` would start nothing for `request`: it is the one
+    /// already asked for (checked, failed or cancelled).
+    pub fn asked(&self, request: &Option<ExportRequest>) -> bool {
+        let s = self.shared.0.lock().unwrap();
+        same_request(&s.request, request)
+    }
     pub fn update(&self, request: Option<ExportRequest>, force: bool) -> bool {
         let mut s = self.shared.0.lock().unwrap();
-        let same = match (&s.request, &request) {
-            (Some(before), Some(after)) => before.same_render_settings(after),
-            (None, None) => true,
-            _ => false,
-        };
+        let same = same_request(&s.request, &request);
         if !force && same {
             return false;
         }

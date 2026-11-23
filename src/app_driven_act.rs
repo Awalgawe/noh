@@ -1052,13 +1052,14 @@ impl NohApp {
                 && noh::copies::state(c.item.path()) == noh::copies::State::Preparing
         });
         // The project's check, wanted or running, is part of the preparation.
-        // A check that failed or was cancelled is not run again for the same
-        // project (Preflight::update): it no longer keeps the turn.
+        // A check is pending when one would start for the project as it is
+        // now: not the one already asked for, which checked, failed or was
+        // cancelled (Preflight::update starts nothing for it again).
         let check = self.inspecting
-            || (!self.busy()
-                && !self.diagnosis_current()
-                && self.diagnosis_error.is_none()
-                && self.diagnostic_request().is_some());
+            || (!self.busy() && !self.diagnosis_current() && {
+                let request = self.diagnostic_request();
+                request.is_some() && !self.preflight.as_ref().is_some_and(|p| p.asked(&request))
+            });
         copies || check || self.project.waveform_loading || self.project.waveform_wanted()
     }
 
