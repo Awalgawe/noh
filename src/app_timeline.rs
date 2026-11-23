@@ -1051,6 +1051,8 @@ fn paint_lanes(
             let near = range
                 .is_some_and(|r| cue.start_ms + 500 >= r.start_ms && cue.end_ms <= r.end_ms + 500);
             painter.rect_filled(block, 4, t.surface_2);
+            // Who sings the line, as a thin band (set in the lyrics screen).
+            crate::app_voices::paint_band(&painter, block, &cue.voices, t, 3.0);
             let ink = if near { colors.cue_in } else { t.text_2 };
             if block.width() > 14.0 {
                 let line = cue.text.replace('\n', " / ");

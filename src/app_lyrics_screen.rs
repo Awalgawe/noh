@@ -16,6 +16,7 @@ use noh::{
 use std::sync::Arc;
 
 mod game;
+mod voices;
 
 const MODEBAR_H: f32 = 56.0;
 const FOOT_H: f32 = 44.0;
@@ -161,6 +162,8 @@ pub struct State {
     prompt_h: f32,
     /// The monitor showed the short before the screen opened.
     was_short: bool,
+    /// Who sings each line: the badge menu, Maj+clic's anchor, renaming.
+    voices: voices::Voices,
     /// The zones drawn last frame, for tests.
     #[cfg(test)]
     drawn: Drawn,
@@ -246,6 +249,7 @@ impl Default for State {
             foot_in_game: false,
             prompt_h: PROMPT_H,
             was_short: false,
+            voices: Default::default(),
             #[cfg(test)]
             drawn: Default::default(),
             #[cfg(test)]
@@ -636,6 +640,27 @@ impl NohApp {
             }
             // A job started while the screen was open: read-only.
             "-read-only" => self.cancelling = true,
+            // Who sings (voices mockup): two voices, the lines as a duet (1, 2,
+            // both); the badge menu open on the line; the last voice asked to go.
+            "-voices" | "-voices-menu" | "-voices-remove" => {
+                self.edit_track(|t| {
+                    t.voices = vec![noh::subtitle_track::Voice::default(); 2];
+                    for (k, c) in t.cues.iter_mut().enumerate() {
+                        c.voices = match k % 3 {
+                            0 => vec![1],
+                            1 => vec![2],
+                            _ => vec![1, 2],
+                        };
+                    }
+                    true
+                });
+                if scene == "-voices-menu" {
+                    self.lyrics_screen.voices.menu = Some((i, Rect::ZERO));
+                }
+                if scene == "-voices-remove" {
+                    self.lyrics_screen.voices.remove_ask = Some(2);
+                }
+            }
             _ => {}
         }
     }
@@ -1198,7 +1223,10 @@ impl NohApp {
         // focus (a line's field, a button), the chosen word, then the screen.
         if ctx.input_mut(|i| take_key(i, Key::Escape, plain)) {
             let s = &mut self.lyrics_screen;
-            if s.drag.is_some() {
+            if s.voices.menu.is_some() || s.voices.remove_ask.is_some() {
+                s.voices.menu = None;
+                s.voices.remove_ask = None;
+            } else if s.drag.is_some() {
                 s.drag = None;
                 s.preview = None;
             } else if s.syl.is_some() {
@@ -1215,6 +1243,9 @@ impl NohApp {
             return;
         }
         if ctx.memory(|m| m.has_focus(row_id(cur))) {
+            if self.ls_voice_keys(ctx, cur, track.voices.len()) {
+                return;
+            }
             let Some(c) = self
                 .lyrics_screen
                 .caret
@@ -1310,6 +1341,9 @@ impl NohApp {
         }
         if focus_free && ctx.input_mut(|i| take_key(i, Key::Space, plain)) {
             self.mini_play(ctx);
+        }
+        if focus_free {
+            self.ls_voice_keys(ctx, cur, track.voices.len());
         }
     }
 
@@ -1797,19 +1831,32 @@ impl NohApp {
         );
         let title_w = title.size().x;
         ui.painter().galley(head.min, title, t.text_2);
-        ui.painter().with_clip_rect(head).text(
-            head.min + vec2(title_w + space::S, 0.0),
-            Align2::LEFT_TOP,
+        // Who sings each line: « Voix », then the voices and « + », on the right.
+        let writable = self.lyrics_screen.game.is_none() && !self.lyrics_locked();
+        let legend = self.ls_voice_header(ui, head, track, writable);
+        // The hint goes where the voices leave room for it, whole or not at all
+        // (the narrow window keeps the title and the voices).
+        let hint = ui.painter().layout_no_wrap(
             l.text(if self.lyrics_screen.game.is_some() {
                 "lyrics_screen.text_waits"
             } else if self.lyrics_locked() {
                 "lyrics_screen.text_locked"
             } else {
                 "lyrics_screen.text_hint"
-            }),
+            })
+            .to_string(),
             FontId::proportional(style::text::SMALL),
             t.text_3,
         );
+        let hint_at = head.min + vec2(title_w + space::S, 0.0);
+        if legend >= head.right() {
+            // Nothing on the right: the header's own edge, as before.
+            ui.painter()
+                .with_clip_rect(head)
+                .galley(hint_at, hint, t.text_3);
+        } else if hint_at.x + hint.size().x <= legend - space::S {
+            ui.painter().galley(hint_at, hint, t.text_3);
+        }
         let list = Rect::from_min_max(
             pos2(doc.left() + 6.0, head.bottom() + 4.0),
             pos2(doc.right() - 2.0, doc.bottom() - 6.0),
@@ -1837,8 +1884,12 @@ impl NohApp {
             Cut(usize),
             Join,
             Delete,
+            Voices(usize, Rect, bool),
         }
         let mut ask = None;
+        let voices_on = !track.voices.is_empty();
+        let compact_rows = self.lyrics_screen.compact;
+        let column = if voices_on { voices::COLUMN_W } else { 0.0 };
         let mut left = None;
         let mut draft = self.lyrics_screen.draft.take();
         #[cfg(test)]
@@ -1849,7 +1900,7 @@ impl NohApp {
             .show(&mut inner, |ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 let width = ui.available_width();
-                let text_w = (width - TIME_W - 6.0 - 12.0).max(40.0);
+                let text_w = (width - TIME_W - 6.0 - 12.0 - column).max(40.0);
                 let mut previous = 0;
                 for (i, cue) in track.cues.iter().enumerate() {
                     if cue.start_ms >= previous + GAP_NOTE_MS {
@@ -1940,6 +1991,21 @@ impl NohApp {
                         let listen_at = ui
                             .interact(time_rect, ui.id().with(("listen", i)), Sense::click())
                             .on_hover_text(&listen);
+                        if voices_on {
+                            let at = Rect::from_min_size(
+                                rect.min + vec2(TIME_W + 2.0, 0.0),
+                                vec2(voices::COLUMN_W, ROW_H),
+                            );
+                            if let Some(shift) = self.ls_badge(ui, at, i, &cue.voices, track, !game)
+                            {
+                                ask = Some(Ask::Voices(i, at, shift));
+                            }
+                            if let Some((m, _)) =
+                                self.lyrics_screen.voices.menu.filter(|m| m.0 == i)
+                            {
+                                self.lyrics_screen.voices.menu = Some((m, at));
+                            }
+                        }
                         if !ui.is_rect_visible(rect) {
                             continue;
                         }
@@ -1958,7 +2024,7 @@ impl NohApp {
                         }
                         style::focus(ui, &row);
                         time(ui, time_rect, listen_at.hovered());
-                        let text_at = rect.min + vec2(TIME_W + 6.0, 4.0);
+                        let text_at = rect.min + vec2(TIME_W + 6.0 + column, 4.0);
                         if listen_at.clicked() {
                             ask = Some(Ask::Listen(i));
                         } else if row.clicked() {
@@ -2008,6 +2074,23 @@ impl NohApp {
                                 ask = Some(Ask::Listen(i));
                             }
                             ui.add_space(2.0);
+                            if voices_on {
+                                let (at, _) = ui.allocate_exact_size(
+                                    vec2(voices::COLUMN_W, ROW_H),
+                                    Sense::hover(),
+                                );
+                                let at = Rect::from_min_size(at.min - vec2(2.0, 0.0), at.size());
+                                if let Some(shift) =
+                                    self.ls_badge(ui, at, i, &cue.voices, track, true)
+                                {
+                                    ask = Some(Ask::Voices(i, at, shift));
+                                }
+                                if let Some((m, _)) =
+                                    self.lyrics_screen.voices.menu.filter(|m| m.0 == i)
+                                {
+                                    self.lyrics_screen.voices.menu = Some((m, at));
+                                }
+                            }
                             // The text sits where the other rows paint theirs.
                             let frame =
                                 egui::Frame::NONE.inner_margin(egui::Margin::symmetric(4, 4));
@@ -2082,7 +2165,9 @@ impl NohApp {
                         .filter(|k| *k < d.text.split_whitespace().count());
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 2.0;
-                        ui.add_space(TIME_W + 2.0);
+                        // Under the text in the wide window; from the time column in
+                        // the narrow one, where three buttons need the whole width.
+                        ui.add_space(TIME_W + 2.0 + if compact_rows { 0.0 } else { column });
                         let b = small_button(
                             ui,
                             l.text("lyrics_screen.cut"),
@@ -2149,6 +2234,8 @@ impl NohApp {
         if self.ls_reading() || game {
             // Nothing can be written for a moment (or a game runs): what was
             // asked is dropped, what was typed stays in its field.
+            self.lyrics_screen.voices.menu = None;
+            self.lyrics_screen.voices.remove_ask = None;
             return;
         }
         if self.lyrics_screen.text_focus {
@@ -2183,7 +2270,12 @@ impl NohApp {
                 let i = self.lyrics_screen.cur;
                 self.ls_delete(i);
             }
+            Some(Ask::Voices(i, at, shift)) => self.ls_badge_clicked(i, at, shift),
             None => {}
+        }
+        if let Some(now) = self.ls_track() {
+            self.ls_voice_menu(&ctx, &now);
+            self.ls_voice_remove_ask(&ctx, &now);
         }
     }
 
@@ -2351,6 +2443,7 @@ impl NohApp {
                     );
                 }
                 self.ls_game_block(&painter, lane, view, i, block);
+                crate::app_voices::paint_band(&painter, block, &cue.voices, t, 4.0);
                 continue;
             }
             painter.rect_filled(
@@ -2440,6 +2533,26 @@ impl NohApp {
                         1,
                         t.text_2,
                     );
+                }
+            }
+            // Who sings the line: a band along the top, and its numbers.
+            if !cue.voices.is_empty() {
+                crate::app_voices::paint_band(&painter, block, &cue.voices, t, 4.0);
+                if block.width() > 44.0 {
+                    let label = painter.layout_no_wrap(
+                        crate::app_voices::numbers(&cue.voices),
+                        style::semibold(style::text::SMALL),
+                        t.on_voice,
+                    );
+                    let chip = Rect::from_min_size(
+                        block.min + vec2(6.0, 8.0),
+                        label.size() + vec2(8.0, 0.0),
+                    );
+                    if chip.right() < block.right() - 4.0 {
+                        let fill = crate::app_voices::color(t, cue.voices[0]);
+                        painter.rect_filled(chip, style::radius::S, fill);
+                        painter.galley(chip.min + vec2(4.0, 0.0), label, t.on_voice);
+                    }
                 }
             }
             if current {
@@ -3050,6 +3163,10 @@ impl NohApp {
             Some(CaretKind::Selection) => l.text("lyrics_screen.foot_selection").to_string(),
         };
         key_caps(ui, &text);
+        if !track.voices.is_empty() {
+            row_gap(ui, space::L);
+            key_caps(ui, l.text("lyrics_screen.foot_voices"));
+        }
     }
 
     /// « Ligne supprimée · Annuler », and the short messages that say why a
@@ -4504,7 +4621,88 @@ mod tests {
         "-game-missed",
         "-summary",
         "-read-only",
+        "-voices",
     ];
+
+    /// The voices' pop-ups, over the screen: checked on their own (their texts
+    /// lie over the screen's on purpose).
+    const VOICE_POPUPS: [(&str, &str); 2] = [
+        ("-voices-menu", "lyrics-screen-voice-menu"),
+        ("-voices-remove", "lyrics-screen-voice-remove"),
+    ];
+
+    #[test]
+    fn the_voice_menu_and_the_remove_question_fit_both_windows_in_every_language() {
+        let folder = tempfile::tempdir().unwrap();
+        let ctx = context();
+        let mut wrong = Vec::new();
+        for language in Language::ALL {
+            for (scene, id) in VOICE_POPUPS {
+                for size in windows() {
+                    let mut app = song_app(folder.path(), language, scene);
+                    for _ in 0..4 {
+                        texts_at(&mut app, &ctx, size, false);
+                    }
+                    // The pop-up alone, where the screen put it (its badge and
+                    // the header as drawn by the frames above).
+                    let track = app.ls_track().unwrap();
+                    let mut output = ctx.run_ui(
+                        egui::RawInput {
+                            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, size)),
+                            ..Default::default()
+                        },
+                        |ui| {
+                            app_style::apply(ui.ctx());
+                            app.ls_voice_menu(ui.ctx(), &track);
+                            app.ls_voice_remove_ask(ui.ctx(), &track);
+                        },
+                    );
+                    output.textures_delta.clear();
+                    let mut texts = Vec::new();
+                    for clipped in &output.shapes {
+                        painted(&clipped.shape, clipped.clip_rect, &mut texts);
+                    }
+                    let Some(area) = ctx.memory(|m| m.area_rect(egui::Id::new(id))) else {
+                        wrong.push(format!("{language:?} «{scene}» {size:?}: not shown"));
+                        continue;
+                    };
+                    let window = Rect::from_min_size(Pos2::ZERO, size);
+                    if !window.contains_rect(area) {
+                        wrong.push(format!(
+                            "{language:?} «{scene}» {size:?}: {area:?} leaves the window"
+                        ));
+                    }
+                    let inside: Vec<&Painted> = texts.iter().collect();
+                    if inside.is_empty() {
+                        wrong.push(format!("{language:?} «{scene}» {size:?}: no text"));
+                    }
+                    for (k, p) in inside.iter().enumerate() {
+                        if p.elided
+                            || p.rect.left() < p.clip.left() - 0.5
+                            || p.rect.right() > p.clip.right() + 0.5
+                            || !area.expand(1.0).contains_rect(p.rect)
+                        {
+                            wrong.push(format!("{language:?} «{scene}» {size:?}: cut: {p:?}"));
+                        }
+                        for q in &inside[k + 1..] {
+                            let both = p.rect.intersect(q.rect);
+                            if both.width() > 1.0 && both.height() > 1.0 {
+                                wrong.push(format!(
+                                    "{language:?} «{scene}» {size:?}: one over the other: {p:?} and {q:?}"
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(
+            wrong.is_empty(),
+            "{} misfits:\n{}",
+            wrong.len(),
+            wrong.join("\n")
+        );
+    }
 
     fn song_app(folder: &std::path::Path, language: Language, scene: &str) -> NohApp {
         let mut app = app(folder);
@@ -5225,5 +5423,96 @@ mod tests {
                 assert!(samples[570] < FRAME_BUDGET_MS, "p95 {:.3} ms", samples[570]);
             }
         }
+    }
+
+    fn voices_of(app: &NohApp) -> Vec<Vec<u8>> {
+        app.lyrics_track()
+            .unwrap()
+            .cues
+            .iter()
+            .map(|c| c.voices.clone())
+            .collect()
+    }
+
+    #[test]
+    fn ctrl_digits_set_the_line_s_voices_once_voices_are_declared() {
+        let folder = tempfile::tempdir().unwrap();
+        let ctx = context();
+        let mut app = song_app(folder.path(), Language::Fr, "");
+        cursor(&mut app, &ctx, 2, 0);
+        // No voice declared: the keys do nothing.
+        frame(&mut app, &ctx, vec![key(Key::Num1, Modifiers::COMMAND)]);
+        assert!(voices_of(&app)[2].is_empty());
+        let mut app = song_app(folder.path(), Language::Fr, "-voices");
+        cursor(&mut app, &ctx, 3, 0);
+        for (k, want) in [
+            (Key::Num2, vec![2]),
+            (Key::Num3, vec![1, 2]),
+            (Key::Num1, vec![1]),
+            (Key::Num0, vec![]),
+        ] {
+            frame(&mut app, &ctx, vec![key(k, Modifiers::COMMAND)]);
+            assert_eq!(voices_of(&app)[3], want, "{k:?}");
+        }
+        // The text was not touched, and each key is one undo step.
+        assert_eq!(texts(&app)[3], SONG[3]);
+        assert!(app.undo());
+        assert_eq!(voices_of(&app)[3], [1]);
+    }
+
+    #[test]
+    fn shift_click_on_a_badge_gives_the_lines_between_the_last_set() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = song_app(folder.path(), Language::Fr, "-voices");
+        assert!(app.ls_set_voices(2, 2, vec![2]));
+        let before = voices_of(&app);
+        app.ls_badge_clicked(6, Rect::ZERO, true);
+        let after = voices_of(&app);
+        assert!(after[2..=6].iter().all(|v| v == &[2]), "{after:?}");
+        assert_eq!(after[7], before[7]);
+        assert!(app.lyrics_screen.voices.menu.is_none());
+        // One undo step brings the five lines back.
+        assert!(app.undo());
+        assert_eq!(voices_of(&app), before);
+        // A plain click opens the menu instead.
+        app.ls_badge_clicked(4, Rect::ZERO, false);
+        assert_eq!(app.lyrics_screen.voices.menu.map(|m| m.0), Some(4));
+    }
+
+    #[test]
+    fn a_click_on_a_badge_opens_its_menu_and_escape_closes_it() {
+        let folder = tempfile::tempdir().unwrap();
+        let ctx = context();
+        let mut app = song_app(folder.path(), Language::Fr, "-voices");
+        frame(&mut app, &ctx, Vec::new());
+        let row = app.lyrics_screen.drawn_rows[1];
+        click(
+            &mut app,
+            &ctx,
+            pos2(row.left() + TIME_W + 2.0 + 10.0, row.top() + ROW_H / 2.0),
+        );
+        assert_eq!(app.lyrics_screen.voices.menu.map(|m| m.0), Some(1));
+        frame(&mut app, &ctx, vec![key(Key::Escape, Modifiers::NONE)]);
+        assert!(app.lyrics_screen.voices.menu.is_none());
+        assert!(
+            app.lyrics_screen.open,
+            "Échap closed the menu, not the screen"
+        );
+    }
+
+    #[test]
+    fn badges_and_their_column_appear_only_once_voices_are_declared() {
+        let folder = tempfile::tempdir().unwrap();
+        let ctx = context();
+        let painted_numbers = |app: &mut NohApp| {
+            texts_at(app, &ctx, windows()[0], false)
+                .into_iter()
+                .filter(|p| p.text == "1" || p.text == "2")
+                .count()
+        };
+        let mut app = song_app(folder.path(), Language::Fr, "");
+        assert_eq!(painted_numbers(&mut app), 0);
+        let mut app = song_app(folder.path(), Language::Fr, "-voices");
+        assert!(painted_numbers(&mut app) > 4);
     }
 }
