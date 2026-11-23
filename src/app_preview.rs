@@ -2123,7 +2123,15 @@ impl NohApp {
                     self.mini_set_volume(self.mini_preview.volume);
                 }
             });
-        if let Some(popup) = popup {
+        // A driven window: the zones drawn now filter the next frame's
+        // input. A popup closed by this frame's click (one on another allowed
+        // place) is not drawn again, so its place is not allowed.
+        let shown = popup.filter(|p| !p.response.should_close());
+        #[cfg(test)]
+        {
+            self.project_ui.volume = (Some(response.rect), shown.as_ref().map(|p| p.response.rect));
+        }
+        if let Some(popup) = shown {
             self.driven_allow(popup.response.rect, super::app_driven::Zone::Navigate);
         }
     }

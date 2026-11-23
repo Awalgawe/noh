@@ -1244,6 +1244,33 @@ mod tests {
     }
 
     #[test]
+    fn the_volume_popup_passes_while_shown_and_not_once_closed_elsewhere() {
+        let mut w = window(true);
+        w.frame(vec![]);
+        let button = w.app.project_ui.volume.0.expect("the volume button");
+        w.click(button.center());
+        let popup = w.app.project_ui.volume.1.expect("the volume popup");
+        // The popup's own zone (other zones drawn later may overlap it).
+        let allowed = |w: &Window| {
+            let gate = &w.app.driven.as_ref().unwrap().gate;
+            gate.zones.contains(&(popup, Zone::Navigate))
+        };
+        assert!(allowed(&w));
+        // A click on the ruler, an allowed place outside it, closes it: from
+        // the next frame on, its place is not allowed.
+        let ruler = w.ruler();
+        let at = [0.1, 0.5, 0.9]
+            .map(|f| Pos2::new(ruler.left() + ruler.width() * f, ruler.center().y))
+            .into_iter()
+            .find(|p| !popup.contains(*p))
+            .expect("a place on the ruler outside the popup");
+        w.frame(vec![Event::PointerMoved(at), press(at, true)]);
+        w.frame(vec![press(at, false)]);
+        assert_eq!(w.app.project_ui.volume.1, None);
+        assert!(!allowed(&w));
+    }
+
+    #[test]
     fn the_history_menu_passes_while_shown_and_not_once_closed() {
         let mut w = window(true);
         // A question open: only the badge and its menu pass.
