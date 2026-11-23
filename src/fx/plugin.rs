@@ -2229,6 +2229,41 @@ impl PluginScene {
         }
     }
 
+    /// What a shader hook reads in `g.user` (float `n` is `g.user[n / 4][n % 4]`):
+    /// the effect's settings as this scene resolves them (preset, values,
+    /// orientation), packed in the order of `params`. A number takes one float
+    /// (its value), a bool one (0 or 1), a choice one (its index in `choices`), a
+    /// colour three (its linear red, green and blue, as pass colours are); a
+    /// palette and a font take none. Packing stops at the first setting that no
+    /// longer fits in the 16 floats; the floats left read 0.
+    pub fn hook_user(&self) -> [f32; 16] {
+        let mut user = [0.0f32; 16];
+        let mut n = 0;
+        for p in &self.effect.params {
+            let v: Vec<f32> = match self.params.get(&p.id) {
+                Some(PVal::Num(x)) => vec![*x as f32],
+                Some(PVal::Bool(b)) => vec![f32::from(u8::from(*b))],
+                Some(PVal::Color(c)) => c
+                    .iter()
+                    .map(|k| srgb_to_linear(*k as f32 / 255.0))
+                    .collect(),
+                Some(PVal::Text(t)) if p.kind == "choice" => vec![
+                    p.choices
+                        .iter()
+                        .position(|c| c == t)
+                        .map_or(0.0, |i| i as f32),
+                ],
+                _ => Vec::new(),
+            };
+            if n + v.len() > user.len() {
+                break;
+            }
+            user[n..n + v.len()].copy_from_slice(&v);
+            n += v.len();
+        }
+        user
+    }
+
     /// Parameter values over the preset's (the app's settings for this effect).
     /// A request is a wire format: an unknown id, a wrong type, a choice outside
     /// its list or a number outside its bounds is refused, not ignored.
@@ -3049,12 +3084,15 @@ impl PluginScene {
         // What every instance of the line tells shader hooks: the line's seconds
         // since it showed and until it goes.
         let (since, until) = ((t - self.shown[li].0) as f32, (line_end - t) as f32);
+        // ... and its seconds since its sung end (where a line `past` slot starts).
+        let ended = (t - line.end) as f32;
         for s in &p.shapes {
             let mut s = *s;
             for c in &mut s.color {
                 *c *= line_st.opacity as f32;
             }
             s.aux = [0.0, PASS_PLATE, since, until];
+            s.lane = [0.0, 1.0, ended, 0.0];
             main.push(s);
         }
         // The reveal clip line in canvas y: the block's top moved down by the hidden
@@ -3099,12 +3137,14 @@ impl PluginScene {
                         alpha: f64,
                         em: f32,
                         bx: [f32; 4],
-                        unit_xf: UnitXform|
+                        unit_xf: UnitXform,
+                        lane: [f32; 4]|
          -> Option<Inst> {
             let mut inst =
                 self.plate(pass, pl, ctx, unit, alpha, em, bx, unit_xf, lx, &line_moved)?;
             inst.extra = [-1.0, t as f32, 0.0, 0.0];
             inst.aux = [0.0, PASS_PLATE, since, until];
+            inst.lane = lane;
             inst.xform[3] = clip_of(&inst);
             Some(inst)
         };
@@ -3123,6 +3163,38 @@ impl PluginScene {
         };
         // A letter's pen edge `x` once the letter is scaled by `sx` about `ax` and spaced.
         let edge = |g: &Glyph, x: f32, ax: f32, sx: f32| ax + (x - ax) * sx + spaced(g);
+        // What shader hooks get of each row (`GlyphIn.span`): its left and right
+        // edges in the frame (0..1 across), its letters' spaced pen spans moved by
+        // the line's scale, rotation and offsets. Compose lays words in slots, not
+        // rows: there (and for a row without letters) it is the whole frame.
+        let row_span: Vec<[f32; 2]> = p
+            .rows
+            .iter()
+            .enumerate()
+            .map(|(r, &(top, bottom))| {
+                let (x0, x1) = p
+                    .glyphs
+                    .iter()
+                    .filter(|g| g.row == r)
+                    .fold((f32::MAX, f32::MIN), |(a, b), g| {
+                        (a.min(g.pen[0] + spaced(g)), b.max(g.pen[1] + spaced(g)))
+                    });
+                if self.effect.layout.compose.is_some() || x0 > x1 {
+                    return [0.0, 1.0];
+                }
+                let y = (top + bottom) * 0.5;
+                let at = |x: f32| {
+                    let q = lx.map_or([x, y], |l| l.apply([x, y]));
+                    line_moved(q)[0] / self.w
+                };
+                let (a, b) = (at(x0), at(x1));
+                [a.min(b), a.max(b)]
+            })
+            .collect();
+        let lane = |row: usize| {
+            let [x0, x1] = row_span.get(row).copied().unwrap_or([0.0, 1.0]);
+            [x0, x1, ended, 0.0]
+        };
         for &(pass, pl) in plate_passes.iter().filter(|(_, pl)| pl.on == Unit::Line) {
             for (r, &(top, bottom)) in p.rows.iter().enumerate() {
                 let (x0, x1) = p
@@ -3142,6 +3214,7 @@ impl PluginScene {
                         p.em,
                         [x0, top, x1, bottom],
                         UnitXform::NONE,
+                        lane(r),
                     ));
                 }
             }
@@ -3243,6 +3316,7 @@ impl PluginScene {
                             em,
                             bx,
                             xf,
+                            lane(first.row),
                         ));
                     }
                 }
@@ -3336,6 +3410,7 @@ impl PluginScene {
                             em,
                             bx,
                             xf,
+                            lane(g.row),
                         ));
                     }
                 }
@@ -3400,6 +3475,7 @@ impl PluginScene {
                             g.index as f32,
                         ],
                         aux: [0.0, PASS_FILL, since, until],
+                        lane: lane(g.row),
                     };
                     // Where the wipe splits the glyph (local x) and its edge fade
                     // (local width, 0 for the hard edge), for a wipe under way.
@@ -3576,6 +3652,7 @@ impl PluginScene {
             params: [2.0, 0.0, 0.0, 1.0],
             extra: [-1.0, 0.0, 0.0, 0.0],
             aux: [0.0, PASS_PLATE, 0.0, 0.0],
+            lane: [0.0, 1.0, 0.0, 0.0],
         })
     }
 }
@@ -3732,5 +3809,6 @@ fn solid(cx: f32, cy: f32, w: f32, h: f32, color: [f32; 4]) -> Inst {
         params: [2.0, 0.0, 0.0, 1.0],
         extra: [-1.0, 0.0, 0.0, 0.0],
         aux: [0.0, PASS_PLATE, 0.0, 0.0],
+        lane: [0.0, 1.0, 0.0, 0.0],
     }
 }

@@ -14,8 +14,9 @@ builds are not public releases.
   (animated in opacity, margin, width and sweep), a soft edge on the colour
   sweep, a window of lines that glides to its new place, the scale, rotation and
   rank of a line or chunk, left or right alignment, and, for shader hooks, the
-  pixel's place in the frame, the letter's number, the line's time and the pass
-  being drawn. The bundled styles draw exactly as before. The format is described
+  pixel's place in the frame, the letter's number, the line's time, the pass
+  being drawn, the letter's row, the time since the line was sung and the
+  effect's own settings. The bundled styles draw exactly as before. The format is described
   in the [effect format guide](https://github.com/Awalgawe/noh/blob/main/docs/EFFECTS.md).
 
 ### MCP

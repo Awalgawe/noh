@@ -468,7 +468,7 @@ fn chain(
 ) -> Result<(ExitStatus, Stats), String> {
     let out = one.tree.0.stdout().take().ok_or("missing FFmpeg output")?;
     if let Some(src) = scene.effect.shader.as_deref() {
-        gpu.set_hooks(Some(src), [0.0; 16])?;
+        gpu.set_hooks(Some(src), scene.hook_user())?;
     }
     let mut mix = YuvMix::new(&gpu, matrix).map_err(|e| format!("OpenGL: {e}"))?;
     let mut fonts = Fonts::load()?;

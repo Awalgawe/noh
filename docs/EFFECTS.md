@@ -13,11 +13,13 @@ bundled effects in [`assets/effects`](../assets/effects) are complete examples.
 
 Some features below are marked **(after 0.3.1)**. NOH 0.3.1 and earlier refuse an
 effect that uses one of them (an unknown field, property, value, operator or pass
-kind, or a shader hook reading a `GlyphIn` field they lack), with one exception: a
-`past` track with its own `duration` loads there but is drawn wrong. Those versions
-accept `duration` on any track and hold a past track at its first key, so the timed
-return never happens (a word coloured on its end stays coloured). An effect meant
-for 0.3.1 too must not rely on a timed past track. `engine` stays `1`.
+kind, or a shader hook reading a `GlyphIn` field they lack), with two exceptions
+that load there but are drawn wrong. A `past` track with its own `duration`: those
+versions accept `duration` on any track and hold a past track at its first key, so
+the timed return never happens (a word coloured on its end stays coloured). A
+shader hook reading the settings in `g.user`: those versions declare `g.user` but
+fill it with zeros. An effect meant for 0.3.1 too must rely on neither. `engine`
+stays `1`.
 
 ## Top level
 
@@ -295,6 +297,8 @@ struct GlyphIn {
   line: f32,              // the line's progress, 0 when it shows, 1 when it goes (after 0.3.1)
   line_time: vec2<f32>,   // seconds since the line showed, and until it goes (after 0.3.1)
   pass_kind: f32,         // 0 fill, 1 outline_only, 2 shadow, 3 glow, 4 plate or shape (after 0.3.1)
+  span: vec2<f32>,        // the left and right edges of the letter's row in the frame, 0 to 1 across (after 0.3.1)
+  line_end: f32,          // seconds since the line's sung end, negative before (after 0.3.1)
 };
 struct VertexIn { corner: vec2<f32>, center: vec2<f32>, time: f32, index: f32 };
 ```
@@ -302,12 +306,43 @@ struct VertexIn { corner: vec2<f32>, center: vec2<f32>, time: f32, index: f32 };
 `frame` and `line_time` are the same in the preview and the export at any size:
 a noise drawn from `frame` dissolves alike everywhere. `line_time.y` gives an exit
 its own clock (for example a dissolve over the line's last 0.7 s, with `hold` long
-enough for it); `pass_kind` lets a glow light only an edge the fill cuts.
+enough for it); `line_end` is the clock of what follows the singing (it passes 0
+where a line `past` slot starts); `pass_kind` lets a glow light only an edge the
+fill cuts.
+
+`span` is the row as drawn (its letters with their spacing, moved by the line's
+scale, rotation and offsets), so
+`(i.frame.x - i.span.x) / (i.span.y - i.span.x)` is the pixel's place across its
+row, from 0 at its left edge to 1 at its right, whatever the row's length. A plate
+takes its row's span (a word or letter plate its first letter's row); compose
+shapes and compose letters, laid in slots rather than rows, get the whole frame
+(0, 1).
+
+**(after 0.3.1)** The hooks read the effect's settings in `g.user`, sixteen floats
+(float `n` is `g.user[n / 4][n % 4]`), as the preset, the user and the orientation
+set them. They are packed in the order of `params`, from float 0: a `number` takes
+one float (its value), a `bool` one (0 or 1), a `choice` one (its index in
+`choices`, from 0), a `color` three (its linear red, green and blue, like the pass
+colours a hook gets); a `palette` and a `font` take none. Packing stops at the
+first setting that no longer fits; the floats left read 0. With
+
+```json
+"params": [
+  {"id": "direction", "type": "choice", "default": "left", "choices": ["left", "centre"]},
+  {"id": "edge", "type": "color", "default": "#FFB347"},
+  {"id": "font", "type": "font", "default": "sans"},
+  {"id": "duration", "type": "number", "default": 0.7}
+]
+```
+
+`direction` is `g.user[0].x`, `edge` is `vec3<f32>(g.user[0].y, g.user[0].z,
+g.user[0].w)`, and `duration` is `g.user[1].x`. Adding a setting before others
+moves theirs: keep the order the shader reads.
 
 The shader profile keeps every frame bounded: no loops, no helper function calls,
 no bindings or globals of its own, control nesting at most 12, at most 32 texture
-reads. The hooks can read `g.canvas` (the canvas size), `cov_tex`/`msdf_tex` and
-`samp`.
+reads. The hooks can read `g.canvas` (the canvas size), `g.user` (above),
+`cov_tex`/`msdf_tex` and `samp`.
 
 ## Limits
 

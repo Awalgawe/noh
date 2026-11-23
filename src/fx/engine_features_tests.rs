@@ -1,7 +1,7 @@
 //! Engine additions for the classic caption styles: a timed return to the past
 //! state, plates, a soft wipe edge, a gliding window, the line's scale, rotation
 //! and rank, left/right alignment, and what shader hooks are told about the
-//! pixel, the line and the pass.
+//! pixel, the line and the pass, the letter's row and the effect's settings.
 use super::line::{Line, split_words};
 use super::plugin::{Effect, PluginScene, R};
 use super::shaders::{Inst, PASS_FILL, PASS_GLOW, PASS_OUTLINE, PASS_PLATE, PASS_SHADOW, Upload};
@@ -910,6 +910,145 @@ fn a_hook_reads_the_letter_number_the_line_and_the_pass() {
     .unwrap();
 }
 
+// ---------------------------------------------------------------- settings, row, line end
+
+fn lin(c: f32) -> f32 {
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+#[test]
+fn hooks_read_the_settings_packed_in_their_order() {
+    let e = effect_with(
+        json!([
+            {"id": "speed", "type": "number", "default": 0.7},
+            {"id": "on", "type": "bool", "default": true},
+            {"id": "pal", "type": "palette", "default": ["#FFFFFF"]},
+            {"id": "dir", "type": "choice", "default": "centre", "choices": ["left", "centre", "right"]},
+            {"id": "edge", "type": "color", "default": "#FF8040"},
+            {"id": "font", "type": "font", "default": "sans"},
+            {"id": "size", "type": "number", "default": {"landscape": 1, "portrait": 2}}
+        ]),
+        sans(),
+        json!([]),
+        fill(),
+    )
+    .unwrap();
+    let wide = PluginScene::new(e.clone(), 1920, 1080, ab_cd(), Some("p"));
+    let u = wide.hook_user();
+    assert_eq!(u[0], 0.7);
+    assert_eq!(u[1], 1.0);
+    // A palette takes no float: the choice comes next, as its index.
+    assert_eq!(u[2], 1.0);
+    // A colour takes three: linear red, green, blue.
+    let want = [lin(1.0), lin(128.0 / 255.0), lin(64.0 / 255.0)];
+    for (got, want) in u[3..6].iter().zip(want) {
+        assert!(close(*got, want, 1e-6), "{:?}", &u[3..6]);
+    }
+    // A font takes none either.
+    assert_eq!(u[6], 1.0);
+    assert!(u[7..].iter().all(|v| *v == 0.0));
+    // The orientation's value, and the app's values over the preset's.
+    let tall = PluginScene::new(e, 1080, 1920, ab_cd(), Some("p"));
+    assert_eq!(tall.hook_user()[6], 2.0);
+    let values = [
+        ("dir".to_string(), json!("right")),
+        ("speed".to_string(), json!(1.2)),
+    ]
+    .into_iter()
+    .collect();
+    let set = wide.with_values(&values).unwrap().hook_user();
+    assert_eq!((set[0], set[2]), (1.2, 2.0));
+}
+
+#[test]
+fn packing_stops_at_the_first_setting_that_does_not_fit() {
+    // Fifteen numbers, then a colour (three floats: it does not fit), then a
+    // number that would: the colour and everything after it read 0.
+    let mut params: Vec<Value> = (0..15)
+        .map(|i| json!({"id": format!("p{i}"), "type": "number", "default": i + 1}))
+        .collect();
+    params.push(json!({"id": "c", "type": "color", "default": "#FFFFFF"}));
+    params.push(json!({"id": "last", "type": "number", "default": 99}));
+    let e = effect_with(json!(params), sans(), json!([]), fill()).unwrap();
+    let u = PluginScene::new(e, 1920, 1080, ab_cd(), Some("p")).hook_user();
+    assert_eq!(u[14], 15.0);
+    assert_eq!(u[15], 0.0);
+}
+
+#[test]
+fn every_instance_tells_its_row_s_edges_and_the_line_s_end() {
+    let e = effect(
+        sans(),
+        json!([{"unit": "line", "slot": "loop", "property": "offset_x", "value": 0.5},
+               {"unit": "line", "slot": "loop", "property": "tracking", "value": 0.1}]),
+        json!([{"kind": "plate", "on": "line", "color": "#000000", "margin_x": 0, "margin_y": 0},
+               {"kind": "fill", "color": "#FFFFFF"}]),
+    )
+    .unwrap();
+    let (_, m) = at(&e, ab_cd(), 1.25);
+    // A line plate without margins is laid on the same row edges, as drawn
+    // (spaced and offset): its edges are the span in canvas px.
+    let p = plates(&m)[0];
+    let (x0, x1) = edges(&p);
+    for i in &m {
+        assert!(close(i.lane[0] * 1920.0, x0, 0.05), "{:?} {x0}", i.lane);
+        assert!(close(i.lane[1] * 1920.0, x1, 0.05), "{:?} {x1}", i.lane);
+        // The line is sung until 2 s: 0.75 s before its end.
+        assert!(close(i.lane[2], -0.75, 1e-5), "{:?}", i.lane);
+    }
+    // Each letter lies inside its row.
+    for l in letters(&m) {
+        assert!(l.center[0] > x0 && l.center[0] < x1);
+    }
+}
+
+#[test]
+fn each_row_has_its_own_span_and_the_end_counts_on_after_it() {
+    let e = effect(
+        json!({"font": "sans", "size": 64, "box": {"width": 0.12}, "hold": 1}),
+        json!([]),
+        fill(),
+    )
+    .unwrap();
+    let (_, m) = at(&e, vec![words(1.0, 2.0, "abcd efgh")], 2.5);
+    let mut spans: Vec<[f32; 2]> = m.iter().map(|i| [i.lane[0], i.lane[1]]).collect();
+    spans.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
+    spans.dedup();
+    assert_eq!(spans.len(), 2, "two rows, two spans: {spans:?}");
+    for i in &m {
+        let (a, b) = (i.lane[0] * 1920.0, i.lane[1] * 1920.0);
+        assert!(i.center[0] > a && i.center[0] < b, "{:?}", i.lane);
+        assert!(close(i.lane[2], 0.5, 1e-5), "half a second after the end");
+    }
+}
+
+#[test]
+fn compose_letters_span_the_whole_frame() {
+    let src = std::fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fx/compose/effect.json"),
+    )
+    .unwrap();
+    let e = Effect::from_json(Path::new(""), &src).unwrap();
+    let preset = e.presets[0].0.clone();
+    let mut fonts = Fonts::load().unwrap();
+    let mut scene = PluginScene::new(e, 1920, 1080, ab_cd(), Some(&preset));
+    let (_, _, m, _) = scene.frame(&mut fonts, &NoGpu, 1.25);
+    assert!(!m.is_empty());
+    assert!(m.iter().all(|i| i.lane[0] == 0.0 && i.lane[1] == 1.0));
+}
+
+#[test]
+fn a_hook_reads_the_settings_the_row_and_the_line_end() {
+    super::plugin_shader::validate(
+        "fn shade(i: GlyphIn) -> vec4<f32> {            let across = (i.frame.x - i.span.x) / max(i.span.y - i.span.x, 1e-6);            let edge = vec3<f32>(g.user[0].y, g.user[0].z, g.user[0].w);            return vec4<f32>(edge.r, across, clamp(i.line_end, 0.0, 1.0), 1.0) * i.coverage; }",
+    )
+    .unwrap();
+}
+
 // ---------------------------------------------------------------- GPU
 
 /// Rendered checks, run inside `tests::gpu_checks` (one GL thread).
@@ -917,6 +1056,7 @@ pub(super) fn gpu_engine_features() {
     a_plate_draws_a_rounded_band_under_its_text();
     a_soft_wipe_edge_blends_over_its_width();
     a_hook_sees_the_line_progress_and_the_pass();
+    a_hook_sees_its_settings_its_place_in_the_row_and_the_line_end();
 }
 
 fn render(
@@ -931,8 +1071,8 @@ fn render(
     use super::shaders::Output;
     let mut fonts = Fonts::load().unwrap();
     let mut gpu = GlRenderer::headless(w, h, w as f32, h as f32, Output::StraightSrgb).unwrap();
-    gpu.set_hooks(hooks, [0.0; 16]).unwrap();
     let mut scene = PluginScene::new(e.clone(), w, h, lines, Some("p"));
+    gpu.set_hooks(hooks, scene.hook_user()).unwrap();
     let (g, gain, m, _) = scene.frame(&mut fonts, &gpu, t);
     let (px, _) = gpu.frame(&g, gain, &m, true).unwrap();
     (m, px)
@@ -1022,4 +1162,40 @@ fn a_hook_sees_the_line_progress_and_the_pass() {
         .find(|c| c[1] < 5 && c[3] > 250);
     let core = core.expect("a letter pixel");
     assert!(core[0].abs_diff(137) <= 3, "{core:?}");
+}
+
+fn a_hook_sees_its_settings_its_place_in_the_row_and_the_line_end() {
+    let (w, h) = (480u32, 240u32);
+    let e = effect_with(
+        json!([{"id": "level", "type": "number", "default": 0.25}]),
+        json!({"font": "sans", "size": 64, "box": {"y": 0.5, "anchor": "center"}}),
+        json!([]),
+        fill(),
+    )
+    .unwrap();
+    // Red: the first setting; green: the pixel's place across its row; blue: the
+    // seconds before the line's end.
+    let hooks = "fn shade(i: GlyphIn) -> vec4<f32> { \
+                   let across = clamp((i.frame.x - i.span.x) / max(i.span.y - i.span.x, 1e-6), 0.0, 1.0); \
+                   return vec4<f32>(g.user[0].x, across, -i.line_end, 1.0) * i.coverage; }";
+    let (m, px) = render(&e, vec![words(1.0, 2.0, "MMMM")], 1.25, w, h, Some(hooks));
+    let core = |g: &Inst| {
+        (0..21 * 21)
+            .map(|k| {
+                (
+                    g.center[0] - 10.0 + (k % 21) as f32,
+                    g.center[1] - 10.0 + (k / 21) as f32,
+                )
+            })
+            .map(|(x, y)| pixel(&px, w, x, y))
+            .find(|c| c[3] > 250)
+            .expect("a letter pixel")
+    };
+    let l = letters(&m);
+    let (first, last) = (core(&l[0]), core(&l[l.len() - 1]));
+    // 0.25 linear is 137 once sRGB-encoded; 0.75 is 225.
+    assert!(first[0].abs_diff(137) <= 3, "{first:?}");
+    assert!(first[2].abs_diff(225) <= 3, "{first:?}");
+    // Across the row: low on the first letter, high on the last.
+    assert!(first[1] < 140 && last[1] > 200, "{first:?} {last:?}");
 }

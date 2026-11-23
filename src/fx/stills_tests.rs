@@ -121,8 +121,6 @@ fn draw_the_plugins_on_the_mockup_lyrics() {
         .filter(|e| e.effect.id != "noh.classic")
     {
         let preset = entry.effect.presets[0].0.clone();
-        gpu.set_hooks(entry.effect.shader.as_deref(), [0.0; 16])
-            .unwrap();
         // Values a plugin does not have (size on a plugin without it) are skipped.
         let own: std::collections::BTreeMap<String, serde_json::Value> = values
             .iter()
@@ -133,6 +131,8 @@ fn draw_the_plugins_on_the_mockup_lyrics() {
             .with_values(&own)
             .unwrap()
             .with_frame_check();
+        gpu.set_hooks(entry.effect.shader.as_deref(), scene.hook_user())
+            .unwrap();
         // NOH_FX_STILLS_MS: other instants, comma-separated ms.
         let instants: Vec<u32> = match std::env::var("NOH_FX_STILLS_MS") {
             Ok(list) => list

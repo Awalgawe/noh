@@ -646,16 +646,21 @@ impl GlRenderer {
         let src = super::shaders::SHADER.replace("HOOKS", &super::plugin_shader::hooks(plugin_src));
         let prog = unsafe { program(&self.gl, &src, "vs", "fs") }
             .map_err(|e| format!("plugin shader rejected by OpenGL: {e}"))?;
+        unsafe { self.gl.delete_program(self.inst_prog) };
+        self.set_user(user);
+        self.inst_prog = prog;
+        self.warm_up()
+    }
+
+    /// The values shader hooks read in `g.user` (`PluginScene::hook_user`).
+    pub fn set_user(&mut self, user: [f32; 16]) {
         unsafe {
-            self.gl.delete_program(self.inst_prog);
             self.gl
                 .bind_buffer(glow::UNIFORM_BUFFER, Some(self.globals));
             self.gl
                 .buffer_sub_data_u8_slice(glow::UNIFORM_BUFFER, 32, bytemuck::cast_slice(&user));
             self.gl.bind_buffer(glow::UNIFORM_BUFFER, None);
         }
-        self.inst_prog = prog;
-        self.warm_up()
     }
 
     /// Drivers compile GL programs lazily, at their first draw. Draw every pass once
@@ -718,7 +723,7 @@ impl GlRenderer {
     unsafe fn bind_instances(&self, first: usize) {
         let gl = &self.gl;
         let stride = std::mem::size_of::<Inst>() as i32;
-        let sizes = [2, 2, 4, 4, 4, 4, 4, 4, 4];
+        let sizes = [2, 2, 4, 4, 4, 4, 4, 4, 4, 4];
         unsafe {
             gl.bind_vertex_array(Some(self.inst_vao));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.inst_buf));
