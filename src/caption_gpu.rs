@@ -39,10 +39,12 @@ pub(crate) struct Job {
     /// Classique with `style`.
     pub effect: Option<crate::project::EffectChoice>,
     /// A motion scene drawn instead of the captions (no fallback).
+    #[cfg_attr(not(feature = "motion"), allow(dead_code))]
     pub scene: Option<SceneJob>,
     /// FFmpeg #1's picture size when it differs from the canvas: a scene
     /// makes a frame of another shape (a vertical frame) from the source's
     /// picture. None: FFmpeg #1 outputs the canvas.
+    #[cfg_attr(not(feature = "motion"), allow(dead_code))]
     pub source_size: Option<(u32, u32)>,
     /// FFmpeg #2's encoder, audio and bitstream arguments, before `-progress`.
     pub encode: Vec<String>,
@@ -52,6 +54,7 @@ pub(crate) struct Job {
 }
 
 /// A scene to draw: validated at the output's frames before FFmpeg starts.
+#[cfg_attr(not(feature = "motion"), allow(dead_code))]
 pub(crate) struct SceneJob {
     pub scene: PathBuf,
     /// Where FFmpeg #1's clock starts on the source's (a clip), and how long it runs.

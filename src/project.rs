@@ -160,6 +160,12 @@ impl ProjectRequest {
         Ok(())
     }
 
+    /// Whether the captions are drawn live over a preview (by an effect or a
+    /// scene) rather than burned into it by libass.
+    pub fn drawn_live(&self) -> bool {
+        self.active_effect().is_some() || self.active_motion().is_some()
+    }
+
     /// The scene actually drawn: one is chosen and there are captions (its
     /// lyrics) to draw.
     pub fn active_motion(&self) -> Option<&crate::scene_request::ProjectScene> {

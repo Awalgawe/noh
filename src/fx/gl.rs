@@ -1186,6 +1186,13 @@ impl GlRenderer {
 
     /// Preview: draw the last output over the current viewport (premultiplied).
     pub fn present(&self) {
+        self.present_texture(self.output.tex);
+    }
+
+    /// Preview: draw `texture` (premultiplied, display-encoded RGBA, top row
+    /// first, as this renderer's output) over the current viewport: how the
+    /// window shows a motion scene's overlay, made on this context.
+    pub fn present_texture(&self, texture: glow::Texture) {
         unsafe {
             let gl = &self.gl;
             gl.enable(glow::BLEND);
@@ -1195,7 +1202,7 @@ impl GlRenderer {
             gl.bind_vertex_array(Some(self.empty_vao));
             gl.use_program(Some(self.present_prog));
             gl.active_texture(glow::TEXTURE0);
-            gl.bind_texture(glow::TEXTURE_2D, Some(self.output.tex));
+            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
             gl.bind_sampler(0, Some(self.sampler));
             gl.draw_arrays(glow::TRIANGLES, 0, 3);
             gl.bind_sampler(0, None);

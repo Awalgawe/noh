@@ -1235,6 +1235,7 @@ pub(crate) fn motion_gpu_checks() {
     shapes_past_the_stencil_range_are_all_drawn();
     a_frame_after_a_failed_group_is_whole();
     the_export_overlay_is_the_m2_render();
+    the_window_overlay_is_the_exports();
     shader_layers_draw_or_hide();
     the_paths_frame_the_picture_alike();
     the_dissolve_grain_grows_with_the_text();
@@ -1340,6 +1341,46 @@ fn the_export_overlay_is_the_m2_render() {
             "{name} at {t}: export overlay vs M2 render, worst {worst}/255, {differing} bytes"
         );
         assert_eq!(differing, 0, "{name} at {t}");
+    }
+}
+
+/// Plan § 6.4: the overlay a window draws (its renderer made as on egui's
+/// context, its scene validated over the song as the window does) is the
+/// export's overlay, at the same size and instant: within 2/255 on the
+/// premultiplied colour and the opacity. The final pictures are not compared
+/// (the window composes in RGB over libmpv's picture, the export mixes in YUV).
+fn the_window_overlay_is_the_exports() {
+    use super::layer::MotionLayer;
+    use super::thread::ScriptThread;
+    use crate::fx::export::Overlay;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
+    for (name, t) in [
+        ("layers.rhai", 1.0),
+        ("text_passes.rhai", 1.0),
+        ("shapes.rhai", 1.5),
+    ] {
+        let src = with_header(&fixture(name));
+        let overlay = |gpu: &mut GlRenderer, from: f64| {
+            let thread =
+                ScriptThread::start(src.clone(), inputs(1916, 1080), Audio::silent(), false)
+                    .unwrap();
+            thread.validate(grid(from, 2.0, 24.0)).unwrap();
+            let mut layer = MotionLayer::new(thread, (1916, 1080), 0.0, Vec::new()).unwrap();
+            layer.setup(gpu).unwrap();
+            layer.draw(gpu, t).unwrap();
+            layer.read()
+        };
+        let mut export =
+            GlRenderer::headless(1916, 1080, 1916.0, 1080.0, Output::PremulGamma).unwrap();
+        // The export validates its own interval (a short's), the window the song.
+        let ours = overlay(&mut export, 0.5);
+        let mut window =
+            GlRenderer::on_egui(export.context().clone(), 1916, 1080, 1916.0, 1080.0).unwrap();
+        let shown = overlay(&mut window, 0.0);
+        let (worst, differing) = worst_difference(&ours, &shown);
+        eprintln!("{name} at {t}: window overlay vs export, worst {worst}/255, {differing} bytes");
+        assert!(worst <= 2, "{name} at {t}: {worst}/255");
     }
 }
 
