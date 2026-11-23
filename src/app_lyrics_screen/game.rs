@@ -109,10 +109,16 @@ fn game_units(
             });
             continue;
         }
-        // A word that is not cut is one unit at the Syllables level too.
+        // A word that is not cut is one unit at the Syllables level too. The
+        // Words and Syllables levels take the main words; « Chœurs » takes the
+        // backing vocals, whole.
+        let backing = noh::subtitle_track::backing_flags(&cue.text);
         let mut syllable = 0;
         let mut last_word = usize::MAX;
         for u in shown_units(cue, level == Level::Syllable) {
+            if backing.get(u.word).copied().unwrap_or(false) != (level == Level::Backing) {
+                continue;
+            }
             syllable = if u.word == last_word { syllable + 1 } else { 0 };
             last_word = u.word;
             units.push(GameUnit {
@@ -191,6 +197,7 @@ impl NohApp {
                 Level::Line => "lyrics_screen.did_sync_lines",
                 Level::Word => "lyrics_screen.did_sync_words",
                 Level::Syllable => "lyrics_screen.did_sync_syllables",
+                Level::Backing => "lyrics_screen.did_sync_backing",
             },
             count,
         )
@@ -1033,6 +1040,7 @@ impl NohApp {
                 Level::Line => "lyrics_screen.game_foot_first_line",
                 Level::Word => "lyrics_screen.game_foot_first_word",
                 Level::Syllable => "lyrics_screen.game_foot_first_syllable",
+                Level::Backing => "lyrics_screen.game_foot_first_backing",
             },
             (false, None) => "lyrics_screen.game_foot",
         };
@@ -1048,6 +1056,7 @@ impl NohApp {
                 Level::Line => "lyrics_screen.synced_lines",
                 Level::Word => "lyrics_screen.synced_words",
                 Level::Syllable => "lyrics_screen.synced_syllables",
+                Level::Backing => "lyrics_screen.synced_backing",
             },
             s.count,
         );

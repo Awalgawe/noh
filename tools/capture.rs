@@ -51,6 +51,8 @@ const STATES: &[&str] = &[
     "lyrics-screen-voices",
     "lyrics-screen-voices-menu",
     "lyrics-screen-voices-remove",
+    "lyrics-screen-backing",
+    "lyrics-screen-backing-game",
     "lyrics-first-edit",
     "lyrics-unsaved",
     "lyrics-srt-stale",
@@ -302,6 +304,9 @@ const LAYOUT: &[LayoutCase] = &[
     ("lyrics-screen-voices-menu", "", "de", "light", COMPACT, ""),
     ("lyrics-screen-voices-remove", "", "fr", "dark", WIDE, ""),
     ("lyrics-screen-voices", "", "ja", "dark", COMPACT, ""),
+    ("lyrics-screen-backing", "", "fr", "dark", WIDE, ""),
+    ("lyrics-screen-backing", "", "de", "light", COMPACT, ""),
+    ("lyrics-screen-backing-game", "", "fr", "light", WIDE, ""),
     ("lyrics-lane-tip", "", "fr", "dark", WIDE, ""),
     ("lyrics-lane-tip", "", "de", "light", WIDE, ""),
     // Additional popup states.
