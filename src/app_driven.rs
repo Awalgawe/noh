@@ -742,7 +742,12 @@ impl NohApp {
         if let Some(rect) = badge_rect {
             self.driven_allow(rect, Zone::Badge);
         }
-        if let Some(rect) = menu_rect {
+        // The zones drawn now filter the next frame's input: a menu closed by
+        // this frame's click is not drawn again, so its place is not allowed
+        // (what lies under it, a question's buttons too, stays the agent's).
+        if let Some(rect) = menu_rect
+            && !history_clicked
+        {
             self.driven_allow(rect, Zone::Badge);
         }
         if history_clicked && let Some(d) = &mut self.driven {
@@ -1230,6 +1235,33 @@ mod tests {
         assert_eq!(w.app.clips.len(), 2);
         let output = w.frame(vec![]);
         assert!(Window::painted(&output, ask).is_some());
+    }
+
+    #[test]
+    fn the_history_menu_passes_while_shown_and_not_once_closed() {
+        let mut w = window(true);
+        // A question open: only the badge and its menu pass.
+        w.app
+            .edit_track(|t| noh::subtitle_edit::set_text(t, 0, "Edited by the agent"));
+        w.app.lyrics_edited();
+        assert_eq!(w.app.open_question(), Some("first_edit"));
+        let output = w.frame(vec![]);
+        let history = Window::painted(&output, "History").unwrap();
+        w.click(history.center());
+        let output = w.frame(vec![]);
+        let menu = Window::painted(&output, "Nothing yet.").expect("the menu");
+        let zone = |w: &Window| w.app.driven.as_ref().unwrap().gate.zone_at(menu.center());
+        assert_eq!(zone(&w), Some(Zone::Badge));
+        // The click that closes it: from the next frame on, its place is not
+        // allowed (the frame's zones filter the next frame's input).
+        let at = history.center();
+        w.frame(vec![Event::PointerMoved(at), press(at, true)]);
+        w.frame(vec![press(at, false)]);
+        assert!(!w.app.driven.as_ref().unwrap().history_open);
+        assert_ne!(zone(&w), Some(Zone::Badge));
+        let output = w.frame(vec![]);
+        assert!(Window::painted(&output, "Nothing yet.").is_none());
+        assert_eq!(w.app.open_question(), Some("first_edit"));
     }
 
     #[test]

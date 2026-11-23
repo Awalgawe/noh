@@ -332,7 +332,7 @@ impl NohApp {
                     );
                     refusal.details = Some(serde_json::json!({
                         "user_position": self.user_position(),
-                        "retry_after_ms": (left != Duration::MAX).then(|| left.as_millis() as u64),
+                        "retry_after_ms": (left != Duration::MAX).then_some(left.as_millis() as u64),
                     }));
                     self.driven_answer(p.id, Err(refusal));
                 }
@@ -924,10 +924,7 @@ impl NohApp {
         if show_on_video == Some(true) && !self.has_lyrics() {
             return refused("Captions can be shown once there are lyrics.".into());
         }
-        let before = (
-            self.project.apply_subtitles,
-            self.project.caption_style.clone(),
-        );
+        let before = (self.project.apply_subtitles, self.project.caption_style);
         if preset.is_some() || !values.is_empty() {
             let Some(choice) = self.project.effect.clone() else {
                 return refused("No effect is chosen (choose_effect).".into());
