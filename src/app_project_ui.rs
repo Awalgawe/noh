@@ -6,6 +6,9 @@ pub struct State {
     /// Range-row buttons of the last frame, for tests (creation = Tab order).
     #[cfg(test)]
     pub range_buttons: Vec<(&'static str, egui::Rect)>,
+    /// The volume button and its open popup in the last frame, for tests.
+    #[cfg(test)]
+    pub volume: (Option<egui::Rect>, Option<egui::Rect>),
     /// The times popover's fields.
     pub times: app_range::Times,
 }
@@ -15,6 +18,8 @@ impl Default for State {
             timeline: Default::default(),
             #[cfg(test)]
             range_buttons: Vec::new(),
+            #[cfg(test)]
+            volume: (None, None),
             times: Default::default(),
         }
     }
