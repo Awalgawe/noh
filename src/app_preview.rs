@@ -478,6 +478,10 @@ impl NohApp {
     }
     /// No still or scrub decode while project work, an export (any kind,
     /// preparation included) or a cancellation runs.
+    /// The light copies wait (see `preview_blocked`).
+    pub(super) fn preview_held(&self) -> bool {
+        self.preview_blocked()
+    }
     fn preview_blocked(&self) -> bool {
         self.project.busy()
             || self.job.is_some()
