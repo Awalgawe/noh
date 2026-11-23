@@ -10,8 +10,8 @@
 //! `fx::export::pipe_input` keeps the picture's place against the sound.
 use crate::captions::CaptionStyle;
 use crate::engine::EngineError;
-use crate::{fx, style};
 use crate::subtitle_track::SubtitleTrack;
+use crate::{fx, style};
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
