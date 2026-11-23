@@ -411,6 +411,8 @@ impl super::NohApp {
     fn apply_try(&mut self) {
         let failed = self.style_panel.try_failed.is_some();
         if let Some(c) = self.style_panel.trying.take() {
+            // Applying a style gives the styles back (scene or style, not both).
+            self.motion_use(false);
             self.style_panel.try_failed = None;
             self.choose_effect(Some(c));
             // A style the preview could not draw is applied like any other: the
@@ -538,7 +540,18 @@ impl super::NohApp {
                 }
             });
         }
-        let footer_h = 44.0;
+        // With a scene listed under the styles, the footer's room goes to the
+        // list while it would only say « one style for both » (a try-on or a
+        // warning keeps it).
+        let quiet = self.motion.found.is_some()
+            && self.style_panel.trying.is_none()
+            && self.has_lyrics()
+            && self.project.apply_subtitles
+            && !(self.project.effect.is_some() && self.effects.preview_failure().is_some())
+            && !(self.project.effect.is_some()
+                && self.mini_preview.short
+                && self.effects.overflow());
+        let footer_h = if quiet { 0.0 } else { 44.0 };
         let body_h = (ui.available_height() - footer_h - space::S).max(40.0);
         // A solid bar, as the page body's: beside the preview the list has a fixed
         // height, and a floating bar (shown on hover only) would hide that a third
@@ -561,12 +574,15 @@ impl super::NohApp {
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
                     ui.spacing_mut().scroll = nested;
-                    self.style_cards(ui, false)
+                    self.style_cards(ui, false);
+                    self.motion_section(ui);
                 });
         }
         ui.spacing_mut().scroll = nested;
         ui.add_space((ui.available_height() - footer_h).max(0.0));
-        self.style_footer(ui, false);
+        if !quiet {
+            self.style_footer(ui, false);
+        }
     }
 
     /// Compact: a row under the transport (header, one scrolling line of cards).
@@ -674,11 +690,13 @@ impl super::NohApp {
                 for choice in chunk {
                     let effect = self.effect_of(choice);
                     let name = effect_name(effect.as_ref(), &choice.id, &lang);
-                    let applied = self
-                        .project
-                        .effect
-                        .as_ref()
-                        .is_some_and(|a| a.id == choice.id);
+                    // A scene in use sets the styles aside: none is « in use ».
+                    let applied = !self.motion.used
+                        && self
+                            .project
+                            .effect
+                            .as_ref()
+                            .is_some_and(|a| a.id == choice.id);
                     let tried = self
                         .style_panel
                         .trying
@@ -792,8 +810,11 @@ impl super::NohApp {
                 .as_ref()
                 .is_some_and(|a| a.id == choice.id);
             // The applied card ends a try-on; another card is tried, not applied.
+            // With a scene in use, the style that was applied comes back at once.
             self.end_try();
-            if !applied {
+            if applied && self.motion.used {
+                self.motion_use(false);
+            } else if !applied {
                 self.style_panel.trying = Some(choice);
             }
         }

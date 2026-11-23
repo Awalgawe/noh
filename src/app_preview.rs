@@ -469,11 +469,12 @@ impl NohApp {
         } else {
             None
         };
+        let motion = self.motion_request();
         Some(ProjectRequest {
-            motion: None,
+            effect: self.preview_effect().filter(|_| motion.is_none()),
+            motion,
             montage,
             short,
-            effect: self.preview_effect(),
             captions,
         })
     }
@@ -975,7 +976,7 @@ impl NohApp {
                 .as_ref()
                 .map(|_| self.mini_preview.scrub_failed),
             project.montage.clip_audio,
-            project.captions.is_some() && project.active_effect().is_none(),
+            project.captions.is_some() && !project.drawn_live(),
             self.clips
                 .iter()
                 .map(|clip| (clip.item.is_image(), noh::copies::state(clip.item.path()))),

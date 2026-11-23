@@ -569,6 +569,14 @@ impl super::NohApp {
         if !self.project.apply_subtitles {
             return;
         }
+        // A scene in use draws the lyrics, unless a style is being tried on;
+        // until the window has prepared it, the style stays on screen.
+        if self.style_panel.trying.is_none() && self.motion.used_scene().is_some() {
+            let t = self.monitor_seconds(scrub_visible);
+            if self.paint_scene(ui, monitor, t) {
+                return;
+            }
+        }
         // The tried style when there is one: the exports keep the applied one.
         let Some(choice) = self.shown_effect().map(|c| self.styled(c)) else {
             return;
@@ -629,16 +637,7 @@ impl super::NohApp {
         };
         let (start, end) = self.mini_bounds();
         let range = self.mini_preview.short.then_some((start, end));
-        // The clock of the picture on the monitor: the player's frame, also
-        // while it is the one a stopped player left there.
-        let t =
-            if self.mini_preview.player_stamp.is_some() || self.mini_preview.shows_left_picture() {
-                self.mini_preview.player_position
-            } else if scrub_visible && let Some(scrubber) = &self.mini_preview.scrubber {
-                scrubber.snapshot().time_ms.saturating_sub(start) as f64 / 1000.0
-            } else {
-                self.mini_preview.cursor_ms.saturating_sub(start) as f64 / 1000.0
-            };
+        let t = self.monitor_seconds(scrub_visible);
         let Some(canvas) = self.effect_canvas() else {
             return;
         };
@@ -662,6 +661,20 @@ impl super::NohApp {
         self.effects.paint(ui, monitor, t);
     }
 
+    /// The clock of the picture on the monitor, in seconds from the montage's
+    /// start (a short's): the player's frame, also while it is the one a
+    /// stopped player left there; else the scrub's, else the playhead's.
+    pub(super) fn monitor_seconds(&self, scrub_visible: bool) -> f64 {
+        let (start, _) = self.mini_bounds();
+        if self.mini_preview.player_stamp.is_some() || self.mini_preview.shows_left_picture() {
+            self.mini_preview.player_position
+        } else if scrub_visible && let Some(scrubber) = &self.mini_preview.scrubber {
+            scrubber.snapshot().time_ms.saturating_sub(start) as f64 / 1000.0
+        } else {
+            self.mini_preview.cursor_ms.saturating_sub(start) as f64 / 1000.0
+        }
+    }
+
     /// Apply a choice from the menu. Between two effects only the layer changes: no
     /// new preview, no restart. To or from "none", the preview restarts (libass).
     pub(super) fn choose_effect(&mut self, choice: Option<Choice>) {
@@ -680,18 +693,7 @@ impl super::NohApp {
         } else {
             // Effect to effect keeps the preview playing (same revision), but the
             // last exports were made with the previous effect: no longer current.
-            if let Some(a) = &mut self.export_artifact {
-                a.revision = a.revision.wrapping_sub(1);
-            }
-            for a in [
-                &mut self.project.full_export_artifact,
-                &mut self.project.short_export_artifact,
-            ]
-            .into_iter()
-            .flatten()
-            {
-                a.stamp.revision = a.stamp.revision.wrapping_sub(1);
-            }
+            self.outdate_exports();
         }
     }
 

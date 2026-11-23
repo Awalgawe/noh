@@ -122,6 +122,12 @@ impl MotionLayer {
         self.video.as_ref()
     }
 
+    /// The last overlay drawn, until the next `draw` (a window shows it again
+    /// while its clock has not moved).
+    pub fn texture(&self) -> Option<glow::Texture> {
+        self.comp.as_ref().map(Compositor::texture)
+    }
+
     /// The compiled shaders, once set up.
     pub fn shader_set(&self) -> Option<&ShaderSet> {
         self.shaders.as_ref()

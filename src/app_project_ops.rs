@@ -166,8 +166,11 @@ impl NohApp {
                     .filter(|_| self.project.apply_subtitles)
                     .map(|c| self.styled(c).request())
             };
+            // A scene in use draws instead of the style.
+            let motion = self.motion_request();
+            let effect = effect.filter(|_| motion.is_none());
             let request = ProjectRequest {
-                motion: None,
+                motion,
                 montage,
                 short: selected,
                 effect,

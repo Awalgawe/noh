@@ -58,6 +58,8 @@ pub struct State {
     /// The monitor could not draw the effect: libass shows the captions in the
     /// preview until the effect is chosen again. Exports still use the effect.
     pub effect_preview_failed: bool,
+    /// A motion scene draws the captions (live in the preview, as an effect).
+    pub scene_used: bool,
     pub range: Option<Range>,
     /// A replacement song shortened the selection; shown until the next edit.
     pub range_moved: bool,
@@ -233,7 +235,8 @@ impl State {
                 self.track.revision.wrapping_add(self.edit_revision),
                 self.effective_caption_style(short),
             )),
-            effect: self.apply_subtitles && self.effect.is_some() && !self.effect_preview_failed,
+            effect: self.apply_subtitles
+                && (self.scene_used || (self.effect.is_some() && !self.effect_preview_failed)),
         }
     }
     pub fn busy(&self) -> bool {
