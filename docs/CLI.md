@@ -121,6 +121,7 @@ noh --scene-check video.mp4 --scene song.noh-motion.rhai --srt reviewed.srt --ou
 noh --scene-look video.mp4 --scene song.noh-motion.rhai --srt reviewed.srt --output frames --look strip --at-ms 12000 --grid
 noh --burn-subtitles video.mp4 --srt reviewed.srt --scene song.noh-motion.rhai --output with-scene.mp4
 noh --burn-subtitles video.mp4 --srt reviewed.srt --scene song.noh-motion.rhai --from-ms 12000 --to-ms 20000 --preview --output clip.mp4
+noh --short video.mp4 --start-ms 12000 --end-ms 42000 --framing scene --scene song.noh-motion.rhai --srt reviewed.srt --caption-safe-area youtube_shorts --output short.mp4
 ```
 
 `--scene-check` writes `report.json` into the new `--output` folder; a refused
@@ -133,7 +134,10 @@ edges, a line every tenth and the safe area; `--bare` shows the video alone. Wit
 `--burn-subtitles`, `--scene` draws the scene instead of the captions (refused with
 `--effect`, `--caption-size` or `--caption-placement`), with OpenGL only; with
 `--from-ms` and `--to-ms` only that clip of the video is rendered, the scene keeping
-the video's clock. A vertical video needs `--caption-safe-area`.
+the video's clock. `--vertical` draws the scene on a vertical Short (1080 x 1920)
+made from the whole picture by its `video()` (covering and centred without one);
+`--short --framing scene --scene` exports that Short for `--start-ms`..`--end-ms`. A
+vertical frame needs `--caption-safe-area`.
 
 ### The lyrics file beside the subtitles
 

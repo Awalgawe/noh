@@ -22,6 +22,7 @@ impl MotionInput {
         Ok(SceneChoice {
             scene: absolute(&self.scene)?,
             range_ms: None,
+            vertical: false,
         })
     }
 }
@@ -68,6 +69,11 @@ pub struct SceneCheckInput {
     #[serde(default)]
     #[schemars(range(min = 1, max = 7200000))]
     pub to_ms: Option<u64>,
+    /// Draw on a vertical frame (a Short, 1080 x 1920) made from the video by
+    /// the scene's framing (`video()`; covering and centred without one), as
+    /// noh_make_short with framing "scene" exports it. Needs a safe_area.
+    #[serde(default)]
+    pub vertical: bool,
     /// Absolute path of a folder that does not exist yet: report.json is
     /// written there.
     #[schemars(length(min = 1))]
@@ -116,6 +122,11 @@ pub struct SceneLookInput {
     /// drawn over each frame.
     #[serde(default)]
     pub grid: bool,
+    /// Draw on a vertical frame (a Short, 1080 x 1920) made from the video by
+    /// the scene's framing (`video()`; covering and centred without one), as
+    /// noh_make_short with framing "scene" exports it. Needs a safe_area.
+    #[serde(default)]
+    pub vertical: bool,
     /// Absolute path of a folder that does not exist yet.
     #[schemars(length(min = 1))]
     pub output: String,
@@ -144,6 +155,11 @@ pub struct SceneClipInput {
     /// Exclusive end in source milliseconds, at most 30 s after the start.
     #[schemars(range(min = 1, max = 7200000))]
     pub end_ms: u64,
+    /// Draw on a vertical frame (a Short, 1080 x 1920) made from the video by
+    /// the scene's framing (`video()`; covering and centred without one), as
+    /// noh_make_short with framing "scene" exports it. Needs a safe_area.
+    #[serde(default)]
+    pub vertical: bool,
     /// Absolute free MP4 destination.
     #[schemars(length(min = 1))]
     pub output: String,
@@ -177,6 +193,7 @@ impl SceneCheckInput {
             from_ms: self.from_ms,
             to_ms: self.to_ms,
             mode: SceneMode::Check,
+            vertical: self.vertical,
             bare: false,
             grid: false,
             output: absolute(&self.output)?,
@@ -208,6 +225,7 @@ impl SceneLookInput {
             from_ms: self.from_ms,
             to_ms: self.to_ms,
             mode,
+            vertical: self.vertical,
             bare: self.bare,
             grid: self.grid,
             output: absolute(&self.output)?,
@@ -241,6 +259,7 @@ impl SceneClipInput {
             scene: Some(SceneChoice {
                 scene: absolute(&self.scene)?,
                 range_ms: Some([self.start_ms, self.end_ms]),
+                vertical: self.vertical,
             }),
         };
         request.validate().map_err(SessionError::from)?;
@@ -371,6 +390,7 @@ mod tests {
             safe_area: CaptionSafeArea::None,
             start_ms,
             end_ms,
+            vertical: false,
             output: root("noh-scene-clip-test.mp4"),
             ffmpeg: None,
         };
@@ -395,6 +415,7 @@ mod tests {
             to_ms: None,
             bare: false,
             grid: false,
+            vertical: false,
             output: root("noh-scene-look-test"),
             ffmpeg: None,
         };

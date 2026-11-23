@@ -498,6 +498,22 @@ pub enum ShortFraming {
     Crop,
 }
 
+/// A short's framing in noh_make_short: the two of a project short, and the
+/// scene's own.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MakeShortFraming {
+    /// The whole picture on black.
+    #[default]
+    Pad,
+    /// Fills the frame by a centred crop.
+    Crop,
+    /// Experimental: follows the scene in `motion`, which frames the picture
+    /// itself (`video()`; covering and centred without one) and draws the
+    /// lyrics. Needs captions with their subtitles and a safe_area.
+    Scene,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ShortCaptionInput {
@@ -541,9 +557,12 @@ pub struct ShortInput {
     #[schemars(range(min = 1, max = 7200000))]
     pub end_ms: u64,
     #[serde(default)]
-    pub framing: ShortFraming,
+    pub framing: MakeShortFraming,
     #[serde(default)]
     pub captions: Option<ShortCaptionInput>,
+    /// Experimental: the motion scene of framing "scene" (and only of it).
+    #[serde(default)]
+    pub motion: Option<super::scene::MotionInput>,
     #[serde(default)]
     pub preview: bool,
 }
@@ -634,10 +653,64 @@ impl ProjectInput {
 }
 
 impl ShortInput {
+    /// Framing "scene": a burn of the interval on a vertical frame that the
+    /// scene frames, with the captions' subtitles and safe area.
+    pub(crate) fn into_scene_request(
+        self,
+        default_ffmpeg: &Path,
+    ) -> Result<crate::captions::CaptionRequest, SessionError> {
+        let refuse = |detail: &str| SessionError::new("mcp.invalid_request", detail);
+        let (Some(motion), Some(captions)) = (self.motion, self.captions) else {
+            return Err(refuse(
+                "Framing \"scene\" takes the scene in motion and the lyrics in captions (subtitles, safe_area).",
+            ));
+        };
+        if captions.effect.is_some() || captions.size.is_some() || captions.placement.is_some() {
+            return Err(refuse(
+                "A scene draws the lyrics itself: leave effect, size and placement out.",
+            ));
+        }
+        if self.start_ms >= self.end_ms || self.end_ms > crate::shorts::MAX_SOURCE_MS {
+            return Err(SessionError::new(
+                "error.short_range",
+                "Select a nonempty interval within the first two hours of the source.",
+            ));
+        }
+        let mut scene = motion.choice()?;
+        scene.range_ms = Some([self.start_ms, self.end_ms]);
+        scene.vertical = true;
+        let request = crate::captions::CaptionRequest {
+            source: absolute(&self.source)?,
+            subtitles: absolute(&captions.subtitles)?,
+            output: absolute(&self.output)?,
+            ffmpeg: self
+                .ffmpeg
+                .as_deref()
+                .map(absolute)
+                .transpose()?
+                .unwrap_or_else(|| default_ffmpeg.to_owned()),
+            style: crate::captions::CaptionStyle {
+                safe_area: captions.safe_area.into(),
+                ..Default::default()
+            },
+            preview: self.preview,
+            effect: None,
+            scene: Some(scene),
+        };
+        request.validate().map_err(SessionError::from)?;
+        Ok(request)
+    }
+
     pub(crate) fn into_request(
         self,
         default_ffmpeg: &Path,
     ) -> Result<crate::shorts::ShortRequest, SessionError> {
+        if self.motion.is_some() {
+            return Err(SessionError::new(
+                "mcp.invalid_request",
+                "A scene frames a short only with framing \"scene\".",
+            ));
+        }
         let (captions, effect) = match self.captions {
             Some(input) => {
                 let (captions, effect) = input.into_request(false)?;
@@ -658,8 +731,14 @@ impl ShortInput {
             start_ms: self.start_ms,
             end_ms: self.end_ms,
             framing: match self.framing {
-                ShortFraming::Pad => crate::shorts::Framing::Pad,
-                ShortFraming::Crop => crate::shorts::Framing::Crop,
+                MakeShortFraming::Pad => crate::shorts::Framing::Pad,
+                MakeShortFraming::Crop => crate::shorts::Framing::Crop,
+                MakeShortFraming::Scene => {
+                    return Err(SessionError::new(
+                        "mcp.invalid_request",
+                        "Framing \"scene\" takes the scene in motion.",
+                    ));
+                }
             },
             captions,
             preview: self.preview,
@@ -1343,6 +1422,59 @@ mod tests {
         assert_eq!(schema["additionalProperties"], false);
         assert_eq!(schema["properties"]["start_ms"]["maximum"], 7200000);
         assert_eq!(schema["properties"]["end_ms"]["minimum"], 1);
+    }
+
+    /// Framing "scene": the scene's burn of the interval on a vertical frame,
+    /// with the captions' subtitles and safe area; a scene with another
+    /// framing, a scene framing without its scene or lyrics, and Classique's
+    /// options are refused before anything starts.
+    #[test]
+    fn a_short_that_follows_its_scene_is_the_scenes_vertical_burn() {
+        let folder = tempfile::tempdir().unwrap();
+        let p = |name: &str| folder.path().join(name);
+        let json = serde_json::json!({
+            "source": p("source.mp4"), "output": p("short.mp4"),
+            "start_ms": 1000, "end_ms": 16000, "framing": "scene",
+            "motion": {"scene": p("song.noh-motion.rhai")},
+            "captions": {"subtitles": p("reviewed.srt"), "safe_area": "youtube_shorts"}
+        });
+        let input: ShortInput = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(input.framing, MakeShortFraming::Scene);
+        match input.into_scene_request(&p("ffmpeg.exe")) {
+            Ok(request) => {
+                let scene = request.scene.unwrap();
+                assert!(scene.vertical);
+                assert_eq!(scene.range_ms, Some([1000, 16000]));
+                assert_eq!(
+                    request.style.safe_area,
+                    crate::safe_area::SafeArea::YoutubeShorts
+                );
+                assert!(request.effect.is_none() && !request.preview);
+            }
+            // A build without scenes refuses at validation.
+            Err(e) => assert_eq!(e.code, "error.scene_unavailable"),
+        }
+        let code = |v: serde_json::Value, scene: bool| {
+            let input: ShortInput = serde_json::from_value(v).unwrap();
+            let e = if scene {
+                input.into_scene_request(Path::new("ffmpeg")).unwrap_err()
+            } else {
+                input.into_request(Path::new("ffmpeg")).unwrap_err()
+            };
+            e.code
+        };
+        let mut other = json.clone();
+        other["framing"] = "crop".into();
+        assert_eq!(code(other, false), "mcp.invalid_request");
+        let mut bare = json.clone();
+        bare.as_object_mut().unwrap().remove("motion");
+        assert_eq!(code(bare, true), "mcp.invalid_request");
+        let mut styled = json.clone();
+        styled["captions"]["size"] = "large".into();
+        assert_eq!(code(styled, true), "mcp.invalid_request");
+        let mut empty = json.clone();
+        empty["end_ms"] = 1000.into();
+        assert_eq!(code(empty, true), "error.short_range");
     }
     /// Step 7 B: an effect by id. Absent size and placement stay medium and
     /// bottom; Classique's values fold into the style; Classique's options with

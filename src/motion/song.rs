@@ -139,15 +139,16 @@ pub fn decode_sound(ffmpeg: &Path, source: &Path) -> Result<Option<Vec<f32>>, St
     ))
 }
 
-/// The inputs of a scene drawn over `source` (`w` x `h`, `duration` seconds;
-/// `sound`: whether it has an audio stream) with `track` (word times read
-/// beside it for `words` of its cues).
+/// The inputs of a scene drawn on a frame of `w` x `h` over `source` (its
+/// picture `src` pixels, `duration` seconds; `sound`: whether it has an audio
+/// stream) with `track` (word times read beside it for `words` of its cues).
 #[allow(clippy::too_many_arguments)]
 pub fn gather(
     ffmpeg: &Path,
     source: &Path,
     sound: bool,
     (w, h): (u32, u32),
+    src: (u32, u32),
     duration: f64,
     track: &SubtitleTrack,
     words: usize,
@@ -181,8 +182,8 @@ pub fn gather(
         inputs: Inputs {
             w,
             h,
-            src_w: w,
-            src_h: h,
+            src_w: src.0,
+            src_h: src.1,
             duration,
             cues,
             words_estimated,

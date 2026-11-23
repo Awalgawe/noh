@@ -40,6 +40,10 @@ pub(crate) struct Job {
     pub effect: Option<crate::project::EffectChoice>,
     /// A motion scene drawn instead of the captions (no fallback).
     pub scene: Option<SceneJob>,
+    /// FFmpeg #1's picture size when it differs from the canvas: a scene
+    /// makes a frame of another shape (a vertical frame) from the source's
+    /// picture. None: FFmpeg #1 outputs the canvas.
+    pub source_size: Option<(u32, u32)>,
     /// FFmpeg #2's encoder, audio and bitstream arguments, before `-progress`.
     pub encode: Vec<String>,
     pub deadline: Duration,
@@ -211,6 +215,7 @@ pub(crate) fn run(
         workspace,
         width: w,
         height: h,
+        source: (w, h),
         matrix,
         scene: fx::export::Layer::Plugin(Box::new(scene)),
         deadline,
@@ -272,11 +277,13 @@ fn run_scene(
         ))
     };
     let scene = job.scene.as_ref().unwrap();
+    let picture = job.source_size.unwrap_or(job.size);
     let inputs = song::gather(
         &job.ffmpeg,
         &job.source,
         scene.sound,
         job.size,
+        picture,
         scene.duration,
         &job.track,
         scene.words,
@@ -306,8 +313,9 @@ fn run_scene(
     let checked = thread
         .validate(grid(scene.start, scene.start + scene.span, fps))
         .map_err(refused)?;
-    let overlay =
-        layer::MotionLayer::new(thread, job.size, scene.start, shaders).map_err(refused)?;
+    let overlay = layer::MotionLayer::new(thread, job.size, scene.start, shaders)
+        .map_err(refused)?
+        .with_source(picture);
     let (w, h) = job.size;
     let first = job.first();
     let workspace = job.workspace.clone();
@@ -323,6 +331,7 @@ fn run_scene(
         workspace,
         width: w,
         height: h,
+        source: picture,
         matrix,
         scene: fx::export::Layer::Overlay(Box::new(overlay)),
         deadline,
@@ -410,6 +419,7 @@ pub(crate) fn args(cmd: &Command) -> Vec<String> {
 pub(crate) fn job_for_test(input: &[&str], finish: Option<&str>) -> Job {
     Job {
         scene: None,
+        source_size: None,
         ffmpeg: "ffmpeg".into(),
         source: "in.mp4".into(),
         workspace: ".".into(),

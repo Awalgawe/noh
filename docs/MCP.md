@@ -52,7 +52,7 @@ cargo --offline dev verify --media --mcp --offline
 | `noh_export_project` | `request`; optional `short`, `captions`, `preview` | Full montage or selected project interval using the current WAV/media/SRT |
 | `noh_transcribe` | `source`, `output`, `transcriber`, `model`, `vad_model`; optional `language` and `ffmpeg` | Local transcription job ID |
 | `noh_burn_subtitles` | `source`, `subtitles`, `output`; optional `ffmpeg`, `size`, `placement`, `effect`, `preview` | Caption render job ID; result is an exported MP4 |
-| `noh_make_short` | `source`, `output`, `start_ms`, `end_ms`; optional `ffmpeg`, `framing`, `captions`, `preview` | Vertical clip job ID; result includes the measured duration and exported MP4 |
+| `noh_make_short` | `source`, `output`, `start_ms`, `end_ms`; optional `ffmpeg`, `framing`, `captions`, `motion`, `preview` | Vertical clip job ID; result includes the measured duration and exported MP4 |
 | `noh_job` | `job_id` | Current status, optionally waiting for a change and returning the result |
 | `noh_cancel` | `job_id` | Cancellation request/current status |
 | `noh_list_effects` | none | The caption effects `effect.id` can name, their presets and settings, the folders read and refused; in a build with motion scenes, `motion` (format, functions, caps, author guide) |
@@ -61,9 +61,9 @@ cargo --offline dev verify --media --mcp --offline
 | `noh_app_state` | `app_id`; optional `after_revision`, `wait_ms` | What the window shows, as data, with `user_position` |
 | `noh_app_look` | `app_id`, `output`; optional `scope`, `at_ms` | A PNG of the window or its monitor, written to a free path |
 | `noh_app_close` | `app_id` | The window closed, or why nothing was closed |
-| `noh_scene_check` | `scene`, `source`, `subtitles`, `output` (a new folder); optional `truth`, `safe_area`, `from_ms`, `to_ms`, `ffmpeg` | Experimental. Scene check job ID; `report.json` in the folder |
-| `noh_scene_look` | `scene`, `source`, `subtitles`, `output` (a new folder); optional `mode`, `at_ms`, `count`, `from_ms`, `to_ms`, `bare`, `grid`, `truth`, `safe_area`, `ffmpeg` | Experimental. Frames of the scene as PNGs (or a measure as JSON) and `look.json` |
-| `noh_scene_clip` | `scene`, `source`, `subtitles`, `start_ms`, `end_ms`, `output`; optional `truth`, `safe_area`, `ffmpeg` | Experimental. A clip of at most 30 s with the scene, preview quality |
+| `noh_scene_check` | `scene`, `source`, `subtitles`, `output` (a new folder); optional `truth`, `safe_area`, `from_ms`, `to_ms`, `vertical`, `ffmpeg` | Experimental. Scene check job ID; `report.json` in the folder |
+| `noh_scene_look` | `scene`, `source`, `subtitles`, `output` (a new folder); optional `mode`, `at_ms`, `count`, `from_ms`, `to_ms`, `bare`, `grid`, `vertical`, `truth`, `safe_area`, `ffmpeg` | Experimental. Frames of the scene as PNGs (or a measure as JSON) and `look.json` |
+| `noh_scene_clip` | `scene`, `source`, `subtitles`, `start_ms`, `end_ms`, `output`; optional `truth`, `safe_area`, `vertical`, `ffmpeg` | Experimental. A clip of at most 30 s with the scene, preview quality |
 
 `noh_transcribe` processes an explicitly selected local audio file or the first
 audio stream in a selected video using local CPU transcription. All paths are
@@ -134,7 +134,10 @@ tenth and the safe area; `bare` shows the video alone. `noh_scene_clip` and
 captions (refused with `effect`, `size` or `placement`). A scene can reframe the
 picture at the video's own size (`video()`: zoom up to 1.5, a light turn, a crop):
 the export resamples the full-size picture before the mix, a look reframes its frame
-the same way at the same instant. A scene's layer shaders
+the same way at the same instant. With `vertical`, the scene tools draw on a vertical
+Short (1080 x 1920) made from the whole picture by the scene's `video()` (covering and
+centred without one), as `noh_make_short` with `framing: "scene"` exports it; a
+vertical frame needs `safe_area`. A scene's layer shaders
 (WGSL files in `<scene>.shaders/`, at most 8) are validated with the scene, then
 compiled and drawn once in the worker; a driver that dies on one stops the worker
 and the job fails with `error.scene_worker_stopped`, nothing published. The worker's
@@ -181,7 +184,11 @@ publication behavior. See [PROJECT_EXPORT.md](PROJECT_EXPORT.md) for clocks, fad
 and frame-boundary details.
 
 `noh_make_short` uses source playback milliseconds and a half-open interval.
-`framing` is `pad` (default) or centered `crop`. Optional `captions` is
+`framing` is `pad` (default), centered `crop`, or (experimental, in a build with
+scenes) `scene`: the scene in `motion: {"scene": …}` frames the Short from the
+whole picture and draws the lyrics of `captions.subtitles`, with `captions.safe_area`
+required and no `size`, `placement` or `effect`; `motion` is refused with the other
+framings. Optional `captions` is
 `{"subtitles":"C:/media/reviewed.srt","size":"medium","placement":"bottom"}`
 with source-timed SRT cues; style defaults match caption rendering. Full output is
 1080x1920 and `preview: true` produces the same composition at 360x640. It shares

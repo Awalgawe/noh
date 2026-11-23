@@ -218,12 +218,12 @@ pub(crate) fn execute(
     // Read by the GPU path only.
     #[cfg(not(feature = "effects"))]
     let _ = words;
+    // A scene draws on the video's own size, or on a vertical Short made from
+    // it by its framing (FFmpeg #1 then outputs the whole picture).
+    let vertical = request.scene.as_ref().is_some_and(|s| s.vertical);
+    let frame = crate::scene_request::scene_frame(vertical, canvas.size());
     if request.scene.is_some() {
-        crate::scene_request::safe_area_required(
-            canvas.size().0,
-            canvas.size().1,
-            request.style.safe_area,
-        )?;
+        crate::scene_request::safe_area_required(frame.0, frame.1, request.style.safe_area)?;
     }
     // A clip of the source (a scene's rhythm judged on a few seconds).
     let range = request
@@ -338,7 +338,13 @@ pub(crate) fn execute(
                 let (head, tags, matrix) = crate::color::Plan::single_source_split(&media.video);
                 let finish: Vec<String> = tags
                     .into_iter()
-                    .chain(request.preview.then(|| preview_scale(&canvas)))
+                    .chain(request.preview.then(|| {
+                        if vertical {
+                            "scale=360:640".to_string()
+                        } else {
+                            preview_scale(&canvas)
+                        }
+                    }))
                     .collect();
                 let (input, limit) = match range {
                     Some((a, b)) => (
@@ -355,7 +361,8 @@ pub(crate) fn execute(
                     limit,
                     filter: format!("{head},scale={}:{},setsar=1", canvas.width, canvas.height),
                     finish: (!finish.is_empty()).then(|| finish.join(",")),
-                    size: (canvas.width, canvas.height),
+                    size: frame,
+                    source_size: vertical.then_some((canvas.width, canvas.height)),
                     matrix,
                     track: track.clone(),
                     style: request.style,

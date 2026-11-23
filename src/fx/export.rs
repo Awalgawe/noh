@@ -66,6 +66,9 @@ pub struct Job {
     pub workspace: PathBuf,
     pub width: u32,
     pub height: u32,
+    /// The decoded picture's size, FFmpeg #1's output: the frame's own, or the
+    /// source's when the layer reframes it into a frame of another shape.
+    pub source: (u32, u32),
     pub matrix: Matrix,
     pub scene: Layer,
     pub deadline: Duration,
@@ -437,6 +440,7 @@ pub fn run(
         job.width,
         job.height,
         job.matrix,
+        job.source,
         job.scene,
         job.end,
         &stats_path,
@@ -480,6 +484,7 @@ fn chain(
     w: u32,
     h: u32,
     matrix: Matrix,
+    source: (u32, u32),
     mut scene: Layer,
     end: Option<f64>,
     stats_path: &Path,
@@ -495,7 +500,7 @@ fn chain(
     {
         gpu.set_hooks(Some(src), scene.hook_user())?;
     }
-    let mut mix = YuvMix::new(&gpu, matrix).map_err(|e| format!("OpenGL: {e}"))?;
+    let mut mix = YuvMix::with_source(&gpu, matrix, source).map_err(|e| format!("OpenGL: {e}"))?;
     let mut fonts = Fonts::load()?;
     // An installed font is read before the first frame: an export never draws
     // with fonts « not read yet », only with the chosen one or, if it is missing,
@@ -510,7 +515,7 @@ fn chain(
     }
     let setup_ms = setup.elapsed().as_secs_f64() * 1000.0;
     let size = mix.frame_bytes();
-    let frames = Frames::start(out, size);
+    let frames = Frames::start(out, mix.input_bytes());
     let mut tail = StatsTail::open(stats_path, until)?;
     let line_until = || (Instant::now() + LINE_GRACE).min(until);
 

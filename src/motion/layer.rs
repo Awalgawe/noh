@@ -52,9 +52,11 @@ pub struct MotionLayer {
     show_shaders: bool,
     /// What the last frame drew.
     pub stats: super::paint::PaintStats,
-    /// How the last frame framed the picture, and the frame's size.
+    /// How the last frame framed the picture, the frame's size and the source
+    /// picture's.
     video: Option<super::reframe::VideoDraw>,
     size: (u32, u32),
+    source: (u32, u32),
 }
 
 /// GL_CONTEXT_LOST: what every call answers once the driver has reset a
@@ -84,7 +86,30 @@ impl MotionLayer {
             stats: Default::default(),
             video: None,
             size: (w, h),
+            source: (w, h),
         })
+    }
+
+    /// The source picture is `source` pixels, not the frame's size: a frame of
+    /// another shape (a vertical frame from a wide video) is made from it by
+    /// the scene's framing, or by covering it, centred, without one.
+    pub fn with_source(mut self, source: (u32, u32)) -> Self {
+        self.source = source;
+        self
+    }
+
+    /// The framing of the last frame drawn: the scene's `video()`, or covering
+    /// and centred when the frame has another shape than the picture.
+    pub fn framing(&self) -> Option<super::reframe::Framing> {
+        let size = (self.size.0 as f32, self.size.1 as f32);
+        let src = (self.source.0 as f32, self.source.1 as f32);
+        match &self.video {
+            Some(v) => Some(v.framing(size, src)),
+            None if self.source != self.size => {
+                Some(super::reframe::VideoDraw::default().framing(size, src))
+            }
+            None => None,
+        }
     }
 
     /// Leave shader layers out (counted in `stats`), or draw them.
@@ -200,16 +225,11 @@ impl Overlay for MotionLayer {
     }
 
     fn reframe(&self) -> Option<crate::fx::gl::Reframe> {
-        // Same format: the output is the source's size.
-        let size = (self.size.0 as f32, self.size.1 as f32);
-        self.video.as_ref().map(|v| {
-            let f = v.framing(size, size);
-            crate::fx::gl::Reframe {
-                inv: f.inverse(),
-                center: f.center,
-                focus: f.focus,
-                crop: f.crop,
-            }
+        self.framing().map(|f| crate::fx::gl::Reframe {
+            inv: f.inverse(),
+            center: f.center,
+            focus: f.focus,
+            crop: f.crop,
         })
     }
 }

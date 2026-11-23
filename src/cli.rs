@@ -67,8 +67,9 @@ pub struct Options {
     /// Exclusive selected end in source playback milliseconds (WAV clock with --project).
     #[arg(long, requires_all = ["short_operation", "start_ms"])]
     end_ms: Option<u64>,
-    /// Preserve the full picture with black padding, or fill by centered crop.
-    #[arg(long, value_parser = ["pad", "crop"], requires_all = ["short_operation", "start_ms"])]
+    /// Preserve the full picture with black padding, fill by centered crop, or
+    /// (experimental, --short with --scene) follow the scene's own framing.
+    #[arg(long, value_parser = ["pad", "crop", "scene"], requires_all = ["short_operation", "start_ms"])]
     framing: Option<String>,
     /// Reviewed plain UTF-8 SRT, or its NOH lyrics file (.noh-lyrics.json), timed
     /// from source zero (full WAV zero with --project). The lyrics file is created
@@ -106,8 +107,12 @@ pub struct Options {
     /// Experimental: a motion scene file (docs/MOTION_AUTHORING.md). With
     /// --burn-subtitles it is drawn instead of the captions; with --scene-check
     /// or --scene-look it is checked, or frames of it are drawn.
-    #[arg(long, value_name = "FILE", requires = "srt", conflicts_with_all = ["effect", "caption_size", "caption_placement", "short", "project"])]
+    #[arg(long, value_name = "FILE", requires = "srt", conflicts_with_all = ["effect", "caption_size", "caption_placement", "project"])]
     scene: Option<PathBuf>,
+    /// Experimental: draw --scene on a vertical frame (1080 x 1920) that it
+    /// frames from the video (--short --framing scene exports one).
+    #[arg(long, requires = "scene", conflicts_with = "short")]
+    vertical: bool,
     /// Experimental: check --scene against this video and --srt at every frame;
     /// writes report.json into the new --output folder.
     #[arg(long, value_name = "SOURCE", requires_all = ["scene", "srt", "output"], conflicts_with_all = ["video", "wav", "soundtrack", "videos", "images", "fade_in", "fade_out", "partial_fades", "clip_audio", "force_encode", "diagnose", "transcribe", "burn_subtitles", "short", "project", "scene_look", "preview", "look", "at_ms", "count", "bare", "grid"])]
@@ -481,6 +486,10 @@ pub fn run(arguments: impl IntoIterator<Item = OsString>) -> i32 {
             return 1;
         }
     };
+    if args.framing.as_deref() == Some("scene") {
+        eprintln!("Error: --framing scene is for --short with --scene.");
+        return 1;
+    }
     let project_short =
         args.start_ms
             .zip(args.end_ms)
@@ -609,6 +618,7 @@ fn scene_job(args: Options) -> i32 {
         from_ms: args.from_ms,
         to_ms: args.to_ms,
         mode,
+        vertical: args.vertical,
         bare: args.bare,
         grid: args.grid,
         output: absolute(args.output.clone().unwrap()),
@@ -741,6 +751,11 @@ impl Options {
 }
 
 fn make_short(args: Options) -> i32 {
+    let follows = args.framing.as_deref() == Some("scene");
+    if follows != args.scene.is_some() {
+        eprintln!("Error: a short follows a scene with both --framing scene and --scene.");
+        return 1;
+    }
     let ffmpeg = match crate::find_ffmpeg(args.ffmpeg.clone().map(PathBuf::into_os_string)) {
         Ok(path) => path,
         Err(error) => {
@@ -748,9 +763,51 @@ fn make_short(args: Options) -> i32 {
             return 1;
         }
     };
+    if follows {
+        return scene_short(args, ffmpeg);
+    }
     let request = args.short_request(ffmpeg);
     run_job(
         CliOperation::Short(request),
+        args.events,
+        args.cancel_file,
+        args.json,
+        args.worker,
+    )
+}
+
+/// `--short --framing scene --scene`: the scene's burn of the interval on a
+/// vertical frame, as noh_make_short with framing "scene".
+fn scene_short(args: Options, ffmpeg: PathBuf) -> i32 {
+    let (start, end) = (args.start_ms.unwrap(), args.end_ms.unwrap());
+    if args.from_ms.is_some() || args.to_ms.is_some() {
+        eprintln!("Error: a short's interval is --start-ms and --end-ms.");
+        return 1;
+    }
+    if start >= end || end > crate::shorts::MAX_SOURCE_MS {
+        eprintln!("Error: select a nonempty interval within the first two hours of the source.");
+        return 1;
+    }
+    let scene = args.scene.clone().unwrap();
+    let request = crate::captions::CaptionRequest {
+        scene: Some(crate::scene_request::SceneChoice {
+            scene: std::path::absolute(&scene).unwrap_or(scene),
+            range_ms: Some([start, end]),
+            vertical: true,
+        }),
+        effect: None,
+        source: args.short.clone().unwrap(),
+        subtitles: args.srt.clone().unwrap(),
+        output: args.output.clone().unwrap(),
+        ffmpeg,
+        style: args.caption_style(),
+        preview: args.preview,
+    };
+    if let Err(error) = request.validate() {
+        return start_error(&error, args.json);
+    }
+    run_job(
+        CliOperation::Burn(request),
         args.events,
         args.cancel_file,
         args.json,
@@ -783,6 +840,7 @@ fn burn_subtitles(args: Options) -> i32 {
             .map(|scene| crate::scene_request::SceneChoice {
                 scene: std::path::absolute(&scene).unwrap_or(scene),
                 range_ms,
+                vertical: args.vertical,
             }),
         effect: args.chosen_effect.clone(),
         source: args.burn_subtitles.unwrap(),
@@ -1117,6 +1175,87 @@ mod tests {
                 .unwrap_err()
                 .code,
             "error.short_range"
+        );
+    }
+
+    #[test]
+    fn a_short_follows_its_scene_and_a_scene_draws_on_a_vertical_frame() {
+        let short = [
+            "noh",
+            "--short",
+            "v.mp4",
+            "--start-ms",
+            "1000",
+            "--end-ms",
+            "16000",
+            "--output",
+            "s.mp4",
+            "--framing",
+            "scene",
+            "--scene",
+            "a.noh-motion.rhai",
+            "--srt",
+            "a.srt",
+            "--caption-safe-area",
+            "youtube_shorts",
+        ];
+        let (options, _) = parse(&short).unwrap();
+        assert_eq!(options.framing.as_deref(), Some("scene"));
+        assert!(options.scene.is_some() && !options.vertical);
+        let (options, _) = parse(&[
+            "noh",
+            "--scene-look",
+            "v.mp4",
+            "--scene",
+            "a.rhai",
+            "--srt",
+            "a.srt",
+            "--output",
+            "f",
+            "--vertical",
+            "--caption-safe-area",
+            "tiktok",
+        ])
+        .unwrap();
+        assert!(options.vertical);
+        // A short is vertical already; --vertical belongs to a scene.
+        let mut both = short.to_vec();
+        both.push("--vertical");
+        assert!(parse(&both).is_err());
+        assert!(
+            parse(&[
+                "noh",
+                "--burn-subtitles",
+                "v.mp4",
+                "--srt",
+                "a.srt",
+                "--output",
+                "o.mp4",
+                "--vertical"
+            ])
+            .is_err()
+        );
+        // Not for a project short.
+        assert!(
+            parse(&[
+                "noh",
+                "--project",
+                "--soundtrack",
+                "a.wav",
+                "--video",
+                "v.mp4",
+                "--output",
+                "o.mp4",
+                "--start-ms",
+                "0",
+                "--end-ms",
+                "1000",
+                "--scene",
+                "a.rhai",
+                "--srt",
+                "a.srt",
+            ])
+            .is_err()
         );
     }
 

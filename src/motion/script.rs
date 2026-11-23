@@ -1090,6 +1090,11 @@ impl ScriptScene {
         })
     }
 
+    /// The source picture's size the scene was loaded for (`ctx.src_w`, `ctx.src_h`).
+    pub fn source_size(&self) -> (f32, f32) {
+        (self.ctx.src_w as f32, self.ctx.src_h as f32)
+    }
+
     pub fn frame(&self, t: f64) -> Result<Frame, String> {
         self.ops.set(0);
         self.calls.set(0);

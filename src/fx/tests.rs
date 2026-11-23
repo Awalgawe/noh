@@ -573,6 +573,7 @@ fn a_failing_encoder_returns_its_diagnostics() {
         workspace: temp.path().into(),
         width: 64,
         height: 36,
+        source: (64, 36),
         matrix: super::gl::Matrix::Bt601,
         scene: super::export::Layer::Plugin(Box::new(scene)),
         deadline: std::time::Duration::from_secs(60),

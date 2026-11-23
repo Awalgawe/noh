@@ -206,8 +206,12 @@ interleaved make a pass each (see the passes limit).
 ## The picture
 
 `video()` frames the video picture; `draw(v)` hands it over. Without it, the picture
-is the video as it is. The output keeps the video's own size in this version (a
-vertical output made from a wide video comes later).
+is the video as it is. The frame is the video's own size, or a vertical Short
+(1080 x 1920) made from it when asked (`vertical` in the scene tools, framing `scene`
+in noh_make_short): there `video()` frames the Short from the whole picture, and
+without it the picture covers the Short, centred. `ctx.w` and `ctx.h` are the frame's
+size, `ctx.src_w` and `ctx.src_h` the video picture's. A vertical frame needs a safe
+area.
 
 | Builder | Default | Meaning |
 |---|---|---|

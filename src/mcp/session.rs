@@ -229,6 +229,15 @@ impl Session {
     pub fn short(&self, input: ShortInput) -> Result<StartReply, SessionError> {
         check_request_size(&input)?;
         let truth = input.captions.as_ref().and_then(|c| c.truth);
+        // A short that follows its scene is the scene's burn on a vertical frame.
+        if input.framing == super::types::MakeShortFraming::Scene {
+            let mut request = input.into_scene_request(&self.0.default_ffmpeg)?;
+            self.ready_to_start()?;
+            let lyrics = resolve_lyrics(&mut request.subtitles, truth)?;
+            return self
+                .start(Operation::Captions(request))
+                .map(|reply| StartReply { lyrics, ..reply });
+        }
         let mut request = input.into_request(&self.0.default_ffmpeg)?;
         self.ready_to_start()?;
         let lyrics = match &mut request.captions {
