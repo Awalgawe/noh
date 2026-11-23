@@ -26,6 +26,8 @@ const STATE_BYTES: usize = 60 * 1024;
 /// Lyrics lines listed in `state`, and the characters kept of each.
 const LINES: usize = 400;
 const LINE_TEXT: usize = 160;
+/// The gestures the history menu keeps.
+const HISTORY: usize = 20;
 
 /// Who moved the playhead last.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -104,10 +106,114 @@ impl NohApp {
             _ => None,
         };
         if let Some(gesture) = playhead {
+            // Recorded when it applies (it may wait for the person, or be refused).
             return self.driven_queue(ctx, id, gesture);
         }
+        let what = self.driven_history_text(&action);
         let outcome = self.driven_apply(ctx, action);
+        if outcome.is_ok() {
+            self.driven_record(what);
+        }
         self.driven_answer(id, outcome);
+    }
+
+    /// One line of the history menu for a gesture, written before it applies
+    /// (a removed clip's name is gone after).
+    fn driven_history_text(&mut self, action: &Action) -> String {
+        let l = self.locale.language;
+        let file = |path: &std::path::Path| {
+            path.file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        };
+        let clip = |id: u64| {
+            self.clips
+                .iter()
+                .find(|c| c.id == id)
+                .map(|c| file(c.item.path()))
+                .unwrap_or_default()
+        };
+        let time = |ms: u64| noh::timeline::format_time(ms);
+        match action {
+            Action::Add { paths } => l.format("driven.h.add", &[paths.len().to_string()]),
+            Action::SetPhotoDuration { clip_id, seconds } => l.format(
+                "driven.h.photo_duration",
+                &[clip(*clip_id), format!("{seconds:.1}")],
+            ),
+            Action::EditLine { edit, .. } => match edit {
+                LineEdit::SetText { index, .. } => {
+                    l.format("driven.h.line_text", &[(index + 1).to_string()])
+                }
+                LineEdit::SetStart { index, .. }
+                | LineEdit::SetEnd { index, .. }
+                | LineEdit::Shift { index, .. } => {
+                    l.format("driven.h.line_time", &[(index + 1).to_string()])
+                }
+                LineEdit::Add { ms, .. } => l.format("driven.h.line_add", &[time(*ms)]),
+                LineEdit::Delete { index } => {
+                    l.format("driven.h.line_delete", &[(index + 1).to_string()])
+                }
+            },
+            Action::Undo {} => l.text("driven.h.undo").into(),
+            Action::Redo {} => l.text("driven.h.redo").into(),
+            Action::ChooseEffect { id: None, .. } => l.text("driven.h.effect_none").into(),
+            Action::ChooseEffect {
+                id: Some(id),
+                preset,
+            } => {
+                let lang = l.code().to_string();
+                let name = self
+                    .effects
+                    .options(&lang)
+                    .into_iter()
+                    .find(|(_, c)| &c.id == id && preset.as_ref().is_none_or(|p| &c.preset == p))
+                    .map(|(name, _)| name)
+                    .unwrap_or_else(|| id.clone());
+                l.format("driven.h.effect", &[name])
+            }
+            Action::SetSafeArea { .. } => l.text("driven.h.safe_area").into(),
+            Action::SetRange {
+                start_ms: Some(start),
+                end_ms: Some(end),
+            } => l.format("driven.h.range", &[time(*start), time(*end)]),
+            Action::SetRange { .. } => l.text("driven.h.range_none").into(),
+            Action::Seek { ms } => l.format("driven.h.seek", &[time(*ms)]),
+            Action::Play {} => l.text("driven.h.play").into(),
+            Action::Pause {} => l.text("driven.h.pause").into(),
+            Action::Answer { .. } => l.text("driven.h.answer").into(),
+            Action::RemoveClip { clip_id } => l.format("driven.h.remove", &[clip(*clip_id)]),
+            Action::MoveClip { clip_id, to_index } => l.format(
+                "driven.h.move",
+                &[clip(*clip_id), (to_index + 1).to_string()],
+            ),
+            Action::SetFades { .. } => l.text("driven.h.fades").into(),
+            Action::SetConvertAll { convert_all: true } => l.text("driven.h.convert_on").into(),
+            Action::SetConvertAll { convert_all: false } => l.text("driven.h.convert_off").into(),
+            Action::SetEffectSettings { .. } => l.text("driven.h.effect_settings").into(),
+            Action::SetFraming { .. } => l.text("driven.h.framing").into(),
+            Action::SetDestination {
+                path: Some(path), ..
+            } => l.format("driven.h.destination", &[file(path)]),
+            Action::SetDestination {
+                short_name: Some(name),
+                ..
+            } => l.format("driven.h.destination", std::slice::from_ref(name)),
+            Action::SetDestination { .. } => l.text("driven.h.destination_none").into(),
+            Action::Export { short: false } => l.text("driven.h.export").into(),
+            Action::Export { short: true } => l.text("driven.h.export_short").into(),
+            Action::Cancel {} => l.text("driven.h.cancel").into(),
+        }
+    }
+
+    /// Keep a gesture in the history menu (the last twenty).
+    fn driven_record(&mut self, what: String) {
+        if let Some(d) = &mut self.driven {
+            let at = chrono::Local::now().format("%H:%M:%S").to_string();
+            d.history.push_back((at, what));
+            while d.history.len() > HISTORY {
+                d.history.pop_front();
+            }
+        }
     }
 
     /// A `look` of the agent.
@@ -254,6 +360,8 @@ impl NohApp {
             Playhead::Seek(ms) => {
                 self.navigate(ms, true);
                 self.driven_mark();
+                let what = self.driven_history_text(&Action::Seek { ms });
+                self.driven_record(what);
                 Some(Ok(serde_json::json!({ "ms": self.mini_preview.cursor_ms })))
             }
             Playhead::Play => {
@@ -261,11 +369,15 @@ impl NohApp {
                     self.mini_play(ctx);
                 }
                 self.driven_mark();
+                let what = self.driven_history_text(&Action::Play {});
+                self.driven_record(what);
                 Some(Ok(serde_json::Value::Null))
             }
             Playhead::Pause => {
                 self.mini_pause();
                 self.driven_mark();
+                let what = self.driven_history_text(&Action::Pause {});
+                self.driven_record(what);
                 Some(Ok(serde_json::Value::Null))
             }
             Playhead::Look(mut look) => {

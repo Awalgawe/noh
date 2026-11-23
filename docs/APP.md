@@ -77,6 +77,11 @@ the timeline and change the volume; a click on a clip or a lyrics line points it
 out to the agent, which also knows where you are on the timeline, so « here »
 means your position. While you move through the video the agent does not move
 the playhead. Everything else is the agent's: ask it in the conversation.
+**History** in the badge lists the agent's last twenty gestures with their time
+(what it added, removed, moved, changed, where it put the playhead, the exports
+it started). While another window of the same agent exports or prepares, this
+one waits its turn: its clips show a still mark and its preview waits
+until then.
 **Stop driving** in the badge, or closing the window, makes it an ordinary NOH
 window again, yours. When the agent's session ends the window stays open as an
 ordinary NOH. If such a window fails, it shows no error dialog (nobody may be
