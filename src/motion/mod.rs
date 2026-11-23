@@ -25,6 +25,7 @@ pub mod check;
 pub mod draw;
 pub mod layer;
 pub mod paint;
+pub mod quick;
 pub mod reframe;
 pub mod run;
 pub mod script;

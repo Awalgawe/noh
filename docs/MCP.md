@@ -62,7 +62,7 @@ cargo --offline dev verify --media --mcp --offline
 | `noh_app_look` | `app_id`, `output`; optional `scope`, `at_ms` | A PNG of the window or its monitor, written to a free path |
 | `noh_app_close` | `app_id` | The window closed, or why nothing was closed |
 | `noh_scene_check` | `scene`, `source`, `subtitles`, `output` (a new folder); optional `truth`, `safe_area`, `from_ms`, `to_ms`, `vertical`, `ffmpeg` | Experimental. Scene check job ID; `report.json` in the folder |
-| `noh_scene_look` | `scene`, `source`, `subtitles`, `output` (a new folder); optional `mode`, `at_ms`, `count`, `from_ms`, `to_ms`, `bare`, `grid`, `vertical`, `truth`, `safe_area`, `ffmpeg` | Experimental. Frames of the scene as PNGs (or a measure as JSON) and `look.json` |
+| `noh_scene_look` | `scene`, `source`, `subtitles`, `output` (a new folder); optional `mode`, `at_ms`, `count`, `from_ms`, `to_ms`, `bare`, `grid`, `vertical`, `app_id`, `truth`, `safe_area`, `ffmpeg` | Experimental. Frames of the scene as PNGs (or a measure as JSON) and `look.json` |
 | `noh_scene_clip` | `scene`, `source`, `subtitles`, `start_ms`, `end_ms`, `output`; optional `truth`, `safe_area`, `vertical`, `ffmpeg` | Experimental. A clip of at most 30 s with the scene, preview quality |
 
 `noh_transcribe` processes an explicitly selected local audio file or the first
@@ -137,7 +137,12 @@ the export resamples the full-size picture before the mix, a look reframes its f
 the same way at the same instant. With `vertical`, the scene tools draw on a vertical
 Short (1080 x 1920) made from the whole picture by the scene's `video()` (covering and
 centred without one), as `noh_make_short` with `framing: "scene"` exports it; a
-vertical frame needs `safe_area`. A scene's layer shaders
+vertical frame needs `safe_area`. With `app_id`, a window the agent drives shows
+the person where the agent looks: its playhead moves to the first instant (a
+sheet: `from_ms`), waiting while the person navigates as `seek` does, and its
+monitor shows the frame's grid (with `grid`) and, on the short, the safe area,
+while the playhead stays there; a refusal of the window starts no job. The
+frames are still drawn by the export's engine, in the heavy-job slot. A scene's layer shaders
 (WGSL files in `<scene>.shaders/`, at most 8) are validated with the scene, then
 compiled and drawn once in the worker; a driver that dies on one stops the worker
 and the job fails with `error.scene_worker_stopped`, nothing published. The worker's
@@ -322,7 +327,12 @@ optional `based_on` lyrics revision: lyrics reloaded since are not changed,
 `set_convert_all`, `set_effect_settings` (preset, settings, Classique's size and
 placement, captions shown on the video), `set_framing`, `set_destination`,
 `export` (the montage or the short; started or why not), `cancel`, `seek`, `play`,
-`pause` and `answer` (the open question: `modify_srt`, `cancel`, `work_on_copy`
+`pause`, `set_scene` (experimental, a build with motion scenes: the scene file
+the agent writes, by absolute path; the window looks at it every 2 s and, when
+it changed, checks that it loads and draws its first frame, in `state.scene`:
+`path`, `revision`, `status` `checking`, `loads`, `refused` with its `reason`,
+or `missing`; the whole check stays `noh_scene_check`'s, and the window does not
+draw the scene yet) and `answer` (the open question: `modify_srt`, `cancel`, `work_on_copy`
 with a free `.srt` path, `keep_lyrics`, `keep_srt`, `later`, `discard`, `save`,
 `retry`, `dismiss`; the state names the open question, so the agent knows what
 it answers; whether to ask the person first is the agent's and its user's

@@ -35,7 +35,9 @@ pub const ATLAS_BUDGET: f64 = 0.6;
 /// carries the glyph's size and its place in the line, `grain_key`). So the
 /// grain is 7 pixels on a text at scale 1 and grows with the text's scale, as
 /// in the scenes made with the prototype, and it is the same at every pixel
-/// scale (the canvas is the export's size in the preview too).
+/// scale (the canvas is the export's size in the preview too). The packed
+/// `time` also reaches `displace`, which these hooks leave as the default (no
+/// movement): a motion `displace` reading it would need another channel.
 pub const MOTION_HOOKS: &str = r#"
 fn shade(i: GlyphIn) -> vec4<f32> {
   let q = i.local * 2.0 - vec2<f32>(1.0);
