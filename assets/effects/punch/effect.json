@@ -1,0 +1,53 @@
+{
+  "engine": 1,
+  "id": "noh.punch",
+  "name": {"fr": "Mot frappé", "en": "Punched words", "de": "Schlagende Wörter", "es": "Palabras que golpean", "ja": "叩きつける言葉", "ko": "꽂히는 단어", "zh": "重击的词"},
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "target": "text",
+  "params": [
+    {"id": "accent", "type": "color", "default": "#FFD84D", "level": 1, "label": {"fr": "Couleur d'accent", "en": "Accent colour", "de": "Akzentfarbe", "es": "Color de acento", "ja": "アクセントカラー", "ko": "강조 색", "zh": "强调色"}},
+    {"id": "size", "type": "choice", "default": "medium", "choices": ["small", "medium", "large"], "choice_labels": {"small": {"fr": "Petite", "en": "Small", "de": "Klein", "es": "Pequeño", "ja": "小", "ko": "작게", "zh": "小"}, "medium": {"fr": "Moyenne", "en": "Medium", "de": "Mittel", "es": "Mediano", "ja": "中", "ko": "보통", "zh": "中"}, "large": {"fr": "Grande", "en": "Large", "de": "Groß", "es": "Grande", "ja": "大", "ko": "크게", "zh": "大"}}, "level": 2, "label": {"fr": "Taille", "en": "Size", "de": "Größe", "es": "Tamaño", "ja": "サイズ", "ko": "크기", "zh": "大小"}},
+    {"id": "placement", "type": "choice", "default": "center", "choices": ["top", "center", "bottom"], "choice_labels": {"top": {"fr": "En haut", "en": "Top", "de": "Oben", "es": "Arriba", "ja": "上", "ko": "위", "zh": "顶部"}, "center": {"fr": "Au centre", "en": "Centre", "de": "Mitte", "es": "Centro", "ja": "中央", "ko": "가운데", "zh": "居中"}, "bottom": {"fr": "En bas", "en": "Bottom", "de": "Unten", "es": "Abajo", "ja": "下", "ko": "아래", "zh": "底部"}}, "level": 2, "label": {"fr": "Position", "en": "Position", "de": "Position", "es": "Posición", "ja": "位置", "ko": "위치", "zh": "位置"}},
+    {"id": "font", "type": "font", "default": "jost_extrabold", "level": 2, "label": {"fr": "Police", "en": "Font", "de": "Schrift", "es": "Fuente", "ja": "フォント", "ko": "글꼴", "zh": "字体"}}
+  ],
+  "presets": [
+    {"id": "yellow", "name": {"fr": "Jaune", "en": "Yellow", "de": "Gelb", "es": "Amarillo", "ja": "イエロー", "ko": "옐로", "zh": "黄色"}, "values": {}},
+    {"id": "cyan", "name": {"fr": "Cyan", "en": "Cyan", "de": "Cyan", "es": "Cian", "ja": "シアン", "ko": "시안", "zh": "青色"}, "values": {"accent": "#5CE1FF"}}
+  ],
+  "layout": {
+    "mode": "line",
+    "font": "$font",
+    "case": "upper",
+    "size": {"mul": ["@short", {"choose": ["$size", {"small": 0.0697, "medium": 0.085, "large": 0.102}]}]},
+    "line_height": 1.05,
+    "box": {
+      "x": 0.5,
+      "width": 0.88,
+      "y": {"choose": ["$placement", {"top": 0.16, "center": {"landscape": 0.5622, "portrait": 0.5}, "bottom": 0.84}]},
+      "anchor": {"choose": ["$placement", {"top": "top", "center": "center", "bottom": "bottom"}]}
+    },
+    "visible": "line",
+    "anchor": "word",
+    "chunk": {"max": 3, "rows": "flow"},
+    "word_lead": 0.05,
+    "preroll": 0.06,
+    "hold": 0.4
+  },
+  "animate": [
+    {"unit": "word", "slot": "future", "property": "opacity", "value": 0},
+    {"unit": "word", "slot": "enter", "property": "opacity", "duration": 0.06, "keys": [[0, 0], [1, 1]]},
+    {"unit": "word", "slot": "enter", "property": "scale", "duration": 0.22, "curve": "ease_out_cubic", "keys": [[0, 0.6], [0.4, 1.12], [1, 1]]},
+    {"unit": "word", "slot": "active", "property": "scale", "keys": [[0, 1], [0.1, {"add": [1, {"mul": [0.07, {"floor": [{"min": [1, {"div": ["@word_duration", 0.45]}]}]}, {"sub": [1, {"mul": [{"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.9, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.9, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.9, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}]}]}]}]}], [0.2, {"add": [1, {"mul": [0.07, {"floor": [{"min": [1, {"div": ["@word_duration", 0.45]}]}]}, {"sub": [1, {"mul": [{"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.8, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.8, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.8, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}]}]}]}]}], [0.3, {"add": [1, {"mul": [0.07, {"floor": [{"min": [1, {"div": ["@word_duration", 0.45]}]}]}, {"sub": [1, {"mul": [{"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.7, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.7, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.7, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}]}]}]}]}], [0.4, {"add": [1, {"mul": [0.07, {"floor": [{"min": [1, {"div": ["@word_duration", 0.45]}]}]}, {"sub": [1, {"mul": [{"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.6, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.6, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.6, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}]}]}]}]}], [0.5, {"add": [1, {"mul": [0.07, {"floor": [{"min": [1, {"div": ["@word_duration", 0.45]}]}]}, {"sub": [1, {"mul": [{"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.5, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.5, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.5, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}]}]}]}]}], [0.6, {"add": [1, {"mul": [0.07, {"floor": [{"min": [1, {"div": ["@word_duration", 0.45]}]}]}, {"sub": [1, {"mul": [{"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.4, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.4, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.4, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}]}]}]}]}], [0.7, {"add": [1, {"mul": [0.07, {"floor": [{"min": [1, {"div": ["@word_duration", 0.45]}]}]}, {"sub": [1, {"mul": [{"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.3, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.3, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.3, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}]}]}]}]}], [0.8, {"add": [1, {"mul": [0.07, {"floor": [{"min": [1, {"div": ["@word_duration", 0.45]}]}]}, {"sub": [1, {"mul": [{"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.2, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.2, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.2, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}]}]}]}]}], [0.9, {"add": [1, {"mul": [0.07, {"floor": [{"min": [1, {"div": ["@word_duration", 0.45]}]}]}, {"sub": [1, {"mul": [{"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.1, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.1, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [{"add": [{"mul": [0.1, "@word_duration"]}, 0.05]}, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}]}]}]}]}], [1, {"add": [1, {"mul": [0.07, {"floor": [{"min": [1, {"div": ["@word_duration", 0.45]}]}]}, {"sub": [1, {"mul": [{"max": [0, {"min": [1, {"div": [0.05, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [0.05, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}, {"max": [0, {"min": [1, {"div": [0.05, {"max": [{"sub": ["@word_duration", 0.17]}, 0.28]}]}]}]}]}]}]}]}]]},
+    {"unit": "word", "slot": "past", "property": "scale", "value": {"add": [1, {"mul": [0.07, {"floor": [{"min": [1, {"div": ["@word_duration", 0.45]}]}]}]}]}},
+    {"unit": "word", "slot": "active", "property": "wipe", "value": 1},
+    {"unit": "word", "slot": "past", "property": "wipe", "duration": 0.05, "keys": [[0, 1], [0.99, 1], [1, 0]]}
+  ],
+  "render": {
+    "passes": [
+      {"kind": "shadow", "color": "#000000", "alpha": 0.65, "offset_y": 0.115, "blur": 0},
+      {"kind": "outline_only", "color": "#000000", "outline": 0.045},
+      {"kind": "fill", "color": "#FFFFFF", "color2": "$accent"}
+    ]
+  }
+}
