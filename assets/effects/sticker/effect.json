@@ -1,0 +1,53 @@
+{
+  "engine": 1,
+  "id": "noh.sticker",
+  "name": {"fr": "Autocollant", "en": "Stickers", "de": "Aufkleber", "es": "Pegatinas", "ja": "ステッカー", "ko": "스티커", "zh": "贴纸"},
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "target": "text",
+  "params": [
+    {"id": "pal", "type": "palette", "default": ["#FF5D73", "#2E86FF", "#FFB800", "#18B87A"], "level": 1, "label": {"fr": "Palette", "en": "Palette", "de": "Palette", "es": "Paleta", "ja": "パレット", "ko": "팔레트", "zh": "调色板"}},
+    {"id": "tilt", "type": "choice", "default": "strong", "choices": ["none", "light", "strong"], "choice_labels": {"none": {"fr": "Aucune", "en": "None", "de": "Keine", "es": "Ninguna", "ja": "なし", "ko": "없음", "zh": "无"}, "light": {"fr": "Légère", "en": "Light", "de": "Leicht", "es": "Ligera", "ja": "弱", "ko": "약하게", "zh": "轻微"}, "strong": {"fr": "Forte", "en": "Strong", "de": "Stark", "es": "Fuerte", "ja": "強", "ko": "강하게", "zh": "强烈"}}, "level": 1, "label": {"fr": "Inclinaison", "en": "Tilt", "de": "Neigung", "es": "Inclinación", "ja": "傾き", "ko": "기울기", "zh": "倾斜"}},
+    {"id": "size", "type": "choice", "default": "medium", "choices": ["small", "medium", "large"], "choice_labels": {"small": {"fr": "Petite", "en": "Small", "de": "Klein", "es": "Pequeño", "ja": "小", "ko": "작게", "zh": "小"}, "medium": {"fr": "Moyenne", "en": "Medium", "de": "Mittel", "es": "Mediano", "ja": "中", "ko": "보통", "zh": "中"}, "large": {"fr": "Grande", "en": "Large", "de": "Groß", "es": "Grande", "ja": "大", "ko": "크게", "zh": "大"}}, "level": 2, "label": {"fr": "Taille", "en": "Size", "de": "Größe", "es": "Tamaño", "ja": "サイズ", "ko": "크기", "zh": "大小"}},
+    {"id": "placement", "type": "choice", "default": "center", "choices": ["top", "center", "bottom"], "choice_labels": {"top": {"fr": "En haut", "en": "Top", "de": "Oben", "es": "Arriba", "ja": "上", "ko": "위", "zh": "顶部"}, "center": {"fr": "Au centre", "en": "Centre", "de": "Mitte", "es": "Centro", "ja": "中央", "ko": "가운데", "zh": "居中"}, "bottom": {"fr": "En bas", "en": "Bottom", "de": "Unten", "es": "Abajo", "ja": "下", "ko": "아래", "zh": "底部"}}, "level": 2, "label": {"fr": "Position", "en": "Position", "de": "Position", "es": "Posición", "ja": "位置", "ko": "위치", "zh": "位置"}},
+    {"id": "font", "type": "font", "default": "jost_extrabold", "level": 2, "label": {"fr": "Police", "en": "Font", "de": "Schrift", "es": "Fuente", "ja": "フォント", "ko": "글꼴", "zh": "字体"}}
+  ],
+  "presets": [
+    {"id": "pop", "name": {"fr": "Pop", "en": "Pop", "de": "Pop", "es": "Pop", "ja": "ポップ", "ko": "팝", "zh": "波普"}, "values": {}},
+    {"id": "mono", "name": {"fr": "Noir et blanc", "en": "Black and white", "de": "Schwarz-Weiß", "es": "Blanco y negro", "ja": "モノクロ", "ko": "흑백", "zh": "黑白"}, "values": {"pal": ["#141414"], "tilt": "light"}},
+    {"id": "pastel", "name": {"fr": "Pastel", "en": "Pastel", "de": "Pastell", "es": "Pastel", "ja": "パステル", "ko": "파스텔", "zh": "粉彩"}, "values": {"pal": ["#E58BB5", "#7FA8E0", "#E6B85C"], "tilt": "light"}}
+  ],
+  "layout": {
+    "mode": "line",
+    "font": "$font",
+    "case": "none",
+    "size": {"mul": ["@short", {"choose": ["$size", {"small": 0.0623, "medium": 0.076, "large": 0.0912}]}]},
+    "line_height": 1.15,
+    "box": {
+      "x": 0.5,
+      "width": 0.88,
+      "y": {"choose": ["$placement", {"top": 0.16, "center": {"landscape": 0.5622, "portrait": 0.5}, "bottom": 0.84}]},
+      "anchor": {"choose": ["$placement", {"top": "top", "center": "center", "bottom": "bottom"}]}
+    },
+    "visible": "line",
+    "anchor": "word",
+    "chunk": {"max": 3, "rows": "flow"},
+    "word_lead": 0.08,
+    "preroll": 0.08,
+    "hold": 0.4
+  },
+  "animate": [
+    {"unit": "line", "slot": "loop", "property": "rotation", "value": {"mul": [{"choose": ["$tilt", {"none": 0, "light": 2, "strong": 4}]}, {"div": [{"mul": [16, {"sub": [{"sub": [0.7, {"mul": [2.1, "@line_index"]}]}, {"mul": [6.283185307, {"floor": [{"div": [{"add": [{"sub": [0.7, {"mul": [2.1, "@line_index"]}]}, 3.141592654]}, 6.283185307]}]}]}]}, {"sub": [3.141592654, {"max": [{"sub": [{"sub": [0.7, {"mul": [2.1, "@line_index"]}]}, {"mul": [6.283185307, {"floor": [{"div": [{"add": [{"sub": [0.7, {"mul": [2.1, "@line_index"]}]}, 3.141592654]}, 6.283185307]}]}]}]}, {"mul": [-1, {"sub": [{"sub": [0.7, {"mul": [2.1, "@line_index"]}]}, {"mul": [6.283185307, {"floor": [{"div": [{"add": [{"sub": [0.7, {"mul": [2.1, "@line_index"]}]}, 3.141592654]}, 6.283185307]}]}]}]}]}]}]}]}, {"sub": [49.34802201, {"mul": [4, {"max": [{"sub": [{"sub": [0.7, {"mul": [2.1, "@line_index"]}]}, {"mul": [6.283185307, {"floor": [{"div": [{"add": [{"sub": [0.7, {"mul": [2.1, "@line_index"]}]}, 3.141592654]}, 6.283185307]}]}]}]}, {"mul": [-1, {"sub": [{"sub": [0.7, {"mul": [2.1, "@line_index"]}]}, {"mul": [6.283185307, {"floor": [{"div": [{"add": [{"sub": [0.7, {"mul": [2.1, "@line_index"]}]}, 3.141592654]}, 6.283185307]}]}]}]}]}]}, {"sub": [3.141592654, {"max": [{"sub": [{"sub": [0.7, {"mul": [2.1, "@line_index"]}]}, {"mul": [6.283185307, {"floor": [{"div": [{"add": [{"sub": [0.7, {"mul": [2.1, "@line_index"]}]}, 3.141592654]}, 6.283185307]}]}]}]}, {"mul": [-1, {"sub": [{"sub": [0.7, {"mul": [2.1, "@line_index"]}]}, {"mul": [6.283185307, {"floor": [{"div": [{"add": [{"sub": [0.7, {"mul": [2.1, "@line_index"]}]}, 3.141592654]}, 6.283185307]}]}]}]}]}]}]}]}]}]}]}},
+    {"unit": "line", "slot": "enter", "property": "rotation", "duration": 0.24, "curve": "back", "keys": [[0, -8], [1, 0]]},
+    {"unit": "line", "slot": "enter", "property": "scale", "duration": 0.24, "curve": "ease_out_cubic", "keys": [[0, 0], [0.6, 1.15], [1, 1]]},
+    {"unit": "word", "slot": "active", "property": "rotation", "curve": "ease_in_cubic", "keys": [[0, 0], [0.05, {"mul": [1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.1, {"mul": [1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.185, {"mul": [-1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.27, {"mul": [-1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.355, {"mul": [1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.44, {"mul": [1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.525, {"mul": [-1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.61, {"mul": [-1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.695, {"mul": [1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.78, {"mul": [1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.85, {"mul": [-0.75, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.92, {"mul": [-0.75, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.96, 0], [1, 0]]},
+    {"unit": "word", "slot": "active", "property": "rotation", "curve": "ease_out_cubic", "keys": [[0, 0], [0.05, 0], [0.1, {"mul": [1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.185, {"mul": [1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.27, {"mul": [-1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.355, {"mul": [-1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.44, {"mul": [1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.525, {"mul": [1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.61, {"mul": [-1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.695, {"mul": [-1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.78, {"mul": [1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.85, {"mul": [1.5, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.92, {"mul": [-0.75, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [0.96, {"mul": [-0.75, {"min": [1, {"div": ["@word_duration", 0.4]}]}]}], [1, 0]]}
+  ],
+  "render": {
+    "passes": [
+      {"kind": "shadow", "color": "#000000", "alpha": 0.4, "offset_y": 0.145, "blur": {"mul": ["@short", {"choose": ["$size", {"small": 0.0623, "medium": 0.076, "large": 0.0912}]}, 0.05]}},
+      {"kind": "outline_only", "color": "#FFFFFF", "outline": 0.085},
+      {"kind": "fill", "color": {"pick": ["$pal", "line_index"]}}
+    ]
+  }
+}
