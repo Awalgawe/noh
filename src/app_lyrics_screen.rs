@@ -15,6 +15,7 @@ use noh::{
 };
 use std::sync::Arc;
 
+mod backing;
 mod game;
 mod voices;
 
@@ -38,6 +39,8 @@ const FLASH: Duration = Duration::from_secs(3);
 const TIME_W: f32 = 52.0;
 const ROW_H: f32 = 28.0;
 const LANE_H: f32 = 84.0;
+/// The backing vocals' band at the bottom of a line's block in the track.
+const BAND_H: f32 = 22.0;
 const EDGE_HIT: f32 = 6.0;
 
 /// The text of the current line while it is typed.
@@ -511,6 +514,48 @@ fn row_gap(ui: &mut egui::Ui, width: f32) {
 
 /// A small button of the text list's row actions and of the footer (and
 /// « Modifier » on the main screen's lyrics chip).
+/// A small tag at `at` (its top right corner): « chœurs », or the warning
+/// « parenthèse non fermée ». Returns its width.
+fn paint_tag(ui: &egui::Ui, at: egui::Pos2, key: &str, l: Language) -> f32 {
+    let t = style::tokens(ui);
+    let warn = key == "lyrics_screen.backing_unclosed";
+    let color = if warn { t.warn } else { t.text_2 };
+    let galley = ui.painter().layout_no_wrap(
+        l.text(key).to_string(),
+        FontId::proportional(style::text::SMALL),
+        color,
+    );
+    let rect = Rect::from_min_size(
+        pos2(at.x - galley.size().x - 12.0, at.y),
+        galley.size() + vec2(12.0, 2.0),
+    );
+    if warn {
+        ui.painter()
+            .rect_stroke(rect, 9, Stroke::new(1.0, t.warn), egui::StrokeKind::Inside);
+    } else {
+        ui.painter().rect_filled(rect, 9, t.surface_3);
+    }
+    ui.painter()
+        .galley(rect.min + vec2(6.0, 1.0), galley, color);
+    rect.width()
+}
+
+/// The width a row's tag takes, with its gap (0 without a tag).
+fn tag_width(ui: &egui::Ui, key: Option<&str>, l: Language) -> f32 {
+    key.map_or(0.0, |k| {
+        ui.painter()
+            .layout_no_wrap(
+                l.text(k).to_string(),
+                FontId::proportional(style::text::SMALL),
+                Color32::WHITE,
+            )
+            .size()
+            .x
+            + 12.0
+            + space::S
+    })
+}
+
 pub(super) fn small_button(
     ui: &mut egui::Ui,
     label: &str,
@@ -642,6 +687,32 @@ impl NohApp {
             "-read-only" => self.cancelling = true,
             // Who sings (voices mockup): two voices, the lines as a duet (1, 2,
             // both); the badge menu open on the line; the last voice asked to go.
+            // Backing vocals (voices mockup, « Chœurs »): every third line ends
+            // with an echo between parentheses, one line has an unclosed one;
+            // the sync bar on « Chœurs », and a game of that pass.
+            "-backing" | "-backing-game" => {
+                if let Some(path) = self.project.track.path.clone() {
+                    self.trust_lyrics(path);
+                }
+                self.edit_track(|t| {
+                    for (k, c) in t.cues.iter_mut().enumerate() {
+                        let last = c.text.split_whitespace().last().unwrap_or("oh").to_string();
+                        if k % 3 == 1 {
+                            c.text = format!("{} ({last})", c.text);
+                            c.words = None;
+                        }
+                    }
+                    if let Some(c) = t.cues.get_mut(i + 2) {
+                        c.text = format!("{} (oh", c.text);
+                        c.words = None;
+                    }
+                    true
+                });
+                self.lyrics_screen.level = Level::Backing;
+                if scene == "-backing-game" {
+                    self.stage_lyrics_game(i, Level::Backing, 0, "");
+                }
+            }
             "-voices" | "-voices-menu" | "-voices-remove" => {
                 // Staged as the person's own lyrics: no first-edit question.
                 if let Some(path) = self.project.track.path.clone() {
@@ -1247,7 +1318,9 @@ impl NohApp {
             return;
         }
         if ctx.memory(|m| m.has_focus(row_id(cur))) {
-            if self.ls_voice_keys(ctx, cur, track.voices.len()) {
+            if self.ls_voice_keys(ctx, cur, track.voices.len())
+                || self.ls_wrap_in_parentheses(ctx, cur)
+            {
                 return;
             }
             let Some(c) = self
@@ -1977,12 +2050,14 @@ impl NohApp {
                         &[app_timeline::clock(cue.start_ms, track.duration_ms, l)],
                     );
                     if i != cur || game {
-                        let galley = ui.painter().layout(
-                            cue.text.clone(),
+                        let tag = backing::tag_key(&cue.text);
+                        let galley = ui.painter().layout_job(backing::job(
+                            &cue.text,
                             FontId::proportional(style::text::BODY),
                             t.text_2,
-                            text_w,
-                        );
+                            t.text_3,
+                            text_w - tag_width(ui, tag, l),
+                        ));
                         let height = (galley.size().y + 8.0).max(ROW_H);
                         let (rect, row) =
                             ui.allocate_exact_size(vec2(width, height), Sense::click());
@@ -2041,6 +2116,9 @@ impl NohApp {
                             ask = Some(Ask::Choose(i, index));
                         }
                         ui.painter().galley(text_at, galley, t.text_2);
+                        if let Some(key) = tag {
+                            paint_tag(ui, pos2(rect.right() - 6.0, rect.top() + 5.0), key, l);
+                        }
                         continue;
                     }
                     // The current line: a field.
@@ -2106,10 +2184,24 @@ impl NohApp {
                             } else {
                                 frame
                             };
-                            egui::TextEdit::multiline(&mut d.text)
+                            let tag = backing::tag_key(&d.text);
+                            let tag_w = tag_width(ui, tag, l);
+                            let mut layouter =
+                                |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap: f32| {
+                                    let job = backing::job(
+                                        buf.as_str(),
+                                        FontId::proportional(style::text::BODY),
+                                        t.text,
+                                        t.text_3,
+                                        wrap,
+                                    );
+                                    ui.fonts_mut(|f| f.layout_job(job))
+                                };
+                            let shown = egui::TextEdit::multiline(&mut d.text)
                                 .id(id)
+                                .layouter(&mut layouter)
                                 .desired_rows(1)
-                                .desired_width(text_w + 8.0)
+                                .desired_width(text_w + 8.0 - tag_w)
                                 .frame(frame)
                                 .text_color(t.text)
                                 .hint_text(l.text("lyrics_screen.type_here"))
@@ -2117,7 +2209,15 @@ impl NohApp {
                                     Modifiers::SHIFT,
                                     Key::Enter,
                                 )))
-                                .show(ui)
+                                .show(ui);
+                            if let Some(key) = tag {
+                                let at = pos2(
+                                    ui.max_rect().right() - 6.0,
+                                    shown.response.rect.top() + 5.0,
+                                );
+                                paint_tag(ui, at, key, l);
+                            }
+                            shown
                         })
                         .inner;
                     let field = &row.response.response;
@@ -2303,21 +2403,28 @@ impl NohApp {
             ui.label(style::strong(l.text("lyrics_screen.sync"), style::text::BODY).color(t.text));
             ui.add_space(space::XS);
         }
-        let levels = [Level::Line, Level::Word, Level::Syllable];
+        // « Chœurs » while the lines from the current one hold backing vocals.
+        let chorus = self
+            .ls_track()
+            .is_some_and(|t| backing::has_backing(&t, self.lyrics_screen.cur));
+        if !chorus && self.lyrics_screen.level == Level::Backing {
+            self.lyrics_screen.level = Level::Word;
+        }
+        let mut levels = vec![Level::Line, Level::Word, Level::Syllable];
+        let mut names = vec![
+            l.text("lyrics_screen.level_lines"),
+            l.text("lyrics_screen.level_words"),
+            l.text("lyrics_screen.level_syllables"),
+        ];
+        if chorus {
+            levels.push(Level::Backing);
+            names.push(l.text("lyrics_screen.level_backing"));
+        }
         let selected = levels
             .iter()
             .position(|x| *x == self.lyrics_screen.level)
             .unwrap_or(0);
-        if let Some(k) = style::segmented(
-            ui,
-            "lyrics-screen-level",
-            &[
-                l.text("lyrics_screen.level_lines"),
-                l.text("lyrics_screen.level_words"),
-                l.text("lyrics_screen.level_syllables"),
-            ],
-            selected,
-        ) {
+        if let Some(k) = style::segmented(ui, "lyrics-screen-level", &names, selected) {
             self.lyrics_screen.level = levels[k];
             self.lyrics_screen.word = None;
             self.lyrics_screen.syl = None;
@@ -2458,15 +2565,33 @@ impl NohApp {
             let ink = if current { t.text } else { t.text_2 };
             let inside = painter.with_clip_rect(block.intersect(lane));
             let units = shown_units(cue, syllables);
+            // Backing vocals sit in a band of their own along the bottom.
+            let backing = noh::subtitle_track::backing_flags(&cue.text);
+            let banded = backing.contains(&true);
+            let is_back = |u: &Unit| backing.get(u.word).copied().unwrap_or(false);
+            if banded {
+                let y = block.bottom() - BAND_H - 2.0;
+                inside.extend(egui::Shape::dashed_line(
+                    &[pos2(block.left(), y), pos2(block.right(), y)],
+                    Stroke::new(1.0, t.border),
+                    3.0,
+                    3.0,
+                ));
+            }
             for (n, u) in units.iter().enumerate() {
                 let (ua, ub) = (x_at(view, lane, u.start), x_at(view, lane, u.end));
                 if ub < lane.left() || ua > lane.right() {
                     continue;
                 }
-                let cell = Rect::from_min_max(
-                    pos2(ua, block.top()),
-                    pos2(ub.max(ua + 1.0), block.bottom()),
-                );
+                let back = is_back(u);
+                let (top, bottom) = if back {
+                    (block.bottom() - BAND_H, block.bottom() - 2.0)
+                } else if banded {
+                    (block.top(), block.bottom() - BAND_H - 2.0)
+                } else {
+                    (block.top(), block.bottom())
+                };
+                let cell = Rect::from_min_max(pos2(ua, top), pos2(ub.max(ua + 1.0), bottom));
                 if current && !syllables && self.lyrics_screen.word == Some(u.word) {
                     inside.rect_filled(cell, 0, t.surface_3);
                     inside.rect_filled(
@@ -2475,12 +2600,16 @@ impl NohApp {
                         t.text,
                     );
                 }
-                // A silence after the unit, when its end is known.
-                let next = units.get(n + 1).map_or(cue.end_ms, |x| x.start);
+                // A silence after the unit, when its end is known, before the
+                // next unit of its kind (main words or backing vocals).
+                let next = units[n + 1..]
+                    .iter()
+                    .find(|x| is_back(x) == back)
+                    .map_or(cue.end_ms, |x| x.start);
                 if next > u.end + 60 {
                     let gap = Rect::from_min_max(
-                        pos2(ub, block.top()),
-                        pos2(x_at(view, lane, next), block.bottom()),
+                        pos2(ub, cell.top()),
+                        pos2(x_at(view, lane, next), cell.bottom()),
                     );
                     let hatch = inside.with_clip_rect(gap.intersect(block).intersect(lane));
                     let mut x = gap.left() - gap.height();
@@ -2496,9 +2625,12 @@ impl NohApp {
                 // an estimate; the line's own edge needs no mark.
                 if n > 0 {
                     let (top, bottom) = if u.word_start {
-                        (block.top(), block.bottom())
+                        (cell.top(), cell.bottom())
                     } else {
-                        (block.top() + 18.0, block.bottom() - 18.0)
+                        (
+                            cell.top() + 18.0,
+                            (cell.bottom() - 18.0).max(cell.top() + 19.0),
+                        )
                     };
                     let stroke = Stroke::new(1.0, t.border_strong);
                     if u.source == WordSource::Estimated {
@@ -4626,6 +4758,8 @@ mod tests {
         "-summary",
         "-read-only",
         "-voices",
+        "-backing",
+        "-backing-game",
     ];
 
     /// The voices' pop-ups, over the screen: checked on their own (their texts
@@ -5010,7 +5144,7 @@ mod tests {
                     assert!(app.lyrics_screen.open, "{language:?} {scene}");
                     assert_eq!(
                         app.lyrics_screen.game.is_some(),
-                        scene.starts_with("-game"),
+                        scene.starts_with("-game") || scene.ends_with("-game"),
                         "{language:?} {scene}: the game as staged"
                     );
                     // Settled: the next frames draw the same zones, the
@@ -5518,5 +5652,76 @@ mod tests {
         assert_eq!(painted_numbers(&mut app), 0);
         let mut app = song_app(folder.path(), Language::Fr, "-voices");
         assert!(painted_numbers(&mut app) > 4);
+    }
+
+    #[test]
+    fn an_open_parenthesis_over_a_selection_makes_it_backing_vocals() {
+        let folder = tempfile::tempdir().unwrap();
+        let ctx = context();
+        let mut app = song_app(folder.path(), Language::Fr, "");
+        cursor(&mut app, &ctx, 4, 0);
+        // Select the last word of the line, as a drag or Maj+→ would.
+        let text = app.lyrics_track().unwrap().cues[4].text.clone();
+        let chars = text.chars().count();
+        let last = text.split_whitespace().last().unwrap().chars().count();
+        let id = row_id(4);
+        let mut state = egui::TextEdit::load_state(&ctx, id).unwrap();
+        state
+            .cursor
+            .set_char_range(Some(egui::text::CCursorRange::two(
+                egui::text::CCursor::new(chars - last),
+                egui::text::CCursor::new(chars),
+            )));
+        egui::TextEdit::store_state(&ctx, id, state);
+        frame(&mut app, &ctx, vec![egui::Event::Text("(".into())]);
+        let draft = app.lyrics_screen.draft.as_ref().unwrap().text.clone();
+        let word = &text[text.len() - text.split_whitespace().last().unwrap().len()..];
+        assert_eq!(
+            draft,
+            format!("{}({word})", &text[..text.len() - word.len()])
+        );
+        // Without a selection « ( » is typed as usual.
+        cursor(&mut app, &ctx, 2, 0);
+        frame(&mut app, &ctx, vec![egui::Event::Text("(".into())]);
+        assert!(
+            app.lyrics_screen
+                .draft
+                .as_ref()
+                .unwrap()
+                .text
+                .starts_with('(')
+        );
+    }
+
+    #[test]
+    fn the_words_pass_skips_the_backing_vocals_and_the_backing_pass_takes_only_them() {
+        let folder = tempfile::tempdir().unwrap();
+        let ctx = context();
+        let mut app = song_app(folder.path(), Language::Fr, "");
+        app.edit_track(|t| {
+            t.cues[3].text = "Hold the line (hold it)".into();
+            t.cues[3].words = None;
+            true
+        });
+        game(&mut app, &ctx, Level::Word, 3);
+        let first: Vec<String> = {
+            let g = app.lyrics_screen.game.as_ref().unwrap();
+            g.units
+                .iter()
+                .take_while(|u| u.cue == 3)
+                .map(|u| u.text.clone())
+                .collect()
+        };
+        assert_eq!(first, ["Hold", "the", "line"]);
+        app.ls_end_game();
+        game(&mut app, &ctx, Level::Backing, 3);
+        let g = app.lyrics_screen.game.as_ref().unwrap();
+        let texts: Vec<&str> = g.units.iter().map(|u| u.text.as_str()).collect();
+        assert_eq!(
+            texts,
+            ["(hold", "it)"],
+            "only the backing vocals, from line 4 on"
+        );
+        assert!(g.units.iter().all(|u| u.cue == 3));
     }
 }
