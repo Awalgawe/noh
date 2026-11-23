@@ -43,6 +43,17 @@ nothing: eframe then runs `App::logic` alone, which does the same work and
 writes a due lyrics change, so a prepared export still starts and its progress
 and end are taken while the window is away. Checked on Windows, minimized.
 
+A window opened by `noh-mcp` (`noh_app_open`) runs with `--driven`: the
+server is its parent and the window's standard input and output are the only
+channel (`driven`, one JSON message per line, bounded lines, a writer thread
+that never blocks its caller). `app_driven` serves the channel from `advance`,
+so a minimized window answers, and filters the person's input in
+`raw_input_hook` by an allow-list built from the rectangles the previous drawn
+frame registered (navigation, the ruler, designation, the badge): keys, drops
+and every other press are taken out before the interface sees them. The server
+side (`mcp::apps`) keeps each window's state, never waits on a window, and
+computes the cap from the machine's free memory (`mcp::machine`).
+
 The desktop preview can prepare lightweight working copies. Export uses the
 original sources. Waveform decoding and reductions run in a bounded worker;
 changing a view does not require decoding the soundtrack again.

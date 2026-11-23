@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "mcp", derive(rmcp::schemars::JsonSchema))]
+#[cfg_attr(feature = "mcp", schemars(crate = "rmcp::schemars"))]
 #[serde(rename_all = "snake_case")]
 pub enum SafeArea {
     #[default]

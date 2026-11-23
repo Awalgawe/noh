@@ -454,9 +454,28 @@ impl NohApp {
         }
         self.project.range = output.range;
         self.project.viewport = output.viewport;
+        // A driven window: the ruler, the lyrics lane (to designate) and the
+        // overview stay the person's (app_driven.rs).
+        let (ruler, lane, overview) = self.project_ui.timeline.driven_zones();
+        for (rect, zone) in [
+            (ruler, super::app_driven::Zone::Seek),
+            (lane, super::app_driven::Zone::Designate),
+            (overview, super::app_driven::Zone::Navigate),
+        ] {
+            if let Some(rect) = rect {
+                self.driven_allow(rect, zone);
+            }
+        }
         // A click on the lyrics lane opens the lyrics screen: on the clicked
-        // line, else on the one under the playhead.
+        // line, else on the one under the playhead. In a driven window it
+        // designates the line instead.
         if let Some(line) = output.lyrics_click
+            && self.driven_locked()
+        {
+            if let Some(line) = line {
+                self.driven_select(super::app_driven::Selection::Line(line));
+            }
+        } else if let Some(line) = output.lyrics_click
             && !locked
             && !self.lyrics_locked()
         {

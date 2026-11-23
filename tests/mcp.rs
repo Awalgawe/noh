@@ -278,6 +278,11 @@ fn stdio_negotiation_schemas_strict_inputs_and_session_ownership() {
         assert_eq!(
             names,
             [
+                "noh_app_close",
+                "noh_app_do",
+                "noh_app_look",
+                "noh_app_open",
+                "noh_app_state",
                 "noh_burn_subtitles",
                 "noh_cancel",
                 "noh_diagnose",

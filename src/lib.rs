@@ -18,6 +18,7 @@ pub mod cli;
 pub mod color;
 #[cfg(feature = "gui")]
 pub mod copies;
+pub mod driven;
 pub mod effect_choice;
 mod encoder;
 pub mod engine;

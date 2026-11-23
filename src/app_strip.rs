@@ -512,7 +512,11 @@ impl NohApp {
             vec2(20.0, 20.0),
         );
         let remove_id = ui.id().with(("tile-remove", id));
+        // A driven window: the clip is designated, never removed by the person.
+        self.driven_allow(thumb, super::app_driven::Zone::Designate);
+        self.driven_deny(remove_rect);
         let show_remove = !locked
+            && !self.driven_locked()
             && (response.hovered()
                 || response.has_focus()
                 || was_focused
@@ -950,6 +954,7 @@ impl NohApp {
                 self.set_image_duration(id, value);
             }
             TileAction::Show(id) => {
+                self.driven_select(super::app_driven::Selection::Clip(id));
                 if let Some(clip) = self.clips.iter().find(|c| c.id == id) {
                     let texture = self.mini_preview.thumbnail(
                         clip.request_id,

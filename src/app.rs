@@ -5,6 +5,8 @@ mod app_captions;
 mod app_capture;
 mod app_destination;
 mod app_diagnosis;
+mod app_driven;
+mod app_driven_act;
 mod app_effects;
 mod app_font_rows;
 mod app_icons;
@@ -127,6 +129,9 @@ struct NohApp {
     log: VecDeque<String>,
     started: Option<Instant>,
     close_question: bool,
+    /// Opened by the agent through noh-mcp (`--driven`): its channel, the
+    /// badge and the person's input filter (app_driven.rs).
+    driven: Option<app_driven::Driven>,
     settings_open: bool,
     /// Options.
     options: app_options::State,
@@ -226,6 +231,7 @@ impl Default for NohApp {
             log: VecDeque::new(),
             started: None,
             close_question: false,
+            driven: None,
             options: app_options::State::default(),
             autoupdate: app_autoupdate::AutoUpdate::default(),
             settings_open: std::env::var_os("NOH_CAPTURE_UI").is_some()
@@ -786,6 +792,15 @@ fn main() -> eframe::Result {
     {
         std::process::exit(noh::cli::run(std::env::args_os()));
     }
+    // Opened by the agent (noh-mcp): its arguments are no files.
+    let driven_title = app_driven::arguments(std::env::args_os());
+    let driven = driven_title.is_some();
+    if driven_title.is_some() {
+        // No helper this window starts may hold its channel.
+        noh::driven::keep_standard_handles_private();
+        // A failed start is told to the server, never in a dialog.
+        app_startup::quiet();
+    }
     // From here every step is written to startup.log: a start that dies leaves its last one.
     app_startup::begin();
     app_startup::note("preparing the application state");
@@ -907,7 +922,14 @@ fn main() -> eframe::Result {
             ])
             .with_drag_and_drop(true)
             .with_min_inner_size([420.0, 540.0])
-            .with_title(app.locale.language.text("title")),
+            .with_title(match &driven_title {
+                Some(_) => format!(
+                    "{} — {}",
+                    app.locale.language.text("title"),
+                    app.locale.language.text("driven.window_title")
+                ),
+                None => app.locale.language.text("title").to_owned(),
+            }),
         centered: true,
         ..Default::default()
     };
@@ -984,10 +1006,21 @@ fn main() -> eframe::Result {
                 }
             }
             app.resources.preview = preview_issue;
-            // Arguments also allow opening files from a shortcut, sorted by type.
-            let arguments: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
-            if !arguments.is_empty() {
-                app.drop_files(arguments, &cc.egui_ctx);
+            if let Some(title) = &driven_title {
+                // The channel is this window's standard input and output.
+                app.driven = Some(app_driven::Driven::new(
+                    title,
+                    std::io::stdin(),
+                    std::io::stdout(),
+                    &cc.egui_ctx,
+                ));
+            } else {
+                // Arguments also allow opening files from a shortcut, sorted by type.
+                let arguments: Vec<PathBuf> =
+                    std::env::args_os().skip(1).map(PathBuf::from).collect();
+                if !arguments.is_empty() {
+                    app.drop_files(arguments, &cc.egui_ctx);
+                }
             }
             if app_capture::transcribe_enabled() {
                 app.start_subtitles(&cc.egui_ctx);
@@ -1008,7 +1041,18 @@ fn main() -> eframe::Result {
     match &outcome {
         Ok(()) => app_startup::note("closed normally"),
         // The window never opened, or its event loop ended on an error: say why before exiting.
-        Err(error) => app_startup::failed(&error.to_string()),
+        Err(error) => {
+            if driven {
+                // Said before anything else: the server is waiting for `ready`.
+                use std::io::Write;
+                let line = noh::driven::line(&noh::driven::ToServer::Failed {
+                    reason: error.to_string(),
+                });
+                let mut out = std::io::stdout();
+                let _ = out.write_all(&line).and_then(|()| out.flush());
+            }
+            app_startup::failed(&error.to_string());
+        }
     }
     outcome
 }

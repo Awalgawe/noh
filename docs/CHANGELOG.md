@@ -7,6 +7,19 @@ builds are not public releases.
 
 ## Unreleased
 
+### MCP
+
+- An agent can open NOH windows and drive them while you watch
+  (`noh_app_open`, `noh_app_do`, `noh_app_state`, `noh_app_look`,
+  `noh_app_close`): it adds media, edits lyrics lines, chooses the effect, the
+  short's range and safe area, moves the playhead and looks at the window. It
+  knows where you are on the timeline, and never takes the playhead from you
+  while you navigate. In such a window you can play, pause and
+  move through the video, and point out a clip or a lyrics line; editing is the
+  agent's. **Stop driving** gives the window back to you. A window opens only
+  if the computer has the memory for it, and stays open after the agent's
+  session as an ordinary NOH window.
+
 ### Fixes
 
 - NOH keeps up while its window is minimized. Before, the window took in

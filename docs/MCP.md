@@ -30,7 +30,9 @@ or `NOH_FFMPEG` selects FFmpeg; ordinary application discovery remains available
 Individual requests can override the engine with an absolute `ffmpeg` path.
 Protocol discovery works even when no default engine is available; media work
 then reports the corresponding engine error. stdout contains JSON-RPC only.
-There is no HTTP listener, upload, remote job store or player launch.
+There is no HTTP listener, upload or remote job store. No tool opens a player
+or a window, except `noh_app_open`, which opens on request a NOH window driven
+by the agent: a child of the server, reached only through its standard pipes.
 
 To build a Windows portable including all three entry points:
 
@@ -54,6 +56,11 @@ cargo --offline dev verify --media --mcp --offline
 | `noh_job` | `job_id` | Current status, optionally waiting for a change and returning the result |
 | `noh_cancel` | `job_id` | Cancellation request/current status |
 | `noh_list_effects` | none | The caption effects `effect.id` can name, their presets and settings, the folders read and refused |
+| `noh_app_open` | `title` | A NOH window the agent drives: `app_id`, its state and every window of this session |
+| `noh_app_do` | `app_id`, `action` | One gesture in the window; the state revision it led to |
+| `noh_app_state` | `app_id`; optional `after_revision`, `wait_ms` | What the window shows, as data, with `user_position` |
+| `noh_app_look` | `app_id`, `output`; optional `scope`, `at_ms` | A PNG of the window or its monitor, written to a free path |
+| `noh_app_close` | `app_id` | The window closed, or why nothing was closed |
 
 `noh_transcribe` processes an explicitly selected local audio file or the first
 audio stream in a selected video using local CPU transcription. All paths are
@@ -235,6 +242,55 @@ An installed Windows copy that installs an update asks its servers to stop (see
 ago, and never in the middle of a job. Its job IDs end with it. A client that
 does not restart stdio servers by itself (interactive Claude Code) needs to
 reconnect it after the update.
+
+## Driven windows
+
+`noh_app_open` starts the NOH application installed beside the server
+(`noh.exe` in the Windows bundle, `noh-app` elsewhere; never from PATH) with
+`--driven`. The window and the server talk over the window's standard input
+and output, one JSON message per line; nothing listens and no other program
+can reach it. The person sees the window and the agent's badge, can play,
+pause and move through the video, and cannot edit: they ask the agent. A click
+on a clip or a lyrics line designates it. **Stop driving** in the badge, or
+closing the window, gives the window back to the person as an ordinary NOH;
+the agent can then no longer act in it (`app.released_by_user`, `app.closed`).
+
+A window opens only if the machine has room for it. Free memory, and on
+Windows free graphics memory, are measured at each open; each window already
+open keeps a margin up to its budget (550 MiB of memory, 250 MiB of graphics
+memory), and 2 GiB or 15 % of the memory (1 GiB of graphics memory) stays free
+for other programs. At most 8 windows per server, 4 when graphics memory cannot
+be read. A refusal (`app.cap_reached`) gives the figures. A window that cannot
+start on this computer (no OpenGL 2.0, no display) ends without a dialog and the
+open fails with `app.start_failed` and its reason. Windows the person took
+back or closed by hand still count while they run: they are still this server's
+children.
+
+The agent acts with `noh_app_do`: `add` (files, as a drop), `set_photo_duration`,
+`edit_line` (`set_text`, `set_start`, `set_end`, `shift`, `add`, `delete`, with an
+optional `based_on` lyrics revision: lyrics reloaded since are not changed,
+`app.state_changed`), `undo`, `redo`, `choose_effect`, `set_safe_area`,
+`set_range`, `seek`, `play`, `pause` and `answer` (the open question; answers that
+rewrite or replace a file need `user_confirmed`, after asking the person). Each
+gesture calls what the matching click calls and answers with the state revision
+it led to. `noh_app_state` gives what the window shows, as data, by revision (it
+can wait up to 30 s for a newer one); position-only changes during playback are
+sent at most 4 times a second. Its `user_position` says where the person is: the
+playhead, playing or not, the view, the clip and lyrics line under the playhead,
+and what they clicked to point it out. The playhead is shared: while the person
+navigates, and for 3 s after their last gesture on it (or as long as they play),
+the agent's `seek`, `play`, `pause` and `look` at a time wait, then are refused
+with `app.user_navigating` and `retry_after_ms`. `noh_app_look` writes a PNG of
+the window or of its monitor to a free path: the screen as it is, or after moving
+the playhead to `at_ms`. It shows NOH's preview, not the exported pixels, and is
+refused while the window is minimized (`app.hidden`).
+
+`noh_app_close` writes pending lyrics changes first and never discards
+anything: with a question open in the window, or one the write needs (the first
+change of an .srt), nothing closes and `app.question_open` names it; a job
+running refuses the close (`app.job_running`). When the session ends the
+server tells its windows and closes their pipes; the windows stay open as
+ordinary NOH windows, theirs to close.
 
 ## Client configuration
 

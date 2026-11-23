@@ -72,9 +72,26 @@ pub struct TimelineState {
     geometry: Option<Geometry>,
     /// The ruler's button was down last frame: its release asks nothing more.
     ruler_down: bool,
+    /// The overview bar drawn last, when the view is zoomed.
+    overview_rect: Option<Rect>,
     /// The ↺ mark painted last frame, for tests.
     #[cfg(test)]
     pub restart_mark: Option<Rect>,
+}
+
+impl TimelineState {
+    /// What a driven window lets the person reach (app_driven.rs), as drawn
+    /// last: the ruler (the playhead), the lyrics lane (designating a line)
+    /// and the overview bar (the view). The overview is forgotten here; the
+    /// timeline sets it again when it draws it.
+    pub fn driven_zones(&mut self) -> (Option<Rect>, Option<Rect>, Option<Rect>) {
+        let geometry = self.geometry;
+        (
+            geometry.map(|g| g.ruler),
+            geometry.and_then(|g| g.cues),
+            self.overview_rect.take(),
+        )
+    }
 }
 
 /// One immutable waveform mesh. Pointer/playback movement changes neither its
@@ -1745,6 +1762,7 @@ fn overview(
     colors: Palette,
 ) -> Viewport {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 14.0), Sense::hover());
+    state.overview_rect = Some(rect);
     let response = ui.interact(rect, id.with("overview"), Sense::click_and_drag());
     let full = Viewport::full(duration).unwrap();
     let window = Rect::from_min_max(

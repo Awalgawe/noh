@@ -23,6 +23,14 @@ static OPENED: AtomicBool = AtomicBool::new(false);
 static LANGUAGE: OnceLock<Language> = OnceLock::new();
 /// The thread `begin` ran on: the only one a dialog may be shown from.
 static MAIN: OnceLock<ThreadId> = OnceLock::new();
+/// A window the agent opened (`--driven`): a failure is told to the server,
+/// never in a dialog nobody may be there to close.
+static QUIET: AtomicBool = AtomicBool::new(false);
+
+/// No dialog from here on: the failure goes to whoever started the window.
+pub fn quiet() {
+    QUIET.store(true, Ordering::Relaxed);
+}
 
 /// `startup.log` in the folder that already holds the language preference.
 pub fn log_path() -> Option<PathBuf> {
@@ -133,7 +141,7 @@ fn message(language: Language, error: &str, opened: bool, log: Option<&Path>) ->
 }
 
 fn tell(error: &str) {
-    if std::env::var_os("NOH_CAPTURE_UI").is_some() {
+    if std::env::var_os("NOH_CAPTURE_UI").is_some() || QUIET.load(Ordering::Relaxed) {
         return;
     }
     let language = *LANGUAGE.get().unwrap_or(&Language::En);

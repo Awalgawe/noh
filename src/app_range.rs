@@ -298,6 +298,7 @@ impl NohApp {
                 .inner;
             #[cfg(test)]
             self.project_ui.range_buttons.push((key, response.rect));
+            self.driven_allow(response.rect, super::app_driven::Zone::Navigate);
             if response.clicked() {
                 self.project.viewport = match factor {
                     Some(factor) => app_timeline::zoom_by(

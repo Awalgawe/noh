@@ -68,6 +68,20 @@ Other installed profiles can add them through **Resolve missing resources →
 Add or repair components**. Source builds may require paths in
 **Settings → Advanced lyrics settings**.
 
+## A window the agent drives
+
+An agent connected to NOH's MCP server can open NOH windows itself and work in
+them while you watch. Such a window shows the agent's badge at the top and says
+so in its title. You can play, pause, move through the video on the ruler, zoom
+the timeline and change the volume; a click on a clip or a lyrics line points it
+out to the agent, which also knows where you are on the timeline, so « here »
+means your position. While you move through the video the agent does not move
+the playhead. Everything else is the agent's: ask it in the conversation.
+**Stop driving** in the badge, or closing the window, makes it an ordinary NOH
+window again, yours. When the agent's session ends the window stays open as an
+ordinary NOH. If such a window fails, it shows no error dialog (nobody may be
+there to close it): the agent is told why, and `startup.log` keeps the reason.
+
 ## Before closing
 
 The desktop does not automatically restore the editing session after closing.

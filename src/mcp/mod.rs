@@ -1,4 +1,6 @@
 //! Optional local MCP adapter; media work remains in the shared job controller.
+pub mod apps;
+pub mod machine;
 pub mod session;
 mod transport;
 pub mod types;
@@ -76,9 +78,43 @@ where
     }
 }
 
+#[derive(Serialize, JsonSchema)]
+struct AppErrorReply {
+    version: u32,
+    error: AppError,
+}
+
+#[derive(JsonSchema)]
+#[serde(untagged)]
+#[allow(dead_code)] // Schema-only union, as `Reply`.
+enum AppReply<T> {
+    Success(T),
+    Error(AppErrorReply),
+}
+
+/// A window tool's call, off the async executor: it may wait for a window.
+async fn app_blocking<T, F>(work: F) -> CallToolResult
+where
+    T: Serialize + Send + 'static,
+    F: FnOnce() -> Result<T, AppError> + Send + 'static,
+{
+    let outcome = tokio::task::spawn_blocking(move || match work() {
+        Ok(reply) => serde_json::to_value(reply)
+            .map(CallToolResult::structured)
+            .map_err(|e| AppError::new("mcp.internal", e.to_string())),
+        Err(error) => Err(error),
+    })
+    .await
+    .unwrap_or_else(|e| Err(AppError::new("mcp.internal", e.to_string())));
+    outcome.unwrap_or_else(|error| {
+        CallToolResult::structured_error(serde_json::json!({ "version": 1, "error": error }))
+    })
+}
+
 #[derive(Clone)]
 struct Server {
     session: Session,
+    apps: apps::Apps,
 }
 
 #[tool_router]
@@ -151,6 +187,36 @@ impl Server {
         .await
     }
 
+    #[tool(name = "noh_app_open", description = "Open a NOH window that you drive and the person watches: the ordinary NOH application, started by this server with nothing listening. The person can play, pause and move through the video in it, but cannot edit: they ask you in the conversation. They can stop the piloting at any time (« Arrêter le pilotage », or closing the window); the window then becomes theirs, an ordinary NOH. The window stays open after this session ends, as an ordinary NOH. Opens only if the machine has room: free memory and graphics memory are measured, each open window keeps a margin, at most 8 windows; a refusal (app.cap_reached) gives the figures. Returns app_id and every window of this session with its state.", output_schema = schema_for_output::<AppReply<AppOpenReply>>())]
+    async fn app_open(&self, Parameters(input): Parameters<AppOpenInput>) -> CallToolResult {
+        let apps = self.apps.clone();
+        app_blocking(move || apps.open(&input.title)).await
+    }
+
+    #[tool(name = "noh_app_close", description = "Close a NOH window you opened and still drive. Pending lyrics changes are written first; nothing is ever discarded. If a question is open in the window, or writing the lyrics needs one (first change of an .srt), nothing closes and the error app.question_open says which. A job running refuses the close (app.job_running). A window the person closed (app.closed) or took back (app.released_by_user) is not yours to close.", output_schema = schema_for_output::<AppReply<AppCloseReply>>())]
+    async fn app_close(&self, Parameters(input): Parameters<AppCloseInput>) -> CallToolResult {
+        let apps = self.apps.clone();
+        app_blocking(move || apps.close(&input.app_id)).await
+    }
+
+    #[tool(name = "noh_app_do", description = "One gesture in a NOH window you drive, applied as the matching click: add files (as a drop), a picture's duration, a lyrics line (set_text, set_start, set_end, shift, add, delete; based_on = the lyrics revision you read, refused with app.state_changed if they were reloaded since), undo, redo, the caption effect, the safe area, the short's range, seek, play, pause, or an answer to the open question. Seek, play and pause wait while the person navigates (up to 3 s after their last gesture) and are then refused with app.user_navigating and retry_after_ms; never take the playhead from the person. Answers that rewrite or replace a file (modify_srt, keep_lyrics, keep_srt) need user_confirmed: ask the person in the conversation first. Returns the state revision the gesture led to.", output_schema = schema_for_output::<AppReply<AppDoReply>>())]
+    async fn app_do(&self, Parameters(input): Parameters<AppDoInput>) -> CallToolResult {
+        let apps = self.apps.clone();
+        app_blocking(move || apps.act(&input.app_id, input.action)).await
+    }
+
+    #[tool(name = "noh_app_state", description = "What a NOH window you drive shows, as data: clips (with their ids), song, lyrics (path, revision, lines), effect, safe area, range, whether the export is ready, the job running, the open question with its kind, whether the window is minimized, and user_position: where the person is (playhead, playing, view, clip and lyrics line under the playhead, what they clicked to point it out). When the person says « here » or « this one », read user_position first. Optionally waits up to 30000 ms for a revision after after_revision.", output_schema = schema_for_output::<AppReply<AppStateReply>>())]
+    async fn app_state(&self, Parameters(input): Parameters<AppStateInput>) -> CallToolResult {
+        let apps = self.apps.clone();
+        app_blocking(move || apps.view(input)).await
+    }
+
+    #[tool(name = "noh_app_look", description = "A PNG of a NOH window you drive, written to a free absolute .png path (no image bytes are returned): the whole window or the monitor alone. Without at_ms, the screen as it is, where the person is; with at_ms, the playhead moves there first, as seek does (it waits while the person navigates), and stays there. This is NOH's preview (light copies, captions drawn over), not the exported pixels. Refused while the window is minimized (app.hidden).", output_schema = schema_for_output::<AppReply<AppLookReply>>())]
+    async fn app_look(&self, Parameters(input): Parameters<AppLookInput>) -> CallToolResult {
+        let apps = self.apps.clone();
+        app_blocking(move || apps.look(input)).await
+    }
+
     #[tool(name = "noh_cancel", description = "Request cooperative cancellation of a session job. A publication already committed remains succeeded. Poll noh_job for the terminal state.", output_schema = schema_for_output::<Reply<JobReply>>())]
     async fn cancel(&self, Parameters(input): Parameters<CancelInput>) -> CallToolResult {
         let session = self.session.clone();
@@ -207,12 +273,13 @@ impl ServerHandler for Server {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("noh-mcp", crate::build_info::VERSION))
-            .with_instructions("Local media jobs only. Use absolute paths. Montage requests provide exactly one videos list or ordered items list; image entries require positive duration in seconds. Transcription uses explicit local runtime and model files and downloads nothing. Caption burning takes a video and reviewed SRT directly; it re-encodes video without requiring a montage diagnosis. Short extraction takes an explicit source interval and framing, with optional reviewed source-timed SRT, and needs no montage diagnosis. Start a job, poll noh_job by revision, and obtain a completed exact diagnosis before montage export. Only one job may run per session. Wire format version is 1.")
+            .with_instructions("Local media jobs only. Use absolute paths. Montage requests provide exactly one videos list or ordered items list; image entries require positive duration in seconds. Transcription uses explicit local runtime and model files and downloads nothing. Caption burning takes a video and reviewed SRT directly; it re-encodes video without requiring a montage diagnosis. Short extraction takes an explicit source interval and framing, with optional reviewed source-timed SRT, and needs no montage diagnosis. Start a job, poll noh_job by revision, and obtain a completed exact diagnosis before montage export. Only one job may run per session. noh_app_open opens a NOH window you drive while the person watches; they cannot edit in it and ask you instead. Wire format version is 1.")
     }
 }
 
 /// Run one stdio session. Cleanup is awaited even when initialization fails.
 pub async fn run_stdio(default_ffmpeg: PathBuf) -> io::Result<()> {
+    crate::driven::keep_standard_handles_private();
     serve_io(default_ffmpeg, tokio::io::stdin(), tokio::io::stdout()).await
 }
 
@@ -229,8 +296,10 @@ where
     });
     let transport = transport::BoundedStdio::new(read, write, shutdown.clone());
     let watch = tokio::spawn(stop_for_update(session.clone(), shutdown.clone()));
+    let apps = apps::Apps::default();
     let result = match (Server {
         session: session.clone(),
+        apps: apps.clone(),
     })
     .serve_with_ct(transport, token)
     .await
@@ -245,6 +314,10 @@ where
     watch.abort();
     shutdown.stop();
     tokio::task::spawn_blocking(move || session.join_and_drop_jobs())
+        .await
+        .map_err(io::Error::other)?;
+    // The windows stay open: they are told, and their pipes closed.
+    tokio::task::spawn_blocking(move || apps.end_session())
         .await
         .map_err(io::Error::other)?;
     result
@@ -280,9 +353,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn eleven_tools_have_strict_inputs_and_explicit_output_schemas() {
+    fn sixteen_tools_have_strict_inputs_and_explicit_output_schemas() {
         let tools = Server::router().list_all();
-        assert_eq!(tools.len(), 11);
+        assert_eq!(tools.len(), 16);
         let transcribe = tools
             .iter()
             .find(|tool| tool.name == "noh_transcribe")
