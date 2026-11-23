@@ -46,7 +46,10 @@ ASSETS = {
 }
 # Jost for the headings only (135 KB); text uses the system fonts, CJK included.
 FONTS = ("Jost-Variable.ttf", "Jost-OFL.txt")
-EFFECTS = ("classique", "block", "breath", "drop", "karaoke-simple", "sweep")
+# The bundled styles in the app's order (src/app_effects.rs: Classique first, then the folders by name);
+# site/template.html draws one tile per entry, in this order (SIM_STYLES).
+EFFECTS = ("classique", "band", "block", "breath", "drop", "dust", "highlighter", "karaoke-simple",
+           "lit", "punch", "scroll", "sticker", "sweep")
 # The app strings the drawings use (A("key") in the template), frozen in site/app-strings.json.
 APP_KEYS = (
     "strip.add", "song.add", "lyrics.title", "lyrics.add", "lyrics.generating", "lyrics.lines.other",
@@ -259,7 +262,8 @@ def render(lang, template, release, site_url):
     windows = json.loads((SITE / "windows-strings.json").read_text(encoding="utf-8"))
     ss, edge = windows["smartscreen"][lang], windows["edge"][lang]
 
-    tokens = {"version": version, "date": format_date(release["published_at"], lang), "drawn": DRAWN}
+    tokens = {"version": version, "date": format_date(release["published_at"], lang), "drawn": DRAWN,
+              "styles": str(len(EFFECTS))}
     for key, item in files.items():
         tokens["size_" + key] = format_size(item["size"], lang)
         tokens["file_" + key] = item["name"]
