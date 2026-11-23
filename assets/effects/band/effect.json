@@ -1,0 +1,48 @@
+{
+  "engine": 1,
+  "id": "noh.band",
+  "name": {"fr": "Bandeau lisible", "en": "Readable band", "de": "Lesbares Band", "es": "Banda legible", "ja": "読みやすい帯", "ko": "읽기 쉬운 띠", "zh": "易读字幕条"},
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "target": "text",
+  "params": [
+    {"id": "size", "type": "choice", "default": "medium", "choices": ["small", "medium", "large"], "choice_labels": {"small": {"fr": "Petite", "en": "Small", "de": "Klein", "es": "Pequeño", "ja": "小", "ko": "작게", "zh": "小"}, "medium": {"fr": "Moyenne", "en": "Medium", "de": "Mittel", "es": "Mediano", "ja": "中", "ko": "보통", "zh": "中"}, "large": {"fr": "Grande", "en": "Large", "de": "Groß", "es": "Grande", "ja": "大", "ko": "크게", "zh": "大"}}, "level": 1, "label": {"fr": "Taille", "en": "Size", "de": "Größe", "es": "Tamaño", "ja": "サイズ", "ko": "크기", "zh": "大小"}},
+    {"id": "band_opacity", "type": "number", "default": 0.62, "min": 0, "max": 1, "level": 1, "label": {"fr": "Opacité du bandeau", "en": "Band opacity", "de": "Deckkraft des Bands", "es": "Opacidad de la banda", "ja": "帯の不透明度", "ko": "띠 불투명도", "zh": "字幕条不透明度"}},
+    {"id": "placement", "type": "choice", "default": "bottom", "choices": ["bottom", "top"], "choice_labels": {"bottom": {"fr": "En bas", "en": "Bottom", "de": "Unten", "es": "Abajo", "ja": "下", "ko": "아래", "zh": "底部"}, "top": {"fr": "En haut", "en": "Top", "de": "Oben", "es": "Arriba", "ja": "上", "ko": "위", "zh": "顶部"}}, "level": 2, "label": {"fr": "Position", "en": "Position", "de": "Position", "es": "Posición", "ja": "位置", "ko": "위치", "zh": "位置"}},
+    {"id": "band", "type": "color", "default": "#0C0D0F", "level": 2, "label": {"fr": "Couleur du bandeau", "en": "Band colour", "de": "Farbe des Bands", "es": "Color de la banda", "ja": "帯の色", "ko": "띠 색", "zh": "字幕条颜色"}},
+    {"id": "ink", "type": "color", "default": "#FFFFFF", "level": 2, "label": {"fr": "Couleur du texte", "en": "Text colour", "de": "Textfarbe", "es": "Color del texto", "ja": "文字の色", "ko": "글자 색", "zh": "文字颜色"}},
+    {"id": "font", "type": "font", "default": "sans_semibold", "level": 2, "label": {"fr": "Police", "en": "Font", "de": "Schrift", "es": "Fuente", "ja": "フォント", "ko": "글꼴", "zh": "字体"}}
+  ],
+  "presets": [
+    {"id": "veiled_black", "name": {"fr": "Noir voilé", "en": "Veiled black", "de": "Schwarz, durchscheinend", "es": "Negro velado", "ja": "半透明の黒", "ko": "반투명 검정", "zh": "半透明黑"}, "values": {}},
+    {"id": "white", "name": {"fr": "Blanc", "en": "White", "de": "Weiß", "es": "Blanco", "ja": "ホワイト", "ko": "화이트", "zh": "白色"}, "values": {"band": "#FAFAF7", "band_opacity": 0.92, "ink": "#16171A"}},
+    {"id": "colour", "name": {"fr": "Couleur", "en": "Colour", "de": "Farbe", "es": "Color", "ja": "カラー", "ko": "컬러", "zh": "彩色"}, "values": {"band": "#0B6C66", "band_opacity": 0.88, "ink": "#FFFFFF"}}
+  ],
+  "layout": {
+    "mode": "line",
+    "font": "$font",
+    "size": {"mul": ["@short", {"choose": ["$size", {"small": 0.04264, "medium": 0.052, "large": 0.0624}]}]},
+    "line_height": 1.75,
+    "box": {
+      "x": 0.5,
+      "width": 0.88,
+      "y": {"choose": ["$placement", {"bottom": {"landscape": 0.84, "portrait": {"add": [0.84, {"mul": ["@safe", 0.16]}]}}, "top": 0.16}]},
+      "anchor": {"choose": ["$placement", {"bottom": "bottom", "top": "top"}]}
+    },
+    "visible": "line",
+    "anchor": "unit",
+    "preroll": 0.12,
+    "hold": 0.3
+  },
+  "animate": [
+    {"unit": "line", "slot": "enter", "property": "opacity", "duration": 0.16, "curve": "linear", "keys": [[0, 0], [0.05, 0.1997], [0.1, 0.3794], [0.15, 0.5402], [0.2, 0.6832], [0.25, 0.8094], [0.3, 0.9198], [0.3414, 1], [1, 1]]},
+    {"unit": "line", "slot": "enter", "property": "plate_margin", "duration": 0.16, "curve": "ease_out_cubic", "keys": [[0, -0.15], [1, 0]]},
+    {"unit": "line", "slot": "exit", "property": "opacity", "duration": 0.12, "curve": "ease_in_cubic", "keys": [[0, 1], [1, 0]]}
+  ],
+  "render": {
+    "passes": [
+      {"kind": "plate", "on": "line", "color": "$band", "alpha": "$band_opacity", "margin_x": 0.6, "margin_y": 0.086, "radius": 0.28},
+      {"kind": "fill", "color": "$ink"}
+    ]
+  }
+}
