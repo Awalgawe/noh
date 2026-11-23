@@ -491,6 +491,7 @@ impl Painter {
                             color2: premul(edge, a),
                             params: [0.0, 0.0, 0.0, g.ppt],
                             extra: [-1.0, grain_key(g.w, g.h, g.index), dis, g.index as f32],
+                            aux: [0.0; 4],
                         };
                         if let Some((c, o, blur, dy)) = shadow {
                             main.push(Inst {
