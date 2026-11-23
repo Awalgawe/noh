@@ -1,5 +1,6 @@
 """Check the style plugin check's choices without a NOH build: pack selection, trust, results."""
 import json
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -204,6 +205,26 @@ class ResultTests(unittest.TestCase):
         self.assertFalse(check.differs(before, bytes([20]) * 1000))  # coding noise
         self.assertTrue(check.differs(before, bytes([200]) + bytes(999)))
         self.assertFalse(check.differs(bytes(100000), bytes([200]) * 49 + bytes(99951)))
+
+    def test_most_probes_must_show_captions(self):
+        blank, caption = bytes(1000), bytes([200]) + bytes(999)
+        before = [blank] * len(check.PROBES)
+        # One empty frame between two chunks of a line (block at 0.833 s) is not a failure.
+        after = [caption] * len(check.PROBES)
+        after[1] = blank
+        shown, enough = check.drawn(before, after)
+        self.assertTrue(enough)
+        self.assertEqual(len(shown), len(check.PROBES) - 1)
+        self.assertEqual(check.drawn(before, [caption, caption] + [blank] * 3), (check.PROBES[:2], False))
+        self.assertEqual(check.drawn(before, before), ([], False))
+
+    def test_every_probe_is_inside_a_cue(self):
+        cues = [(int(m[0]) * 60 + int(m[1]) + int(m[2]) / 1000, int(m[3]) * 60 + int(m[4]) + int(m[5]) / 1000)
+                for m in re.findall(r"00:(\d\d):(\d\d),(\d{3}) --> 00:(\d\d):(\d\d),(\d{3})", check.SRT)]
+        self.assertEqual(len(cues), 2)
+        for seconds in check.PROBES:
+            with self.subTest(seconds=seconds):
+                self.assertTrue(any(start + 0.1 < seconds < end - 0.1 for start, end in cues))
 
 
 if __name__ == "__main__":

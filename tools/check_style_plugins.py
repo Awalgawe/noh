@@ -45,7 +45,9 @@ GPU_TEST = "gpu_checks"
 SIZES = [(1280, 720), (720, 1280)]
 SRT = ("1\n00:00:00,200 --> 00:00:01,400\nnothing feels the same tonight\n\n"
        "2\n00:00:01,500 --> 00:00:02,800\nÉté, déjà là\n")
-PROBE_SECONDS = 0.8  # inside the first cue
+# Instants inside the two cues. A style may leave a frame empty between two chunks of a line (block
+# does, at 0.833 s): most of these instants, not one, must show captions.
+PROBES = [0.5, 0.9, 1.2, 1.9, 2.4]
 
 
 class CheckError(Exception):
@@ -258,19 +260,29 @@ def check_listing(listing, bundled):
     return loaded
 
 
-def frame(ffmpeg, video, size):
+def frames(ffmpeg, video, size):
+    """The grey frames of `video` at each of PROBES."""
     width, height = size
-    data = run([ffmpeg, "-v", "error", "-ss", str(PROBE_SECONDS), "-i", str(video), "-frames:v", "1",
-                "-f", "rawvideo", "-pix_fmt", "gray", "-"], capture_output=True).stdout
-    if len(data) != width * height:
-        raise CheckError("Could not read a frame of %s" % video)
-    return data
+    found = []
+    for seconds in PROBES:
+        data = run([ffmpeg, "-v", "error", "-ss", str(seconds), "-i", str(video), "-frames:v", "1",
+                    "-f", "rawvideo", "-pix_fmt", "gray", "-"], capture_output=True).stdout
+        if len(data) != width * height:
+            raise CheckError("Could not read a frame of %s at %s s" % (video, seconds))
+        found.append(data)
+    return found
 
 
 def differs(before, after):
     """Captions drew something: at least 0.05 % of the pixels changed by more than a coding error."""
     changed = sum(1 for a, b in zip(before, after) if abs(a - b) > 24)
     return changed * 2000 >= len(before)
+
+
+def drawn(before, after):
+    """The probes that show captions, and whether they are most of them."""
+    shown = [seconds for seconds, a, b in zip(PROBES, before, after) if differs(a, b)]
+    return shown, len(shown) * 2 > len(PROBES)
 
 
 def gl_env(home):
@@ -321,7 +333,7 @@ def check(bundle, effects_dir=ROOT / "assets/effects"):
         run([ffmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=%dx%d:r=24:d=3" % size,
              "-f", "lavfi", "-i", "sine=frequency=440:duration=3", "-c:v", "libx264",
              "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(source)])
-        before = frame(ffmpeg, source, size)
+        before = frames(ffmpeg, source, size)
         for name in names:
             effect = loaded[name]
             for preset in effect["presets"]:
@@ -334,10 +346,12 @@ def check(bundle, effects_dir=ROOT / "assets/effects"):
                 if burn.returncode != 0 or not output.is_file():
                     failures.append(label + ": exit %d" % burn.returncode)
                     print("%s failed:\n%s\n%s" % (label, burn.stdout[-4000:], burn.stderr[-4000:]))
-                elif not differs(before, frame(ffmpeg, output, size)):
-                    failures.append(label + ": no caption drawn at %.1f s" % PROBE_SECONDS)
                 else:
-                    print(label + ": drawn")
+                    shown, enough = drawn(before, frames(ffmpeg, output, size))
+                    print("%s: captions at %s of %s s" % (label, shown, PROBES))
+                    if not enough:
+                        failures.append(label + ": captions at %s of %s s only" % (shown, PROBES))
+                        print(burn.stdout[-4000:])
     if failures:
         raise CheckError("Drawing failed: " + "; ".join(failures))
     print("Style plugins checked: %d library tests, %d effects drawn" % (count, len(names)))
@@ -352,6 +366,7 @@ def main():
     commands.add_parser("fetch").add_argument("--out", required=True)
     commands.add_parser("check").add_argument("--bundle", required=True)
     args = parser.parse_args()
+    sys.stdout.reconfigure(line_buffering=True)  # keep the log in order with the errors on stderr
     try:
         if args.command == "pack":
             pack(args.target, args.out)
