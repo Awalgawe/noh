@@ -661,7 +661,7 @@ fn play_refusal(project: &ProjectRequest) -> Option<&'static str> {
     if project.montage.clip_audio {
         // One sound stream beside the pictures: the song.
         Some("the montage mixes the clips' sound")
-    } else if project.captions.is_some() && project.active_effect().is_none() {
+    } else if project.captions.is_some() && !project.drawn_live() {
         // The effect layer draws over libmpv's picture; libass draws in it.
         Some("the captions are drawn by libass")
     } else if project.montage.items.iter().any(|item| item.is_image()) {
@@ -1094,11 +1094,7 @@ fn caption_workspace(
         .as_ref()
         .map_or((0, source_ms), |s| (s.start_ms, s.end_ms));
     // A caption effect is drawn over the preview by the GPU engine, not by libass.
-    let key = if let Some(captions) = project
-        .captions
-        .as_ref()
-        .filter(|_| project.active_effect().is_none())
-    {
+    let key = if let Some(captions) = project.captions.as_ref().filter(|_| !project.drawn_live()) {
         WorkspaceKey {
             captions: Some((snapshot.0.last().unwrap().clone(), captions.style)),
             source_ms,
@@ -1563,6 +1559,7 @@ mod tests {
     #[cfg(feature = "gui")]
     fn montage_request(items: Vec<crate::input::MediaItem>) -> ProjectRequest {
         ProjectRequest {
+            motion: None,
             montage: crate::engine::ExportRequest {
                 items,
                 wav: "song.wav".into(),
@@ -1905,6 +1902,7 @@ fn main() {
             .collect();
         let snapshot = Snapshot(paths.iter().map(|p| FileStamp::read(p).unwrap()).collect());
         let mut project = ProjectRequest {
+            motion: None,
             montage: ExportRequest {
                 items: vec![paths[0].clone().into(), paths[1].clone().into()],
                 wav: paths[2].clone(),
@@ -2009,6 +2007,7 @@ fn main() {
                 .collect(),
         );
         let project = ProjectRequest {
+            motion: None,
             montage: ExportRequest {
                 items: vec![paths[0].clone().into(), paths[1].clone().into()],
                 wav: paths[2].clone(),
@@ -2118,6 +2117,7 @@ fn main() {
         std::fs::write(&subtitles, "1\n00:00:14,000 --> 00:00:16,000\nCAPTION\n").unwrap();
         let snapshot = Snapshot(vec![FileStamp::read(&subtitles).unwrap()]);
         let mut project = ProjectRequest {
+            motion: None,
             montage: ExportRequest {
                 items: vec![],
                 wav: "unused.wav".into(),

@@ -469,10 +469,12 @@ impl NohApp {
         } else {
             None
         };
+        let motion = self.motion_request();
         Some(ProjectRequest {
+            effect: self.preview_effect().filter(|_| motion.is_none()),
+            motion,
             montage,
             short,
-            effect: self.preview_effect(),
             captions,
         })
     }
@@ -974,7 +976,7 @@ impl NohApp {
                 .as_ref()
                 .map(|_| self.mini_preview.scrub_failed),
             project.montage.clip_audio,
-            project.captions.is_some() && project.active_effect().is_none(),
+            project.captions.is_some() && !project.drawn_live(),
             self.clips
                 .iter()
                 .map(|clip| (clip.item.is_image(), noh::copies::state(clip.item.path()))),
@@ -1273,6 +1275,16 @@ impl NohApp {
         }
         if self.mini_preview.short && !self.project.hide_safe_area {
             paint_safe_area(ui, monitor, self.project.short_safe_area, l);
+        }
+        // Where the agent's scene look is: the frame's grid, and on the short
+        // the safe area it asked for.
+        if let Some(marker) = self.driven_scene_marker() {
+            if marker.grid {
+                super::app_driven_scene::paint_grid(ui, monitor);
+            }
+            if self.mini_preview.short {
+                paint_safe_area(ui, monitor, marker.safe_area, l);
+            }
         }
         if let Some(error) = self.mini_preview.error.clone() {
             let mut inside = ui.new_child(

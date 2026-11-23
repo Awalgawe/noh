@@ -236,6 +236,9 @@ pub(super) struct Driven {
     pub history: std::collections::VecDeque<(String, String)>,
     /// The history menu under the badge is open.
     pub history_open: bool,
+    /// The motion scene the agent attached, and where its last scene look is.
+    pub scene: Option<super::app_driven_scene::SceneWatch>,
+    pub marker: Option<super::app_driven_scene::SceneMarker>,
 }
 
 impl Driven {
@@ -291,6 +294,8 @@ impl Driven {
             agent_cancelled: false,
             history: Default::default(),
             history_open: false,
+            scene: None,
+            marker: None,
         }
     }
 
@@ -400,6 +405,7 @@ impl NohApp {
         // The agent's playhead gestures waiting for the person; the end of its
         // job; the preparation turn; then what the window shows, if it changed.
         self.driven_pending(ctx);
+        self.driven_scene_frame(ctx);
         self.driven_job_frame();
         self.driven_turn_frame();
         self.driven_state(false);
@@ -2162,5 +2168,86 @@ mod tests {
         assert_eq!(args(&["noh-app", "--driven"]), Some(String::new()));
         assert_eq!(args(&["noh-app", "song.wav", "--driven"]), None);
         assert_eq!(args(&["noh-app"]), None);
+    }
+
+    /// The scene the agent attaches is reread when it changes, its light check
+    /// in `state.scene`; a scene look moves the playhead there and marks the
+    /// monitor as long as the playhead stays (motion overlay plan, M8).
+    #[cfg(feature = "motion")]
+    #[test]
+    fn a_followed_scene_is_reread_and_a_scene_look_marks_the_monitor() {
+        use driven::Action;
+        let mut w = window(true);
+        let dir = tempfile::tempdir().unwrap();
+        let scene = dir.path().join("song.noh-motion.rhai");
+        std::fs::write(
+            &scene,
+            "// noh-motion 0
+fn frame(t, ctx) { draw(rect(0.1, 0.1).at(0.5, 0.5)); }
+",
+        )
+        .unwrap();
+        let relative = Action::SetScene {
+            path: Some("relative.rhai".into()),
+        };
+        assert_eq!(refusal_code(&w.act(1, relative)), Some("app.refused"));
+        let attach = Action::SetScene {
+            path: Some(scene.clone()),
+        };
+        assert_eq!(refusal_code(&w.act(2, attach)), None);
+        // States go out only when they change: frames until one says `want`.
+        let wait = |w: &mut Window, want: &str| {
+            let until = Instant::now() + Duration::from_secs(20);
+            while Instant::now() < until {
+                w.frame(vec![]);
+                while let Ok(ToServer::State { state, .. }) = w.states.try_recv() {
+                    if state["scene"]["status"] == want {
+                        return state;
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            panic!("the scene never became {want}");
+        };
+        let state = wait(&mut w, "loads");
+        assert_eq!(state["scene"]["revision"], 1);
+        // Rewritten by the agent: reread at the next look at the file.
+        std::fs::write(
+            &scene,
+            "// noh-motion 0
+fn frame(t, ctx) { draw(; }
+",
+        )
+        .unwrap();
+        let state = wait(&mut w, "refused");
+        assert_eq!(state["scene"]["revision"], 2);
+        assert!(!state["scene"]["reason"].as_str().unwrap().is_empty());
+        // A scene look: the playhead there, the marker shown while it stays.
+        let look = Action::ShowSceneLook {
+            at_ms: 7_000,
+            safe_area: noh::safe_area::SafeArea::YoutubeShorts,
+            grid: true,
+        };
+        assert_eq!(refusal_code(&w.act(3, look)), None);
+        w.frame(vec![]);
+        assert_eq!(w.app.mini_preview.cursor_ms, 7_000);
+        assert_eq!(w.app.driven_scene_marker().map(|m| m.at_ms), Some(7_000));
+        assert_eq!(refusal_code(&w.act(4, Action::Seek { ms: 3_000 })), None);
+        w.frame(vec![]);
+        assert!(w.app.driven_scene_marker().is_none());
+        // Detached.
+        assert_eq!(
+            refusal_code(&w.act(5, Action::SetScene { path: None })),
+            None
+        );
+        let until = Instant::now() + Duration::from_secs(5);
+        let mut detached = false;
+        while Instant::now() < until && !detached {
+            w.frame(vec![]);
+            while let Ok(ToServer::State { state, .. }) = w.states.try_recv() {
+                detached |= state["scene"].is_null();
+            }
+        }
+        assert!(detached);
     }
 }

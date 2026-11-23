@@ -1648,6 +1648,7 @@ mod tests {
                 },
                 short: None,
                 effect: None,
+                motion: None,
                 captions: None,
             },
         }

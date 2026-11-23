@@ -198,7 +198,8 @@ fn verify(media: bool, mcp: bool, transcription: bool, offline: bool) -> Result<
     fmt.args(["fmt", "--check"]);
     checked(fmt)?;
     let mut tests = cargo();
-    let features = if mcp { "gui,mcp" } else { "gui" };
+    // `motion` (experimental scenes) adds no binary of its own: its tests run here.
+    let features = if mcp { "gui,mcp,motion" } else { "gui,motion" };
     tests.args([
         "test",
         "--locked",

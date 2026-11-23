@@ -81,7 +81,7 @@ export NOH_TEST_PLAYBACK_AUDIO="$task_audio"
 
 cargo fmt --check
 # The GUI unit tests launch the normal desktop worker beside their test binary.
-task_build=(build --locked --features gui,mcp --bins --example dev)
+task_build=(build --locked --features gui,mcp,motion --bins --example dev)
 if ((task_offline)); then task_build+=(--offline); fi
 cargo "${task_build[@]}"
 

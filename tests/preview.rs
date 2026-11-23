@@ -53,6 +53,7 @@ fn fixture() -> (Fixture, ProjectRequest) {
         },
         short: None,
         effect: None,
+        motion: None,
         captions: None,
     };
     (f, request)
@@ -283,6 +284,7 @@ fn still_occurrences_follow_the_export_frame_grid_and_composite_alpha() {
         },
         short: None,
         effect: None,
+        motion: None,
         captions: None,
     };
     // At 25 fps, the 60 ms red occurrence rounds to two frames (80 ms).
@@ -406,6 +408,7 @@ fn cursor_cold_and_eight_warm_seeks_on_thirty_minute_captioned_project() {
         },
         short: None,
         effect: None,
+        motion: None,
         captions: Some(ShortCaptions {
             subtitles: f.path("reviewed.srt"),
             style: CaptionStyle::default(),

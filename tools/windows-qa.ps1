@@ -10,7 +10,8 @@ if (-not $IsWindows) { throw 'Windows PowerShell 7 is required' }
 $logs = Join-Path $workspace 'logs/setup'
 [void][IO.Directory]::CreateDirectory($logs)
 $cargo = (Get-Command cargo).Source
-$features = 'gui,mcp'
+# motion: the experimental scene runtime, whose tests run with the others.
+$features = 'gui,mcp,motion'
 $env:CARGO_TARGET_DIR = Join-Path $workspace 'target'
 Write-Json @{features=$features;profile='qa';rustflags=$env:RUSTFLAGS;encoded_rustflags=$env:CARGO_ENCODED_RUSTFLAGS;source_commit=(git -C $workspace rev-parse HEAD).Trim()} "$logs/qa-inputs.json"
 Invoke-RecordedProcess (Get-Command python).Source @('tools/windows_test_runtime.py','--cache',$Cache,'--output',$Runtime) $workspace "$logs/test-runtime" 300

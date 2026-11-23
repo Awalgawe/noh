@@ -22,6 +22,7 @@ use support::Fixture;
 /// `effect`: "classic" (bundled Classique) or a test-only effect of tests/fixtures/fx.
 fn request(f: &Fixture, effect: &str, preset: &str) -> ProjectRequest {
     ProjectRequest {
+        motion: None,
         montage: ExportRequest {
             items: vec![f.path("clip.mp4").into()],
             wav: f.path("song.wav"),
@@ -183,6 +184,7 @@ fn without_opengl_classique_falls_back_to_libass_and_other_effects_fail() {
     };
     let burn = collect(Job::burn_with_worker(
         CaptionRequest {
+            scene: None,
             source: f.path("clip.mp4"),
             subtitles: f.path("lyrics.srt"),
             output: f.path("burn.mp4"),

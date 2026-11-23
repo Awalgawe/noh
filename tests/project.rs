@@ -82,6 +82,7 @@ fn fixture() -> (Fixture, ProjectRequest) {
             framing: Framing::Pad,
         }),
         effect: None,
+        motion: None,
         captions: Some(ShortCaptions {
             subtitles: f.path("reviewed.srt"),
             style: CaptionStyle::default(),
@@ -312,6 +313,7 @@ fn project_h264_level_uses_picture_rate_instead_of_nut_timestamp_ticks() {
                 restart_loops: false,
             }),
             effect: None,
+            motion: None,
             captions: None,
         };
         success(&run(&f, &request));
@@ -553,6 +555,7 @@ fn a_cue_too_tall_for_libass_is_drawn_by_classique_with_an_overflow_warning() {
                 framing: Framing::Pad,
             }),
             effect,
+            motion: None,
             captions: Some(ShortCaptions {
                 subtitles: f.path("tall.srt"),
                 style,
@@ -653,6 +656,7 @@ fn a_missing_installed_font_is_drawn_in_the_plugin_face_with_a_warning() {
         },
         short: None,
         effect: Some(effect),
+        motion: None,
         captions: Some(ShortCaptions {
             subtitles: f.path("words.srt"),
             style: CaptionStyle::default(),
