@@ -1,0 +1,55 @@
+{
+  "engine": 1,
+  "id": "noh.lit",
+  "name": {"fr": "Mot éclairé", "en": "Lit word", "de": "Beleuchtetes Wort", "es": "Palabra iluminada", "ja": "灯る言葉", "ko": "밝아지는 단어", "zh": "点亮的词"},
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "target": "text",
+  "params": [
+    {"id": "size", "type": "choice", "default": "medium", "choices": ["small", "medium", "large"], "choice_labels": {"small": {"fr": "Petite", "en": "Small", "de": "Klein", "es": "Pequeño", "ja": "小", "ko": "작게", "zh": "小"}, "medium": {"fr": "Moyenne", "en": "Medium", "de": "Mittel", "es": "Mediano", "ja": "中", "ko": "보통", "zh": "中"}, "large": {"fr": "Grande", "en": "Large", "de": "Groß", "es": "Grande", "ja": "大", "ko": "크게", "zh": "大"}}, "level": 1, "label": {"fr": "Taille", "en": "Size", "de": "Größe", "es": "Tamaño", "ja": "サイズ", "ko": "크기", "zh": "大小"}},
+    {"id": "placement", "type": "choice", "default": "bottom", "choices": ["bottom", "top"], "choice_labels": {"bottom": {"fr": "En bas", "en": "Bottom", "de": "Unten", "es": "Abajo", "ja": "下", "ko": "아래", "zh": "底部"}, "top": {"fr": "En haut", "en": "Top", "de": "Oben", "es": "Arriba", "ja": "上", "ko": "위", "zh": "顶部"}}, "level": 1, "label": {"fr": "Position", "en": "Position", "de": "Position", "es": "Posición", "ja": "位置", "ko": "위치", "zh": "位置"}},
+    {"id": "sung", "type": "color", "default": "#FFFFFF", "level": 2, "label": {"fr": "Couleur du mot chanté", "en": "Sung word colour", "de": "Farbe des gesungenen Worts", "es": "Color de la palabra cantada", "ja": "歌っている言葉の色", "ko": "부르는 단어 색", "zh": "演唱中词语的颜色"}},
+    {"id": "edge", "type": "choice", "default": "shadow", "choices": ["shadow", "outline"], "choice_labels": {"shadow": {"fr": "Ombre", "en": "Shadow", "de": "Schatten", "es": "Sombra", "ja": "影", "ko": "그림자", "zh": "阴影"}, "outline": {"fr": "Contour", "en": "Outline", "de": "Kontur", "es": "Contorno", "ja": "縁取り", "ko": "외곽선", "zh": "描边"}}, "level": 2, "label": {"fr": "Fond", "en": "Edge", "de": "Rand", "es": "Borde", "ja": "縁", "ko": "테두리", "zh": "边缘"}},
+    {"id": "upcoming", "type": "number", "default": 60, "min": 20, "max": 100, "unit": "%", "level": 2, "label": {"fr": "Luminosité des mots à venir", "en": "Brightness of upcoming words", "de": "Helligkeit der kommenden Wörter", "es": "Brillo de las palabras siguientes", "ja": "これから歌う言葉の明るさ", "ko": "다음 단어의 밝기", "zh": "未唱词语的亮度"}},
+    {"id": "font", "type": "font", "default": "sans_semibold", "level": 2, "label": {"fr": "Police", "en": "Font", "de": "Schrift", "es": "Fuente", "ja": "フォント", "ko": "글꼴", "zh": "字体"}}
+  ],
+  "presets": [
+    {"id": "subtle", "name": {"fr": "Discret", "en": "Subtle", "de": "Dezent", "es": "Discreto", "ja": "控えめ", "ko": "은은하게", "zh": "低调"}, "values": {}},
+    {"id": "outline", "name": {"fr": "Contour", "en": "Outline", "de": "Kontur", "es": "Contorno", "ja": "縁取り", "ko": "외곽선", "zh": "描边"}, "values": {"edge": "outline"}},
+    {"id": "contrast", "name": {"fr": "Contraste fort", "en": "High contrast", "de": "Hoher Kontrast", "es": "Alto contraste", "ja": "ハイコントラスト", "ko": "고대비", "zh": "高对比度"}, "values": {"upcoming": 42}}
+  ],
+  "layout": {
+    "mode": "line",
+    "font": "$font",
+    "size": {"mul": ["@short", {"choose": ["$size", {"small": 0.04756, "medium": 0.058, "large": 0.0696}]}]},
+    "line_height": 1.2,
+    "box": {
+      "x": 0.5,
+      "width": {"add": [0.88, {"mul": ["@safe", 0.12]}]},
+      "y": {"choose": ["$placement", {"bottom": {"add": [0.84, {"mul": ["@safe", {"sub": [0.16, {"div": [{"mul": ["@short", {"choose": ["$size", {"small": 0.04756, "medium": 0.058, "large": 0.0696}]}, 0.25]}, {"sub": ["@h", "@inset_t", "@inset_b"]}]}]}]}]}, "top": {"sub": [0.16, {"mul": ["@safe", 0.16]}]}}]},
+      "anchor": {"choose": ["$placement", {"bottom": "bottom", "top": "top"}]}
+    },
+    "visible": "line",
+    "word_lead": 0.08,
+    "preroll": 0.15,
+    "hold": 0.4
+  },
+  "animate": [
+    {"unit": "line", "slot": "enter", "property": "opacity", "duration": 0.15, "curve": "ease_out_cubic", "keys": [[0, 0], [1, 1]]},
+    {"unit": "line", "slot": "enter", "property": "offset_y", "duration": 0.15, "curve": "ease_out_cubic", "keys": [[0, 0.15], [1, 0]]},
+    {"unit": "line", "slot": "exit", "property": "opacity", "duration": 0.15, "curve": "ease_in_cubic", "keys": [[0, 1], [1, 0]]},
+    {"unit": "word", "slot": "future", "property": "opacity", "value": {"div": ["$upcoming", 100]}},
+    {"unit": "word", "slot": "enter", "property": "opacity", "duration": 0.12, "curve": "ease_out_cubic", "keys": [[0, {"div": ["$upcoming", 100]}], [1, 1]]},
+    {"unit": "word", "slot": "enter", "property": "wipe", "duration": 0.12, "curve": "ease_out_cubic", "keys": [[0, 0], [1, 1]]},
+    {"unit": "word", "slot": "past", "property": "opacity", "duration": 0.3, "curve": "ease_in_cubic", "keys": [[0, 1], [0.26667, 1], [1, 0.85]]},
+    {"unit": "word", "slot": "past", "property": "wipe", "duration": 0.3, "curve": "ease_in_cubic", "keys": [[0, 1], [0.26667, 1], [1, 0]]},
+    {"unit": "word", "slot": "loop", "property": "wipe_edge", "value": 0.6}
+  ],
+  "render": {
+    "passes": [
+      {"kind": "shadow", "color": "#000000", "alpha": {"choose": ["$edge", {"shadow": 0.55, "outline": 0}]}, "offset_y": 0.04, "blur": {"mul": ["@short", {"choose": ["$size", {"small": 0.005232, "medium": 0.00638, "large": 0.007656}]}]}},
+      {"kind": "outline_only", "color": "#000000", "color2": "#000000", "alpha": {"choose": ["$edge", {"shadow": 0, "outline": 1}]}, "outline": 0.045},
+      {"kind": "fill", "color": "#FFFFFF", "color2": "$sung"}
+    ]
+  }
+}
