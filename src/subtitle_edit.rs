@@ -25,7 +25,7 @@ fn letters(w: &str) -> u64 {
 }
 
 /// Starts for `words` spread by letter count over [a, b), as the engine does
-/// without word times (fx/line.rs split_words), on whole milliseconds.
+/// without word times (style/line.rs split_words), on whole milliseconds.
 fn spread(words: &[&str], a: u64, b: u64) -> Vec<u64> {
     let total: u64 = words.iter().map(|w| letters(w)).sum::<u64>().max(1);
     let mut acc = 0;

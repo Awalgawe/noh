@@ -128,19 +128,19 @@ class ResultTests(unittest.TestCase):
                 check.passed_count(log)
 
     def test_required_tests_must_each_pass_once(self):
-        log = ("test fx::tests::bundled_effects_load ... ok\n"
-               "test fx::tests::bundled_effects_load_twice ... ok\n"
-               "test fx::tests::gpu_checks ... FAILED\n"
+        log = ("test style::tests::bundled_effects_load ... ok\n"
+               "test style::tests::bundled_effects_load_twice ... ok\n"
+               "test style::tests::gpu_checks ... FAILED\n"
                "test effect_choice::tests::a ... ok\n")
         self.assertTrue(check.ran_once(log, "bundled_effects_load"))
         self.assertFalse(check.ran_once(log, "gpu_checks"))
         self.assertFalse(check.ran_once(log, "effects_load"))
         self.assertFalse(check.ran_once(log + log, "bundled_effects_load"))
-        self.assertFalse(check.ran_once("test fx::tests::bundled_effects_load ... ignored\n",
+        self.assertFalse(check.ran_once("test style::tests::bundled_effects_load ... ignored\n",
                                         "bundled_effects_load"))
 
     def test_a_library_run_missing_one_required_test_fails(self):
-        lines = ["test %s::tests::%s ... ok" % ("effect_choice" if path.endswith("effect_choice.rs") else "fx",
+        lines = ["test %s::tests::%s ... ok" % ("effect_choice" if path.endswith("effect_choice.rs") else "style",
                                                 name)
                  for name, path in check.REQUIRED_TESTS.items()]
         summary = "test result: ok. %d passed; 0 failed; 3 ignored" % len(lines)
@@ -153,13 +153,13 @@ class ResultTests(unittest.TestCase):
         with self.assertRaises(check.CheckError):
             check.library_result("\n".join(lines + ["", summary]), 101)
         # One required test per filter, so a filter that matches nothing is noticed.
-        for prefix, filters in (("src/fx/", "fx::"), ("src/effect_choice.rs", "effect_choice::")):
+        for prefix, filters in (("src/style/", "style::"), ("src/effect_choice.rs", "effect_choice::")):
             self.assertIn(filters, check.TEST_FILTERS)
             self.assertTrue(any(path.startswith(prefix) for path in check.REQUIRED_TESTS.values()), prefix)
 
     def test_the_required_tests_exist_in_the_library(self):
         # A rename on main must update the list, or the light job fails closed: see it here first.
-        for name, path in {**check.REQUIRED_TESTS, check.GPU_TEST: "src/fx/tests.rs"}.items():
+        for name, path in {**check.REQUIRED_TESTS, check.GPU_TEST: "src/style/tests.rs"}.items():
             with self.subTest(name=name):
                 source = (check.ROOT / path).read_text(encoding="utf-8")
                 self.assertRegex(source, r"#\[test\][^{]*\bfn %s\(\)" % name)

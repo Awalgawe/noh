@@ -320,7 +320,8 @@ pub struct MotionInfo {
 /// The motion section of noh_list_effects, in a build that draws scenes.
 #[cfg(feature = "motion")]
 pub fn motion_info() -> Option<MotionInfo> {
-    use crate::motion::{draw, script, shader, shapes};
+    use crate::fx::{draw, layer_shader as shader, shapes};
+    use crate::motion::script;
     let words = |v: &[&str]| v.iter().map(|s| s.to_string()).collect();
     let limits = [
         ("operations_per_frame", script::MAX_OPS as f64),
@@ -364,11 +365,11 @@ pub fn motion_info() -> Option<MotionInfo> {
         ("shader_helpers", shader::MAX_HELPERS as f64),
         (
             "video_scale_max",
-            f64::from(crate::motion::reframe::MAX_VIDEO_SCALE),
+            f64::from(crate::fx::reframe::MAX_VIDEO_SCALE),
         ),
         (
             "video_rot_max",
-            f64::from(crate::motion::reframe::MAX_VIDEO_ROT),
+            f64::from(crate::fx::reframe::MAX_VIDEO_ROT),
         ),
     ]
     .into_iter()

@@ -4,8 +4,10 @@
 //! pixel, the line and the pass, the letter's row and the effect's settings.
 use super::line::{Line, split_words};
 use super::plugin::{Effect, PluginScene, R};
-use super::shaders::{Inst, PASS_FILL, PASS_GLOW, PASS_OUTLINE, PASS_PLATE, PASS_SHADOW, Upload};
-use super::text::Fonts;
+use crate::fx::shaders::{
+    Inst, PASS_FILL, PASS_GLOW, PASS_OUTLINE, PASS_PLATE, PASS_SHADOW, Upload,
+};
+use crate::fx::text::Fonts;
 use serde_json::{Value, json};
 use std::path::Path;
 
@@ -1067,8 +1069,8 @@ fn render(
     h: u32,
     hooks: Option<&str>,
 ) -> (Vec<Inst>, Vec<u8>) {
-    use super::gl::GlRenderer;
-    use super::shaders::Output;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
     let mut fonts = Fonts::load().unwrap();
     let mut gpu = GlRenderer::headless(w, h, w as f32, h as f32, Output::StraightSrgb).unwrap();
     let mut scene = PluginScene::new(e.clone(), w, h, lines, Some("p"));

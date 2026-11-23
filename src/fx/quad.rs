@@ -1,5 +1,5 @@
 //! A texture drawn through four corners: how a preview shows its own picture
-//! reframed by a motion scene's `video()` (`crate::motion::reframe::Framing::quad`).
+//! reframed by a motion scene's `video()` (`crate::fx::reframe::Framing::quad`).
 //! libmpv renders the whole picture, unframed, into a texture; this draws it
 //! as a textured quad, transformed, into the preview's target, black around it.
 //! Positions are pixels of the target from its top left; texture coordinates

@@ -12,7 +12,7 @@
 //! layer stacked on their own first, so that the layer still fades as one
 //! picture when it holds both text and shapes. Both use targets made at their
 //! first use only. A group can also be closed by an author's layer shader
-//! (`crate::motion::shader`), run over the group's content at full or half
+//! (`crate::fx::layer_shader`), run over the group's content at full or half
 //! resolution, its result stacked like any pass.
 use super::gl::GlRenderer;
 use glow::HasContext;

@@ -16,8 +16,9 @@
 //! draw values.
 use super::Inputs;
 use super::audio::Audio;
-use super::draw::{
-    BoxF, Draw, EmitterDraw, MAX_DRAWS, Outline, RectDraw, ShaderSpec, Shadow, Source, Span,
+use crate::fx::check::{Checker, Counts};
+use crate::fx::draw::{
+    BoxF, Draw, EmitterDraw, Frame, MAX_DRAWS, Outline, RectDraw, ShaderSpec, Shadow, Source, Span,
     TextDraw, WordMod,
 };
 use crate::fx::text::Fonts;
@@ -236,7 +237,7 @@ pub struct ScriptScene {
     /// Which runs of them are layers.
     layers: Rc<RefCell<Vec<Span>>>,
     /// The frame's framing of the picture, if it asked for one.
-    video: Rc<RefCell<Option<super::reframe::VideoDraw>>>,
+    video: Rc<RefCell<Option<crate::fx::reframe::VideoDraw>>>,
     audio: Rc<super::audio::Audio>,
 }
 
@@ -244,25 +245,29 @@ pub struct ScriptScene {
 /// long path does not copy it at every step. `draw(p)` hands over what it holds
 /// at that moment.
 #[derive(Clone)]
-pub struct PathV(Rc<RefCell<super::shapes::PathDraw>>);
+pub struct PathV(Rc<RefCell<crate::fx::shapes::PathDraw>>);
 
-fn path_push(p: &mut PathV, s: super::shapes::Seg) -> Res<PathV> {
+fn path_push(p: &mut PathV, s: crate::fx::shapes::Seg) -> Res<PathV> {
     let mut inner = p.0.borrow_mut();
     inner.segs.push(s);
-    if inner.points() > super::shapes::MAX_POINTS {
-        return Err(format!("a path of more than {} points", super::shapes::MAX_POINTS).into());
+    if inner.points() > crate::fx::shapes::MAX_POINTS {
+        return Err(format!(
+            "a path of more than {} points",
+            crate::fx::shapes::MAX_POINTS
+        )
+        .into());
     }
     drop(inner);
     Ok(p.clone())
 }
 
-fn path_set(p: &mut PathV, f: impl FnOnce(&mut super::shapes::PathDraw)) -> PathV {
+fn path_set(p: &mut PathV, f: impl FnOnce(&mut crate::fx::shapes::PathDraw)) -> PathV {
     f(&mut p.0.borrow_mut());
     p.clone()
 }
 
 fn register_shapes(e: &mut Engine, w: f32, h: f32) {
-    use super::shapes::{Paint, PathDraw, Seg, ellipse_segs, rounded_rect_segs};
+    use crate::fx::shapes::{Paint, PathDraw, Seg, ellipse_segs, rounded_rect_segs};
     let new = |segs: Vec<Seg>| {
         PathV(Rc::new(RefCell::new(PathDraw {
             segs,
@@ -335,8 +340,8 @@ fn register_shapes(e: &mut Engine, w: f32, h: f32) {
                 Paint::Linear(_, _, s) | Paint::Radial(_, _, s) => s,
                 _ => return Err("stop() follows linear() or radial()".into()),
             };
-            if stops.len() >= super::shapes::MAX_STOPS {
-                return Err(format!("more than {} stops", super::shapes::MAX_STOPS).into());
+            if stops.len() >= crate::fx::shapes::MAX_STOPS {
+                return Err(format!("more than {} stops", crate::fx::shapes::MAX_STOPS).into());
             }
             stops.push((f(o), c.into(), f(a)));
             drop(inner);
@@ -376,9 +381,9 @@ fn register_shapes(e: &mut Engine, w: f32, h: f32) {
 
 /// Features of the format that NOH does not have yet: a scene that uses one is
 /// refused with this reason when it is checked.
-/// `video()`: how the frame frames the picture (`super::reframe`).
+/// `video()`: how the frame frames the picture (`crate::fx::reframe`).
 fn register_video(e: &mut Engine) {
-    use super::reframe::VideoDraw;
+    use crate::fx::reframe::VideoDraw;
     e.register_type_with_name::<VideoDraw>("Video");
     e.register_fn("video", VideoDraw::default);
     e.register_fn("scale", |v: &mut VideoDraw, s: f64| {
@@ -486,12 +491,11 @@ fn register_layer(e: &mut Engine, shaders: Rc<Vec<String>>) {
     });
 }
 
-/// One evaluated frame, as host data, with what it cost.
+/// One frame as the script evaluated it: the frame the engine draws, with what
+/// evaluating it cost. Reads like the frame it holds.
 #[derive(Clone, Debug)]
-pub struct Frame {
-    pub draws: Vec<Draw>,
-    /// The runs of `draws` that are layers, in order.
-    pub layers: Vec<Span>,
+pub struct Evaluated {
+    pub frame: Frame,
     /// Operations spent (0 when the scene was loaded without counting).
     pub ops: u64,
     /// Calls to costly offered functions, and reads of lyrics and onsets.
@@ -499,28 +503,44 @@ pub struct Frame {
     pub reads: u32,
     /// Milliseconds running the script: measured, reported, never a reason to refuse.
     pub run_ms: f64,
-    /// The sound at this instant, for layer shaders: loudness (0 to 1) and
-    /// seconds since the last sudden rise.
-    pub energy: f32,
-    pub onset_age: f32,
-    /// How the frame frames the picture (`None`: the picture as it is).
-    pub video: Option<super::reframe::VideoDraw>,
 }
 
-pub fn ease_named(curve: &str, x: f64) -> f64 {
-    let x = x.clamp(0.0, 1.0);
-    match curve {
-        "ease_in" => x * x,
-        "ease_out" => 1.0 - (1.0 - x) * (1.0 - x),
-        "ease_in_out" => x * x * (3.0 - 2.0 * x),
-        "ease_in_cubic" => x * x * x,
-        "ease_out_cubic" => 1.0 - (1.0 - x).powi(3),
-        "back" => {
-            let (c1, c3) = (1.70158, 2.70158);
-            1.0 + c3 * (x - 1.0).powi(3) + c1 * (x - 1.0).powi(2)
-        }
-        _ => x,
+impl std::ops::Deref for Evaluated {
+    type Target = Frame;
+    fn deref(&self) -> &Frame {
+        &self.frame
     }
+}
+
+impl Evaluated {
+    /// The counted checks of this frame at `t`: the engine's, and the script's
+    /// own cap on costly calls, in the order a scene has always been refused.
+    pub fn check(&self, checker: &mut Checker, t: f64) -> Result<Counts, String> {
+        checker.draws_cap(self, t)?;
+        if self.calls > MAX_CALLS {
+            return Err(format!(
+                "at t={t:.3}: {} costly calls exceed {MAX_CALLS}",
+                self.calls
+            ));
+        }
+        checker.check(self, t)
+    }
+}
+
+/// A scene's `ease(curve, x)`: the names scenes have always offered, each on
+/// its curve of the engine's table; an unknown name is linear.
+pub fn ease_named(curve: &str, x: f64) -> f64 {
+    use crate::fx::ease::{Curve, ease};
+    let c = match curve {
+        "ease_in" => Curve::EaseIn,
+        "ease_out" => Curve::EaseOut,
+        "ease_in_out" => Curve::Smooth,
+        "ease_in_cubic" => Curve::EaseInCubic,
+        "ease_out_cubic" => Curve::EaseOutCubic,
+        "back" => Curve::Back,
+        _ => Curve::Linear,
+    };
+    ease(c, x)
 }
 
 fn word_mut(d: &mut TextDraw, k: i64) -> Res<&mut WordMod> {
@@ -617,7 +637,7 @@ fn register_text(e: &mut Engine) {
     e.register_fn(
         "word_color",
         |d: &mut TextDraw, k: i64, c: &str| -> Res<TextDraw> {
-            word_mut(d, k)?.color = Some(super::draw::hex(c)?);
+            word_mut(d, k)?.color = Some(crate::fx::draw::hex(c)?);
             Ok(d.clone())
         },
     );
@@ -821,7 +841,7 @@ fn register_measure(
         let b = &d.block;
         let key = format!(
             "{}|{}|{}|{}|{}",
-            super::draw::layout_key(b, w, h),
+            crate::fx::draw::layout_key(b, w, h),
             b.x,
             b.y,
             b.anchor,
@@ -830,7 +850,7 @@ fn register_measure(
         if let Some(m) = cache.borrow().get(&key) {
             return Ok(m.clone());
         }
-        let m = Rc::new(super::draw::measure(
+        let m = Rc::new(crate::fx::draw::measure(
             &mut fonts.borrow_mut(),
             b,
             d.scale,
@@ -955,9 +975,9 @@ impl ScriptScene {
             let snap = d.0.borrow().clone();
             push(&o, Draw::Path(snap))
         });
-        let video: Rc<RefCell<Option<super::reframe::VideoDraw>>> = Rc::default();
+        let video: Rc<RefCell<Option<crate::fx::reframe::VideoDraw>>> = Rc::default();
         let vs = video.clone();
-        engine.register_fn("draw", move |v: super::reframe::VideoDraw| -> Res<()> {
+        engine.register_fn("draw", move |v: crate::fx::reframe::VideoDraw| -> Res<()> {
             let mut slot = vs.borrow_mut();
             if slot.is_some() {
                 return Err("one video() per frame".into());
@@ -1095,7 +1115,7 @@ impl ScriptScene {
         (self.ctx.src_w as f32, self.ctx.src_h as f32)
     }
 
-    pub fn frame(&self, t: f64) -> Result<Frame, String> {
+    pub fn frame(&self, t: f64) -> Result<Evaluated, String> {
         self.ops.set(0);
         self.calls.set(0);
         self.reads.set(0);
@@ -1113,16 +1133,18 @@ impl ScriptScene {
                 "script at t={t:.3}: frame() returns nothing; hand each draw to draw(…)"
             ));
         }
-        Ok(Frame {
-            draws: std::mem::take(&mut *self.out.borrow_mut()),
-            layers: std::mem::take(&mut *self.layers.borrow_mut()),
+        Ok(Evaluated {
+            frame: Frame {
+                draws: std::mem::take(&mut *self.out.borrow_mut()),
+                layers: std::mem::take(&mut *self.layers.borrow_mut()),
+                energy: self.audio.energy_at(t) as f32,
+                onset_age: self.audio.onset_age(t).min(1e6) as f32,
+                video: self.video.borrow_mut().take(),
+            },
             ops: self.ops.get(),
             calls: self.calls.get(),
             reads: self.reads.get(),
             run_ms,
-            energy: self.audio.energy_at(t) as f32,
-            onset_age: self.audio.onset_age(t).min(1e6) as f32,
-            video: self.video.borrow_mut().take(),
         })
     }
 }

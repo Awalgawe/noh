@@ -5,11 +5,10 @@
 use crate::app_effects::Choice;
 use crate::app_style::{self as style, space};
 use eframe::egui::{self, Color32, Rect, Sense, Vec2, pos2, vec2};
-use noh::fx::{
-    gl::GlRenderer,
+use noh::fx::{gl::GlRenderer, text::Fonts};
+use noh::style::{
     line::split_words,
     plugin::{Effect, Param, PluginScene, localized},
-    text::Fonts,
 };
 use serde_json::Value as J;
 use std::collections::{BTreeMap, HashMap};
@@ -827,7 +826,7 @@ impl super::NohApp {
     fn font_picker(
         &mut self,
         ui: &mut egui::Ui,
-        p: &noh::fx::plugin::Param,
+        p: &noh::style::plugin::Param,
         value: &serde_json::Value,
         next: &mut Choice,
     ) {
@@ -1489,7 +1488,7 @@ mod tests {
         app.locale.language = language;
         app.project.apply_subtitles = true;
         // Classique, plus the test-only effects (tests/fixtures/fx).
-        app.effects.set_catalog(noh::fx::catalog::scan(&[
+        app.effects.set_catalog(noh::style::catalog::scan(&[
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("assets")
                 .join("effects"),
@@ -1773,7 +1772,7 @@ mod tests {
         )
         .unwrap();
         app.effects
-            .set_catalog(noh::fx::catalog::scan(&[folder.path().to_path_buf()]));
+            .set_catalog(noh::style::catalog::scan(&[folder.path().to_path_buf()]));
         let c = card(&mut app, "test.labels");
         app.choose_effect(Some(c));
         app.style_panel.settings = true;
@@ -2038,7 +2037,7 @@ mod tests {
 
     #[test]
     fn size_sliders_never_leave_the_parameter_bounds() {
-        let catalog = noh::fx::catalog::scan(&[
+        let catalog = noh::style::catalog::scan(&[
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("assets")
                 .join("effects"),
@@ -2148,7 +2147,7 @@ mod tests {
     #[test]
     #[ignore]
     fn samples_draw_every_bundled_effect() {
-        let catalog = noh::fx::catalog::scan(&[
+        let catalog = noh::style::catalog::scan(&[
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("assets")
                 .join("effects"),

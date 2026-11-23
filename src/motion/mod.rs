@@ -1,36 +1,27 @@
 //! Motion scenes (feature `motion`, experimental): a scene is a sandboxed script
 //! whose `frame(t, ctx)` describes, for any instant, what to draw over the video.
 //!
-//! - `script`: the script engine with its allow-list and counted limits.
-//! - `draw`, `shapes`: the draws a frame hands over, as host data, and the checks
-//!   the painter would make, without drawing.
-//! - `check`: the counted checks of one frame. They apply to **every** frame that
-//!   is evaluated (preview and export alike), not only to the frames validated
+//! - `script`: the script engine with its allow-list and counted limits. A frame
+//!   it evaluates is host data of the drawing engine (`crate::fx::draw`), checked
+//!   by the engine's counted checks (`crate::fx::check`) on **every** frame that
+//!   is evaluated (preview and export alike), not only on the frames validated
 //!   in advance: a pure script can still exceed a cap between two of them.
 //! - `validate`: the pass run before a scene is shown or exported: every frame of
 //!   a list of instants, checked, then asked again in another order.
 //! - `thread`: the one thread that loads and evaluates a scene, with a stack of
 //!   a fixed size, the same in the export worker and in the window.
-//! - `paint`: a frame's draws as instances of the engine (`crate::fx`), its
-//!   passes stacked by `crate::fx::compose`.
 //!
 //! - `song`, `layer`, `run`: a scene over a source video, in the worker: its
-//!   inputs gathered from the job's files, its overlay for the export, and the
-//!   check and look jobs.
+//!   inputs gathered from the job's files, its overlay for the export (painted
+//!   by `crate::fx::paint`), and the check and look jobs.
 //!
-//! - `reframe`: the scene's `video()` as one framing function, applied by the
-//!   export to the source's planes and by the previews to their own images.
+//! What a scene draws, its shapes, its layer shaders and the picture's framing
+//! (`video()`) live in the engine, where caption styles can reach them too.
 pub mod audio;
-pub mod check;
-pub mod draw;
 pub mod layer;
-pub mod paint;
 pub mod quick;
-pub mod reframe;
 pub mod run;
 pub mod script;
-pub mod shader;
-pub mod shapes;
 pub mod song;
 pub mod thread;
 pub mod validate;

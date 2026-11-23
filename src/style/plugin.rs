@@ -1,8 +1,11 @@
 //! Generic effect engine driven by plugin files (archi-greffons-v2). The engine
 //! knows layouts, tracks and passes; it knows no effect by name.
 use super::line::Line;
-use super::shaders::{Inst, PASS_FILL, PASS_GLOW, PASS_OUTLINE, PASS_PLATE, PASS_SHADOW, Upload};
-use super::text::{Atlas, Face, Fonts, Lack, PGlyph, RowAlign, Sprite, layout, layout_aligned};
+use crate::fx::ease::{Curve, ease};
+use crate::fx::shaders::{
+    Inst, PASS_FILL, PASS_GLOW, PASS_OUTLINE, PASS_PLATE, PASS_SHADOW, Upload,
+};
+use crate::fx::text::{Atlas, Face, Fonts, Lack, PGlyph, RowAlign, Sprite, layout, layout_aligned};
 use serde_json::Value as J;
 use std::collections::HashMap;
 use std::path::Path;
@@ -569,19 +572,6 @@ impl Prop {
             Prop::PlateOpacity | Prop::PlateMargin | Prop::PlateScaleX | Prop::PlateWipe
         )
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Curve {
-    Linear,
-    EaseIn,
-    EaseOut,
-    EaseInOut,
-    Back,
-    /// The power curves x³ and 1 − (1 − x)³ ("easeInCubic" / "easeOutCubic" in the
-    /// usual easing tables). Not the CSS ease-in / ease-out keywords (cubic-bezier).
-    EaseInCubic,
-    EaseOutCubic,
 }
 
 #[derive(Clone, Debug)]
@@ -2027,29 +2017,6 @@ fn hash1(x: f64) -> f64 {
     z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
     z ^= z >> 31;
     (z as f64 / u64::MAX as f64) * 2.0 - 1.0
-}
-
-fn ease(c: Curve, x: f64) -> f64 {
-    let x = x.clamp(0.0, 1.0);
-    match c {
-        Curve::Linear => x,
-        Curve::EaseIn => x * x,
-        Curve::EaseOut => 1.0 - (1.0 - x) * (1.0 - x),
-        Curve::EaseInOut => {
-            if x < 0.5 {
-                2.0 * x * x
-            } else {
-                1.0 - (-2.0 * x + 2.0).powi(2) / 2.0
-            }
-        }
-        Curve::Back => {
-            let c1 = 1.70158;
-            let c3 = c1 + 1.0;
-            1.0 + c3 * (x - 1.0).powi(3) + c1 * (x - 1.0).powi(2)
-        }
-        Curve::EaseInCubic => x * x * x,
-        Curve::EaseOutCubic => 1.0 - (1.0 - x).powi(3),
-    }
 }
 
 fn noise1(x: f64, seed: u64) -> f64 {
@@ -3548,9 +3515,9 @@ impl PluginScene {
                             // outline), scaled and rotated as drawn; shadows and glows aside.
                             if (self.checked || self.frame_check) && !*overflow && a > 0.0 {
                                 let pad = if g.sprite.msdf {
-                                    super::shaders::MSDF_RANGE
+                                    crate::fx::shaders::MSDF_RANGE
                                 } else {
-                                    super::text::COV_PAD as f32
+                                    crate::fx::text::COV_PAD as f32
                                 } * g.sprite.ppt;
                                 let half = [
                                     ((g.sprite.w - 2.0 * pad).max(0.0) * 0.5 + inst.params[2]) * sx,
@@ -3811,5 +3778,59 @@ fn solid(cx: f32, cy: f32, w: f32, h: f32, color: [f32; 4]) -> Inst {
         extra: [-1.0, 0.0, 0.0, 0.0],
         aux: [0.0, PASS_PLATE, 0.0, 0.0],
         lane: [0.0, 1.0, 0.0, 0.0],
+    }
+}
+
+/// A caption style as the export's layer: the scene, with the fonts it draws
+/// with (read at set-up, on the export's thread).
+pub struct StyleLayer {
+    scene: PluginScene,
+    fonts: Option<Fonts>,
+}
+
+impl StyleLayer {
+    pub fn new(scene: PluginScene) -> Self {
+        Self { scene, fonts: None }
+    }
+}
+
+impl crate::fx::export::Overlay for StyleLayer {
+    fn setup(&mut self, gpu: &mut crate::fx::gl::GlRenderer) -> Result<(), String> {
+        if let Some(src) = self.scene.effect.shader.as_deref() {
+            gpu.set_hooks(Some(src), self.scene.hook_user())?;
+        }
+        let mut fonts = Fonts::load()?;
+        // An installed font is read before the first frame: an export never draws
+        // with fonts « not read yet », only with the chosen one or, if it is missing,
+        // the plugin's own face and a warning.
+        if self.scene.wants_installed_fonts() {
+            fonts.set_installed(std::sync::Arc::new(crate::fx::text::system_fonts(None)));
+        }
+        self.fonts = Some(fonts);
+        Ok(())
+    }
+
+    fn draw(
+        &mut self,
+        gpu: &mut crate::fx::gl::GlRenderer,
+        t: f64,
+    ) -> Result<glow::Texture, String> {
+        let fonts = self.fonts.as_mut().ok_or("the style was not set up")?;
+        let (glow_i, gain, main, _) = self.scene.frame(fonts, gpu, t);
+        gpu.frame(&glow_i, gain, &main, false)
+            .map_err(|e| format!("OpenGL: {e}"))?;
+        Ok(gpu.output_texture())
+    }
+
+    fn overflowed(&self) -> bool {
+        self.scene.overflowed()
+    }
+
+    fn too_wide(&self) -> bool {
+        self.scene.too_wide()
+    }
+
+    fn font_missing(&self) -> Option<String> {
+        self.scene.font_missing().map(str::to_string)
     }
 }

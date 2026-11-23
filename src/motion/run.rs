@@ -2,12 +2,12 @@
 //! frames and measure it), or look at frames of it drawn by the export's engine
 //! path over the source's picture. Everything is written into `scene/` in the
 //! job's workspace; the supervisor publishes that folder whole, or nothing.
-use super::draw::{Draw, measure};
 use super::layer::{MotionLayer, read_scene};
 use super::song::{Song, gather};
 use super::thread::ScriptThread;
 use super::validate::{Report, grid};
 use crate::engine::{EngineError, Event, ExportResult, Reporter};
+use crate::fx::draw::{Draw, measure};
 use crate::fx::export::Overlay;
 use crate::fx::gl::GlRenderer;
 use crate::fx::shaders::Output;
@@ -110,7 +110,7 @@ fn load(request: &SceneRequest, report: &mut Reporter<'_>) -> Result<Loaded, Eng
     .map_err(|e| fail("error.scene_input", Some(&request.source), e))?;
     let src = read_scene(&request.scene)
         .map_err(|e| fail("error.scene_refused", Some(&request.scene), e))?;
-    let shaders = super::shader::read_beside(&request.scene)
+    let shaders = crate::fx::layer_shader::read_beside(&request.scene)
         .map_err(|e| fail("error.scene_refused", Some(&request.scene), e))?;
     inputs.shaders = shaders.iter().map(|(n, _)| n.clone()).collect();
     let thread = ScriptThread::start(src, inputs, audio, true)
@@ -165,13 +165,13 @@ fn report_json(r: &Report) -> serde_json::Value {
             "shader_layers": r.max_shader_layers, "shader_area": r.max_shader_area,
         },
         "limits": {
-            "ops": super::script::MAX_OPS, "draws": super::draw::MAX_DRAWS,
-            "particles": super::draw::MAX_PARTICLES, "glyphs": super::draw::MAX_GLYPHS,
-            "area": super::draw::MAX_AREA, "blurs": super::draw::MAX_BLURS,
-            "passes": super::draw::MAX_PASSES, "calls": super::script::MAX_CALLS,
-            "text_blocks": super::draw::MAX_BLOCKS,
-            "shader_layers": super::shader::MAX_SHADER_LAYERS,
-            "shader_area": super::shader::MAX_SHADER_AREA,
+            "ops": super::script::MAX_OPS, "draws": crate::fx::draw::MAX_DRAWS,
+            "particles": crate::fx::draw::MAX_PARTICLES, "glyphs": crate::fx::draw::MAX_GLYPHS,
+            "area": crate::fx::draw::MAX_AREA, "blurs": crate::fx::draw::MAX_BLURS,
+            "passes": crate::fx::draw::MAX_PASSES, "calls": super::script::MAX_CALLS,
+            "text_blocks": crate::fx::draw::MAX_BLOCKS,
+            "shader_layers": crate::fx::layer_shader::MAX_SHADER_LAYERS,
+            "shader_area": crate::fx::layer_shader::MAX_SHADER_AREA,
         },
         "script_ms": { "p95": r.script_ms_p95, "worst": r.script_ms_worst, "worst_at": r.script_ms_worst_at },
         "warnings": r.warnings,
@@ -560,7 +560,7 @@ fn look(
         // `video()`, or covering a frame of another shape.
         let under = match layer.framing() {
             Some(f) => {
-                super::reframe::resample(&source_frame(request, t, picture)?, 3, &f, &[0, 0, 0])
+                crate::fx::reframe::resample(&source_frame(request, t, picture)?, 3, &f, &[0, 0, 0])
             }
             None => source_frame(request, t, size)?,
         };

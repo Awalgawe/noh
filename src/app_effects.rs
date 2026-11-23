@@ -4,11 +4,13 @@
 //! engine starts at the first frame drawn with an effect: nothing at app start.
 use eframe::{egui, egui_glow, glow};
 use noh::fx::{
-    catalog::{self, Catalog},
     gl::GlRenderer,
+    text::{Fonts, InstalledFonts, families_of, system_fonts},
+};
+use noh::style::{
+    catalog::{self, Catalog},
     line::Line,
     plugin::{Effect, PluginScene, localized},
-    text::{Fonts, InstalledFonts, families_of, system_fonts},
 };
 use std::{
     io::Write,
@@ -292,7 +294,7 @@ impl State {
             None => Some(track.clone()),
         };
         let lines = trimmed
-            .map(|t| noh::fx::line::from_track(&t))
+            .map(|t| noh::style::line::from_track(&t))
             .unwrap_or_default();
         layer.wanted = Some(Wanted { key, effect, lines });
     }
@@ -754,7 +756,7 @@ mod tests {
     fn installed_fonts_landing_rebuild_a_scene_that_waited_for_them() {
         use noh::fx::text::{Fonts, system_fonts};
         let effects = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/effects");
-        let catalog = noh::fx::catalog::scan(&[effects.clone()]);
+        let catalog = noh::style::catalog::scan(&[effects.clone()]);
         let drop = catalog
             .effects
             .iter()
@@ -762,7 +764,7 @@ mod tests {
             .unwrap()
             .effect
             .clone();
-        let line = noh::fx::line::split_words(1.0, 3.0, &["la".to_string()], " ");
+        let line = noh::style::line::split_words(1.0, 3.0, &["la".to_string()], " ");
         let choice = Choice {
             id: "noh.drop".into(),
             preset: "white".into(),
@@ -787,7 +789,7 @@ mod tests {
             let values = [("font".to_string(), serde_json::json!(value))]
                 .into_iter()
                 .collect();
-            let mut scene = noh::fx::plugin::PluginScene::new(
+            let mut scene = noh::style::plugin::PluginScene::new(
                 drop.clone(),
                 1920,
                 1080,
@@ -912,8 +914,8 @@ mod tests {
     }
 
     /// Classique, plus the test-only effects (tests/fixtures/fx).
-    fn bundled_catalog() -> noh::fx::catalog::Catalog {
-        noh::fx::catalog::scan(&[
+    fn bundled_catalog() -> noh::style::catalog::Catalog {
+        noh::style::catalog::scan(&[
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("assets")
                 .join("effects"),
@@ -953,7 +955,7 @@ mod tests {
             )
             .unwrap();
         assert!(
-            matches!(anchor, noh::fx::plugin::R::Text(ref t) if t == "top"),
+            matches!(anchor, noh::style::plugin::R::Text(ref t) if t == "top"),
             "{anchor:?}"
         );
         // An invalid value is refused, not ignored.
@@ -977,7 +979,7 @@ mod tests {
         // Without Classique installed nothing is chosen (libass draws), and it is
         // looked for once only.
         let mut bare = NohApp::default();
-        bare.effects.catalog = Some(noh::fx::catalog::scan(&[]));
+        bare.effects.catalog = Some(noh::style::catalog::scan(&[]));
         bare.ensure_default_effect();
         assert!(bare.project.effect.is_none());
         bare.effects.catalog = Some(bundled_catalog());

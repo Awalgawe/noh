@@ -858,7 +858,7 @@ pub(crate) fn execute(
 enum Pass<'a> {
     Effect {
         choice: &'a EffectChoice,
-        /// The built-in Classique (`fx::catalog::builtin_classic`), not a folder.
+        /// The built-in Classique (`style::catalog::builtin_classic`), not a folder.
         builtin: bool,
     },
     /// A motion scene, validated at the export's frames before anything starts.
@@ -973,7 +973,7 @@ fn job_layer(
     fps: f64,
     span: f64,
 ) -> Result<crate::fx::export::Layer, EngineError> {
-    use crate::fx;
+    use crate::style;
     let (choice, builtin) = match &job.pass {
         Pass::Effect { choice, builtin } => (*choice, *builtin),
         Pass::Scene {
@@ -989,9 +989,9 @@ fn job_layer(
         }
     };
     let effect = if builtin {
-        fx::catalog::builtin_classic()
+        style::catalog::builtin_classic()
     } else {
-        fx::catalog::load_one(&choice.dir, &choice.id)
+        style::catalog::load_one(&choice.dir, &choice.id)
             .map_err(|e| error("error.effect", Some(&choice.dir), e))?
     };
     if let Some(preset) = &choice.preset
@@ -1004,11 +1004,11 @@ fn job_layer(
         ));
     }
     let (w, h) = job.size;
-    let scene = fx::plugin::PluginScene::new(
+    let scene = style::plugin::PluginScene::new(
         effect,
         w,
         h,
-        fx::line::from_track(&job.track),
+        style::line::from_track(&job.track),
         choice.preset.as_deref(),
     )
     .with_values(&choice.values)
@@ -1021,7 +1021,7 @@ fn job_layer(
     } else {
         scene
     };
-    Ok(fx::export::Layer::Plugin(Box::new(scene)))
+    Ok(Box::new(crate::style::plugin::StyleLayer::new(scene)))
 }
 
 #[cfg(all(feature = "effects", not(feature = "motion")))]
@@ -1061,7 +1061,8 @@ fn scene_layer(
     fps: f64,
     span: f64,
 ) -> Result<crate::fx::export::Layer, EngineError> {
-    use crate::motion::{layer, shader, song, thread::ScriptThread, validate};
+    use crate::fx::layer_shader as shader;
+    use crate::motion::{layer, song, thread::ScriptThread, validate};
     let refused = |e: String| error("error.scene_refused", Some(scene), e);
     let size = job.size;
     crate::scene_request::safe_area_required(size.0, size.1, safe_area)?;
@@ -1079,7 +1080,7 @@ fn scene_layer(
         .validate(validate::grid(start, start + span, fps))
         .map_err(refused)?;
     let overlay = layer::MotionLayer::new(thread, size, start, shaders).map_err(refused)?;
-    Ok(crate::fx::export::Layer::Overlay(Box::new(overlay)))
+    Ok(Box::new(overlay))
 }
 
 /// E4: FFmpeg #1 (video, no captions) -> GPU caption layer and YUV mix -> FFmpeg #2

@@ -10,8 +10,8 @@
 //! `fx::export::pipe_input` keeps the picture's place against the sound.
 use crate::captions::CaptionStyle;
 use crate::engine::EngineError;
-use crate::fx;
 use crate::subtitle_track::SubtitleTrack;
+use crate::{fx, style};
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
@@ -164,13 +164,13 @@ pub(crate) fn run(
     };
     let (effect, preset, values, dir) = match &job.effect {
         None => (
-            fx::catalog::builtin_classic(),
+            style::catalog::builtin_classic(),
             None,
             crate::project::classic_values(&job.style),
             None,
         ),
         Some(choice) => (
-            fx::catalog::load_one(&choice.dir, &choice.id)
+            style::catalog::load_one(&choice.dir, &choice.id)
                 .map_err(|e| engine(Some(&choice.dir), e))?,
             choice.preset.clone(),
             choice.values.clone(),
@@ -186,11 +186,11 @@ pub(crate) fn run(
             format!("The effect has no preset \"{preset}\"."),
         ));
     }
-    let scene = fx::plugin::PluginScene::new(
+    let scene = style::plugin::PluginScene::new(
         effect,
         w,
         h,
-        fx::line::from_track(&job.track),
+        style::line::from_track(&job.track),
         preset.as_deref(),
     )
     .with_values(&values)
@@ -220,7 +220,7 @@ pub(crate) fn run(
         height: h,
         source: (w, h),
         matrix,
-        scene: fx::export::Layer::Plugin(Box::new(scene)),
+        scene: Box::new(crate::style::plugin::StyleLayer::new(scene)),
         deadline,
         end,
     };
@@ -301,7 +301,7 @@ fn run_scene(
         ))
     })?;
     let src = layer::read_scene(&scene.scene).map_err(refused)?;
-    let shaders = crate::motion::shader::read_beside(&scene.scene).map_err(refused)?;
+    let shaders = crate::fx::layer_shader::read_beside(&scene.scene).map_err(refused)?;
     let mut song_inputs = inputs.inputs;
     song_inputs.shaders = shaders.iter().map(|(n, _)| n.clone()).collect();
     let thread = ScriptThread::start(src, song_inputs, inputs.audio, false).map_err(refused)?;
@@ -336,7 +336,7 @@ fn run_scene(
         height: h,
         source: picture,
         matrix,
-        scene: fx::export::Layer::Overlay(Box::new(overlay)),
+        scene: Box::new(overlay),
         deadline,
         end,
     };
@@ -465,11 +465,11 @@ mod tests {
         let mut fonts = crate::fx::text::Fonts::load().unwrap();
         let words: Vec<String> = std::iter::repeat_n("Text".to_string(), 600).collect();
         let scene = |check: bool, words: &[String]| {
-            let s = fx::plugin::PluginScene::new(
-                fx::catalog::builtin_classic(),
+            let s = style::plugin::PluginScene::new(
+                style::catalog::builtin_classic(),
                 320,
                 180,
-                vec![fx::line::split_words(0.0, 2.0, words, " ")],
+                vec![style::line::split_words(0.0, 2.0, words, " ")],
                 None,
             );
             if check { s.with_frame_check() } else { s }

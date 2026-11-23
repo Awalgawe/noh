@@ -28,16 +28,16 @@ PAGES = 10  # of 100 packs: far more than 14 days of main's runs and one day of 
 RECORD = "build.json"
 CLI = "noh"
 TESTS = "noh-lib-tests"
-# Library tests run on the PR's plugins: every test of the effect engine and of the effect choice.
-TEST_FILTERS = ["fx::", "effect_choice::"]
+# Library tests run on the PR's plugins: every test of the caption styles and of the effect choice.
+TEST_FILTERS = ["style::", "effect_choice::"]
 # A filter that matches nothing also passes: these must each run and pass once, at least one per
 # filter. Each reads the bundled plugins; renaming one on main means updating this list (the first
 # job's test_check_style_plugins.py finds each in its source file).
 REQUIRED_TESTS = {
-    "bundled_effects_load": "src/fx/tests.rs",
-    "bundled_presets_match_the_recorded_instances": "src/fx/tests.rs",
-    "every_bundled_preset_draws_deterministically": "src/fx/tests.rs",
-    "the_bundled_plugins_take_an_installed_font_in_one_level_2_setting": "src/fx/tests.rs",
+    "bundled_effects_load": "src/style/tests.rs",
+    "bundled_presets_match_the_recorded_instances": "src/style/tests.rs",
+    "every_bundled_preset_draws_deterministically": "src/style/tests.rs",
+    "the_bundled_plugins_take_an_installed_font_in_one_level_2_setting": "src/style/tests.rs",
     "a_plugin_is_found_by_id_with_typed_checked_values": "src/effect_choice.rs",
 }
 # The OpenGL checks, ignored by default: they prove this runner draws with software OpenGL.

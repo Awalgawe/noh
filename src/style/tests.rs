@@ -3,8 +3,8 @@
 use super::catalog::{Catalog, scan};
 use super::line::{Line, split_words};
 use super::plugin::PluginScene;
-use super::shaders::{Inst, Upload};
-use super::text::Fonts;
+use crate::fx::shaders::{Inst, Upload};
+use crate::fx::text::Fonts;
 use std::path::{Path, PathBuf};
 
 fn repo(rel: &str) -> PathBuf {
@@ -324,7 +324,8 @@ fn gpu_checks() {
     #[cfg(feature = "motion")]
     crate::motion::tests::motion_gpu_checks();
     let other = std::thread::spawn(|| {
-        super::gl::GlRenderer::headless(8, 8, 8.0, 8.0, super::shaders::Output::PremulGamma).err()
+        crate::fx::gl::GlRenderer::headless(8, 8, 8.0, 8.0, crate::fx::shaders::Output::PremulGamma)
+            .err()
     });
     let refused = other
         .join()
@@ -334,8 +335,8 @@ fn gpu_checks() {
 }
 
 fn gpu_mix_matches_the_float64_reference_in_both_matrices() {
-    use super::gl::{GlRenderer, Matrix, YuvMix};
-    use super::shaders::Output;
+    use crate::fx::gl::{GlRenderer, Matrix, YuvMix};
+    use crate::fx::shaders::Output;
     use glow::HasContext;
     // Odd sizes exercise the half-size chroma edge.
     let (w, h) = (161usize, 91usize);
@@ -568,7 +569,7 @@ fn a_failing_encoder_returns_its_diagnostics() {
         .arg(&out);
         c
     };
-    let job = super::export::Job {
+    let job = crate::fx::export::Job {
         first,
         second: Box::new(second),
         end: None,
@@ -576,11 +577,11 @@ fn a_failing_encoder_returns_its_diagnostics() {
         width: 64,
         height: 36,
         source: (64, 36),
-        matrix: super::gl::Matrix::Bt601,
-        scene: super::export::Layer::Plugin(Box::new(scene)),
+        matrix: crate::fx::gl::Matrix::Bt601,
+        scene: Box::new(super::plugin::StyleLayer::new(scene)),
         deadline: std::time::Duration::from_secs(60),
     };
-    match super::export::run(job, |_| {}) {
+    match crate::fx::export::run(job, |_| {}) {
         Ok((status, log, _)) => assert!(
             !status.success() && log.contains("no-such-preset-noh"),
             "{status:?}\n{log}"
@@ -601,8 +602,8 @@ fn a_failing_encoder_returns_its_diagnostics() {
 #[test]
 #[ignore = "measurement dump: needs NOH_FX_DUMP, FFmpeg on PATH and a GPU"]
 fn dump_same_render_frames() {
-    use super::gl::{GlRenderer, Matrix, YuvMix};
-    use super::shaders::Output;
+    use crate::fx::gl::{GlRenderer, Matrix, YuvMix};
+    use crate::fx::shaders::Output;
     let Some(dir) = std::env::var_os("NOH_FX_DUMP").map(PathBuf::from) else {
         return;
     };
@@ -1290,7 +1291,7 @@ fn line_offsets_and_tracking_are_refused_in_compose_mode() {
 
 #[test]
 fn every_face_resolves_to_its_own_file_and_variable_ones_draw_at_their_weight() {
-    use super::text::{Face, layout};
+    use crate::fx::text::{Face, layout};
     let mut fonts = Fonts::load().unwrap();
     let file_len = |fonts: &mut Fonts, face: Face| -> usize {
         let laid = layout(
@@ -1375,7 +1376,7 @@ fn every_face_resolves_to_its_own_file_and_variable_ones_draw_at_their_weight() 
 
 #[test]
 fn a_variable_face_is_outlined_at_its_weight_in_the_msdf_atlas() {
-    use super::text::{Face, layout};
+    use crate::fx::text::{Face, layout};
     let mut fonts = Fonts::load().unwrap();
     let laid = layout(
         &mut fonts,
@@ -1403,10 +1404,10 @@ fn a_variable_face_is_outlined_at_its_weight_in_the_msdf_atlas() {
         "the axis moves the outline"
     );
     assert_eq!(fonts.weights[&g.font_id], 500.0);
-    let mut atlas = super::text::Atlas::new(48.0);
+    let mut atlas = crate::fx::text::Atlas::new(48.0);
     let s = atlas.msdf_sprite(&fonts, &NoGpu, g).unwrap();
     // Sprite width in font units (minus the MSDF padding) matches the 500 bbox.
-    let range = super::shaders::MSDF_RANGE;
+    let range = crate::fx::shaders::MSDF_RANGE;
     let units = (s.w / s.ppt - 2.0 * range) * f32::from(face.units_per_em()) / 48.0;
     assert!(
         (units - f32::from(at_500.width())).abs() < f32::from(face.units_per_em()) * 0.03,
@@ -1664,8 +1665,8 @@ fn choice_labels_name_each_choice_and_unknown_ones_are_refused() {
 #[test]
 #[ignore = "measurement: needs NOH_FX_BLUR_COST and a GPU"]
 fn blur_cost_of_a_full_blurred_line() {
-    use super::gl::GlRenderer;
-    use super::shaders::Output;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
     if std::env::var_os("NOH_FX_BLUR_COST").is_none() {
         return;
     }
@@ -1709,8 +1710,8 @@ fn blur_cost_of_a_full_blurred_line() {
 /// Gap 13: a blurred glyph is a smooth gaussian, not a grid of copies, and its
 /// blur runs past the sprite instead of stopping at it.
 fn a_blurred_glyph_is_smooth_and_not_cut_at_its_sprite() {
-    use super::gl::GlRenderer;
-    use super::shaders::Output;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
     let (w, h) = (320u32, 200u32);
     let mut fonts = Fonts::load().unwrap();
     let mut gpu = GlRenderer::headless(w, h, w as f32, h as f32, Output::PremulGamma).unwrap();
@@ -1817,8 +1818,8 @@ fn a_blurred_glyph_is_smooth_and_not_cut_at_its_sprite() {
 #[test]
 #[ignore = "measurement: needs NOH_FX_BLUR_PROBE and a GPU"]
 fn blur_layer_measurements() {
-    use super::gl::GlRenderer;
-    use super::shaders::Output;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
     if std::env::var_os("NOH_FX_BLUR_PROBE").is_none() {
         return;
     }
@@ -1940,7 +1941,7 @@ fn installed(files: &[&str]) -> (tempfile::TempDir, Fonts) {
     for f in files {
         std::fs::copy(repo(&format!("assets/{f}")), dir.path().join(f)).unwrap();
     }
-    let db = super::text::system_fonts(Some(&[dir.path().to_path_buf()]));
+    let db = crate::fx::text::system_fonts(Some(&[dir.path().to_path_buf()]));
     let fonts = Fonts::load()
         .unwrap()
         .with_installed(std::sync::Arc::new(db));
@@ -1984,7 +1985,7 @@ fn font_scene_at(value: &str, w: u32, h: u32) -> PluginScene {
 
 #[test]
 fn an_installed_family_draws_from_its_own_file_in_both_atlases() {
-    use super::text::{Face, FontData, layout};
+    use crate::fx::text::{Face, FontData, layout};
     let (dir, mut fonts) = installed(&["BarlowCondensed-ExtraBold.ttf"]);
     let (face, missing) = fonts.face("system:Barlow Condensed", Face::CondensedExtraBold);
     assert!(missing.is_none());
@@ -2004,7 +2005,7 @@ fn an_installed_family_draws_from_its_own_file_in_both_atlases() {
     assert!(matches!(data, FontData::Shared(_)));
     let file = std::fs::read(dir.path().join("BarlowCondensed-ExtraBold.ttf")).unwrap();
     assert_eq!(data.bytes(), &file[..]);
-    let mut atlas = super::text::Atlas::new(48.0);
+    let mut atlas = crate::fx::text::Atlas::new(48.0);
     let g = &mine.glyphs[0];
     assert!(atlas.cov_sprite(&mut fonts, &NoGpu, g, 1.0).is_some());
     assert!(atlas.msdf_sprite(&fonts, &NoGpu, g).is_some());
@@ -2020,7 +2021,7 @@ fn an_installed_family_draws_from_its_own_file_in_both_atlases() {
 
 #[test]
 fn a_missing_family_draws_the_plugin_face_and_is_reported() {
-    use super::text::{Face, Lack};
+    use crate::fx::text::{Face, Lack};
     let (_dir, mut fonts) = installed(&["BarlowCondensed-ExtraBold.ttf"]);
     assert_eq!(
         fonts.face("system:Nope Sans", Face::CondensedExtraBold),
@@ -2058,7 +2059,7 @@ fn a_missing_family_draws_the_plugin_face_and_is_reported() {
 
 #[test]
 fn a_font_removed_after_the_read_is_missing_and_leaves_nothing_behind() {
-    use super::text::{Face, Lack};
+    use crate::fx::text::{Face, Lack};
     let (dir, mut fonts) = installed(&["BarlowCondensed-ExtraBold.ttf"]);
     std::fs::remove_file(dir.path().join("BarlowCondensed-ExtraBold.ttf")).unwrap();
     let before = fonts.system.db().len();
@@ -2076,7 +2077,7 @@ fn a_font_removed_after_the_read_is_missing_and_leaves_nothing_behind() {
 
 #[test]
 fn an_installed_font_never_takes_over_a_bundled_face_fallback() {
-    use super::text::{Face, layout};
+    use crate::fx::text::{Face, layout};
     // A wide-coverage file installed and chosen BEFORE any text needs a fallback
     // (the order a user makes): a character Jost lacks must still be drawn from
     // the bundled file, not from the installed copy. Two separate font systems,
@@ -2123,7 +2124,7 @@ fn an_installed_font_never_takes_over_a_bundled_face_fallback() {
 
 #[test]
 fn a_variable_installed_font_is_drawn_at_the_plugin_weight() {
-    use super::text::Face;
+    use crate::fx::text::Face;
     let (_dir, mut fonts) = installed(&["Jost-Variable.ttf"]);
     // Jost ExtraBold (800) is the plugin's face: the variable file is asked at 800.
     let (face, missing) = fonts.face("system:Jost", Face::Jost);
@@ -2132,7 +2133,7 @@ fn a_variable_installed_font_is_drawn_at_the_plugin_weight() {
         "{face:?}"
     );
     assert_eq!(fonts.face_info(face).1.0, 800);
-    let laid = super::text::layout(
+    let laid = crate::fx::text::layout(
         &mut fonts,
         &["H".to_string()],
         "",
@@ -2147,8 +2148,8 @@ fn a_variable_installed_font_is_drawn_at_the_plugin_weight() {
 
 /// GPU: an installed copy of a bundled file draws the same pixels as the bundled face.
 fn an_installed_font_draws_on_the_gpu_like_the_bundled_face() {
-    use super::gl::GlRenderer;
-    use super::shaders::Output;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
     let (w, h) = (320u32, 200u32);
     let (_dir, mut fonts) = installed(&["BarlowCondensed-ExtraBold.ttf"]);
     let mut gpu = GlRenderer::headless(w, h, w as f32, h as f32, Output::PremulGamma).unwrap();
@@ -2187,9 +2188,9 @@ fn a_font_param_defaults_to_a_bundled_face_and_takes_installed_names() {
 #[ignore = "measurement: reads this machine's installed fonts (run with --nocapture)"]
 fn installed_fonts_read_time() {
     let started = std::time::Instant::now();
-    let db = super::text::system_fonts(None);
+    let db = crate::fx::text::system_fonts(None);
     let read = started.elapsed();
-    let families = super::text::families_of(&db);
+    let families = crate::fx::text::families_of(&db);
     eprintln!(
         "installed fonts: {} faces, {} families, read in {read:?}",
         db.len(),
@@ -2355,7 +2356,7 @@ fn the_bundled_plugins_take_an_installed_font_in_one_level_2_setting() {
 /// would start it at the box's left edge), and the layout says so.
 #[test]
 fn a_word_wider_than_the_box_stays_whole_centred_and_is_said() {
-    use super::text::{Face, layout};
+    use crate::fx::text::{Face, layout};
     let mut fonts = Fonts::load().unwrap();
     let long = "Supercalifragilisticexpialidocious";
     let words: Vec<String> = ["on", long, "ici"].iter().map(|s| s.to_string()).collect();
@@ -2475,7 +2476,7 @@ fn a_too_wide_word_is_centred_and_said_by_classique_and_a_plugin() {
 /// symbol font, is said so (the row keeps the interface font).
 #[test]
 fn a_face_draws_its_own_name_or_says_why_it_cannot() {
-    use super::text::{Face, Label};
+    use crate::fx::text::{Face, Label};
     let mut fonts = Fonts::load().unwrap();
     let ink = |l: &Label| match l {
         Label::Drawn { w, h, alpha } => {
@@ -2504,7 +2505,9 @@ fn a_face_draws_its_own_name_or_says_why_it_cannot() {
     for f in ["NotoSans-Regular.ttf", "NotoSans-SemiBold.ttf"] {
         std::fs::copy(repo(&format!("assets/{f}")), dir.path().join(f)).unwrap();
     }
-    let db = std::sync::Arc::new(super::text::system_fonts(Some(&[dir.path().to_path_buf()])));
+    let db = std::sync::Arc::new(crate::fx::text::system_fonts(Some(&[dir
+        .path()
+        .to_path_buf()])));
     fonts.set_installed(db);
     let (bold, _) = fonts.face("system:Noto Sans", Face::Jost);
     let (regular, _) = fonts.face("system:Noto Sans", Face::Sans);
@@ -2521,7 +2524,9 @@ fn a_face_draws_its_own_name_or_says_why_it_cannot() {
     if wingdings.is_file() {
         let sym = tempfile::tempdir().unwrap();
         std::fs::copy(wingdings, sym.path().join("wingding.ttf")).unwrap();
-        let db = std::sync::Arc::new(super::text::system_fonts(Some(&[sym.path().to_path_buf()])));
+        let db = std::sync::Arc::new(crate::fx::text::system_fonts(Some(&[sym
+            .path()
+            .to_path_buf()])));
         fonts.set_installed(db);
         let (face, lack) = fonts.face("system:Wingdings", Face::Sans);
         assert_eq!(lack, None);

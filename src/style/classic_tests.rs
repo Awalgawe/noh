@@ -160,8 +160,8 @@ fn classique_draws_white_letters_with_a_black_outline_in_the_cjk_face() {
 /// for every size and placement, with one-line, three-line and CJK cues.
 #[test]
 fn classique_stays_inside_every_safe_area() {
-    use super::shaders::Upload;
-    use super::text::Fonts;
+    use crate::fx::shaders::Upload;
+    use crate::fx::text::Fonts;
     struct NoGpu;
     impl Upload for NoGpu {
         fn upload_cov(&self, _: u32, _: u32, _: u32, _: u32, _: &[u8]) {}
@@ -214,8 +214,8 @@ fn real_dim_ratio() -> f64 {
 /// letter advances F x ratio x advance / upem, and lines are F apart.
 #[test]
 fn classique_draws_letters_and_lines_at_libass_size() {
-    use super::shaders::Upload;
-    use super::text::Fonts;
+    use crate::fx::shaders::Upload;
+    use crate::fx::text::Fonts;
     struct NoGpu;
     impl Upload for NoGpu {
         fn upload_cov(&self, _: u32, _: u32, _: u32, _: u32, _: &[u8]) {}
@@ -408,8 +408,8 @@ fn the_built_in_classique_is_the_bundled_one() {
 /// same drawn width and break the same cues after the same letters.
 #[test]
 fn line_width_setting_breaks_like_the_libass_fallback() {
-    use super::shaders::Upload;
-    use super::text::Fonts;
+    use crate::fx::shaders::Upload;
+    use crate::fx::text::Fonts;
     struct NoGpu;
     impl Upload for NoGpu {
         fn upload_cov(&self, _: u32, _: u32, _: u32, _: u32, _: &[u8]) {}
@@ -618,8 +618,8 @@ fn line_breaks_is_keep_or_rewrap() {
 /// paragraph); Classique draws its two typed lines.
 #[test]
 fn typed_lines_are_kept_by_classique_only() {
-    use super::shaders::Upload;
-    use super::text::Fonts;
+    use crate::fx::shaders::Upload;
+    use crate::fx::text::Fonts;
     struct NoGpu;
     impl Upload for NoGpu {
         fn upload_cov(&self, _: u32, _: u32, _: u32, _: u32, _: &[u8]) {}

@@ -9,10 +9,10 @@
 //! costs a few milliseconds at worst); what comes back is host data.
 use super::Inputs;
 use super::audio::Audio;
-use super::check::{Checker, Counts};
-use super::draw::Block;
-use super::script::{Frame, ScriptScene};
+use super::script::{Evaluated, ScriptScene};
 use super::validate::{Report, validate};
+use crate::fx::check::{Checker, Counts};
+use crate::fx::draw::Block;
 use crate::fx::text::Fonts;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -27,7 +27,7 @@ pub const STACK: usize = 16 * 1024 * 1024;
 type Reply<T> = mpsc::Sender<Result<T, String>>;
 
 enum Request {
-    Frame(f64, Reply<(Frame, Counts)>),
+    Frame(f64, Reply<(Evaluated, Counts)>),
     Validate(Vec<f64>, Reply<Report>),
     Blocks(Reply<Vec<(Block, f32)>>),
 }
@@ -66,7 +66,7 @@ fn serve(
             Request::Frame(t, reply) => {
                 let r = scene
                     .frame(t)
-                    .and_then(|f| checker.check(&f, t).map(|c| (f, c)));
+                    .and_then(|f| f.check(&mut checker, t).map(|c| (f, c)));
                 let _ = reply.send(r);
             }
             Request::Validate(instants, reply) => {
@@ -120,7 +120,7 @@ impl ScriptThread {
     }
 
     /// The frame at `t`, checked: an error names the instant and the cap.
-    pub fn frame(&self, t: f64) -> Result<(Frame, Counts), String> {
+    pub fn frame(&self, t: f64) -> Result<(Evaluated, Counts), String> {
         self.ask(|r| Request::Frame(t, r))
     }
 
