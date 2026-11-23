@@ -13,7 +13,7 @@
   "presets": [
     {"id": "white", "name": {"fr": "Blanc", "en": "White", "de": "Weiß", "es": "Blanco", "ja": "ホワイト", "ko": "화이트", "zh": "白色"}, "values": {}}
   ],
-  "layout": {
+  "layout" BROKEN : {
     "mode": "line",
     "font": "$font",
     "size": {"mul": ["@short", {"choose": ["$size", {"small": 0.1025, "medium": 0.125, "large": 0.15}]}]},
