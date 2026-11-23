@@ -124,6 +124,40 @@ pub struct SceneRequest {
     pub grid: bool,
     /// A folder that does not exist yet: the files are written there.
     pub output: PathBuf,
+    /// A check for a montage: `source` is then the song (a WAV, its sound), and
+    /// the frame is the project's, at its rate. Looks need the montage's
+    /// picture: refused in this form.
+    #[serde(default)]
+    pub project: Option<SceneProject>,
+}
+
+/// The frame of a montage a scene is checked for.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SceneProject {
+    pub width: u32,
+    pub height: u32,
+    pub fps: f64,
+}
+
+/// A scene drawn instead of the captions in a project export (the montage,
+/// or its short): it sees the song's clock and the whole lyrics.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectScene {
+    pub scene: PathBuf,
+}
+
+impl ProjectScene {
+    pub fn validate(&self) -> Result<(), EngineError> {
+        absolute(&self.scene, "scene")?;
+        if !cfg!(feature = "motion") {
+            return Err(invalid(
+                "error.scene_unavailable",
+                "This build of NOH cannot draw scenes.",
+            ));
+        }
+        Ok(())
+    }
 }
 
 /// A scene drawn instead of the captions in a caption burn.
@@ -177,6 +211,23 @@ impl SceneRequest {
                 "error.scene_request",
                 "from_ms must come before to_ms.",
             ));
+        }
+        if let Some(p) = &self.project {
+            if self.mode != SceneMode::Check || self.vertical || self.bare || self.grid {
+                return Err(invalid(
+                    "error.scene_request",
+                    "A scene is only checked for a montage in this version: looks need a video.",
+                ));
+            }
+            if !(2..=16384).contains(&p.width)
+                || !(2..=16384).contains(&p.height)
+                || !(p.fps.is_finite() && p.fps > 0.0 && p.fps <= 240.0)
+            {
+                return Err(invalid(
+                    "error.scene_request",
+                    "The montage's frame takes 2 to 16384 pixels a side and 1 to 240 frames per second.",
+                ));
+            }
         }
         match &self.mode {
             SceneMode::Check => {}
@@ -250,6 +301,7 @@ mod tests {
     fn request(mode: SceneMode) -> SceneRequest {
         let root = std::env::temp_dir();
         SceneRequest {
+            project: None,
             scene: root.join("a.noh-motion.rhai"),
             source: root.join("a.mp4"),
             subtitles: root.join("a.srt"),
@@ -332,5 +384,47 @@ mod tests {
         assert_eq!(v["at_ms"], 1500);
         let back: SceneRequest = serde_json::from_value(v).unwrap();
         assert_eq!(back, r);
+    }
+
+    /// The montage form is a check only, of a frame within bounds.
+    #[test]
+    fn a_montage_scene_is_only_checked() {
+        let project = Some(SceneProject {
+            width: 1920,
+            height: 1080,
+            fps: 25.0,
+        });
+        let check = SceneRequest {
+            project,
+            ..request(SceneMode::Check)
+        };
+        check.validate().unwrap();
+        let look = SceneRequest {
+            project,
+            ..request(SceneMode::Strip { at_ms: 0 })
+        };
+        assert_eq!(look.validate().unwrap_err().code, "error.scene_request");
+        let tall = SceneRequest {
+            project,
+            vertical: true,
+            ..request(SceneMode::Check)
+        };
+        assert_eq!(tall.validate().unwrap_err().code, "error.scene_request");
+        for (w, h, fps) in [
+            (0, 1080, 25.0),
+            (1920, 20000, 25.0),
+            (1920, 1080, 0.0),
+            (1920, 1080, f64::NAN),
+        ] {
+            let bad = SceneRequest {
+                project: Some(SceneProject {
+                    width: w,
+                    height: h,
+                    fps,
+                }),
+                ..request(SceneMode::Check)
+            };
+            assert_eq!(bad.validate().unwrap_err().code, "error.scene_request");
+        }
     }
 }

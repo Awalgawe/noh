@@ -470,6 +470,7 @@ impl NohApp {
             None
         };
         Some(ProjectRequest {
+            motion: None,
             montage,
             short,
             effect: self.preview_effect(),

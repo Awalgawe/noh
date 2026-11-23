@@ -592,6 +592,12 @@ pub struct ProjectInput {
     /// Reviewed SRT on the full WAV clock; presence explicitly requests burning.
     #[serde(default)]
     pub captions: Option<ShortCaptionInput>,
+    /// Experimental: a motion scene drawn instead of the captions (it draws the
+    /// lyrics of `captions` itself, on the song's clock, with the song's sound);
+    /// needs captions, refused with their effect, size or placement. See
+    /// noh_list_effects (`motion`) and noh_scene_check.
+    #[serde(default)]
+    pub motion: Option<super::scene::MotionInput>,
     #[serde(default)]
     pub preview: bool,
 }
@@ -626,6 +632,26 @@ impl ProjectInput {
         default_ffmpeg: &Path,
     ) -> Result<crate::project::ProjectRequest, SessionError> {
         let preview = self.preview;
+        let motion = match self.motion {
+            Some(motion) => {
+                let Some(c) = &self.captions else {
+                    return Err(SessionError::new(
+                        "mcp.invalid_request",
+                        "A scene draws the lyrics in captions: give captions (subtitles, safe_area).",
+                    ));
+                };
+                if c.effect.is_some() || c.size.is_some() || c.placement.is_some() {
+                    return Err(SessionError::new(
+                        "mcp.invalid_request",
+                        "A scene draws the lyrics itself: leave effect, size and placement out.",
+                    ));
+                }
+                Some(crate::scene_request::ProjectScene {
+                    scene: motion.choice()?.scene,
+                })
+            }
+            None => None,
+        };
         let (captions, effect) = match self.captions {
             Some(input) => {
                 let (captions, effect) = input.into_request(preview)?;
@@ -633,7 +659,10 @@ impl ProjectInput {
             }
             None => (None, None),
         };
+        // A scene draws the captions: no effect (not even Classique) with it.
+        let effect = effect.filter(|_| motion.is_none());
         let request = crate::project::ProjectRequest {
+            motion,
             montage: self.request.into_engine(default_ffmpeg, preview)?,
             short: self.short.map(|s| crate::project::ProjectShort {
                 start_ms: s.start_ms,
@@ -1422,6 +1451,44 @@ mod tests {
         assert_eq!(schema["additionalProperties"], false);
         assert_eq!(schema["properties"]["start_ms"]["maximum"], 7200000);
         assert_eq!(schema["properties"]["end_ms"]["minimum"], 1);
+    }
+
+    /// noh_export_project with `motion`: the scene replaces the captions'
+    /// effect (Classique included); it needs the captions, without their effect,
+    /// size or placement.
+    #[test]
+    fn a_project_draws_its_scene_instead_of_the_captions() {
+        let folder = tempfile::tempdir().unwrap();
+        let p = |name: &str| folder.path().join(name);
+        let json = serde_json::json!({
+            "request": {"videos": [p("v.mp4")], "wav": p("s.wav"), "output": p("o.mp4")},
+            "captions": {"subtitles": p("x.srt"), "safe_area": "none"},
+            "motion": {"scene": p("s.noh-motion.rhai")}
+        });
+        let result = serde_json::from_value::<ProjectInput>(json.clone())
+            .unwrap()
+            .into_request(Path::new("ffmpeg"));
+        if cfg!(feature = "motion") {
+            let request = result.unwrap();
+            assert_eq!(request.motion.unwrap().scene, p("s.noh-motion.rhai"));
+            assert!(request.effect.is_none());
+        } else {
+            assert_eq!(result.unwrap_err().code, "error.scene_unavailable");
+        }
+        let mut bare = json.clone();
+        bare.as_object_mut().unwrap().remove("captions");
+        let error = serde_json::from_value::<ProjectInput>(bare)
+            .unwrap()
+            .into_request(Path::new("ffmpeg"))
+            .unwrap_err();
+        assert_eq!(error.code, "mcp.invalid_request");
+        let mut sized = json;
+        sized["captions"]["size"] = "large".into();
+        let error = serde_json::from_value::<ProjectInput>(sized)
+            .unwrap()
+            .into_request(Path::new("ffmpeg"))
+            .unwrap_err();
+        assert!(error.detail.contains("lyrics itself"), "{}", error.detail);
     }
 
     /// Framing "scene": the scene's burn of the interval on a vertical frame,

@@ -43,18 +43,33 @@ struct Loaded {
 
 fn load(request: &SceneRequest, report: &mut Reporter<'_>) -> Result<Loaded, EngineError> {
     report.progress(0, "scene.preparing");
-    let media = crate::media::inspect_timed(&request.ffmpeg, &request.source)
-        .map_err(|e| fail("error.scene_input", Some(&request.source), e))?;
-    crate::captions::supported_video(&media.video)?;
-    let canvas = crate::captions::Canvas::new(
-        media.video.display_width,
-        media.video.display_height,
-        crate::captions::CaptionStyle::default(),
-    )?;
-    let picture = canvas.size();
+    // A montage's check reads the song alone: its sound, its length; the frame
+    // is the project's. Over one video, the video gives all three.
+    let (picture, duration, sound, rate) = match &request.project {
+        Some(p) => {
+            let duration = crate::wav_duration(&request.source)
+                .map_err(|e| fail("error.scene_input", Some(&request.source), e))?;
+            ((p.width, p.height), duration, true, p.fps)
+        }
+        None => {
+            let media = crate::media::inspect_timed(&request.ffmpeg, &request.source)
+                .map_err(|e| fail("error.scene_input", Some(&request.source), e))?;
+            crate::captions::supported_video(&media.video)?;
+            let canvas = crate::captions::Canvas::new(
+                media.video.display_width,
+                media.video.display_height,
+                crate::captions::CaptionStyle::default(),
+            )?;
+            (
+                canvas.size(),
+                media.duration,
+                media.audio_codec.is_some(),
+                media.video.fps,
+            )
+        }
+    };
     let size = crate::scene_request::scene_frame(request.vertical, picture);
     safe_area_required(size.0, size.1, request.safe_area)?;
-    let duration = media.duration;
     let from = request.from_ms.map_or(0.0, |ms| ms as f64 / 1000.0);
     let to = request
         .to_ms
@@ -84,7 +99,7 @@ fn load(request: &SceneRequest, report: &mut Reporter<'_>) -> Result<Loaded, Eng
     } = gather(
         &request.ffmpeg,
         &request.source,
-        media.audio_codec.is_some(),
+        sound,
         size,
         picture,
         duration,
@@ -100,7 +115,7 @@ fn load(request: &SceneRequest, report: &mut Reporter<'_>) -> Result<Loaded, Eng
     inputs.shaders = shaders.iter().map(|(n, _)| n.clone()).collect();
     let thread = ScriptThread::start(src, inputs, audio, true)
         .map_err(|e| fail("error.scene_refused", Some(&request.scene), e))?;
-    let fps = match super::validate::known_fps(media.video.fps) {
+    let fps = match super::validate::known_fps(rate) {
         Some(fps) => fps,
         None => {
             notes.push(super::validate::UNKNOWN_FPS.into());

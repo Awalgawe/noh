@@ -542,6 +542,7 @@ pub fn run(arguments: impl IntoIterator<Item = OsString>) -> i32 {
     };
     let operation = if args.project {
         CliOperation::Project(crate::project::ProjectRequest {
+            motion: None,
             montage: request,
             short: project_short,
             effect: args.chosen_effect.clone(),
@@ -605,6 +606,7 @@ fn scene_job(args: Options) -> i32 {
     };
     let absolute = |p: PathBuf| std::path::absolute(&p).unwrap_or(p);
     let request = SceneRequest {
+        project: None,
         scene: absolute(args.scene.clone().unwrap()),
         source: absolute(
             args.scene_check
