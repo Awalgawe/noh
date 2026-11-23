@@ -1,8 +1,8 @@
 //! Generic effect engine driven by plugin files (archi-greffons-v2). The engine
 //! knows layouts, tracks and passes; it knows no effect by name.
 use super::line::Line;
-use super::shaders::{Inst, Upload};
-use super::text::{Atlas, Face, Fonts, Lack, PGlyph, Sprite, layout, layout_sized};
+use super::shaders::{Inst, PASS_FILL, PASS_GLOW, PASS_OUTLINE, PASS_PLATE, PASS_SHADOW, Upload};
+use super::text::{Atlas, Face, Fonts, Lack, PGlyph, RowAlign, Sprite, layout, layout_aligned};
 use serde_json::Value as J;
 use std::collections::HashMap;
 use std::path::Path;
@@ -49,6 +49,8 @@ pub enum V {
     Host(usize),
     /// A number of the word being drawn (see WORD_VARS).
     Word(usize),
+    /// A number of the line being drawn (see LINE_VARS).
+    Line(usize),
     /// Arithmetic on numbers: add, sub, mul, div, min, max (2+ args), round, ceil, floor (1).
     Op(Op, Vec<V>),
     /// The value for the current text of a choice parameter, else the `default`
@@ -67,6 +69,9 @@ pub enum Op {
     Round,
     Ceil,
     Floor,
+    /// A number from -1 to 1 that only depends on its argument rounded to a whole
+    /// number: the same value for the same line or word, a different one for the next.
+    Hash,
 }
 
 /// Numbers an effect may read, written `@name`, in canvas pixels. `inset_*` are
@@ -80,6 +85,10 @@ pub const HOST_VARS: [&str; 8] = [
 /// seconds (word_lead not applied) and 1 for the longest-sung word of its line
 /// (the first on a tie), else 0. Both are 0 where no word is being drawn.
 pub const WORD_VARS: [&str; 2] = ["word_duration", "word_longest"];
+
+/// Numbers of the line being drawn, written `@name`: its rank among the lines of
+/// the lyrics (a chunk's among the chunks), from 0.
+pub const LINE_VARS: [&str; 1] = ["line_index"];
 
 #[derive(Clone, Debug)]
 pub enum PVal {
@@ -119,16 +128,19 @@ fn parse_v(j: &J, field: &str) -> Result<V, LoadError> {
             match (
                 HOST_VARS.iter().position(|v| *v == &s[1..]),
                 WORD_VARS.iter().position(|v| *v == &s[1..]),
+                LINE_VARS.iter().position(|v| *v == &s[1..]),
             ) {
-                (Some(i), _) => V::Host(i),
-                (None, Some(i)) => V::Word(i),
-                (None, None) => {
+                (Some(i), _, _) => V::Host(i),
+                (None, Some(i), _) => V::Word(i),
+                (None, None, Some(i)) => V::Line(i),
+                (None, None, None) => {
                     return err(
                         field,
                         format!(
-                            "{s:?} is not a host or word value ({}, {})",
+                            "{s:?} is not a host, word or line value ({}, {}, {})",
                             HOST_VARS.join(", "),
-                            WORD_VARS.join(", ")
+                            WORD_VARS.join(", "),
+                            LINE_VARS.join(", ")
                         ),
                     );
                 }
@@ -226,7 +238,10 @@ fn parse_v(j: &J, field: &str) -> Result<V, LoadError> {
                 ),
                 ("pick", 2) => {
                     let scope = args[1].as_str().unwrap_or("");
-                    if !matches!(scope, "word_index" | "index" | "index_in_word") {
+                    if !matches!(
+                        scope,
+                        "word_index" | "index" | "index_in_word" | "line_index"
+                    ) {
                         return err(field, format!("pick scope {scope:?} unknown"));
                     }
                     V::Pick(Box::new(parse_v(&args[0], field)?), scope.into())
@@ -249,10 +264,11 @@ fn parse_v(j: &J, field: &str) -> Result<V, LoadError> {
                             .collect::<Result<_, _>>()?,
                     )
                 }
-                (k @ ("round" | "ceil" | "floor"), 1) => {
+                (k @ ("round" | "ceil" | "floor" | "hash"), 1) => {
                     let op = match k {
                         "round" => Op::Round,
                         "ceil" => Op::Ceil,
+                        "hash" => Op::Hash,
                         _ => Op::Floor,
                     };
                     V::Op(op, vec![parse_v(&args[0], field)?])
@@ -307,6 +323,8 @@ pub struct Ctx<'a> {
     pub host: [f64; 8],
     /// WORD_VARS values, in the same order.
     pub word: [f64; 2],
+    /// LINE_VARS values, in the same order.
+    pub line: [f64; 1],
 }
 
 pub const PAST: u8 = 0;
@@ -348,6 +366,7 @@ fn eval(v: &V, c: &Ctx) -> R {
         ),
         V::Host(i) => R::Num(c.host[*i]),
         V::Word(i) => R::Num(c.word[*i]),
+        V::Line(i) => R::Num(c.line[*i]),
         V::Op(op, args) => {
             let n: Vec<f64> = args.iter().map(|a| num(&eval(a, c))).collect();
             let fold = |f: fn(f64, f64) -> f64| n[1..].iter().fold(n[0], |acc, x| f(acc, *x));
@@ -362,6 +381,7 @@ fn eval(v: &V, c: &Ctx) -> R {
                 Op::Round => n[0].round(),
                 Op::Ceil => n[0].ceil(),
                 Op::Floor => n[0].floor(),
+                Op::Hash => hash1(n[0]),
             };
             R::Num(if r.is_finite() { r } else { 0.0 })
         }
@@ -392,6 +412,7 @@ fn eval(v: &V, c: &Ctx) -> R {
             let i = match scope.as_str() {
                 "word_index" => c.word_index,
                 "index_in_word" => c.index_in_word,
+                "line_index" => c.line[0] as usize,
                 _ => c.index,
             };
             match eval(p, c) {
@@ -530,6 +551,24 @@ enum Prop {
     /// Share of the line block shown from its bottom up (1 = all), line unit only:
     /// CSS `clip-path: inset(top)` on the whole block, every row and pass alike.
     RevealY,
+    /// Plate passes on the track's unit: opacity factor, margin added on every
+    /// side (em), horizontal scale about the plate's centre, and the share of the
+    /// plate drawn from its left edge (1 = all).
+    PlateOpacity,
+    PlateMargin,
+    PlateScaleX,
+    PlateWipe,
+    /// Width of the wipe's edge fade in em (0 = the engine's hard edge).
+    WipeEdge,
+}
+
+impl Prop {
+    fn is_plate(self) -> bool {
+        matches!(
+            self,
+            Prop::PlateOpacity | Prop::PlateMargin | Prop::PlateScaleX | Prop::PlateWipe
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -570,6 +609,9 @@ struct Track {
     duration: f64,
     stagger: f64,
     shape: Shape,
+    /// A past track with its own `duration`: its keys run over that time from
+    /// the moment the unit becomes past (else they read their first key).
+    timed: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -698,6 +740,9 @@ struct Layout {
     /// `layout.word_size`: a size factor per word (read with the word values,
     /// e.g. `@word_longest`), laid out so the row reflows. Line mode only.
     word_size: Option<V>,
+    /// `layout.align`: rows centred in the box, or set against its left or right
+    /// edge. Line mode only.
+    align: RowAlign,
 }
 
 /// `layout.chunk`: each cue sliced in order into groups of `max` words (the last
@@ -717,6 +762,9 @@ struct Window {
     after: usize,
     lead: f64,
     gap: f32,
+    /// `glide`: when the active slot changes, the lines move to their new place
+    /// over `duration` seconds along `curve` instead of jumping there.
+    glide: Option<(f64, Curve)>,
 }
 
 #[derive(Clone, Debug)]
@@ -731,6 +779,17 @@ struct Pass {
     blur: V,
     outline: V,
     gain: V,
+    /// A plate pass: the unit it is measured on (line rows, words or letters),
+    /// its margins and corner radius in em.
+    plate: Option<Plate>,
+}
+
+#[derive(Clone, Debug)]
+struct Plate {
+    on: Unit,
+    margin_x: V,
+    margin_y: V,
+    radius: V,
 }
 
 #[derive(Clone, Debug)]
@@ -1185,6 +1244,7 @@ impl Effect {
                 "hold",
                 "chunk",
                 "word_size",
+                "align",
             ],
         )?;
         let keep_breaks = match get_s(lo, "line_breaks", "rewrap").as_str() {
@@ -1348,7 +1408,11 @@ impl Effect {
                     return err("layout.window", "line mode only");
                 }
                 let wo = obj(w, "layout.window")?;
-                only(wo, "layout.window", &["before", "after", "lead", "gap"])?;
+                only(
+                    wo,
+                    "layout.window",
+                    &["before", "after", "lead", "gap", "glide"],
+                )?;
                 let count = |k: &str| -> Result<usize, LoadError> {
                     match wo.get(k) {
                         None => Ok(0),
@@ -1372,11 +1436,31 @@ impl Effect {
                             }),
                     }
                 };
+                let glide = match wo.get("glide") {
+                    None => None,
+                    Some(g) => {
+                        let f = "layout.window.glide";
+                        let go = obj(g, f)?;
+                        only(go, f, &["duration", "curve"])?;
+                        let duration = go
+                            .get("duration")
+                            .and_then(J::as_f64)
+                            .filter(|n| n.is_finite() && *n > 0.0 && *n <= 2.0)
+                            .ok_or_else(|| {
+                                LoadError(format!("{f}.duration: a number above 0, at most 2"))
+                            })?;
+                        Some((
+                            duration,
+                            parse_curve(&get_s(go, "curve", "linear"), &format!("{f}.curve"))?,
+                        ))
+                    }
+                };
                 Some(Window {
                     before: count("before")?,
                     after: count("after")?,
                     lead: number("lead", 0.0, 10.0)?,
                     gap: number("gap", 0.3, 4.0)? as f32,
+                    glide,
                 })
             }
         };
@@ -1426,6 +1510,20 @@ impl Effect {
             }
             Some(j) => Some(parse_v(j, "layout.word_size")?),
         };
+        if mode == "compose" && lo.contains_key("align") {
+            return err("layout.align", "line mode only");
+        }
+        let align = match get_s(lo, "align", "center").as_str() {
+            "center" => RowAlign::Center,
+            "left" => RowAlign::Left,
+            "right" => RowAlign::Right,
+            a => {
+                return err(
+                    "layout.align",
+                    format!("{a:?} unknown (center, left, right)"),
+                );
+            }
+        };
         let layout = Layout {
             mode,
             font: {
@@ -1452,6 +1550,7 @@ impl Effect {
             hold,
             chunk,
             word_size,
+            align,
         };
         // tracks
         let tracks_j = o
@@ -1507,6 +1606,11 @@ impl Effect {
                 "glow" => Prop::Glow,
                 "tracking" => Prop::Tracking,
                 "reveal_y" => Prop::RevealY,
+                "plate_opacity" => Prop::PlateOpacity,
+                "plate_margin" => Prop::PlateMargin,
+                "plate_scale_x" => Prop::PlateScaleX,
+                "plate_wipe" => Prop::PlateWipe,
+                "wipe_edge" => Prop::WipeEdge,
                 p => return err(&format!("{f}.property"), format!("{p:?} unknown")),
             };
             // What the line unit draws, and what only the line unit draws: any other
@@ -1518,11 +1622,27 @@ impl Effect {
                 Prop::Blur,
                 Prop::Tracking,
                 Prop::RevealY,
+                Prop::Scale,
+                Prop::ScaleX,
+                Prop::Rotation,
             ];
-            if unit == Unit::Line && !line_props.contains(&prop) {
+            if prop == Prop::WipeEdge && unit == Unit::Line {
                 return err(
                     &format!("{f}.property"),
-                    "not drawn on the line unit (opacity, offset_x, offset_y, blur, tracking, reveal_y)",
+                    "wipe_edge is on the word, syllable or letter unit",
+                );
+            }
+            if unit == Unit::Line && !line_props.contains(&prop) && !prop.is_plate() {
+                return err(
+                    &format!("{f}.property"),
+                    "not drawn on the line unit (opacity, offset_x, offset_y, blur, tracking, reveal_y, scale, scale_x, rotation, plate_*)",
+                );
+            }
+            // Plates are measured on line rows, words or letters (render.passes on).
+            if prop.is_plate() && unit == Unit::Syllable {
+                return err(
+                    &format!("{f}.property"),
+                    "plate properties are on the line, word or letter unit",
                 );
             }
             // Compose lays each word out alone, with no line em or block: line offsets,
@@ -1531,7 +1651,13 @@ impl Effect {
                 && layout.compose.is_some()
                 && matches!(
                     prop,
-                    Prop::OffsetX | Prop::OffsetY | Prop::Tracking | Prop::RevealY
+                    Prop::OffsetX
+                        | Prop::OffsetY
+                        | Prop::Tracking
+                        | Prop::RevealY
+                        | Prop::Scale
+                        | Prop::ScaleX
+                        | Prop::Rotation
                 )
             {
                 return err(
@@ -1545,16 +1671,7 @@ impl Effect {
                     format!("{:?} is a line unit property", get_s(to, "property", "")),
                 );
             }
-            let curve = match get_s(to, "curve", "linear").as_str() {
-                "linear" => Curve::Linear,
-                "ease_in" => Curve::EaseIn,
-                "ease_out" => Curve::EaseOut,
-                "ease_in_out" => Curve::EaseInOut,
-                "back" => Curve::Back,
-                "ease_in_cubic" => Curve::EaseInCubic,
-                "ease_out_cubic" => Curve::EaseOutCubic,
-                c => return err(&format!("{f}.curve"), format!("{c:?} unknown")),
-            };
+            let curve = parse_curve(&get_s(to, "curve", "linear"), &format!("{f}.curve"))?;
             let shape = if let Some(k) = to.get("keys") {
                 Shape::Keys(parse_keys(k, &format!("{f}.keys"))?, curve)
             } else if let Some(w) = to.get("wave") {
@@ -1587,13 +1704,23 @@ impl Effect {
             } else {
                 return err(&f, "needs keys, wave, noise or value");
             };
+            // A past track given its own duration times its keys from the unit's end.
+            let timed = slot == Slot::Past && to.contains_key("duration");
+            let duration = to.get("duration").and_then(J::as_f64).unwrap_or(0.3);
+            if timed && !(duration.is_finite() && duration > 0.0) {
+                return err(
+                    &format!("{f}.duration"),
+                    "a past track's duration must be above 0",
+                );
+            }
             tracks.push(Track {
                 unit,
                 slot,
                 prop,
-                duration: to.get("duration").and_then(J::as_f64).unwrap_or(0.3),
+                duration,
                 stagger: to.get("stagger").and_then(J::as_f64).unwrap_or(0.0),
                 shape,
+                timed,
             });
         }
         // passes
@@ -1619,13 +1746,51 @@ impl Effect {
                 &f,
                 &[
                     "kind", "color", "color2", "alpha", "alpha2", "offset_y", "blur", "outline",
-                    "gain",
+                    "gain", "on", "margin_x", "margin_y", "radius",
                 ],
             )?;
             let kind = get_s(po, "kind", "");
-            if !matches!(kind.as_str(), "fill" | "shadow" | "glow" | "outline_only") {
+            if !matches!(
+                kind.as_str(),
+                "fill" | "shadow" | "glow" | "outline_only" | "plate"
+            ) {
                 return err(&format!("{f}.kind"), format!("{kind:?} unknown"));
             }
+            let plate = if kind == "plate" {
+                if layout.compose.is_some() {
+                    return err(&format!("{f}.kind"), "plate passes are line mode only");
+                }
+                for k in ["color2", "alpha2", "offset_y", "blur", "outline", "gain"] {
+                    if po.contains_key(k) {
+                        return err(&format!("{f}.{k}"), "not a plate field");
+                    }
+                }
+                let on = match get_s(po, "on", "line").as_str() {
+                    "line" => Unit::Line,
+                    "word" => Unit::Word,
+                    "letter" => Unit::Letter,
+                    u => {
+                        return err(
+                            &format!("{f}.on"),
+                            format!("{u:?} unknown (line, word, letter)"),
+                        );
+                    }
+                };
+                Some(Plate {
+                    on,
+                    margin_x: get_v(po, &f, "margin_x", J::from(0.0))?,
+                    margin_y: get_v(po, &f, "margin_y", J::from(0.0))?,
+                    radius: get_v(po, &f, "radius", J::from(0.0))?,
+                })
+            } else {
+                if let Some(k) = ["on", "margin_x", "margin_y", "radius"]
+                    .iter()
+                    .find(|k| po.contains_key(**k))
+                {
+                    return err(&format!("{f}.{k}"), "plate passes only");
+                }
+                None
+            };
             // The wipe's second colour is drawn by fill and outline passes only; its
             // own opacity also by the glow (a halo fainter over the unsung side).
             if matches!(kind.as_str(), "shadow" | "glow") && po.contains_key("color2") {
@@ -1653,7 +1818,21 @@ impl Effect {
                 blur: get_v(po, &f, "blur", J::from(0.0))?,
                 outline: get_v(po, &f, "outline", J::from(0.0))?,
                 gain: get_v(po, &f, "gain", J::from(1.0))?,
+                plate,
             });
+        }
+        // A plate property must reach a plate: one drawn on its track's unit.
+        for (i, t) in tracks.iter().enumerate() {
+            if t.prop.is_plate()
+                && !passes
+                    .iter()
+                    .any(|p| p.plate.as_ref().is_some_and(|pl| pl.on == t.unit))
+            {
+                return err(
+                    &format!("animate[{i}].property"),
+                    "no plate pass is drawn on this unit (render.passes on)",
+                );
+            }
         }
         // shader (black box)
         let shader = match o.get("shader").and_then(J::as_str) {
@@ -1775,6 +1954,11 @@ impl Effect {
             for c in [&p.color2, &p.alpha2].into_iter().flatten() {
                 param_refs(c, out);
             }
+            if let Some(pl) = &p.plate {
+                for v in [&pl.margin_x, &pl.margin_y, &pl.radius] {
+                    param_refs(v, out);
+                }
+            }
         }
     }
 
@@ -1821,7 +2005,29 @@ impl Effect {
     }
 }
 
+fn parse_curve(c: &str, field: &str) -> Result<Curve, LoadError> {
+    Ok(match c {
+        "linear" => Curve::Linear,
+        "ease_in" => Curve::EaseIn,
+        "ease_out" => Curve::EaseOut,
+        "ease_in_out" => Curve::EaseInOut,
+        "back" => Curve::Back,
+        "ease_in_cubic" => Curve::EaseInCubic,
+        "ease_out_cubic" => Curve::EaseOutCubic,
+        c => return err(field, format!("{c:?} unknown")),
+    })
+}
+
 // ---------------------------------------------------------------- runtime
+
+/// `hash`: a value from -1 to 1 for `x` rounded to a whole number (splitmix64).
+fn hash1(x: f64) -> f64 {
+    let mut z = (x.round() as i64 as u64).wrapping_add(0x9E3779B97F4A7C15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
+    z ^= z >> 31;
+    (z as f64 / u64::MAX as f64) * 2.0 - 1.0
+}
 
 fn ease(c: Curve, x: f64) -> f64 {
     let x = x.clamp(0.0, 1.0);
@@ -1882,6 +2088,8 @@ struct Glyph {
     pen: [f32; 2],
     /// Characters from its row's centre, for letter spacing (PGlyph::row_pos).
     row_pos: f32,
+    /// Its visual row in the block (plates find their row's box).
+    row: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -1911,6 +2119,11 @@ struct Prepared {
     shapes: Vec<Inst>,
     /// A word wider than the box: kept whole, wider than the box (line mode).
     too_wide: bool,
+    /// Each visual row's top and bottom in canvas px (line mode), for plates.
+    rows: Vec<(f32, f32)>,
+    /// The centre of the laid-out text (line mode): the line's scale and
+    /// rotation turn about it.
+    center: [f32; 2],
 }
 
 pub struct PluginScene {
@@ -1943,6 +2156,8 @@ pub struct PluginScene {
     /// (`by_state`, `by_offset`).
     state: u8,
     offset: i32,
+    /// The line being prepared or drawn (`@line_index`).
+    li: usize,
     pub atlas: Atlas,
     pub tracks_us: Vec<f64>,
 }
@@ -1962,6 +2177,25 @@ struct State {
     glow: Option<f64>,
     tracking: f64,
     reveal: Option<f64>,
+    plate_opacity: f64,
+    plate_margin: f64,
+    plate_scale_x: f64,
+    plate_wipe: Option<f64>,
+    wipe_edge: Option<f64>,
+}
+
+impl State {
+    /// A unit before its tracks: drawn whole, at its place and size.
+    fn unit() -> Self {
+        State {
+            opacity: 1.0,
+            scale: 1.0,
+            scale_x: 1.0,
+            plate_opacity: 1.0,
+            plate_scale_x: 1.0,
+            ..Default::default()
+        }
+    }
 }
 
 impl PluginScene {
@@ -1989,6 +2223,7 @@ impl PluginScene {
             prepared: Vec::new(),
             state: ACTIVE,
             offset: 0,
+            li: 0,
             atlas: Atlas::new(48.0),
             tracks_us: Vec::new(),
         }
@@ -2195,6 +2430,7 @@ impl PluginScene {
             line_offset: self.offset,
             host: self.host(),
             word: [0.0; 2],
+            line: [self.li as f64],
         }
     }
 
@@ -2236,6 +2472,7 @@ impl PluginScene {
                     char_in_word: g.char_in_word,
                     pen: [ox + g.x, ox + g.x + g.advance],
                     row_pos: g.row_pos,
+                    row: g.line,
                 });
                 *iw += 1;
             }
@@ -2247,6 +2484,8 @@ impl PluginScene {
         let line = self.lines[li].clone();
         let (mut top, mut bottom, mut em) = (0.0f32, 0.0f32, 0.0f32);
         let mut too_wide = false;
+        let mut rows = Vec::new();
+        let mut center = [0.0f32; 2];
         let (w, h) = (self.w, self.h);
         let portrait = h > w;
         let lay = self.effect.layout.clone();
@@ -2426,7 +2665,7 @@ impl PluginScene {
                         .collect()
                 }
             };
-            let laid = layout_sized(
+            let laid = layout_aligned(
                 fonts,
                 &words_t,
                 &line.sep,
@@ -2436,6 +2675,7 @@ impl PluginScene {
                 &word_sizes,
                 Some(max_w),
                 self.n(&lay.line_height),
+                lay.align,
             );
             let [bx, ay] = self.at(lay.bx.space, self.n(&lay.bx.x), self.n(&lay.bx.y));
             let ox = bx - max_w * 0.5;
@@ -2446,6 +2686,18 @@ impl PluginScene {
             };
             (top, bottom, em) = (oy, oy + laid.height, size);
             too_wide = laid.too_wide;
+            rows = laid
+                .rows
+                .iter()
+                .map(|&(t, h)| (oy + t, oy + t + h))
+                .collect();
+            let (x0, x1) = laid.glyphs.iter().fold((f32::MAX, f32::MIN), |(a, b), g| {
+                (a.min(ox + g.x), b.max(ox + g.x + g.advance))
+            });
+            center = [
+                if x0 <= x1 { (x0 + x1) * 0.5 } else { bx },
+                oy + laid.height * 0.5,
+            ];
             for g in &laid.glyphs {
                 let e = &mut words[g.word];
                 e.x0 = e.x0.min(ox + g.x);
@@ -2465,6 +2717,8 @@ impl PluginScene {
             order,
             shapes,
             too_wide,
+            rows,
+            center,
         }
     }
 
@@ -2505,6 +2759,8 @@ impl PluginScene {
                 Slot::Enter => ((t - s0) / tr.duration).clamp(0.0, 1.0),
                 Slot::Exit => ((t - (line_end - tr.duration)) / tr.duration).clamp(0.0, 1.0),
                 Slot::Active => ((t - start) / (end - start)).clamp(0.0, 1.0),
+                // A timed return: its keys run from the unit's end (track duration).
+                Slot::Past if tr.timed => ((t - end) / tr.duration).clamp(0.0, 1.0),
                 _ => 0.0,
             };
             let r = match &tr.shape {
@@ -2573,6 +2829,11 @@ impl PluginScene {
                 Prop::Glow => st.glow = Some(num(&r)),
                 Prop::Tracking => st.tracking += num(&r),
                 Prop::RevealY => st.reveal = Some(num(&r).clamp(0.0, 1.0)),
+                Prop::PlateOpacity => st.plate_opacity *= num(&r),
+                Prop::PlateMargin => st.plate_margin += num(&r),
+                Prop::PlateScaleX => st.plate_scale_x *= num(&r),
+                Prop::PlateWipe => st.plate_wipe = Some(num(&r).clamp(0.0, 1.0)),
+                Prop::WipeEdge => st.wipe_edge = Some(num(&r).max(0.0)),
             }
         }
     }
@@ -2590,10 +2851,21 @@ impl PluginScene {
             self.too_wide = false;
             return (Vec::new(), 1.0, Vec::new(), false);
         }
+        // A window gliding to its new place also needs the lines as they were
+        // placed before the change (`layout.window.glide`).
+        let glide = self.glide(t, &visible);
+        let mut needed = visible.clone();
+        if let Some((_, prev)) = &glide {
+            for e in prev {
+                if !needed.contains(e) {
+                    needed.push(*e);
+                }
+            }
+        }
         // Keep the prepared lines still on screen, in their current state; build the rest.
         let mut changed = false;
-        let mut kept: Vec<Prepared> = Vec::with_capacity(visible.len());
-        for &(li, state, offset) in &visible {
+        let mut kept: Vec<Prepared> = Vec::with_capacity(needed.len());
+        for &(li, state, offset) in &needed {
             match self
                 .prepared
                 .iter()
@@ -2603,6 +2875,7 @@ impl PluginScene {
                 None => {
                     self.state = state;
                     self.offset = offset;
+                    self.li = li;
                     let p = self.prepare(fonts, gpu, li);
                     kept.push(p);
                     changed = true;
@@ -2613,30 +2886,71 @@ impl PluginScene {
         self.prepared = kept;
         self.state = ACTIVE;
         self.offset = 0;
+        self.li = 0;
         let started = Instant::now();
         // Vertical shift of each line: the slot-0 line stays where its box puts it;
         // upcoming lines stack below it, past lines above, `gap` font sizes apart.
-        let gap = self.effect.layout.window.as_ref().map_or(0.0, |w| w.gap);
-        let slot0 = visible.iter().position(|v| v.2 == 0).unwrap_or(0);
-        let mut dys = vec![0.0f32; visible.len()];
-        for k in slot0 + 1..visible.len() {
-            let (prev, this) = (&self.prepared[k - 1], &self.prepared[k]);
-            dys[k] = prev.bottom + dys[k - 1] + gap * prev.em - this.top;
+        let here: Vec<usize> = (0..visible.len()).collect();
+        let dys = self.stack(&visible, &here);
+        // (prepared index, line, state, offset, shift, fade), drawn in order.
+        let mut draws: Vec<(usize, usize, u8, i32, f32, f64)> = Vec::new();
+        if let Some((u, prev)) = &glide {
+            let at: Vec<usize> = prev
+                .iter()
+                .map(|e| needed.iter().position(|n| n == e).unwrap_or(0))
+                .collect();
+            let dys_prev = self.stack(prev, &at);
+            let y_now = |l: usize| {
+                visible
+                    .iter()
+                    .position(|v| v.0 == l)
+                    .map(|k| self.prepared[k].top + dys[k])
+            };
+            let y_before = |l: usize| {
+                prev.iter()
+                    .position(|v| v.0 == l)
+                    .map(|j| self.prepared[at[j]].top + dys_prev[j])
+            };
+            // How far the column moves: measured on the new slot-0 line, else on
+            // any line shown both before and now.
+            let anchor = visible
+                .iter()
+                .find(|v| v.2 == 0)
+                .map_or(visible[0].0, |v| v.0);
+            let d = std::iter::once(anchor)
+                .chain(visible.iter().map(|v| v.0))
+                .find_map(|l| Some(y_before(l)? - y_now(l)?));
+            if let Some(d) = d {
+                let (uf, u) = (*u, *u as f32);
+                // Lines leaving the window keep their place and look, move with the
+                // column and fade out, under the others.
+                for (j, &(li, state, offset)) in prev.iter().enumerate() {
+                    if !visible.iter().any(|v| v.0 == li) {
+                        draws.push((at[j], li, state, offset, dys_prev[j] - u * d, 1.0 - uf));
+                    }
+                }
+                for (k, &(li, state, offset)) in visible.iter().enumerate() {
+                    draws.push((k, li, state, offset, dys[k] + (1.0 - u) * d, 1.0));
+                }
+            }
         }
-        for k in (0..slot0).rev() {
-            let (next, this) = (&self.prepared[k + 1], &self.prepared[k]);
-            dys[k] = next.top + dys[k + 1] - gap * this.em - this.bottom;
+        if draws.is_empty() {
+            for (k, &(li, state, offset)) in visible.iter().enumerate() {
+                draws.push((k, li, state, offset, dys[k], 1.0));
+            }
         }
         let mut glow = Vec::new();
         let mut main = Vec::new();
         let mut overflow = false;
-        for (k, &(li, state, offset)) in visible.iter().enumerate() {
+        for &(k, li, state, offset, shift, fade) in &draws {
             self.state = state;
             self.offset = offset;
+            self.li = li;
             self.draw_line(
                 &self.prepared[k],
                 li,
-                dys[k],
+                shift,
+                fade,
                 t,
                 &mut glow,
                 &mut main,
@@ -2647,17 +2961,68 @@ impl PluginScene {
         self.too_wide = self.prepared.iter().any(|p| p.too_wide);
         self.state = ACTIVE;
         self.offset = 0;
+        self.li = 0;
         self.tracks_us.push(started.elapsed().as_secs_f64() * 1e6);
         (glow, 1.0, main, changed)
     }
 
-    /// One prepared line at time `t`, shifted vertically by `shift` (its window slot).
+    /// The vertical shift of each line of `lines` (a window, top to bottom), whose
+    /// prepared layouts are `self.prepared[at[k]]`: the slot-0 line stays where its
+    /// box puts it, the others stack `gap` font sizes apart above and below it.
+    fn stack(&self, lines: &[(usize, u8, i32)], at: &[usize]) -> Vec<f32> {
+        let gap = self.effect.layout.window.as_ref().map_or(0.0, |w| w.gap);
+        let slot0 = lines.iter().position(|v| v.2 == 0).unwrap_or(0);
+        let mut dys = vec![0.0f32; lines.len()];
+        for k in slot0 + 1..lines.len() {
+            let (prev, this) = (&self.prepared[at[k - 1]], &self.prepared[at[k]]);
+            dys[k] = prev.bottom + dys[k - 1] + gap * prev.em - this.top;
+        }
+        for k in (0..slot0).rev() {
+            let (next, this) = (&self.prepared[at[k + 1]], &self.prepared[at[k]]);
+            dys[k] = next.top + dys[k + 1] - gap * this.em - this.bottom;
+        }
+        dys
+    }
+
+    /// While the window glides (`layout.window.glide`): how far along it is (the
+    /// curve applied, 0 to 1) and the lines shown just before the active slot
+    /// changed. None outside a glide, or when nothing was shown before.
+    fn glide(&self, t: f64, visible: &[(usize, u8, i32)]) -> Option<(f64, Vec<(usize, u8, i32)>)> {
+        let w = self.effect.layout.window.as_ref()?;
+        let (duration, curve) = w.glide?;
+        let anchor = visible.iter().find(|v| v.2 == 0)?.0;
+        // When this line took the active slot: its showing, or earlier, in the
+        // gap after the previous line, from its lead (`visible_lines`).
+        let from = self.shown[anchor].0;
+        let prev_end = anchor
+            .checked_sub(1)
+            .map_or(f64::NEG_INFINITY, |p| self.shown[p].1);
+        let since = if prev_end < from {
+            (from - w.lead).max(prev_end)
+        } else {
+            from
+        };
+        let x = (t - since) / duration;
+        if !(0.0..1.0).contains(&x) {
+            return None;
+        }
+        let prev = self.visible_lines(since - 1e-6);
+        let before = prev.iter().find(|v| v.2 == 0)?.0;
+        if before == anchor {
+            return None;
+        }
+        Some((ease(curve, x), prev))
+    }
+
+    /// One prepared line at time `t`, shifted vertically by `shift` (its window
+    /// slot and glide) and faded by `fade` (a line gliding out of the window).
     #[allow(clippy::too_many_arguments)]
     fn draw_line(
         &self,
         p: &Prepared,
         li: usize,
         shift: f32,
+        fade: f64,
         t: f64,
         glow: &mut Vec<Inst>,
         main: &mut Vec<Inst>,
@@ -2667,12 +3032,7 @@ impl PluginScene {
         // Exits run at the end of the line's visible span (layout.hold).
         let line_end = self.shown[li].1;
         let base = self.ctx();
-        let mut line_st = State {
-            opacity: 1.0,
-            scale: 1.0,
-            scale_x: 1.0,
-            ..Default::default()
-        };
+        let mut line_st = State::unit();
         self.fold(
             &mut line_st,
             Unit::Line,
@@ -2683,11 +3043,18 @@ impl PluginScene {
             0,
             &base,
         );
+        if fade != 1.0 {
+            line_st.opacity *= fade;
+        }
+        // What every instance of the line tells shader hooks: the line's seconds
+        // since it showed and until it goes.
+        let (since, until) = ((t - self.shown[li].0) as f32, (line_end - t) as f32);
         for s in &p.shapes {
             let mut s = *s;
             for c in &mut s.color {
                 *c *= line_st.opacity as f32;
             }
+            s.aux = [0.0, PASS_PLATE, since, until];
             main.push(s);
         }
         // The reveal clip line in canvas y: the block's top moved down by the hidden
@@ -2707,6 +3074,63 @@ impl PluginScene {
                 None => 0.0,
             }
         };
+        // The line's own scale and rotation, about its block's centre; None when
+        // it has neither, so its letters are placed as they always were.
+        let lx = LineXform::of(&line_st, p.center);
+        // After the line's scale and rotation: its offsets (in its em) and slot shift.
+        let line_moved = |q: [f32; 2]| -> [f32; 2] {
+            let x = q[0] + line_st.offset_x as f32 * p.em;
+            let y = q[1] + line_st.offset_y as f32 * p.em;
+            [x, if shift != 0.0 { y + shift } else { y }]
+        };
+        // Plates sit under every letter of their line, whatever the pass order.
+        let plates_at = main.len();
+        let mut plates: Vec<Inst> = Vec::new();
+        let plate_passes: Vec<(&Pass, &Plate)> = self
+            .effect
+            .passes
+            .iter()
+            .filter_map(|pa| pa.plate.as_ref().map(|pl| (pa, pl)))
+            .collect();
+        let plate_of = |pass: &Pass,
+                        pl: &Plate,
+                        ctx: &Ctx,
+                        unit: &State,
+                        alpha: f64,
+                        em: f32,
+                        bx: [f32; 4],
+                        unit_xf: UnitXform|
+         -> Option<Inst> {
+            let mut inst =
+                self.plate(pass, pl, ctx, unit, alpha, em, bx, unit_xf, lx, &line_moved)?;
+            inst.extra = [-1.0, t as f32, 0.0, 0.0];
+            inst.aux = [0.0, PASS_PLATE, since, until];
+            inst.xform[3] = clip_of(&inst);
+            Some(inst)
+        };
+        for &(pass, pl) in plate_passes.iter().filter(|(_, pl)| pl.on == Unit::Line) {
+            for (r, &(top, bottom)) in p.rows.iter().enumerate() {
+                let (x0, x1) = p
+                    .glyphs
+                    .iter()
+                    .filter(|g| g.row == r)
+                    .fold((f32::MAX, f32::MIN), |(a, b), g| {
+                        (a.min(g.pen[0]), b.max(g.pen[1]))
+                    });
+                if x0 <= x1 {
+                    plates.extend(plate_of(
+                        pass,
+                        pl,
+                        &base,
+                        &line_st,
+                        line_st.opacity,
+                        p.em,
+                        [x0, top, x1, bottom],
+                        UnitXform::NONE,
+                    ));
+                }
+            }
+        }
         let compose = self.effect.layout.compose.is_some();
         let from_start = self.effect.layout.visible == "from_start";
         let mut by_word: Vec<Vec<&Glyph>> = vec![Vec::new(); line.words.len()];
@@ -2759,12 +3183,7 @@ impl PluginScene {
                 word: word_vars,
                 ..base
             };
-            let mut word_st = State {
-                opacity: 1.0,
-                scale: 1.0,
-                scale_x: 1.0,
-                ..Default::default()
-            };
+            let mut word_st = State::unit();
             self.fold(
                 &mut word_st,
                 Unit::Word,
@@ -2775,6 +3194,39 @@ impl PluginScene {
                 wi,
                 &wctx,
             );
+            // A word's plate: around its pen span on its first letter's row, moved
+            // with the word (its offsets, and its scale about its centre unless each
+            // letter scales in place).
+            if let Some(first) = by_word[wi].first() {
+                if let Some(&(top, bottom)) = p.rows.get(first.row) {
+                    let em = first.font_size;
+                    let in_place = self.effect.layout.anchor == Anchor::Unit;
+                    let xf = UnitXform {
+                        scale: if in_place {
+                            [1.0, 1.0]
+                        } else {
+                            [
+                                (word_st.scale * word_st.scale_x) as f32,
+                                word_st.scale as f32,
+                            ]
+                        },
+                        rot: word_st.rotation as f32,
+                        offset: [word_st.offset_x as f32 * em, word_st.offset_y as f32 * em],
+                    };
+                    for &(pass, pl) in plate_passes.iter().filter(|(_, pl)| pl.on == Unit::Word) {
+                        plates.extend(plate_of(
+                            pass,
+                            pl,
+                            &wctx,
+                            &word_st,
+                            line_st.opacity * word_st.opacity,
+                            em,
+                            [wb.x0, top, wb.x1, bottom],
+                            xf,
+                        ));
+                    }
+                }
+            }
             for g in &by_word[wi] {
                 let gctx = Ctx {
                     word_index: wi,
@@ -2783,6 +3235,7 @@ impl PluginScene {
                     word: word_vars,
                     ..base
                 };
+                // Plate properties start afresh on letters: a word's are its own plate's.
                 let mut st = State {
                     opacity: word_st.opacity,
                     scale: word_st.scale,
@@ -2795,6 +3248,9 @@ impl PluginScene {
                     color2: word_st.color2,
                     wipe: word_st.wipe,
                     glow: word_st.glow,
+                    wipe_edge: word_st.wipe_edge,
+                    plate_opacity: 1.0,
+                    plate_scale_x: 1.0,
                     ..Default::default()
                 };
                 let (sk, s_start, s_end, s_span) = syllable_of(g);
@@ -2842,17 +3298,58 @@ impl PluginScene {
                 } else {
                     (dx, dy)
                 };
-                // Line offsets and letter spacing are in the line's em, so every row
-                // of a line moves alike whatever its words' sizes.
-                let line_dx =
-                    (line_st.offset_x + line_st.tracking * g.row_pos as f64) as f32 * p.em;
-                let cx = anchor[0] + rx + st.offset_x as f32 * em + line_dx;
-                let cy = anchor[1] + ry + st.offset_y as f32 * em + line_st.offset_y as f32 * p.em;
+                // A letter's plate: its pen span on its row, moved and scaled with it.
+                if let Some(&(top, bottom)) = p.rows.get(g.row) {
+                    let xf = UnitXform {
+                        scale: [sx, s],
+                        rot,
+                        offset: [st.offset_x as f32 * em, st.offset_y as f32 * em],
+                    };
+                    for &(pass, pl) in plate_passes.iter().filter(|(_, pl)| pl.on == Unit::Letter) {
+                        plates.extend(plate_of(
+                            pass,
+                            pl,
+                            &gctx,
+                            &st,
+                            line_st.opacity * st.opacity,
+                            em,
+                            [g.pen[0], top, g.pen[1], bottom],
+                            xf,
+                        ));
+                    }
+                }
+                let (cx, cy, glyph_rot, sx, s) = match &lx {
+                    None => {
+                        // Line offsets and letter spacing are in the line's em, so every
+                        // row of a line moves alike whatever its words' sizes.
+                        let line_dx =
+                            (line_st.offset_x + line_st.tracking * g.row_pos as f64) as f32 * p.em;
+                        let cx = anchor[0] + rx + st.offset_x as f32 * em + line_dx;
+                        let cy = anchor[1]
+                            + ry
+                            + st.offset_y as f32 * em
+                            + line_st.offset_y as f32 * p.em;
+                        // Only shift a stacked window line: adding 0.0 would turn -0.0 into +0.0.
+                        let cy = if shift != 0.0 { cy + shift } else { cy };
+                        (cx, cy, rot, sx, s)
+                    }
+                    Some(x) => {
+                        // Letter spacing, then the line's scale and rotation, then its
+                        // offsets and slot.
+                        let spaced = (line_st.tracking * g.row_pos as f64) as f32 * p.em;
+                        let q = x.apply([
+                            anchor[0] + rx + st.offset_x as f32 * em + spaced,
+                            anchor[1] + ry + st.offset_y as f32 * em,
+                        ]);
+                        let [cx, cy] = line_moved(q);
+                        (cx, cy, rot + x.rot, sx * x.scale[0], s * x.scale[1])
+                    }
+                };
                 let blur = (st.blur + line_st.blur) as f32;
-                // Only shift a stacked window line: adding 0.0 would turn -0.0 into +0.0.
-                let cy = if shift != 0.0 { cy + shift } else { cy };
-                let glyph_rot = rot;
                 for pass in &self.effect.passes {
+                    if pass.plate.is_some() {
+                        continue;
+                    }
                     let pa = num(&eval(&pass.alpha, &gctx)) as f32;
                     let base_color = st.color.unwrap_or_else(|| {
                         if compose {
@@ -2881,9 +3378,31 @@ impl PluginScene {
                             (((t - w_start) / (w_end - w_start).max(1e-6)).clamp(0.0, 1.0)) as f32,
                             g.index as f32,
                         ],
+                        aux: [0.0, PASS_FILL, since, until],
+                    };
+                    // Where the wipe splits the glyph (local x) and its edge fade
+                    // (local width, 0 for the hard edge), for a wipe under way.
+                    let split = |wp: f64| -> (f32, f32) {
+                        let left = g.cx - g.sprite.w * 0.5;
+                        match st.wipe_edge.filter(|e| *e > 0.0) {
+                            None => {
+                                let split_x =
+                                    wipe_span[0] + wp as f32 * (wipe_span[1] - wipe_span[0]);
+                                ((split_x - left) / g.sprite.w, 0.0)
+                            }
+                            // A soft edge enters wholly left of the span and leaves
+                            // wholly right of it, so it never pops in or out.
+                            Some(e) => {
+                                let soft = e as f32 * em;
+                                let split_x = wipe_span[0] - soft * 0.5
+                                    + wp as f32 * (wipe_span[1] - wipe_span[0] + soft);
+                                ((split_x - left) / g.sprite.w, soft / g.sprite.w)
+                            }
+                        }
                     };
                     match pass.kind.as_str() {
                         "shadow" => {
+                            inst.aux[1] = PASS_SHADOW;
                             inst.center[1] += num(&eval(&pass.offset_y, &gctx)) as f32 * em;
                             inst.params[1] = num(&eval(&pass.blur, &gctx)) as f32 + blur;
                             inst.color = premul(col(&eval(&pass.color, &gctx)), pa * alpha);
@@ -2891,6 +3410,7 @@ impl PluginScene {
                             main.push(inst);
                         }
                         "glow" => {
+                            inst.aux[1] = PASS_GLOW;
                             let gain = num(&eval(&pass.gain, &gctx)) as f32
                                 * st.glow.unwrap_or(1.0) as f32;
                             let glow_rgb = col(&eval(&pass.color, &gctx));
@@ -2905,10 +3425,7 @@ impl PluginScene {
                                 if wp >= 1.0 {
                                     inst.color = c2;
                                 } else if wp > 0.0 {
-                                    let split_x =
-                                        wipe_span[0] + wp as f32 * (wipe_span[1] - wipe_span[0]);
-                                    let left = g.cx - g.sprite.w * 0.5;
-                                    inst.extra[0] = (split_x - left) / g.sprite.w;
+                                    (inst.extra[0], inst.aux[0]) = split(wp);
                                     inst.color2 = c2;
                                 }
                             }
@@ -2917,6 +3434,9 @@ impl PluginScene {
                             glow.push(inst);
                         }
                         _ => {
+                            if pass.kind == "outline_only" {
+                                inst.aux[1] = PASS_OUTLINE;
+                            }
                             let a = pa * alpha * if compose { wb.alpha } else { 1.0 };
                             inst.color = premul(base_color, a);
                             inst.params[1] = blur;
@@ -2955,10 +3475,7 @@ impl PluginScene {
                                 if wp >= 1.0 {
                                     inst.color = premul(c2, a);
                                 } else if wp > 0.0 {
-                                    let split_x =
-                                        wipe_span[0] + wp as f32 * (wipe_span[1] - wipe_span[0]);
-                                    let left = g.cx - g.sprite.w * 0.5;
-                                    inst.extra[0] = (split_x - left) / g.sprite.w;
+                                    (inst.extra[0], inst.aux[0]) = split(wp);
                                     inst.color2 = premul(c2, a);
                                 }
                             }
@@ -2969,6 +3486,128 @@ impl PluginScene {
                 }
             }
         }
+        main.splice(plates_at..plates_at, plates);
+    }
+
+    /// A plate around `bx` (x0, y0, x1, y1 in canvas px as laid out): grown by its
+    /// margins, scaled and wiped by its unit's plate properties, moved with its
+    /// unit (`unit_xf`, about the box centre), then with its line (`lx`, `moved`).
+    #[allow(clippy::too_many_arguments)]
+    fn plate(
+        &self,
+        pass: &Pass,
+        pl: &Plate,
+        ctx: &Ctx,
+        unit: &State,
+        alpha: f64,
+        em: f32,
+        bx: [f32; 4],
+        unit_xf: UnitXform,
+        lx: Option<LineXform>,
+        moved: impl Fn([f32; 2]) -> [f32; 2],
+    ) -> Option<Inst> {
+        let a = (num(&eval(&pass.alpha, ctx)) * alpha * unit.plate_opacity) as f32;
+        let grow = unit.plate_margin as f32;
+        let mx = (num(&eval(&pl.margin_x, ctx)) as f32 + grow) * em;
+        let my = (num(&eval(&pl.margin_y, ctx)) as f32 + grow) * em;
+        let (x0, x1) = (bx[0] - mx, bx[2] + mx);
+        let mut w = (x1 - x0) * unit.plate_scale_x as f32;
+        let h = bx[3] - bx[1] + 2.0 * my;
+        // The box centre: the unit's own scale and rotation turn about it.
+        let centre = [(bx[0] + bx[2]) * 0.5, (bx[1] + bx[3]) * 0.5];
+        let mut cx = centre[0];
+        if let Some(wp) = unit.plate_wipe {
+            let left = cx - w * 0.5;
+            w *= wp as f32;
+            cx = left + w * 0.5;
+        }
+        if a <= 0.0 || w <= 0.0 || h <= 0.0 {
+            return None;
+        }
+        // The unit's scale and rotation about the box centre, then its offsets.
+        let (c, s) = (unit_xf.rot.cos(), unit_xf.rot.sin());
+        let d = [(cx - centre[0]) * unit_xf.scale[0], 0.0];
+        let mut at = [
+            centre[0] + d[0] * c - d[1] * s + unit_xf.offset[0],
+            centre[1] + d[0] * s + d[1] * c + unit_xf.offset[1],
+        ];
+        let (mut w, mut h) = (w * unit_xf.scale[0].abs(), h * unit_xf.scale[1].abs());
+        let mut rot = unit_xf.rot;
+        if let Some(x) = lx {
+            at = x.apply(at);
+            w *= x.scale[0].abs();
+            h *= x.scale[1].abs();
+            rot += x.rot;
+        }
+        let at = moved(at);
+        let radius = (num(&eval(&pl.radius, ctx)) as f32 * em).max(0.0)
+            * unit_xf.scale[1].abs()
+            * lx.map_or(1.0, |x| x.scale[1].abs());
+        // Anti-aliasing over one physical pixel; the quad grows by it on every side.
+        let aa = 1.0 / self.atlas.px_scale.max(1e-3);
+        let color = premul(col(&eval(&pass.color, ctx)), a);
+        Some(Inst {
+            center: at,
+            size: [w + 2.0 * aa, h + 2.0 * aa],
+            xform: [rot, 1.0, 1.0, 0.0],
+            uv: [w, h, radius, aa],
+            color,
+            color2: color,
+            params: [2.0, 0.0, 0.0, 1.0],
+            extra: [-1.0, 0.0, 0.0, 0.0],
+            aux: [0.0, PASS_PLATE, 0.0, 0.0],
+        })
+    }
+}
+
+/// A unit's own move for its plate: scale (x, y) and rotation about the plate's
+/// box centre, then an offset, in canvas px.
+#[derive(Clone, Copy)]
+struct UnitXform {
+    scale: [f32; 2],
+    rot: f32,
+    offset: [f32; 2],
+}
+
+impl UnitXform {
+    const NONE: UnitXform = UnitXform {
+        scale: [1.0, 1.0],
+        rot: 0.0,
+        offset: [0.0, 0.0],
+    };
+}
+
+/// A line's own scale (x, y) and rotation about its block's centre.
+#[derive(Clone, Copy)]
+struct LineXform {
+    centre: [f32; 2],
+    scale: [f32; 2],
+    rot: f32,
+}
+
+impl LineXform {
+    /// None when the line is neither scaled nor rotated.
+    fn of(st: &State, centre: [f32; 2]) -> Option<Self> {
+        if st.scale == 1.0 && st.scale_x == 1.0 && st.rotation == 0.0 {
+            return None;
+        }
+        Some(Self {
+            centre,
+            scale: [(st.scale * st.scale_x) as f32, st.scale as f32],
+            rot: st.rotation as f32,
+        })
+    }
+
+    fn apply(&self, q: [f32; 2]) -> [f32; 2] {
+        let d = [
+            (q[0] - self.centre[0]) * self.scale[0],
+            (q[1] - self.centre[1]) * self.scale[1],
+        ];
+        let (c, s) = (self.rot.cos(), self.rot.sin());
+        [
+            self.centre[0] + d[0] * c - d[1] * s,
+            self.centre[1] + d[0] * s + d[1] * c,
+        ]
     }
 }
 
@@ -3071,5 +3710,6 @@ fn solid(cx: f32, cy: f32, w: f32, h: f32, color: [f32; 4]) -> Inst {
         color2: color,
         params: [2.0, 0.0, 0.0, 1.0],
         extra: [-1.0, 0.0, 0.0, 0.0],
+        aux: [0.0, PASS_PLATE, 0.0, 0.0],
     }
 }

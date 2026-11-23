@@ -162,6 +162,16 @@ fn bundled_presets_match_the_recorded_instances() {
         }
         h
     };
+    // The instance as recorded: every field before `aux` (the shader hook inputs
+    // added later, which these effects never read), so the record still proves
+    // they draw the same bytes. `aux` has its own tests.
+    let recorded_part = |insts: &[Inst]| -> Vec<u8> {
+        let keep = std::mem::offset_of!(Inst, aux);
+        insts
+            .iter()
+            .flat_map(|i| bytemuck::bytes_of(i)[..keep].to_vec())
+            .collect()
+    };
     let mut fonts = Fonts::load().unwrap();
     let catalog = scan(&[repo("assets/effects"), repo("tests/fixtures/fx")]);
     let mut effects: Vec<_> = catalog.effects.iter().collect();
@@ -173,9 +183,9 @@ fn bundled_presets_match_the_recorded_instances() {
                 let mut scene = PluginScene::new(e.effect.clone(), w, h, lines(), Some(preset));
                 let mut hash = 0xcbf2_9ce4_8422_2325u64;
                 for (g, gain, m) in frames(&mut scene, &mut fonts) {
-                    hash = fnv(bytemuck::cast_slice::<Inst, u8>(&g), hash);
+                    hash = fnv(&recorded_part(&g), hash);
                     hash = fnv(&gain.to_bits().to_le_bytes(), hash);
-                    hash = fnv(bytemuck::cast_slice::<Inst, u8>(&m), hash);
+                    hash = fnv(&recorded_part(&m), hash);
                 }
                 out.push_str(&format!("{} {preset} {w}x{h} {hash:016x}\n", e.effect.id));
             }
@@ -310,6 +320,7 @@ fn gpu_checks() {
     a_blurred_glyph_is_smooth_and_not_cut_at_its_sprite();
     an_installed_font_draws_on_the_gpu_like_the_bundled_face();
     a_failing_encoder_returns_its_diagnostics();
+    super::engine_features_tests::gpu_engine_features();
     let other = std::thread::spawn(|| {
         super::gl::GlRenderer::headless(8, 8, 8.0, 8.0, super::shaders::Output::PremulGamma).err()
     });
@@ -1231,7 +1242,7 @@ fn line_blur_reaches_the_fill_and_the_shadow() {
 #[test]
 fn line_properties_that_would_not_draw_are_refused() {
     for (unit, prop, says) in [
-        ("line", "scale", "not drawn on the line unit"),
+        ("line", "wipe", "not drawn on the line unit"),
         ("line", "color", "not drawn on the line unit"),
         ("word", "tracking", "\"tracking\" is a line unit property"),
     ] {

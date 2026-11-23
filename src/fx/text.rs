@@ -438,6 +438,9 @@ pub struct Laid {
     pub width: f32,
     pub height: f32,
     pub lines: Vec<(f32, f32)>, // (line_y baseline, line width)
+    /// Each visual line's box: its top and height (the font size times the line
+    /// height, the tallest word's on a row of mixed sizes).
+    pub rows: Vec<(f32, f32)>,
     /// A line holds a word wider than `max_width`: it is kept whole, wider than
     /// the box and centred on it (NOH never cuts a word between letters).
     pub too_wide: bool,
@@ -469,6 +472,14 @@ pub fn layout(
     )
 }
 
+/// How the rows of a laid-out block sit in its box (`layout.align`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowAlign {
+    Center,
+    Left,
+    Right,
+}
+
 /// `layout` with a size factor per word (`word_sizes[i]`, missing = 1): a word
 /// drawn larger takes more room and its row grows, as a CSS `font-size` on a
 /// span does; separators keep `size`.
@@ -483,6 +494,36 @@ pub fn layout_sized(
     word_sizes: &[f32],
     max_width: Option<f32>,
     line_height: f32,
+) -> Laid {
+    layout_aligned(
+        fonts,
+        words,
+        sep,
+        breaks,
+        face,
+        size,
+        word_sizes,
+        max_width,
+        line_height,
+        RowAlign::Center,
+    )
+}
+
+/// `layout_sized` with its rows centred, or set against the left or right edge
+/// of the box. A row wider than the box stays whole: centred on it, or from the
+/// edge it is set against. Letter spacing (`row_pos`) grows from that edge too.
+#[allow(clippy::too_many_arguments)]
+pub fn layout_aligned(
+    fonts: &mut Fonts,
+    words: &[String],
+    sep: &str,
+    breaks: &[usize],
+    face: Face,
+    size: f32,
+    word_sizes: &[f32],
+    max_width: Option<f32>,
+    line_height: f32,
+    align: RowAlign,
 ) -> Laid {
     let info = fonts.face_info(face);
     let attrs = attrs_of(&info);
@@ -518,11 +559,16 @@ pub fn layout_sized(
         spans.iter().map(|(s, a)| (s.as_str(), a.clone())),
         &attrs,
         Shaping::Advanced,
-        Some(Align::Center),
+        Some(match align {
+            RowAlign::Center => Align::Center,
+            RowAlign::Left => Align::Left,
+            RowAlign::Right => Align::Right,
+        }),
     );
     buffer.shape_until_scroll(&mut fonts.system, false);
     let mut glyphs = Vec::new();
     let mut lines = Vec::new();
+    let mut rows = Vec::new();
     let mut line_texts = Vec::new();
     let mut per_word: HashMap<usize, usize> = HashMap::new();
     let mut width: f32 = 0.0;
@@ -535,12 +581,27 @@ pub fn layout_sized(
         let shift = match max_width {
             Some(box_w) if run.line_w > box_w + 0.5 => {
                 too_wide = true;
-                let half = (run.line_w - box_w) * 0.5;
-                if run.rtl { half } else { -half }
+                match align {
+                    RowAlign::Center => {
+                        let half = (run.line_w - box_w) * 0.5;
+                        if run.rtl { half } else { -half }
+                    }
+                    // From the edge the row is set against, wherever the shaper put it.
+                    RowAlign::Left | RowAlign::Right => {
+                        let start = run.glyphs.iter().map(|g| g.x).fold(f32::INFINITY, f32::min);
+                        let want = if align == RowAlign::Left {
+                            0.0
+                        } else {
+                            box_w - run.line_w
+                        };
+                        if start.is_finite() { want - start } else { 0.0 }
+                    }
+                }
             }
             _ => 0.0,
         };
         lines.push((run.line_y, run.line_w));
+        rows.push((run.line_top, run.line_height));
         let lo = run.glyphs.iter().map(|g| g.start).min().unwrap_or(0);
         let hi = run.glyphs.iter().map(|g| g.end).max().unwrap_or(0);
         let row_chars = run.text.get(lo..hi).map_or(0, |s| s.chars().count()) as f32;
@@ -569,7 +630,11 @@ pub fn layout_sized(
                     .get(..g.start.saturating_sub(word_at[g.metadata]))
                     .map_or(0, |s| s.chars().count()),
                 row_pos: run.text.get(lo..g.start).map_or(0, |s| s.chars().count()) as f32
-                    - row_chars * 0.5,
+                    - match align {
+                        RowAlign::Center => row_chars * 0.5,
+                        RowAlign::Left => 0.0,
+                        RowAlign::Right => (row_chars - 1.0).max(0.0),
+                    },
             });
             *letter += 1;
         }
@@ -580,6 +645,7 @@ pub fn layout_sized(
         width: max_width.unwrap_or(width),
         height,
         lines,
+        rows,
         too_wide,
     }
 }

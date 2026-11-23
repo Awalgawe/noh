@@ -8,7 +8,7 @@ struct Globals { canvas: vec2<f32>, cov_size: f32, msdf_size: f32, msdf_range: f
 @group(0) @binding(1) var cov_tex: texture_2d<f32>;
 @group(0) @binding(2) var msdf_tex: texture_2d<f32>;
 @group(0) @binding(3) var samp: sampler;
-struct GlyphIn { coverage: f32, local: vec2<f32>, uv: vec2<f32>, color: vec4<f32>, color2: vec4<f32>, time: f32, progress: f32, frame: vec2<f32> };
+struct GlyphIn { coverage: f32, local: vec2<f32>, uv: vec2<f32>, color: vec4<f32>, color2: vec4<f32>, time: f32, progress: f32, frame: vec2<f32>, index: f32, line: f32, line_time: vec2<f32>, pass_kind: f32 };
 struct VertexIn { corner: vec2<f32>, center: vec2<f32>, time: f32, index: f32 };
 "#;
 

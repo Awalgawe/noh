@@ -85,7 +85,8 @@ See the [changelog](docs/CHANGELOG.md) for changes and known limits.
 ## Learn more
 
 [Desktop guide](docs/APP.md) · [Command line](docs/CLI.md) ·
-[Local MCP server](docs/MCP.md) · [Development](docs/DEVELOPMENT.md)
+[Local MCP server](docs/MCP.md) · [Caption effect format](docs/EFFECTS.md) ·
+[Development](docs/DEVELOPMENT.md)
 
 [Contributing](CONTRIBUTING.md) · [Security reports](SECURITY.md)
 
