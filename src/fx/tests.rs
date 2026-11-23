@@ -27,44 +27,32 @@ fn lines() -> Vec<Line> {
     ]
 }
 
-/// NOH ships Classique and the caption plugins of lyrics step 7; the engine's
-/// other features are exercised by the test-only effects in tests/fixtures/fx
-/// (never packaged).
+/// Every folder of assets/effects loads, Classique among them (built in through
+/// `catalog::CLASSIC_JSON`). A style is added by its folder alone: the list of
+/// bundled styles is not written here. The engine's other features are exercised
+/// by the test-only effects in tests/fixtures/fx (never packaged).
 #[test]
 fn bundled_effects_load() {
     let bundled = scan(&[repo("assets/effects")]);
-    assert_eq!(
-        bundled
-            .effects
-            .iter()
-            .map(|e| e.effect.id.as_str())
-            .collect::<Vec<_>>(),
-        [
-            "noh.block",
-            "noh.breath",
-            "noh.classic",
-            "noh.drop",
-            "noh.karaoke-simple",
-            "noh.sweep"
-        ]
-    );
+    assert!(bundled.rejected.is_empty(), "{:?}", bundled.rejected);
+    let folders = std::fs::read_dir(repo("assets/effects"))
+        .unwrap()
+        .filter(|e| e.as_ref().unwrap().path().is_dir())
+        .count();
+    assert_eq!(bundled.effects.len(), folders, "every folder is an effect");
+    assert!(bundled.effects.iter().any(|e| e.effect.id == "noh.classic"));
     let catalog = scan(&[repo("assets/effects"), repo("tests/fixtures/fx")]);
     assert!(catalog.rejected.is_empty(), "{:?}", catalog.rejected);
     let mut ids: Vec<&str> = catalog
         .effects
         .iter()
         .map(|e| e.effect.id.as_str())
+        .filter(|id| id.starts_with("test."))
         .collect();
     ids.sort();
     assert_eq!(
         ids,
         [
-            "noh.block",
-            "noh.breath",
-            "noh.classic",
-            "noh.drop",
-            "noh.karaoke-simple",
-            "noh.sweep",
             "test.compose",
             "test.glow",
             "test.motion",
@@ -162,6 +150,16 @@ fn bundled_presets_match_the_recorded_instances() {
         }
         h
     };
+    // The instance as recorded: every field before `aux` (the shader hook inputs
+    // added later, which these effects never read), so the record still proves
+    // they draw the same bytes. `aux` has its own tests.
+    let recorded_part = |insts: &[Inst]| -> Vec<u8> {
+        let keep = std::mem::offset_of!(Inst, aux);
+        insts
+            .iter()
+            .flat_map(|i| bytemuck::bytes_of(i)[..keep].to_vec())
+            .collect()
+    };
     let mut fonts = Fonts::load().unwrap();
     let catalog = scan(&[repo("assets/effects"), repo("tests/fixtures/fx")]);
     let mut effects: Vec<_> = catalog.effects.iter().collect();
@@ -173,9 +171,9 @@ fn bundled_presets_match_the_recorded_instances() {
                 let mut scene = PluginScene::new(e.effect.clone(), w, h, lines(), Some(preset));
                 let mut hash = 0xcbf2_9ce4_8422_2325u64;
                 for (g, gain, m) in frames(&mut scene, &mut fonts) {
-                    hash = fnv(bytemuck::cast_slice::<Inst, u8>(&g), hash);
+                    hash = fnv(&recorded_part(&g), hash);
                     hash = fnv(&gain.to_bits().to_le_bytes(), hash);
-                    hash = fnv(bytemuck::cast_slice::<Inst, u8>(&m), hash);
+                    hash = fnv(&recorded_part(&m), hash);
                 }
                 out.push_str(&format!("{} {preset} {w}x{h} {hash:016x}\n", e.effect.id));
             }
@@ -201,10 +199,21 @@ fn bundled_presets_match_the_recorded_instances() {
     }
     let recorded = std::fs::read_to_string(&path).expect("recorded instances");
     let recorded = recorded.replace("\r\n", "\n");
-    for (now, before) in out.lines().zip(recorded.lines()) {
-        assert_eq!(now, before, "bundled effects draw different instances");
+    // Every recorded line is drawn again, the same. An effect with no line yet (a
+    // style added by its folder alone) is drawn by the other tests and recorded
+    // later by a run with NOH_FX_GOLDEN_WRITE on each system.
+    let id = |line: &str| line.split(' ').next().unwrap_or("").to_string();
+    let known: std::collections::HashSet<String> = recorded.lines().map(id).collect();
+    let now: Vec<&str> = out.lines().filter(|l| known.contains(&id(l))).collect();
+    let unrecorded: std::collections::BTreeSet<String> =
+        out.lines().map(id).filter(|i| !known.contains(i)).collect();
+    if !unrecorded.is_empty() {
+        eprintln!("not recorded yet, not compared: {unrecorded:?}");
     }
-    assert_eq!(out.lines().count(), recorded.lines().count());
+    for (now, before) in now.iter().zip(recorded.lines()) {
+        assert_eq!(*now, before, "bundled effects draw different instances");
+    }
+    assert_eq!(now.len(), recorded.lines().count());
 }
 
 #[test]
@@ -310,6 +319,7 @@ fn gpu_checks() {
     a_blurred_glyph_is_smooth_and_not_cut_at_its_sprite();
     an_installed_font_draws_on_the_gpu_like_the_bundled_face();
     a_failing_encoder_returns_its_diagnostics();
+    super::engine_features_tests::gpu_engine_features();
     let other = std::thread::spawn(|| {
         super::gl::GlRenderer::headless(8, 8, 8.0, 8.0, super::shaders::Output::PremulGamma).err()
     });
@@ -1231,7 +1241,7 @@ fn line_blur_reaches_the_fill_and_the_shadow() {
 #[test]
 fn line_properties_that_would_not_draw_are_refused() {
     for (unit, prop, says) in [
-        ("line", "scale", "not drawn on the line unit"),
+        ("line", "wipe", "not drawn on the line unit"),
         ("line", "color", "not drawn on the line unit"),
         ("word", "tracking", "\"tracking\" is a line unit property"),
     ] {

@@ -593,6 +593,18 @@ fn line_breaks_is_keep_or_rewrap() {
         let j: serde_json::Value =
             serde_json::from_slice(&std::fs::read(e.dir.join("effect.json")).unwrap()).unwrap();
         let declared = j["layout"]["line_breaks"].as_str();
+        // Classique keeps; the effects that shipped with it rewrap. A style added
+        // later chooses for itself.
+        let shipped_rewrap = [
+            "noh.block",
+            "noh.breath",
+            "noh.drop",
+            "noh.karaoke-simple",
+            "noh.sweep",
+        ];
+        if e.effect.id != "noh.classic" && !shipped_rewrap.contains(&e.effect.id.as_str()) {
+            continue;
+        }
         assert_eq!(
             declared == Some("keep"),
             e.effect.id == "noh.classic",

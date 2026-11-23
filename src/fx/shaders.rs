@@ -31,7 +31,19 @@ pub struct Inst {
     /// Wipe split in local x (0..1; negative = no wipe), time, word progress and
     /// glyph index (the last three for plugin shader hooks).
     pub extra: [f32; 4],
+    /// Soft wipe edge width in local x (0 = the engine's hard edge), the pass
+    /// being drawn (PASS_*), and the line's seconds since it showed and until it
+    /// goes (the last three for plugin shader hooks).
+    pub aux: [f32; 4],
 }
+
+/// `GlyphIn.pass_kind` values: what an instance draws.
+pub const PASS_FILL: f32 = 0.0;
+pub const PASS_OUTLINE: f32 = 1.0;
+pub const PASS_SHADOW: f32 = 2.0;
+pub const PASS_GLOW: f32 = 3.0;
+/// A plate, or a compose-mode shape.
+pub const PASS_PLATE: f32 = 4.0;
 
 /// Engine glyph shader; `HOOKS` is replaced by the plugin hooks (or the defaults).
 pub const SHADER: &str = r#"
@@ -40,7 +52,7 @@ struct Globals { canvas: vec2<f32>, cov_size: f32, msdf_size: f32, msdf_range: f
 @group(0) @binding(1) var cov_tex: texture_2d<f32>;
 @group(0) @binding(2) var msdf_tex: texture_2d<f32>;
 @group(0) @binding(3) var samp: sampler;
-struct GlyphIn { coverage: f32, local: vec2<f32>, uv: vec2<f32>, color: vec4<f32>, color2: vec4<f32>, time: f32, progress: f32 };
+struct GlyphIn { coverage: f32, local: vec2<f32>, uv: vec2<f32>, color: vec4<f32>, color2: vec4<f32>, time: f32, progress: f32, frame: vec2<f32>, index: f32, line: f32, line_time: vec2<f32>, pass_kind: f32 };
 struct VertexIn { corner: vec2<f32>, center: vec2<f32>, time: f32, index: f32 };
 HOOKS
 
@@ -53,6 +65,7 @@ struct Inst {
   @location(5) color2: vec4<f32>,
   @location(6) params: vec4<f32>,
   @location(7) extra: vec4<f32>,
+  @location(8) aux: vec4<f32>,
 };
 struct VOut {
   @builtin(position) pos: vec4<f32>,
@@ -64,6 +77,8 @@ struct VOut {
   @location(5) extra: vec4<f32>,
   @location(6) uvspan: vec4<f32>,
   @location(7) clip: f32,
+  @location(8) frame: vec2<f32>,
+  @location(9) @interpolate(flat) aux: vec4<f32>,
 };
 
 @vertex fn vs(@builtin(vertex_index) vi: u32, i: Inst) -> VOut {
@@ -84,6 +99,10 @@ struct VOut {
   o.extra = i.extra;
   o.uvspan = i.uv;
   o.clip = i.xform.w;
+  // Where the pixel is in the frame, 0..1 across and down: the same at every
+  // pixel scale (the canvas is the export's size in the preview too).
+  o.frame = r / g.canvas;
+  o.aux = i.aux;
   return o;
 }
 
@@ -143,17 +162,34 @@ fn cov_at(uv: vec2<f32>, span: vec4<f32>) -> f32 {
     } else {
       a = clamp(dist + 0.5, 0.0, 1.0);
     }
+  } else if (v.uvspan.w > 0.0) {
+    // A rounded plate: uvspan holds its width, height and corner radius and the
+    // anti-aliasing width, in canvas px; the quad is the plate grown by that width.
+    let quad = v.uvspan.xy + vec2<f32>(2.0 * v.uvspan.w);
+    let p = (v.local - vec2<f32>(0.5)) * quad;
+    let half = v.uvspan.xy * 0.5;
+    let r = min(v.uvspan.z, min(half.x, half.y));
+    let q = abs(p) - half + vec2<f32>(r);
+    let d = length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - r;
+    a = clamp(0.5 - d / v.uvspan.w, 0.0, 1.0);
   }
   // Reveal clip (line reveal_y): nothing above the clip line.
   if (v.local.y < v.clip) {
     a = 0.0;
   }
   var col = v.color;
-  if (v.extra.x >= 0.0) {
+  if (v.aux.x > 0.0) {
+    // A soft edge (aux.x, its width in local x); its split may lie left of the glyph.
+    let h = 0.5 * v.aux.x;
+    let t = smoothstep(v.extra.x - h, v.extra.x + h, v.local.x);
+    col = mix(v.color2, v.color, t);
+  } else if (v.extra.x >= 0.0) {
     let t = smoothstep(v.extra.x - 0.02, v.extra.x + 0.02, v.local.x);
     col = mix(v.color2, v.color, t);
   }
-  return shade(GlyphIn(a, v.local, v.uv, col, v.color2, v.extra.y, v.extra.z));
+  let shown = v.aux.z + v.aux.w;
+  let line = select(0.0, clamp(v.aux.z / shown, 0.0, 1.0), shown > 0.0);
+  return shade(GlyphIn(a, v.local, v.uv, col, v.color2, v.extra.y, v.extra.z, v.frame, v.extra.w, line, v.aux.zw, v.aux.y));
 }
 
 @vertex fn fs_tri(@builtin(vertex_index) id: u32) -> @builtin(position) vec4<f32> {

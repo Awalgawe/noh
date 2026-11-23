@@ -15,6 +15,8 @@ pub mod text;
 #[cfg(test)]
 mod classic_tests;
 #[cfg(test)]
+mod engine_features_tests;
+#[cfg(test)]
 mod expr_tests;
 #[cfg(test)]
 mod overflow_tests;

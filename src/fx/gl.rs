@@ -718,7 +718,7 @@ impl GlRenderer {
     unsafe fn bind_instances(&self, first: usize) {
         let gl = &self.gl;
         let stride = std::mem::size_of::<Inst>() as i32;
-        let sizes = [2, 2, 4, 4, 4, 4, 4, 4];
+        let sizes = [2, 2, 4, 4, 4, 4, 4, 4, 4];
         unsafe {
             gl.bind_vertex_array(Some(self.inst_vao));
             gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.inst_buf));

@@ -8,7 +8,7 @@ struct Globals { canvas: vec2<f32>, cov_size: f32, msdf_size: f32, msdf_range: f
 @group(0) @binding(1) var cov_tex: texture_2d<f32>;
 @group(0) @binding(2) var msdf_tex: texture_2d<f32>;
 @group(0) @binding(3) var samp: sampler;
-struct GlyphIn { coverage: f32, local: vec2<f32>, uv: vec2<f32>, color: vec4<f32>, color2: vec4<f32>, time: f32, progress: f32 };
+struct GlyphIn { coverage: f32, local: vec2<f32>, uv: vec2<f32>, color: vec4<f32>, color2: vec4<f32>, time: f32, progress: f32, frame: vec2<f32>, index: f32, line: f32, line_time: vec2<f32>, pass_kind: f32 };
 struct VertexIn { corner: vec2<f32>, center: vec2<f32>, time: f32, index: f32 };
 "#;
 
@@ -126,4 +126,17 @@ pub fn hooks(src: Option<&str>) -> String {
         out += "\nfn displace(v: VertexIn) -> vec2<f32> { return vec2<f32>(0.0, 0.0); }\n";
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    /// A hook knows where its pixel is in the frame (0..1 across and down), the
+    /// same at every pixel scale.
+    #[test]
+    fn a_hook_can_read_where_its_pixel_is_in_the_frame() {
+        super::validate(
+            "fn shade(i: GlyphIn) -> vec4<f32> { return vec4<f32>(i.frame, 0.0, 1.0) * i.coverage; }",
+        )
+        .unwrap();
+    }
 }
