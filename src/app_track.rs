@@ -42,12 +42,14 @@ pub enum Pairing {
     /// Both readable, and different: the question. `srt` is the .srt's cues
     /// with the word times of the lyrics' identical cues; `lines` how many
     /// lines differ; `lose` how many lines of the lyrics would lose their word
-    /// times by taking the .srt, `hand` whether some of those were set by hand.
+    /// times by taking the .srt, `hand` whether some of those were set by hand,
+    /// `voices_lost` how many lines would lose their voices (`carry_voices`).
     Differ {
         srt: Arc<SubtitleTrack>,
         lines: usize,
         lose: usize,
         hand: bool,
+        voices_lost: usize,
     },
     /// A usable lyrics file and an .srt that cannot be used as these lyrics
     /// (not SRT, or not fitting the song): the question, « Les paroles » only.
@@ -429,12 +431,14 @@ fn load(request: &Request) -> Result<Loaded, EngineError> {
                         Ok(mut srt) => {
                             words::merge(&mut srt, &words::to_lyrics_json(&lyrics.track, None));
                             srt.language = lyrics.track.language.clone();
+                            let voices_lost = words::carry_voices(&lyrics.track, &mut srt);
                             let (lose, hand) = lost_words(&lyrics.track, &srt);
                             Pairing::Differ {
                                 srt: Arc::new(srt),
                                 lines,
                                 lose,
                                 hand,
+                                voices_lost,
                             }
                         }
                     },

@@ -984,6 +984,7 @@ mod tests {
     fn the_first_too_wide_cue_gives_the_warning_time() {
         let canvas = Canvas::new(1280.0, 720.0, CaptionStyle::default()).unwrap();
         let cue = |start_ms, text: &str| SubtitleCue {
+            voices: Vec::new(),
             start_ms,
             end_ms: start_ms + 900,
             text: text.into(),
@@ -991,6 +992,7 @@ mod tests {
         };
         let long = "W".repeat(90);
         let mut two = SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 10_000,
             cues: vec![
@@ -1010,9 +1012,11 @@ mod tests {
 
     fn track(start: u64, end: u64, text: &str) -> SubtitleTrack {
         SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 1000,
             cues: vec![SubtitleCue {
+                voices: Vec::new(),
                 start_ms: start,
                 end_ms: end,
                 text: text.into(),
@@ -1241,6 +1245,7 @@ mod tests {
         }
         let canvas = Canvas::new(640.0, 360.0, CaptionStyle::default()).unwrap();
         let empty = SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 1000,
             cues: vec![],

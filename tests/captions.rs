@@ -559,9 +559,11 @@ fn words_beside(srt: &Path) {
     })
     .to_vec();
     let track = SubtitleTrack {
+        voices: Vec::new(),
         language: None,
         duration_ms: 3_000,
         cues: vec![SubtitleCue {
+            voices: Vec::new(),
             start_ms: 500,
             end_ms: 2_500,
             text: "On a gardé la lumière".into(),

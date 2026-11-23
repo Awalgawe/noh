@@ -38,6 +38,8 @@ pub enum Kind {
         lines: usize,
         lose: usize,
         hand: bool,
+        /// How many lines would lose their voices by taking the .srt.
+        voices_lost: usize,
         /// When each file was last changed, as HH:MM local time, if known.
         srt_time: Option<String>,
         lyrics_time: Option<String>,
@@ -187,6 +189,7 @@ impl NohApp {
                             &noh::subtitle_words::to_lyrics_json(&memory, None),
                         );
                         choice.language = memory.language.clone();
+                        let voices_lost = noh::subtitle_words::carry_voices(&memory, &mut choice);
                         let (lose, hand) = app_track::lost_words(&memory, &choice);
                         self.lyrics_pair.question = Some(Question {
                             path,
@@ -195,6 +198,7 @@ impl NohApp {
                                 lines,
                                 lose,
                                 hand,
+                                voices_lost,
                                 srt_time: hhmm(srt_stamp.as_ref()),
                                 lyrics_time: None,
                             },
@@ -210,6 +214,7 @@ impl NohApp {
                 lines,
                 lose,
                 hand,
+                voices_lost,
             } => {
                 self.lyrics_pair.question = Some(Question {
                     path,
@@ -218,6 +223,7 @@ impl NohApp {
                         lines,
                         lose,
                         hand,
+                        voices_lost,
                         srt_time: hhmm(srt_stamp.as_ref()),
                         lyrics_time: hhmm(lyrics_stamp.as_ref()),
                     },
@@ -357,11 +363,13 @@ impl NohApp {
                 lines,
                 lose,
                 hand,
+                voices_lost,
                 srt_time,
                 lyrics_time,
                 ..
             } => (
-                // « (.srt modifié à HH:MM, paroles à HH:MM) » when both are known.
+                // « (.srt modifié à HH:MM, paroles à HH:MM) » when both are known,
+                // then « N lignes y perdent leurs voix. » when the .srt would cost some.
                 match (srt_time, lyrics_time) {
                     (Some(s), Some(t)) => format!(
                         "{} {}",
@@ -374,6 +382,10 @@ impl NohApp {
                         l.format("pair.srt_time", &[s.clone()])
                     ),
                     _ => format!("{}.", l.plural("pair.body", *lines)),
+                } + &if *voices_lost > 0 {
+                    format!(" {}", l.plural("pair.voices_lost", *voices_lost))
+                } else {
+                    String::new()
                 },
                 Some(if unsaved {
                     l.text("pair.srt_unsaved").to_owned()
@@ -567,6 +579,31 @@ mod tests {
             panic!("differ");
         };
         assert_eq!((*lose, *hand), (1, true));
+    }
+
+    #[test]
+    fn the_srt_answer_says_how_many_lines_lose_their_voices() {
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("song.srt");
+        let mut lyrics = noh::subtitle_srt::parse(A, 20_000).unwrap();
+        lyrics.voices = vec![noh::subtitle_track::Voice::default(); 2];
+        lyrics.cues[0].voices = vec![1];
+        lyrics.cues[1].voices = vec![2];
+        std::fs::write(&path, B).unwrap();
+        words::write_lyrics(&words::lyrics_path(&path), &lyrics, None).unwrap();
+        let app = attached(folder.path(), B, None);
+        let Some(Question {
+            kind: Kind::Differ {
+                srt, voices_lost, ..
+            },
+            ..
+        }) = &app.lyrics_pair.question
+        else {
+            panic!("differ");
+        };
+        // B changes only the second line's text, at the same times: no voice is lost.
+        assert_eq!(*voices_lost, 0);
+        assert_eq!(srt.cues[1].voices, [2]);
     }
 
     #[test]
@@ -786,7 +823,7 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let path = folder.path().join("song.srt");
         std::fs::write(&path, B).unwrap();
-        std::fs::write(words::lyrics_path(&path), br#"{"version":3,"cues":[]}"#).unwrap();
+        std::fs::write(words::lyrics_path(&path), br#"{"version":4,"cues":[]}"#).unwrap();
         let mut app = attached(folder.path(), B, None);
         app.project.apply_subtitles = true;
         let warnings = app.prepare_lyrics_export().unwrap();

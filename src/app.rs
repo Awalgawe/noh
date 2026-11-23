@@ -1263,6 +1263,7 @@ mod metadata_tests {
         let result = noh::subtitles::SubtitleResult {
             output: "speech.srt".into(),
             track: noh::subtitle_track::SubtitleTrack {
+                voices: Vec::new(),
                 language: None,
                 duration_ms: 1000,
                 cues: vec![],

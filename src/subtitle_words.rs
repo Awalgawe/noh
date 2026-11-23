@@ -6,6 +6,13 @@
 //! style, no media, no project. Unknown fields are ignored within a version; a
 //! higher version is « newer » and never read as lyrics.
 //!
+//! Version 3 is version 2 plus who sings: the declared voices (`voices`, with
+//! optional names) and each cue's set of voices, and word ends that run past
+//! the backing vocals of their cue (`SubtitleCue::fit_ends`). It is written only
+//! when the lyrics hold one of these, so a NOH that reads version 2 alone never
+//! drops them when it writes the file back: to it the file is « newer ». Lyrics
+//! without them are written as version 2, byte for byte as before.
+//!
 //! Version 1, `<name>.noh-words.json`, held only the cues with word times and
 //! is still read: its words go to the identical cues of the .srt.
 //!
@@ -22,8 +29,11 @@ use std::{
 /// Larger files are ignored (a 10 000-cue track with words is far below this).
 pub const MAX_BYTES: u64 = 32 * 1024 * 1024;
 const VERSION: u32 = 1;
-/// The lyrics file's version written by this NOH.
-pub const LYRICS_VERSION: u32 = 2;
+/// The highest lyrics file version this NOH reads and writes (`to_lyrics_json`
+/// writes the lowest that holds the lyrics: 2 or 3).
+pub const LYRICS_VERSION: u32 = 3;
+/// The version of lyrics that hold no voices and no backing-vocal ends.
+pub const LYRICS_VERSION_PLAIN: u32 = 2;
 /// The full suffix that names a lyrics file (never any `.json`).
 pub const LYRICS_SUFFIX: &str = ".noh-lyrics.json";
 /// The version-1 name, still read.
@@ -91,7 +101,16 @@ struct LyricsFile {
     language: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     model: Option<String>,
+    /// Version 3: the declared voices.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    voices: Vec<LyricsVoice>,
     cues: Vec<LyricsCue>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct LyricsVoice {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -101,6 +120,9 @@ struct LyricsCue {
     text: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     words: Option<Vec<LyricsWord>>,
+    /// Version 3: the voices that sing the cue (empty or absent: unknown).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    voices: Vec<u8>,
 }
 
 // Mirrors of WordTime and SyllableTime that ignore unknown fields, as the rest
@@ -169,12 +191,36 @@ impl From<LyricsWord> for WordTime {
     }
 }
 
-/// The version-2 lyrics file for `track` (made by `model`, if known): every cue.
+/// Whether `track` holds what only version 3 keeps: declared voices, a cue's
+/// voices, or a word end past the backing vocals of its cue.
+pub fn needs_version_3(track: &SubtitleTrack) -> bool {
+    !track.voices.is_empty()
+        || track.cues.iter().any(|c| {
+            !c.voices.is_empty()
+                || c.words
+                    .as_ref()
+                    .is_some_and(|w| c.words_fit(w) && c.has_backing_overlap(w))
+        })
+}
+
+/// The lyrics file for `track` (made by `model`, if known): every cue, as
+/// version 2, or version 3 when `needs_version_3`.
 pub fn to_lyrics_json(track: &SubtitleTrack, model: Option<&str>) -> Vec<u8> {
     serde_json::to_vec_pretty(&LyricsFile {
-        version: LYRICS_VERSION,
+        version: if needs_version_3(track) {
+            LYRICS_VERSION
+        } else {
+            LYRICS_VERSION_PLAIN
+        },
         language: track.language.clone(),
         model: model.filter(|m| valid_model(m)).map(str::to_string),
+        voices: track
+            .voices
+            .iter()
+            .map(|v| LyricsVoice {
+                name: v.name.clone(),
+            })
+            .collect(),
         cues: track
             .cues
             .iter()
@@ -187,6 +233,7 @@ pub fn to_lyrics_json(track: &SubtitleTrack, model: Option<&str>) -> Vec<u8> {
                     .as_ref()
                     .filter(|w| c.words_fit(w))
                     .map(|w| w.iter().map(LyricsWord::from).collect()),
+                voices: c.voices.clone(),
             })
             .collect(),
     })
@@ -207,7 +254,7 @@ pub fn parse_lyrics(bytes: &[u8]) -> Result<Lyrics, LyricsError> {
         .version;
     match version {
         1 => return Err(LyricsError::Version1),
-        LYRICS_VERSION => {}
+        LYRICS_VERSION_PLAIN..=LYRICS_VERSION => {}
         v if v > LYRICS_VERSION => return Err(LyricsError::Newer(v)),
         v => return Err(LyricsError::Damaged(format!("unknown version {v}"))),
     }
@@ -217,6 +264,9 @@ pub fn parse_lyrics(bytes: &[u8]) -> Result<Lyrics, LyricsError> {
         .into_iter()
         .map(|c| {
             let mut cue = SubtitleCue {
+                // Read in either version: a version-2 file given voices by hand
+                // or by an agent keeps them (and is written back as version 3).
+                voices: c.voices,
                 start_ms: c.start_ms,
                 end_ms: c.end_ms,
                 // One form after loading, as the SRT parser gives (merge compares
@@ -235,6 +285,11 @@ pub fn parse_lyrics(bytes: &[u8]) -> Result<Lyrics, LyricsError> {
         })
         .collect();
     let track = unbound(SubtitleTrack {
+        voices: file
+            .voices
+            .into_iter()
+            .map(|v| crate::subtitle_track::Voice { name: v.name })
+            .collect(),
         language: file.language,
         duration_ms: 1,
         cues,
@@ -544,6 +599,40 @@ pub fn merge(track: &mut SubtitleTrack, json: &[u8]) -> usize {
     merged
 }
 
+/// Give the cues of `to` (lyrics taken from an .srt, which holds no voices) the
+/// voices of `from` (the lyrics it replaces), and its declared voices. A cue of
+/// `to` takes the voices of the `from` cue with the same start and end, or else
+/// of the first unused `from` cue with the same text, so a typo fixed in the
+/// .srt keeps its voice. Returns how many `from` cues with voices found no cue:
+/// the lines that lose their voices.
+pub fn carry_voices(from: &SubtitleTrack, to: &mut SubtitleTrack) -> usize {
+    to.voices = from.voices.clone();
+    let mut taken = vec![false; to.cues.len()];
+    let mut lost = Vec::new();
+    for cue in from.cues.iter().filter(|c| !c.voices.is_empty()) {
+        match (0..to.cues.len()).find(|&j| {
+            !taken[j] && to.cues[j].start_ms == cue.start_ms && to.cues[j].end_ms == cue.end_ms
+        }) {
+            Some(j) => {
+                taken[j] = true;
+                to.cues[j].voices = cue.voices.clone();
+            }
+            None => lost.push(cue),
+        }
+    }
+    let mut count = 0;
+    for cue in lost {
+        match (0..to.cues.len()).find(|&j| !taken[j] && to.cues[j].text == cue.text) {
+            Some(j) => {
+                taken[j] = true;
+                to.cues[j].voices = cue.voices.clone();
+            }
+            None => count += 1,
+        }
+    }
+    count
+}
+
 /// The bytes of the lyrics file beside `srt`: the new name when it exists,
 /// otherwise the old one.
 fn bytes_beside(srt: &Path) -> Option<Vec<u8>> {
@@ -639,6 +728,7 @@ mod tests {
                 .collect(),
         );
         SubtitleTrack {
+            voices: Vec::new(),
             language: Some("fr".into()),
             duration_ms: 10_000,
             cues: vec![a, SubtitleCue::new(4000, 5000, "lo lo")],
@@ -690,6 +780,7 @@ mod tests {
         assert_eq!(merge(&mut bare, &json), 1);
         assert_eq!(bare, t);
         let mut none = SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 10_000,
             cues: vec![SubtitleCue::new(0, 500, "x")],
@@ -818,6 +909,7 @@ mod tests {
         assert_eq!(parse_lyrics(&to_lyrics_json(&long, None)).unwrap().track, t);
         // No cues at all is valid lyrics.
         let empty = SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 1,
             cues: vec![],
@@ -873,7 +965,7 @@ mod tests {
         // Without ends, the file is byte for byte what 0.2.0's shape writes.
         let plain = lyrics_track();
         let old_shape = OldFile {
-            version: LYRICS_VERSION,
+            version: LYRICS_VERSION_PLAIN,
             language: plain.language.clone(),
             model: None,
             cues: plain
@@ -969,7 +1061,7 @@ mod tests {
     fn create_lyrics_never_replaces_an_existing_file() {
         let folder = tempfile::tempdir().unwrap();
         let path = folder.path().join("song.noh-lyrics.json");
-        for existing in [&br#"{"version":3,"cues":[]}"#[..], b"{ not json"] {
+        for existing in [&br#"{"version":4,"cues":[]}"#[..], b"{ not json"] {
             std::fs::write(&path, existing).unwrap();
             let error = create_lyrics(&path, &lyrics_track(), None).unwrap_err();
             assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
@@ -1022,10 +1114,10 @@ mod tests {
     fn newer_old_and_damaged_files_are_told_apart() {
         let mut v: serde_json::Value =
             serde_json::from_slice(&to_lyrics_json(&lyrics_track(), None)).unwrap();
-        v["version"] = 3.into();
+        v["version"] = 4.into();
         assert_eq!(
             parse_lyrics(&serde_json::to_vec(&v).unwrap()),
-            Err(LyricsError::Newer(3))
+            Err(LyricsError::Newer(4))
         );
         assert_eq!(
             parse_lyrics(&to_json(&track(), None).unwrap()),
@@ -1167,7 +1259,7 @@ mod tests {
         // in its place).
         let mut v: serde_json::Value =
             serde_json::from_slice(&std::fs::read(lyrics_path(&srt)).unwrap()).unwrap();
-        v["version"] = 3.into();
+        v["version"] = 4.into();
         std::fs::write(lyrics_path(&srt), serde_json::to_vec(&v).unwrap()).unwrap();
         let mut read = track();
         read.cues[0].words = None;
@@ -1179,5 +1271,152 @@ mod tests {
         let mut t = t.clone();
         t.duration_ms = t.cues.last().map_or(1, |c| c.end_ms);
         t
+    }
+
+    fn voiced() -> SubtitleTrack {
+        let mut t = lyrics_track();
+        t.voices = vec![
+            crate::subtitle_track::Voice {
+                name: Some("Léa".into()),
+            },
+            crate::subtitle_track::Voice { name: None },
+        ];
+        t.cues[0].voices = vec![1];
+        t.cues[1].voices = vec![1, 2];
+        t
+    }
+
+    #[test]
+    fn lyrics_without_voices_stay_version_2_and_voices_make_version_3() {
+        let plain = lyrics_track();
+        let json: serde_json::Value =
+            serde_json::from_slice(&to_lyrics_json(&plain, None)).unwrap();
+        assert_eq!(json["version"], 2);
+        assert!(json.get("voices").is_none() && json["cues"][0].get("voices").is_none());
+
+        let t = voiced();
+        let bytes = to_lyrics_json(&t, None);
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["version"], 3);
+        assert_eq!(json["voices"][0]["name"], "Léa");
+        assert!(json["voices"][1].get("name").is_none());
+        assert_eq!(json["cues"][1]["voices"], serde_json::json!([1, 2]));
+        assert_eq!(parse_lyrics(&bytes).unwrap().track, t, "voices round-trip");
+
+        // Declared voices alone (no line uses them yet) also need version 3.
+        let mut declared = lyrics_track();
+        declared.voices = vec![crate::subtitle_track::Voice::default(); 2];
+        assert!(needs_version_3(&declared));
+        // Taking every voice away writes version 2 again, byte for byte.
+        let mut back = t.clone();
+        back.voices.clear();
+        back.cues.iter_mut().for_each(|c| c.voices.clear());
+        assert_eq!(to_lyrics_json(&back, None), to_lyrics_json(&plain, None));
+    }
+
+    #[test]
+    fn a_version_2_file_given_voices_from_outside_keeps_them() {
+        let mut v: serde_json::Value =
+            serde_json::from_slice(&to_lyrics_json(&voiced(), None)).unwrap();
+        v["version"] = 2.into();
+        let read = parse_lyrics(&serde_json::to_vec(&v).unwrap()).unwrap();
+        assert_eq!(read.track, voiced());
+    }
+
+    #[test]
+    fn undeclared_or_unordered_voices_make_the_file_damaged() {
+        for (voices, cue) in [
+            (serde_json::json!([{}]), serde_json::json!([2])),
+            (serde_json::json!([{}, {}]), serde_json::json!([2, 1])),
+            (serde_json::json!([{}, {}]), serde_json::json!([1, 1])),
+            (serde_json::json!([{}]), serde_json::json!([0])),
+            (
+                serde_json::json!([{}, {}, {}, {}, {}]),
+                serde_json::json!([1]),
+            ),
+            (serde_json::json!([{ "name": " " }]), serde_json::json!([1])),
+        ] {
+            let mut v: serde_json::Value =
+                serde_json::from_slice(&to_lyrics_json(&voiced(), None)).unwrap();
+            v["voices"] = voices.clone();
+            v["cues"][1]["voices"] = cue.clone();
+            assert!(
+                matches!(
+                    parse_lyrics(&serde_json::to_vec(&v).unwrap()),
+                    Err(LyricsError::Damaged(_))
+                ),
+                "{voices} {cue}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_word_held_past_backing_vocals_needs_version_3() {
+        let mut t = lyrics_track();
+        let mut cue = SubtitleCue::new(4000, 6000, "matin (au matin)");
+        let w = |text: &str, start_ms, end_ms| WordTime {
+            text: text.into(),
+            start_ms,
+            end_ms,
+            source: WordSource::Hand,
+            syllables: None,
+        };
+        // « matin » is held until 5600, while « (au matin) » starts at 4800.
+        cue.words = Some(vec![
+            w("matin", 4000, Some(5600)),
+            w("(au", 4800, None),
+            w("matin)", 5200, None),
+        ]);
+        t.cues[1] = cue;
+        t.duration_ms = 6000;
+        assert!(needs_version_3(&t));
+        let bytes = to_lyrics_json(&t, None);
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["version"], 3);
+        assert_eq!(
+            json["cues"][1]["words"][0]["end_ms"], 5600,
+            "the held end is kept"
+        );
+        assert_eq!(parse_lyrics(&bytes).unwrap().track, t);
+    }
+
+    #[test]
+    fn voices_follow_the_srt_by_times_then_by_text_and_the_lost_are_counted() {
+        let from = {
+            let mut t = SubtitleTrack {
+                voices: vec![crate::subtitle_track::Voice::default(); 2],
+                language: None,
+                duration_ms: 10_000,
+                cues: vec![
+                    SubtitleCue::new(1000, 2000, "one"),
+                    SubtitleCue::new(3000, 4000, "two"),
+                    SubtitleCue::new(5000, 6000, "three"),
+                    SubtitleCue::new(7000, 8000, "four"),
+                ],
+            };
+            t.cues[0].voices = vec![1];
+            t.cues[1].voices = vec![2];
+            t.cues[2].voices = vec![1, 2];
+            t.cues[3].voices = vec![2];
+            t
+        };
+        let mut to = SubtitleTrack {
+            voices: Vec::new(),
+            language: None,
+            duration_ms: 10_000,
+            cues: vec![
+                // Same times, typo fixed: keeps voice 1.
+                SubtitleCue::new(1000, 2000, "One"),
+                // Moved, same text: keeps voice 2.
+                SubtitleCue::new(3200, 4200, "two"),
+                // « three » is gone; « four » changed time and text: both lost.
+                SubtitleCue::new(7500, 8500, "for"),
+            ],
+        };
+        assert_eq!(carry_voices(&from, &mut to), 2);
+        assert_eq!(to.voices, from.voices);
+        let sets: Vec<Vec<u8>> = to.cues.iter().map(|c| c.voices.clone()).collect();
+        assert_eq!(sets, [vec![1], vec![2], vec![]]);
+        assert!(to.validate().is_ok());
     }
 }

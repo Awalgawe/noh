@@ -119,7 +119,10 @@ given alone gets its lyrics file created beside it (never over an existing file)
 a lyrics file given uses the `.srt` beside it (rebuilt when missing), and a lyrics
 file NOH cannot use leaves the `.srt` in use. When the two differ, `truth` is
 required: `"lyrics"` rewrites the `.srt`, `"srt"` replaces the lyrics (unchanged
-lines keep their word times); the replaced file is first kept beside it under the
+lines keep their word times; a line keeps its voices when the `.srt` has a line
+with the same times, or else the same text, and the note
+`lyrics_input.voices_lost` counts the others); the replaced file is first kept
+beside it under the
 next free `<name>.replaced.srt` or `<name>.noh-lyrics.replaced.json`. Without
 `truth` the start is refused before anything is written, with code
 `error.lyrics_truth_required`; its `technical` is a JSON object with `srt`,
