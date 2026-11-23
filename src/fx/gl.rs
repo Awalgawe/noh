@@ -1712,7 +1712,12 @@ impl YuvMix {
             for (tex, data, w, h) in [
                 (self.y_in, &i420[..iys], self.sw, self.sh),
                 (self.u_in, &i420[iys..iys + ics], self.csw, self.csh),
-                (self.v_in, &i420[iys + ics..iys + 2 * ics], self.csw, self.csh),
+                (
+                    self.v_in,
+                    &i420[iys + ics..iys + 2 * ics],
+                    self.csw,
+                    self.csh,
+                ),
             ] {
                 gl.bind_texture(glow::TEXTURE_2D, Some(tex));
                 gl.tex_sub_image_2d(
