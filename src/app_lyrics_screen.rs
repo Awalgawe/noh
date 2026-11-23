@@ -5583,19 +5583,53 @@ mod tests {
         assert!(voices_of(&app)[2].is_empty());
         let mut app = song_app(folder.path(), Language::Fr, "-voices");
         cursor(&mut app, &ctx, 3, 0);
-        for (k, want) in [
-            (Key::Num2, vec![2]),
-            (Key::Num3, vec![1, 2]),
-            (Key::Num1, vec![1]),
-            (Key::Num0, vec![]),
+        // Ctrl+Shift is the Ctrl key on every system (on macOS Cmd+Shift+3 and
+        // +4 take screenshots).
+        let both = Modifiers::CTRL | Modifiers::SHIFT;
+        // Ctrl+n: that voice alone; Ctrl+Shift+n: added, then removed; Ctrl+0: none.
+        for (k, m, want) in [
+            (Key::Num2, Modifiers::COMMAND, vec![2]),
+            (Key::Num1, both, vec![1, 2]),
+            (Key::Num2, both, vec![1]),
+            (Key::Num0, Modifiers::COMMAND, vec![]),
         ] {
-            frame(&mut app, &ctx, vec![key(k, Modifiers::COMMAND)]);
-            assert_eq!(voices_of(&app)[3], want, "{k:?}");
+            frame(&mut app, &ctx, vec![key(k, m)]);
+            assert_eq!(voices_of(&app)[3], want, "{k:?} {m:?}");
         }
+        // With Shift a QWERTY « 1 » reads « ! »: the key's place counts.
+        frame(
+            &mut app,
+            &ctx,
+            vec![egui::Event::Key {
+                key: Key::Exclamationmark,
+                physical_key: Some(Key::Num1),
+                pressed: true,
+                repeat: false,
+                modifiers: both,
+            }],
+        );
+        assert_eq!(voices_of(&app)[3], [1]);
+        // Cmd+Shift (macOS) is not the toggle: nothing changes.
+        frame(
+            &mut app,
+            &ctx,
+            vec![key(
+                Key::Num2,
+                Modifiers::MAC_CMD | Modifiers::COMMAND | Modifiers::SHIFT,
+            )],
+        );
+        assert_eq!(voices_of(&app)[3], [1]);
+        // Voice 3 is not declared: nothing changes, NOH says so.
+        frame(&mut app, &ctx, vec![key(Key::Num3, Modifiers::COMMAND)]);
+        assert_eq!(voices_of(&app)[3], [1]);
+        assert_eq!(
+            app.notice.as_ref().map(|m| m.key.as_str()),
+            Some("lyrics_screen.voice_missing")
+        );
         // The text was not touched, and each key is one undo step.
         assert_eq!(texts(&app)[3], SONG[3]);
         assert!(app.undo());
-        assert_eq!(voices_of(&app)[3], [1]);
+        assert!(voices_of(&app)[3].is_empty());
     }
 
     #[test]

@@ -1,9 +1,11 @@
 //! Who sings each line, in the lyrics screen (voices mockup): « Voix » in the
 //! text's header declares two voices; a badge before each line opens a menu of
 //! voices (a single voice, « Ensemble », none, and a « + » per voice to build
-//! any set); Ctrl+1, Ctrl+2, Ctrl+3 (voices 1 and 2) and Ctrl+0 set the
-//! current line's voices; Maj+clic on another badge gives the lines in between
-//! the set chosen last. Every change is one undo step.
+//! any set); Ctrl+1 to Ctrl+4 (Cmd on macOS) give the current line that voice
+//! alone, Ctrl+Shift+1 to 4 (Ctrl on every system) add or remove it, Ctrl+0
+//! none (maintainer, Q2); Shift+click on
+//! another badge gives the lines in between the set chosen last. Every change
+//! is one undo step.
 use super::*;
 use crate::app_voices::{self as v, BADGE_H, BADGE_W};
 use noh::subtitle_track::{MAX_VOICES, Voice};
@@ -34,6 +36,33 @@ pub(super) const COLUMN_W: f32 = BADGE_W + 6.0;
 /// Ctrl (Cmd on macOS) alone.
 fn command_only(m: Modifiers) -> bool {
     m.command && !m.alt && !m.shift
+}
+
+/// Ctrl+Maj, on every system: on macOS the Ctrl key itself, since Cmd+Maj+3
+/// and Cmd+Maj+4 take screenshots there and never reach NOH.
+fn ctrl_shift(m: Modifiers) -> bool {
+    m.ctrl && m.shift && !m.alt && !m.mac_cmd
+}
+
+/// A digit key, by its place on the keyboard: with Shift a QWERTY « 1 » reads
+/// « ! », and an AZERTY digit needs Shift; the place is the same. Events made
+/// without a physical key (tests, an agent) are read by their key.
+fn take_digit(i: &mut egui::InputState, digit: Key, want: impl Fn(Modifiers) -> bool) -> bool {
+    let mut hit = false;
+    i.events.retain(|e| match e {
+        egui::Event::Key {
+            key,
+            physical_key,
+            pressed: true,
+            modifiers,
+            ..
+        } if !hit && physical_key.unwrap_or(*key) == digit && want(*modifiers) => {
+            hit = true;
+            false
+        }
+        _ => true,
+    });
+    hit
 }
 
 impl NohApp {
@@ -68,32 +97,59 @@ impl NohApp {
         self.edit_track_as(label, |t| edit::declare_voices(t, voices))
     }
 
-    /// Ctrl+1, Ctrl+2, Ctrl+3 and Ctrl+0 on line `i`. Returns whether a key was
-    /// taken (the keys do nothing while no voice is declared).
+    /// Ctrl+1 to Ctrl+4 (that voice alone), Ctrl+Shift+1 to 4 (that voice
+    /// added to the line's voices, or removed) and Ctrl+0 (none) on line `i`. Returns
+    /// whether a key was taken (the keys do nothing while no voice is
+    /// declared; a voice not declared says so).
     pub(super) fn ls_voice_keys(&mut self, ctx: &egui::Context, i: usize, declared: usize) -> bool {
         if declared == 0 {
             return false;
         }
+        const DIGITS: [Key; 5] = [Key::Num0, Key::Num1, Key::Num2, Key::Num3, Key::Num4];
         let pressed = ctx.input_mut(|input| {
-            [
-                (Key::Num1, vec![1]),
-                (Key::Num2, vec![2]),
-                (Key::Num3, vec![1, 2]),
-                (Key::Num0, vec![]),
-            ]
-            .into_iter()
-            .find(|(key, set)| {
-                set.iter().all(|&n| n as usize <= declared) && take_key(input, *key, command_only)
+            DIGITS.iter().enumerate().find_map(|(n, key)| {
+                if take_digit(input, *key, command_only) {
+                    Some((n as u8, false))
+                } else if n > 0 && take_digit(input, *key, ctrl_shift) {
+                    Some((n as u8, true))
+                } else {
+                    None
+                }
             })
-            .map(|(_, set)| set)
         });
-        match pressed {
-            Some(set) => {
-                self.ls_set_voices(i, i, set);
-                true
-            }
-            None => false,
+        let Some((n, toggle)) = pressed else {
+            return false;
+        };
+        if n as usize > declared {
+            self.notice = Some(Message::new(
+                "lyrics_screen.voice_missing",
+                &[self
+                    .locale
+                    .language
+                    .format("voices.numbered", &[n.to_string()])],
+            ));
+            return true;
         }
+        let set = match (n, toggle) {
+            (0, _) => vec![],
+            (n, false) => vec![n],
+            (n, true) => {
+                let mut set = self
+                    .ls_track()
+                    .and_then(|t| t.cues.get(i).map(|c| c.voices.clone()))
+                    .unwrap_or_default();
+                match set.iter().position(|&x| x == n) {
+                    Some(k) => {
+                        set.remove(k);
+                    }
+                    None => set.push(n),
+                }
+                set.sort_unstable();
+                set
+            }
+        };
+        self.ls_set_voices(i, i, set);
+        true
     }
 
     /// The right of the text's header: « Voix » while no voice is declared,
@@ -490,22 +546,18 @@ impl NohApp {
                         });
                     };
                     for n in 1..=declared as u8 {
-                        let key = if n <= 2 {
-                            format!("Ctrl+{n}")
-                        } else {
-                            String::new()
-                        };
-                        row(ui, vec![n], v::name(track, n, l), &key, Some(n));
+                        row(
+                            ui,
+                            vec![n],
+                            v::name(track, n, l),
+                            &format!("Ctrl+{n}"),
+                            Some(n),
+                        );
                     }
                     ui.separator();
                     if declared >= 2 {
-                        row(
-                            ui,
-                            vec![1, 2],
-                            v::set_name(track, &[1, 2], l),
-                            "Ctrl+3",
-                            None,
-                        );
+                        // « Ensemble » has no key of its own: Ctrl+1 then Ctrl+Maj+2.
+                        row(ui, vec![1, 2], v::set_name(track, &[1, 2], l), "", None);
                     }
                     row(
                         ui,
