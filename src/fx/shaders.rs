@@ -35,6 +35,10 @@ pub struct Inst {
     /// being drawn (PASS_*), and the line's seconds since it showed and until it
     /// goes (the last three for plugin shader hooks).
     pub aux: [f32; 4],
+    /// For plugin shader hooks: the left and right edges of the instance's row in
+    /// the frame (0..1 across), the line's seconds since its sung end (negative
+    /// before), and a spare zero.
+    pub lane: [f32; 4],
 }
 
 /// `GlyphIn.pass_kind` values: what an instance draws.
@@ -52,7 +56,7 @@ struct Globals { canvas: vec2<f32>, cov_size: f32, msdf_size: f32, msdf_range: f
 @group(0) @binding(1) var cov_tex: texture_2d<f32>;
 @group(0) @binding(2) var msdf_tex: texture_2d<f32>;
 @group(0) @binding(3) var samp: sampler;
-struct GlyphIn { coverage: f32, local: vec2<f32>, uv: vec2<f32>, color: vec4<f32>, color2: vec4<f32>, time: f32, progress: f32, frame: vec2<f32>, index: f32, line: f32, line_time: vec2<f32>, pass_kind: f32 };
+struct GlyphIn { coverage: f32, local: vec2<f32>, uv: vec2<f32>, color: vec4<f32>, color2: vec4<f32>, time: f32, progress: f32, frame: vec2<f32>, index: f32, line: f32, line_time: vec2<f32>, pass_kind: f32, span: vec2<f32>, line_end: f32 };
 struct VertexIn { corner: vec2<f32>, center: vec2<f32>, time: f32, index: f32 };
 HOOKS
 
@@ -66,6 +70,7 @@ struct Inst {
   @location(6) params: vec4<f32>,
   @location(7) extra: vec4<f32>,
   @location(8) aux: vec4<f32>,
+  @location(9) lane: vec4<f32>,
 };
 struct VOut {
   @builtin(position) pos: vec4<f32>,
@@ -79,6 +84,7 @@ struct VOut {
   @location(7) clip: f32,
   @location(8) frame: vec2<f32>,
   @location(9) @interpolate(flat) aux: vec4<f32>,
+  @location(10) @interpolate(flat) lane: vec4<f32>,
 };
 
 @vertex fn vs(@builtin(vertex_index) vi: u32, i: Inst) -> VOut {
@@ -103,6 +109,7 @@ struct VOut {
   // pixel scale (the canvas is the export's size in the preview too).
   o.frame = r / g.canvas;
   o.aux = i.aux;
+  o.lane = i.lane;
   return o;
 }
 
@@ -189,7 +196,7 @@ fn cov_at(uv: vec2<f32>, span: vec4<f32>) -> f32 {
   }
   let shown = v.aux.z + v.aux.w;
   let line = select(0.0, clamp(v.aux.z / shown, 0.0, 1.0), shown > 0.0);
-  return shade(GlyphIn(a, v.local, v.uv, col, v.color2, v.extra.y, v.extra.z, v.frame, v.extra.w, line, v.aux.zw, v.aux.y));
+  return shade(GlyphIn(a, v.local, v.uv, col, v.color2, v.extra.y, v.extra.z, v.frame, v.extra.w, line, v.aux.zw, v.aux.y, v.lane.xy, v.lane.z));
 }
 
 @vertex fn fs_tri(@builtin(vertex_index) id: u32) -> @builtin(position) vec4<f32> {

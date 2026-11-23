@@ -439,7 +439,10 @@ impl Layer {
                 gpu.set_hooks(wanted.effect.shader.as_deref(), [0.0; 16])?;
             }
             let px_scale = gpu.width as f32 / canvas.0 as f32;
-            self.scene = Some(scene_for(wanted, px_scale)?);
+            let scene = scene_for(wanted, px_scale)?;
+            // The settings shader hooks read change with the choice, not the shader.
+            gpu.set_user(scene.hook_user());
+            self.scene = Some(scene);
             self.built = Some(wanted.key.clone());
             self.overflow = false;
         }

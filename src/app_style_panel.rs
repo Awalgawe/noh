@@ -241,7 +241,7 @@ fn render_sample(
         Some(&job.preset),
     )
     .with_values(&job.values)?;
-    gpu.set_hooks(job.effect.shader.as_deref(), [0.0; 16])?;
+    gpu.set_hooks(job.effect.shader.as_deref(), scene.hook_user())?;
     let (glow, gain, main, _) = scene.frame(fonts, &*gpu, 1.3);
     let (px, _) = gpu.frame(&glow, gain, &main, true)?;
     crop(&px, SAMPLE_W as usize, SAMPLE_H as usize).ok_or_else(|| "nothing drawn".into())

@@ -627,9 +627,9 @@ fn dump_same_render_frames() {
         } else {
             preset.to_string()
         };
-        gpu.set_hooks(entry.effect.shader.as_deref(), [0.0; 16])
-            .unwrap();
         let mut scene = PluginScene::new(entry.effect.clone(), w, h, lines.clone(), Some(&preset));
+        gpu.set_hooks(entry.effect.shader.as_deref(), scene.hook_user())
+            .unwrap();
         for t in [16.2, 49.0, 80.5, 81.7, 121.3] {
             let tag = format!("{}-{}-{:.1}", id.trim_start_matches("noh."), preset, t);
             let src = std::process::Command::new(&ffmpeg)
