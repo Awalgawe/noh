@@ -186,6 +186,9 @@ impl Server {
                 // are drawn; a window that refuses (the person navigates, it
                 // was taken back) starts nothing.
                 if let Some(app_id) = &input.app_id {
+                    // An invalid look, or one a running job refuses, moves no
+                    // one's playhead.
+                    session.scene_look_ready(&input)?;
                     apps.act(app_id, input.marker()).map_err(|e| {
                         let mut error = SessionError::new(&e.code, &e.detail);
                         error.technical = e.details.map(|d| d.to_string()).unwrap_or_default();

@@ -21,6 +21,9 @@ const POLL: Duration = Duration::from_secs(2);
 
 /// A file's identity as the poll compares it.
 type Stamp = Option<(SystemTime, u64)>;
+/// What a poll found: the file's stamp, and the check's verdict when it
+/// changed (None: unchanged).
+type Polled = (Stamp, Option<Result<(), String>>);
 
 /// What the light check found.
 #[derive(Clone, Debug, PartialEq)]
@@ -39,9 +42,8 @@ pub(super) struct SceneWatch {
     pub status: SceneStatus,
     stamp: Stamp,
     polled: Option<Instant>,
-    /// The check under way: the file's stamp, and what the check said when it
-    /// changed (None: unchanged).
-    work: Option<mpsc::Receiver<(Stamp, Option<Result<(), String>>)>>,
+    /// The poll under way.
+    work: Option<mpsc::Receiver<Polled>>,
 }
 
 /// Where the agent looks: the instant, and what is drawn over the monitor.
