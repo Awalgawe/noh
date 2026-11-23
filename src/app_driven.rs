@@ -1573,6 +1573,57 @@ mod tests {
         );
         assert_eq!(refusal_code(&answer), Some("app.state_changed"));
         assert_eq!(w.app.lyrics_track().unwrap().cues.len(), 2);
+        // Who sings: voices declared, then a line's set, read back in the state.
+        let answer = w.act(
+            31,
+            Action::EditLine {
+                edit: LineEdit::SetVoices {
+                    index: 0,
+                    voices: vec![1],
+                },
+                based_on: None,
+            },
+        );
+        assert_eq!(
+            refusal_code(&answer),
+            Some("app.refused"),
+            "no voice declared yet"
+        );
+        for (id, edit) in [
+            (
+                32,
+                LineEdit::NameVoices {
+                    names: vec![Some("Lead".into()), None],
+                },
+            ),
+            (
+                33,
+                LineEdit::SetVoices {
+                    index: 0,
+                    voices: vec![2, 1],
+                },
+            ),
+        ] {
+            let answer = w.act(
+                id,
+                Action::EditLine {
+                    edit,
+                    based_on: None,
+                },
+            );
+            assert!(
+                matches!(answer, ToServer::Done { error: None, .. }),
+                "{answer:?}"
+            );
+        }
+        assert_eq!(w.app.lyrics_track().unwrap().cues[0].voices, [1, 2]);
+        let state = w.latest_state();
+        assert_eq!(state["lyrics"]["voices"], serde_json::json!(["Lead", null]));
+        assert_eq!(
+            state["lyrics"]["lines"][0]["voices"],
+            serde_json::json!([1, 2])
+        );
+        assert!(w.app.undo() && w.app.undo(), "two undo steps");
         let answer = w.act(4, Action::Undo {});
         assert!(
             matches!(answer, ToServer::Done { error: None, .. }),

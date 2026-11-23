@@ -307,14 +307,65 @@ pub fn add_cue(track: &mut SubtitleTrack, ms: u64, text: &str) -> Option<usize> 
     let len = (b - a).min(2000);
     let start = ms.saturating_sub(len / 2).clamp(a, b - len);
     let at = track.cues.partition_point(|c| c.start_ms < start);
-    track
-        .cues
-        .insert(at, SubtitleCue::new(start, start + len, text.trim()));
+    let mut cue = SubtitleCue::new(start, start + len, text.trim());
+    // A line added after another is sung by the same voices.
+    if let Some(before) = at.checked_sub(1).and_then(|p| track.cues.get(p)) {
+        cue.voices = before.voices.clone();
+    }
+    track.cues.insert(at, cue);
     if track.validate().is_err() {
         track.cues.remove(at);
         return None;
     }
     Some(at)
+}
+
+/// Give cues `lo..=hi` the set `voices` (sorted and made unique here). Refused
+/// (nothing changes) when a number is not declared or nothing would change.
+pub fn set_voices(track: &mut SubtitleTrack, lo: usize, hi: usize, voices: &[u8]) -> bool {
+    let mut set = voices.to_vec();
+    set.sort_unstable();
+    set.dedup();
+    if hi >= track.cues.len()
+        || lo > hi
+        || set
+            .iter()
+            .any(|&v| v == 0 || v as usize > track.voices.len())
+        || track.cues[lo..=hi].iter().all(|c| c.voices == set)
+    {
+        return false;
+    }
+    for cue in &mut track.cues[lo..=hi] {
+        cue.voices = set.clone();
+    }
+    true
+}
+
+/// Declare `voices` (at most `MAX_VOICES`). Lines lose the numbers that are no
+/// longer declared (only the last voices can go, so numbers never shift).
+pub fn declare_voices(
+    track: &mut SubtitleTrack,
+    voices: Vec<crate::subtitle_track::Voice>,
+) -> bool {
+    if voices.len() > crate::subtitle_track::MAX_VOICES || voices == track.voices {
+        return false;
+    }
+    let before = track.clone();
+    let count = voices.len() as u8;
+    track.voices = voices;
+    for cue in &mut track.cues {
+        cue.voices.retain(|&v| v <= count);
+    }
+    if track.validate().is_err() {
+        *track = before;
+        return false;
+    }
+    true
+}
+
+/// How many lines sing voice `n`.
+pub fn lines_with_voice(track: &SubtitleTrack, n: u8) -> usize {
+    track.cues.iter().filter(|c| c.voices.contains(&n)).count()
 }
 
 pub fn delete(track: &mut SubtitleTrack, i: usize) -> Option<SubtitleCue> {
@@ -1555,5 +1606,38 @@ mod tests {
         assert!(join_next_with(&mut t, 1, " "));
         assert_eq!(t.cues[1].text, "b c d");
         assert_eq!(t.cues[1].voices, [1, 2], "the first line's voices");
+    }
+
+    #[test]
+    fn voices_are_set_on_lines_and_declared_voices_can_shrink() {
+        let mut t = SubtitleTrack {
+            voices: vec![crate::subtitle_track::Voice::default(); 2],
+            language: None,
+            duration_ms: 20_000,
+            cues: vec![
+                SubtitleCue::new(1000, 2000, "a"),
+                SubtitleCue::new(3000, 4000, "b"),
+                SubtitleCue::new(9000, 10_000, "c"),
+            ],
+        };
+        assert!(set_voices(&mut t, 0, 1, &[2, 1, 2]));
+        assert_eq!(t.cues[0].voices, [1, 2]);
+        assert_eq!(t.cues[1].voices, [1, 2]);
+        assert!(!set_voices(&mut t, 0, 1, &[1, 2]), "nothing to change");
+        assert!(!set_voices(&mut t, 2, 2, &[3]), "voice 3 is not declared");
+        // A line added after another takes its voices.
+        let i = add_cue(&mut t, 6000, "new").unwrap();
+        assert_eq!(t.cues[i].voices, [1, 2]);
+        assert_eq!(lines_with_voice(&t, 2), 3);
+        // Declaring one voice takes voice 2 from every line.
+        assert!(declare_voices(
+            &mut t,
+            vec![crate::subtitle_track::Voice::default()]
+        ));
+        assert!(t.cues.iter().all(|c| !c.voices.contains(&2)));
+        assert!(!declare_voices(
+            &mut t,
+            vec![crate::subtitle_track::Voice::default(); 5]
+        ));
     }
 }
