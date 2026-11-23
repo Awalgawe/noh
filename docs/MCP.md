@@ -276,8 +276,10 @@ placement, captions shown on the video), `set_framing`, `set_destination`,
 `export` (the montage or the short; started or why not), `cancel`, `seek`, `play`,
 `pause` and `answer` (the open question: `modify_srt`, `cancel`, `work_on_copy`
 with a free `.srt` path, `keep_lyrics`, `keep_srt`, `later`, `discard`, `save`,
-`retry`, `dismiss`; answers that drop work or rewrite a file need
-`user_confirmed`, after asking the person). Gestures the interface locks while a
+`retry`, `dismiss`; the state names the open question, so the agent knows what
+it answers; whether to ask the person first is the agent's and its user's
+choice, as NOH keeps what it keeps for anyone: the replaced lyrics file beside,
+undo). Gestures the interface locks while a
 job runs are refused then (`app.job_running`). Each
 gesture calls what the matching click calls and answers with the state revision
 it led to. `noh_app_state` gives what the window shows, as data, by revision (it

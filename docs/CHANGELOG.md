@@ -14,8 +14,7 @@ builds are not public releases.
   `noh_app_close`): it adds, removes and orders media, sets fades, edits lyrics
   lines, chooses the effect and its settings, the short's range, framing and safe
   area, the destination, exports or cancels, moves the playhead and looks at the
-  window. It answers NOH's questions; an answer that drops work or rewrites a
-  file needs your agreement, asked in the conversation. It
+  window. It answers NOH's questions, which it reads in the window's state. It
   knows where you are on the timeline, and never takes the playhead from you
   while you navigate. In such a window you can play, pause and
   move through the video, and point out a clip or a lyrics line; editing is the
