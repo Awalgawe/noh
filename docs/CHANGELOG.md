@@ -117,8 +117,8 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
   digests GitHub reports for the files of the latest release. The Windows
   installers are not Authenticode-signed. From this version GitHub keeps an
   attestation of each release file: `gh attestation verify <file> --repo
-  Awalgawe/noh` checks that the repository's release workflow published it.
-  NOH itself does not check it.
+  Awalgawe/noh` checks that a workflow of that repository attested it. NOH
+  itself does not check it.
 - The other known issues of [0.3.1](https://github.com/Awalgawe/noh/releases/tag/v0.3.1)
   remain, including those it carries from 0.3.0 and 0.2.0.
 - The automated tests use software rendering and virtual audio. They test no
