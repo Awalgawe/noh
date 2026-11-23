@@ -104,37 +104,48 @@ impl Audio {
 
 /// The loudness (root mean square) of each hundredth of a second of mono
 /// samples at their own rate, as they come: the sound is never held whole (two
-/// hours at 48 kHz would be 1.4 GB). Each hop is `hz / 100` samples, truncated,
-/// summed in f64: the prototype's analysis exactly, which the scenes seen so far
-/// were made with.
+/// hours at 48 kHz would be 1.4 GB). Hop `k` ends at sample
+/// `floor((k + 1) * hz / 100)` and is divided by its own length, so the values
+/// stay 100 per second at any rate (22 050 Hz included); at a rate that is a
+/// multiple of 100 every hop is `hz / 100` samples, summed in f64: the
+/// prototype's analysis exactly, which the scenes seen so far were made with.
 pub struct Loudness {
-    hop: usize,
-    filled: usize,
+    hz: u64,
+    /// Samples read, and where the current hop ends.
+    read: u64,
+    end: u64,
+    start: u64,
     acc: f64,
     out: Vec<f32>,
 }
 
 impl Loudness {
     pub fn new(hz: u32) -> Self {
+        let hz = u64::from(hz);
         Self {
-            hop: (f64::from(hz) / RATE) as usize,
-            filled: 0,
+            hz,
+            read: 0,
+            end: hz / 100,
+            start: 0,
             acc: 0.0,
             out: Vec::new(),
         }
     }
 
     pub fn push(&mut self, samples: &[f32]) {
-        if self.hop == 0 {
+        if self.hz < 100 {
             return;
         }
         for &s in samples {
             self.acc += f64::from(s) * f64::from(s);
-            self.filled += 1;
-            if self.filled == self.hop {
-                self.out.push((self.acc / self.hop as f64).sqrt() as f32);
+            self.read += 1;
+            if self.read == self.end {
+                let len = (self.end - self.start) as f64;
+                self.out.push((self.acc / len).sqrt() as f32);
                 self.acc = 0.0;
-                self.filled = 0;
+                self.start = self.end;
+                let k = self.out.len() as u64 + 1;
+                self.end = k * self.hz / 100;
             }
         }
     }
@@ -149,8 +160,35 @@ impl Loudness {
 mod tests {
     use super::{Audio, Loudness};
 
-    /// Pushed in pieces or at once, the same loudness; a hop is hz / 100
-    /// samples, truncated, and a partial last hop is dropped.
+    /// At a rate that is not a multiple of 100, still 100 values per second:
+    /// 10 s at 22 050 Hz give 1000, and a burst at 5.00 s lands at index 500.
+    #[test]
+    fn loudness_keeps_time_at_any_rate() {
+        let hz = 22_050u32;
+        let mut s = vec![0.001f32; hz as usize * 10];
+        let at = (hz as usize) * 5;
+        for v in &mut s[at..at + 2205] {
+            *v = 0.8;
+        }
+        let mut l = Loudness::new(hz);
+        l.push(&s);
+        let raw = l.finish();
+        assert_eq!(raw.len(), 1000);
+        let first = raw.iter().position(|v| *v > 0.5).unwrap();
+        assert_eq!(first, 500);
+        assert!(
+            raw[509] > 0.5 && raw[510] < 0.5,
+            "{} {}",
+            raw[509],
+            raw[510]
+        );
+        let a = Audio::analyse(&s, hz);
+        assert!((a.onsets()[0] - 5.0).abs() < 0.015, "{:?}", a.onsets());
+    }
+
+    /// Pushed in pieces or at once, the same loudness; at a rate that is a
+    /// multiple of 100 a hop is hz / 100 samples, and a partial last hop is
+    /// dropped.
     #[test]
     fn loudness_is_the_same_however_the_samples_come() {
         let s: Vec<f32> = (0..44_100 + 300)
