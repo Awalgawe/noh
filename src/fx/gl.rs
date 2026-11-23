@@ -1366,6 +1366,12 @@ pub struct YuvMix {
     h: i32,
     cw: i32,
     ch: i32,
+    /// The decoded picture's size, and its chroma's: the frame's own unless a
+    /// reframing makes the frame from a picture of another shape.
+    sw: i32,
+    sh: i32,
+    csw: i32,
+    csh: i32,
     y_in: glow::Texture,
     u_in: glow::Texture,
     v_in: glow::Texture,
@@ -1387,13 +1393,22 @@ pub struct YuvMix {
 
 impl YuvMix {
     pub fn new(r: &GlRenderer, matrix: Matrix) -> Result<Self, String> {
+        Self::with_source(r, matrix, (r.width, r.height))
+    }
+
+    /// A mix whose decoded picture is `source` pixels, the frame `r`'s size: a
+    /// picture of another shape is made into the frame by a reframing, which
+    /// every frame must then set (`set_reframe`).
+    pub fn with_source(r: &GlRenderer, matrix: Matrix, source: (u32, u32)) -> Result<Self, String> {
         let gl = r.gl.clone();
         let (kr, kb) = matrix.coefficients();
         let (w, h) = (r.width as i32, r.height as i32);
         let (cw, ch) = ((w + 1) / 2, (h + 1) / 2);
+        let (sw, sh) = (source.0 as i32, source.1 as i32);
+        let (csw, csh) = ((sw + 1) / 2, (sh + 1) / 2);
         unsafe {
             let r8 = |w, h| texture(&gl, w, h, glow::R8, glow::RED, glow::UNSIGNED_BYTE);
-            let (y_in, u_in, v_in) = (r8(w, h)?, r8(cw, ch)?, r8(cw, ch)?);
+            let (y_in, u_in, v_in) = (r8(sw, sh)?, r8(csw, csh)?, r8(csw, csh)?);
             let y_out = target(&gl, w, h, glow::R8, glow::RED, glow::UNSIGNED_BYTE)?;
             let (u_out, v_out) = (r8(cw, ch)?, r8(cw, ch)?);
             let uv_fbo = gl.create_framebuffer().map_err(err("fbo"))?;
@@ -1467,6 +1482,10 @@ impl YuvMix {
                 h,
                 cw,
                 ch,
+                sw,
+                sh,
+                csw,
+                csh,
                 y_in,
                 u_in,
                 v_in,
@@ -1487,6 +1506,12 @@ impl YuvMix {
 
     pub fn frame_bytes(&self) -> usize {
         (self.w * self.h + 2 * self.cw * self.ch) as usize
+    }
+
+    /// The bytes of one decoded picture handed to `submit` (the frame's own
+    /// size unless the mix was made `with_source`).
+    pub fn input_bytes(&self) -> usize {
+        (self.sw * self.sh + 2 * self.csw * self.csh) as usize
     }
 
     /// `i420` in, mixed I420 out (same layout), with `overlay` = the engine's output
@@ -1611,14 +1636,35 @@ impl YuvMix {
             gl.active_texture(glow::TEXTURE0);
             gl.bind_sampler(0, Some(f.linear));
             gl.bind_vertex_array(Some(self.vao));
-            for (src, out, (w, h), k, black) in [
-                (self.y_in, &f.y, (self.w, self.h), 1.0, 16.0),
-                (self.u_in, &f.u, (self.cw, self.ch), 2.0, 128.0),
-                (self.v_in, &f.v, (self.cw, self.ch), 2.0, 128.0),
+            for (src, out, (w, h), (iw, ih), k, black) in [
+                (
+                    self.y_in,
+                    &f.y,
+                    (self.w, self.h),
+                    (self.sw, self.sh),
+                    1.0,
+                    16.0,
+                ),
+                (
+                    self.u_in,
+                    &f.u,
+                    (self.cw, self.ch),
+                    (self.csw, self.csh),
+                    2.0,
+                    128.0,
+                ),
+                (
+                    self.v_in,
+                    &f.v,
+                    (self.cw, self.ch),
+                    (self.csw, self.csh),
+                    2.0,
+                    128.0,
+                ),
             ] {
                 gl.bind_framebuffer(glow::FRAMEBUFFER, Some(out.fbo));
                 gl.viewport(0, 0, w, h);
-                gl.uniform_2_f32(loc("src_size").as_ref(), w as f32, h as f32);
+                gl.uniform_2_f32(loc("src_size").as_ref(), iw as f32, ih as f32);
                 gl.uniform_2_f32(loc("center").as_ref(), r.center[0] / k, r.center[1] / k);
                 gl.uniform_2_f32(loc("focus").as_ref(), r.focus[0] / k, r.focus[1] / k);
                 gl.uniform_4_f32(
@@ -1646,21 +1692,27 @@ impl YuvMix {
         overlay: glow::Texture,
         slot: usize,
     ) -> Result<(), String> {
+        // The decoded picture's planes (its own size), then the frame's (what
+        // is read back).
+        let (iys, ics) = ((self.sw * self.sh) as usize, (self.csw * self.csh) as usize);
         let (ys, cs) = ((self.w * self.h) as usize, (self.cw * self.ch) as usize);
-        if i420.len() != self.frame_bytes() {
+        if i420.len() != self.input_bytes() {
             return Err(format!(
                 "I420 frame of {} bytes, expected {}",
                 i420.len(),
-                self.frame_bytes()
+                self.input_bytes()
             ));
+        }
+        if self.reframe.is_none() && (self.sw, self.sh) != (self.w, self.h) {
+            return Err("a picture of another shape than the frame needs a reframing".into());
         }
         let gl = &self.gl;
         unsafe {
             gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
             for (tex, data, w, h) in [
-                (self.y_in, &i420[..ys], self.w, self.h),
-                (self.u_in, &i420[ys..ys + cs], self.cw, self.ch),
-                (self.v_in, &i420[ys + cs..ys + 2 * cs], self.cw, self.ch),
+                (self.y_in, &i420[..iys], self.sw, self.sh),
+                (self.u_in, &i420[iys..iys + ics], self.csw, self.csh),
+                (self.v_in, &i420[iys + ics..iys + 2 * ics], self.csw, self.csh),
             ] {
                 gl.bind_texture(glow::TEXTURE_2D, Some(tex));
                 gl.tex_sub_image_2d(

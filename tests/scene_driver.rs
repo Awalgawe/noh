@@ -63,6 +63,7 @@ fn a_driver_that_dies_on_a_shader_fails_the_scene_job_cleanly() {
         from_ms: None,
         to_ms: None,
         mode: SceneMode::Check,
+        vertical: false,
         bare: false,
         grid: false,
         output: f.path("check"),

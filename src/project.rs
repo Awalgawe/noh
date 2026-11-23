@@ -1037,6 +1037,7 @@ fn run_effect(
         workspace: workspace.to_path_buf(),
         width: w,
         height: h,
+        source: (w, h),
         matrix: if job.bt709 {
             fx::gl::Matrix::Bt709
         } else {

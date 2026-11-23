@@ -1233,6 +1233,7 @@ pub(crate) fn motion_gpu_checks() {
     the_export_overlay_is_the_m2_render();
     shader_layers_draw_or_hide();
     the_paths_frame_the_picture_alike();
+    a_vertical_frame_is_made_from_a_wide_picture();
     compositor_memory();
     shape_timings();
 }
@@ -1522,6 +1523,81 @@ fn the_paths_frame_the_picture_alike() {
     }
     eprintln!("reframed preview quad vs CPU: worst {worst_rgb}/255 away from its edges");
     assert!(worst_rgb <= 2, "{worst_rgb}");
+}
+
+/// A vertical frame made from a wide picture (a short that follows its scene):
+/// the mix takes the picture at its own size and resamples it into the frame
+/// through the framing, as the CPU does, covering and centred or as the scene
+/// frames it; without a framing it refuses the picture.
+fn a_vertical_frame_is_made_from_a_wide_picture() {
+    use super::reframe::{VideoDraw, resample};
+    use crate::fx::compose::Compositor;
+    use crate::fx::gl::{GlRenderer, Matrix, Reframe, YuvMix};
+    use crate::fx::shaders::Output;
+    let (sw, sh) = (640usize, 360usize);
+    let (w, h) = (180usize, 320usize);
+    // Planes with structure everywhere: ramps and a checker.
+    let plane = |pw: usize, ph: usize, k: usize| -> Vec<u8> {
+        (0..pw * ph)
+            .map(|i| {
+                let (x, y) = (i % pw, i / pw);
+                let check = if (x / 8 + y / 8) % 2 == 0 { 30 } else { 0 };
+                ((x * k + y * 3) % 200 + 16 + check) as u8
+            })
+            .collect()
+    };
+    let (y, u, v) = (
+        plane(sw, sh, 1),
+        plane(sw / 2, sh / 2, 2),
+        plane(sw / 2, sh / 2, 3),
+    );
+    let i420 = [y.clone(), u.clone(), v.clone()].concat();
+    let gpu =
+        GlRenderer::headless(w as u32, h as u32, w as f32, h as f32, Output::PremulGamma).unwrap();
+    let mut comp = Compositor::new(&gpu).unwrap();
+    comp.begin();
+    comp.finish();
+    let clear = comp.texture();
+    let mut mix = YuvMix::with_source(&gpu, Matrix::Bt601, (sw as u32, sh as u32)).unwrap();
+    assert_eq!(mix.input_bytes(), i420.len());
+    assert!(
+        mix.submit(&i420, clear, 0).is_err(),
+        "a wide picture went into a vertical frame without a framing"
+    );
+    let framed = VideoDraw {
+        scale: 1.2,
+        focus: [0.3, 0.45],
+        rot: 0.1,
+        ..VideoDraw::default()
+    };
+    for (name, video) in [("covering", VideoDraw::default()), ("framed", framed)] {
+        let f = video.framing((w as f32, h as f32), (sw as f32, sh as f32));
+        mix.set_reframe(Some(Reframe {
+            inv: f.inverse(),
+            center: f.center,
+            focus: f.focus,
+            crop: f.crop,
+        }));
+        mix.submit(&i420, clear, 0).unwrap();
+        let mut out = vec![0u8; mix.frame_bytes()];
+        mix.fetch(0, &mut out).unwrap();
+        let half = f.for_plane(2.0);
+        let want = [
+            resample(&y, 1, &f, &[16]),
+            resample(&u, 1, &half, &[128]),
+            resample(&v, 1, &half, &[128]),
+        ]
+        .concat();
+        assert_eq!(out.len(), want.len());
+        let worst = out
+            .iter()
+            .zip(&want)
+            .map(|(a, b)| a.abs_diff(*b))
+            .max()
+            .unwrap();
+        eprintln!("vertical frame from a wide picture ({name}), GPU vs CPU: worst {worst}/255");
+        assert!(worst <= 2, "{name}: {worst}");
+    }
 }
 
 /// A fixture scene with the shaders beside it, through the export's path (the

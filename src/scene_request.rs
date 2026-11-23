@@ -112,6 +112,10 @@ pub struct SceneRequest {
     pub to_ms: Option<u64>,
     #[serde(flatten)]
     pub mode: SceneMode,
+    /// Draw on a vertical frame (a Short, 1080 x 1920) made from the video by the
+    /// scene's framing (`video()`; covering and centred without one).
+    #[serde(default)]
+    pub vertical: bool,
     /// Looks: the video alone, without the scene's draws (to compose on it).
     #[serde(default)]
     pub bare: bool,
@@ -130,6 +134,19 @@ pub struct SceneChoice {
     /// a rhythm); the scene still sees the source's clock.
     #[serde(default)]
     pub range_ms: Option<[u64; 2]>,
+    /// A vertical frame (a Short, 1080 x 1920) made from the video by the
+    /// scene's framing, instead of the video's own size.
+    #[serde(default)]
+    pub vertical: bool,
+}
+
+/// The frame a scene draws on: the video's own size, or a vertical Short.
+pub fn scene_frame(vertical: bool, video: (u32, u32)) -> (u32, u32) {
+    if vertical {
+        (crate::shorts::OUTPUT_WIDTH, crate::shorts::OUTPUT_HEIGHT)
+    } else {
+        video
+    }
 }
 
 fn invalid(code: &str, detail: impl ToString) -> EngineError {
@@ -220,7 +237,7 @@ pub fn safe_area_required(width: u32, height: u32, safe: SafeArea) -> Result<(),
     if height > width && safe == SafeArea::None {
         return Err(invalid(
             "error.safe_area_required",
-            "This video is vertical: choose the safe area of the platform it is for (ask the user; youtube_shorts, tiktok, reels or universal).",
+            "This frame is vertical: choose the safe area of the platform it is for (ask the user; youtube_shorts, tiktok, reels or universal).",
         ));
     }
     Ok(())
@@ -241,10 +258,25 @@ mod tests {
             from_ms: None,
             to_ms: None,
             mode,
+            vertical: false,
             bare: false,
             grid: false,
             output: root.join("noh-scene-request-test-that-does-not-exist"),
         }
+    }
+
+    #[test]
+    fn a_vertical_scene_draws_on_a_short_frame_that_needs_a_safe_area() {
+        assert_eq!(scene_frame(false, (1920, 1080)), (1920, 1080));
+        assert_eq!(scene_frame(true, (1920, 1080)), (1080, 1920));
+        assert_eq!(scene_frame(true, (720, 1280)), (1080, 1920));
+        let (w, h) = scene_frame(true, (1920, 1080));
+        assert_eq!(
+            safe_area_required(w, h, SafeArea::None).unwrap_err().code,
+            "error.safe_area_required"
+        );
+        assert!(safe_area_required(w, h, SafeArea::YoutubeShorts).is_ok());
+        assert!(safe_area_required(1920, 1080, SafeArea::None).is_ok());
     }
 
     #[test]

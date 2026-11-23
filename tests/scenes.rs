@@ -122,6 +122,7 @@ fn request(f: &Fixture, mode: SceneMode, out: &str, scene: &str) -> SceneRequest
         from_ms: None,
         to_ms: None,
         mode,
+        vertical: false,
         bare: false,
         grid: true,
         output: f.path(out),
@@ -150,10 +151,60 @@ fn burn(f: &Fixture, scene: &str, range_ms: Option<[u64; 2]>, out: &str) -> Vec<
         scene: Some(SceneChoice {
             scene: f.path(scene),
             range_ms,
+            vertical: false,
         }),
     };
     let job = Job::burn_with_worker(request, f.exe.clone(), || {});
     wait(&job)
+}
+
+/// A short that follows its scene: the burn of `range_ms` on a vertical frame.
+fn short(f: &Fixture, scene: &str, range_ms: [u64; 2], out: &str) -> Vec<Event> {
+    let request = CaptionRequest {
+        source: f.path("source.mp4"),
+        subtitles: f.path("reviewed.srt"),
+        output: f.path(out),
+        ffmpeg: f.ffmpeg.clone(),
+        style: CaptionStyle {
+            safe_area: SafeArea::YoutubeShorts,
+            ..Default::default()
+        },
+        preview: false,
+        effect: None,
+        scene: Some(SceneChoice {
+            scene: f.path(scene),
+            range_ms: Some(range_ms),
+            vertical: true,
+        }),
+    };
+    wait(&Job::burn_with_worker(request, f.exe.clone(), || {}))
+}
+
+/// One frame of `video` at `at` seconds, RGB.
+fn frame_at(f: &Fixture, video: &Path, at: f64) -> Vec<u8> {
+    f.ff(args![
+        "-ss",
+        format!("{at}"),
+        "-i",
+        video,
+        "-frames:v",
+        "1",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-"
+    ])
+    .stdout
+}
+
+fn mean_difference(a: &[u8], b: &[u8]) -> f64 {
+    assert_eq!(a.len(), b.len());
+    a.iter()
+        .zip(b)
+        .map(|(x, y)| f64::from(x.abs_diff(*y)))
+        .sum::<f64>()
+        / a.len() as f64
 }
 
 fn ok(events: &[Event]) {
@@ -398,6 +449,100 @@ fn scene_jobs_check_look_burn_clip_and_refuse() {
         same < 6.0 && moved > 3.0 * same,
         "look vs export {same}, export vs source {moved}"
     );
+
+    // A vertical frame made from the wide video. Without a safe area, refused
+    // before any work; a look draws 1080 x 1920 frames, covering and centred
+    // without a `video()` (as FFmpeg's cover crop does), as the scene frames
+    // it with one; a short of the interval encodes the look's frame there.
+    let vertical = |out: &str, scene: &str, at: u64, bare: bool, safe: SafeArea| SceneRequest {
+        vertical: true,
+        bare,
+        grid: false,
+        safe_area: safe,
+        ..request(&f, SceneMode::Stills { at_ms: vec![at] }, out, scene)
+    };
+    let look = |r: SceneRequest| {
+        wait(&Job::scene_with_cancel(
+            r,
+            f.exe.clone(),
+            Arc::new(AtomicBool::new(false)),
+            || {},
+        ))
+    };
+    match look(vertical(
+        "vertical-unsafe",
+        "framed.noh-motion.rhai",
+        1600,
+        false,
+        SafeArea::None,
+    ))
+    .last()
+    {
+        Some(Event::Done(Err(e))) => assert_eq!(e.code, "error.safe_area_required"),
+        other => panic!("a vertical look without a safe area went on: {other:?}"),
+    }
+    assert!(!f.path("vertical-unsafe").exists());
+    let shorts = SafeArea::YoutubeShorts;
+    ok(&look(vertical(
+        "vertical-cover",
+        "song.noh-motion.rhai",
+        1600,
+        true,
+        shorts,
+    )));
+    let covered = image::open(f.path("vertical-cover").join("frame-01-1600ms.png"))
+        .unwrap()
+        .to_rgb8();
+    assert_eq!(covered.dimensions(), (1080, 1920));
+    let cover_crop = f
+        .ff(args![
+            "-ss",
+            "1.6",
+            "-i",
+            f.path("source.mp4"),
+            "-frames:v",
+            "1",
+            "-vf",
+            "scale=-2:1920:flags=bilinear,crop=1080:1920",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-"
+        ])
+        .stdout;
+    let cover = mean_difference(covered.as_raw(), &cover_crop);
+    eprintln!("vertical cover at 1.6 s vs FFmpeg's cover crop: {cover:.2}");
+    assert!(cover < 8.0, "{cover}");
+    ok(&look(vertical(
+        "vertical-framed",
+        "framed.noh-motion.rhai",
+        1600,
+        false,
+        shorts,
+    )));
+    let looked = image::open(f.path("vertical-framed").join("frame-01-1600ms.png"))
+        .unwrap()
+        .to_rgb8();
+    assert_eq!(looked.dimensions(), (1080, 1920));
+    ok(&short(
+        &f,
+        "framed.noh-motion.rhai",
+        [1000, 2400],
+        "vertical.mp4",
+    ));
+    let played = frame_at(&f, &f.path("vertical.mp4"), 0.6);
+    assert_eq!(
+        played.len(),
+        1080 * 1920 * 3,
+        "the short is not 1080 x 1920"
+    );
+    let (same, cover_vs) = (
+        mean_difference(looked.as_raw(), &played),
+        mean_difference(&cover_crop, &played),
+    );
+    eprintln!("vertical short at 1.6 s: look vs export {same:.2}, cover vs export {cover_vs:.2}");
+    assert!(same < 6.0 && cover_vs > 2.0 * same, "{same} {cover_vs}");
 
     // Refused at the instant it goes over the cap: nothing published.
     let why = refused(&scene_job(

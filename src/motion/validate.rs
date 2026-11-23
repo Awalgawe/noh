@@ -196,7 +196,7 @@ pub fn validate(
         );
         if let Some(v) = &f.video
             && !v
-                .framing((w as f32, h as f32), (w as f32, h as f32))
+                .framing((w as f32, h as f32), scene.source_size())
                 .covers()
         {
             notes.add(

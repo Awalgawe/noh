@@ -29,6 +29,8 @@ fn fail(code: &str, path: Option<&Path>, detail: impl ToString) -> EngineError {
 /// its script thread and validated at the output's frames.
 struct Loaded {
     thread: ScriptThread,
+    /// The source picture's size (the frame's own unless vertical).
+    picture: (u32, u32),
     /// The layer shaders beside the scene, validated.
     shaders: Vec<(String, String)>,
     report: Report,
@@ -49,7 +51,8 @@ fn load(request: &SceneRequest, report: &mut Reporter<'_>) -> Result<Loaded, Eng
         media.video.display_height,
         crate::captions::CaptionStyle::default(),
     )?;
-    let size = canvas.size();
+    let picture = canvas.size();
+    let size = crate::scene_request::scene_frame(request.vertical, picture);
     safe_area_required(size.0, size.1, request.safe_area)?;
     let duration = media.duration;
     let from = request.from_ms.map_or(0.0, |ms| ms as f64 / 1000.0);
@@ -83,6 +86,7 @@ fn load(request: &SceneRequest, report: &mut Reporter<'_>) -> Result<Loaded, Eng
         &request.source,
         media.audio_codec.is_some(),
         size,
+        picture,
         duration,
         &track,
         words,
@@ -109,6 +113,7 @@ fn load(request: &SceneRequest, report: &mut Reporter<'_>) -> Result<Loaded, Eng
         .map_err(|e| fail("error.scene_refused", Some(&request.scene), e))?;
     Ok(Loaded {
         thread,
+        picture,
         shaders,
         report: checked,
         notes,
@@ -212,7 +217,8 @@ fn check(request: &SceneRequest, l: Loaded, dir: &Path) -> Result<(), EngineErro
     match GlRenderer::headless(w, h, w as f32, h as f32, Output::PremulGamma) {
         Ok(mut gpu) => {
             let mut layer = MotionLayer::new(l.thread, l.size, 0.0, l.shaders)
-                .map_err(|e| fail("error.scene_render", None, e))?;
+                .map_err(|e| fail("error.scene_render", None, e))?
+                .with_source(l.picture);
             layer
                 .setup(&mut gpu)
                 .map_err(|e| fail("error.scene_refused", None, e))?;
@@ -522,8 +528,10 @@ fn look(
                 format!("This computer cannot draw scenes ({e})."),
             )
         })?;
+    let picture = l.picture;
     let mut layer = MotionLayer::new(l.thread, size, 0.0, l.shaders)
-        .map_err(|e| fail("error.scene_render", None, e))?;
+        .map_err(|e| fail("error.scene_render", None, e))?
+        .with_source(picture);
     layer
         .setup(&mut gpu)
         .map_err(|e| fail("error.scene_refused", None, e))?;
@@ -533,12 +541,14 @@ fn look(
         layer
             .draw(&mut gpu, t)
             .map_err(|e| fail("error.scene_refused", None, e))?;
-        let mut under = source_frame(request, t, size)?;
-        // The picture as the export frames it at this instant (`video()`).
-        if let Some(v) = layer.video() {
-            let f = v.framing((w as f32, h as f32), (w as f32, h as f32));
-            under = super::reframe::resample(&under, 3, &f, &[0, 0, 0]);
-        }
+        // The picture as the export frames it at this instant: the scene's
+        // `video()`, or covering a frame of another shape.
+        let under = match layer.framing() {
+            Some(f) => {
+                super::reframe::resample(&source_frame(request, t, picture)?, 3, &f, &[0, 0, 0])
+            }
+            None => source_frame(request, t, size)?,
+        };
         // Bare: the video alone, to compose on it.
         let mut rgb = if request.bare {
             under
