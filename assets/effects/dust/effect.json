@@ -1,0 +1,53 @@
+{
+  "engine": 1,
+  "id": "noh.dust",
+  "name": {"fr": "Fin en poussière", "en": "Fade to dust", "de": "Zu Staub zerfallen", "es": "Final en polvo", "ja": "塵になって消える", "ko": "먼지로 사라짐", "zh": "化为尘埃"},
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "target": "text",
+  "params": [
+    {"id": "direction", "type": "choice", "default": "left", "choices": ["left", "centre"], "choice_labels": {"left": {"fr": "De gauche à droite", "en": "Left to right", "de": "Von links nach rechts", "es": "De izquierda a derecha", "ja": "左から右へ", "ko": "왼쪽에서 오른쪽으로", "zh": "从左到右"}, "centre": {"fr": "Depuis le centre", "en": "From the centre", "de": "Von der Mitte aus", "es": "Desde el centro", "ja": "中央から", "ko": "가운데부터", "zh": "从中间"}}, "level": 1, "label": {"fr": "Direction", "en": "Direction", "de": "Richtung", "es": "Dirección", "ja": "方向", "ko": "방향", "zh": "方向"}},
+    {"id": "duration", "type": "choice", "default": "short", "choices": ["short", "medium", "long"], "choice_labels": {"short": {"fr": "0,7 s", "en": "0.7 s", "de": "0,7 s", "es": "0,7 s", "ja": "0.7 秒", "ko": "0.7초", "zh": "0.7 秒"}, "medium": {"fr": "0,9 s", "en": "0.9 s", "de": "0,9 s", "es": "0,9 s", "ja": "0.9 秒", "ko": "0.9초", "zh": "0.9 秒"}, "long": {"fr": "1,2 s", "en": "1.2 s", "de": "1,2 s", "es": "1,2 s", "ja": "1.2 秒", "ko": "1.2초", "zh": "1.2 秒"}}, "level": 1, "label": {"fr": "Durée", "en": "Duration", "de": "Dauer", "es": "Duración", "ja": "長さ", "ko": "길이", "zh": "时长"}},
+    {"id": "edge", "type": "color", "default": "#FFE2B4", "level": 2, "label": {"fr": "Couleur du bord", "en": "Edge colour", "de": "Randfarbe", "es": "Color del borde", "ja": "縁の色", "ko": "가장자리 색", "zh": "边缘颜色"}},
+    {"id": "size", "type": "choice", "default": "medium", "choices": ["small", "medium", "large"], "choice_labels": {"small": {"fr": "Petite", "en": "Small", "de": "Klein", "es": "Pequeño", "ja": "小", "ko": "작게", "zh": "小"}, "medium": {"fr": "Moyenne", "en": "Medium", "de": "Mittel", "es": "Mediano", "ja": "中", "ko": "보통", "zh": "中"}, "large": {"fr": "Grande", "en": "Large", "de": "Groß", "es": "Grande", "ja": "大", "ko": "크게", "zh": "大"}}, "level": 2, "label": {"fr": "Taille", "en": "Size", "de": "Größe", "es": "Tamaño", "ja": "サイズ", "ko": "크기", "zh": "大小"}},
+    {"id": "placement", "type": "choice", "default": "bottom", "choices": ["bottom", "top"], "choice_labels": {"bottom": {"fr": "En bas", "en": "Bottom", "de": "Unten", "es": "Abajo", "ja": "下", "ko": "아래", "zh": "底部"}, "top": {"fr": "En haut", "en": "Top", "de": "Oben", "es": "Arriba", "ja": "上", "ko": "위", "zh": "顶部"}}, "level": 2, "label": {"fr": "Position", "en": "Position", "de": "Position", "es": "Posición", "ja": "位置", "ko": "위치", "zh": "位置"}},
+    {"id": "font", "type": "font", "default": "jost_medium", "level": 2, "label": {"fr": "Police", "en": "Font", "de": "Schrift", "es": "Fuente", "ja": "フォント", "ko": "글꼴", "zh": "字体"}}
+  ],
+  "presets": [
+    {"id": "ash", "name": {"fr": "Cendre", "en": "Ash", "de": "Asche", "es": "Ceniza", "ja": "灰", "ko": "재", "zh": "灰烬"}, "values": {"direction": "left", "duration": "short"}},
+    {"id": "centre", "name": {"fr": "Depuis le centre", "en": "From the centre", "de": "Von der Mitte aus", "es": "Desde el centro", "ja": "中央から", "ko": "가운데부터", "zh": "从中间"}, "values": {"direction": "centre", "duration": "medium"}}
+  ],
+  "layout": {
+    "mode": "line",
+    "font": "$font",
+    "size": {"mul": ["@short", {"choose": ["$size", {"small": 0.06, "medium": 0.072, "large": 0.0864}]}]},
+    "line_height": 1.2,
+    "box": {
+      "x": {"landscape": 0.5, "portrait": 0.4333},
+      "width": {"landscape": 0.88, "portrait": 0.7778},
+      "y": {"choose": ["$placement", {"bottom": {"landscape": 0.84, "portrait": 0.65}, "top": 0.16}]},
+      "anchor": {"choose": ["$placement", {"bottom": "bottom", "top": "top"}]}
+    },
+    "visible": "line",
+    "anchor": "unit",
+    "word_lead": 0.08,
+    "preroll": 0.25,
+    "hold": 10,
+    "window": {"before": 1, "after": 0, "lead": 0, "gap": 0, "glide": {"duration": 0.7, "curve": "ease_out_cubic"}}
+  },
+  "animate": [
+    {"unit": "line", "slot": "enter", "property": "opacity", "duration": 0.25, "curve": "ease_out_cubic", "keys": [[0, 0], [1, 1]]},
+    {"unit": "line", "slot": "enter", "property": "offset_y", "duration": 0.7, "curve": "ease_out_cubic",
+     "keys": [[0, {"mul": [-1.2, {"min": [1, "@line_index"]}]}], [1, 0]]},
+    {"unit": "word", "slot": "future", "property": "opacity", "value": 0.7},
+    {"unit": "word", "slot": "enter", "property": "opacity", "duration": 0.12, "curve": "ease_out_cubic", "keys": [[0, 0.7], [1, 1]]}
+  ],
+  "render": {
+    "passes": [
+      {"kind": "shadow", "color": "#000000", "alpha": 0.5, "offset_y": 0, "blur": {"mul": ["@short", {"choose": ["$size", {"small": 0.0075, "medium": 0.009, "large": 0.0108}]}]}},
+      {"kind": "fill", "color": "#FFFFFF", "alpha": 1},
+      {"kind": "shadow", "color": "#FFFFFF", "alpha": 0.9, "offset_y": 0, "blur": 0}
+    ]
+  },
+  "shader": "shaders/dust.wgsl"
+}
