@@ -226,8 +226,8 @@ fn no_display() -> bool {
         && std::env::var_os("WAYLAND_DISPLAY").is_none()
 }
 
-/// A short prepared by gestures, as an agent would: media added, the range,
-/// the safe area, the playhead, a look at T; the times each took.
+/// A short made by gestures, as an agent would: media added, the range, the
+/// safe area, the playhead, looks, the destination, framing and the export.
 #[test]
 fn a_short_is_prepared_by_gestures_and_looked_at() {
     if no_display() {
@@ -313,6 +313,26 @@ fn a_short_is_prepared_by_gestures_and_looked_at() {
     eprintln!(
         "MEASURE set_range {range:?}, seek {seek:?}, look here {look_here:?}, look at T {look_at_time:?}"
     );
+    // Then the short itself: destination, framing, export, its end in `state`.
+    let montage = f.path("scenario.mp4");
+    timed(
+        &mut server,
+        json!({"type":"set_destination","path":montage,"short_name":"scenario-short.mp4"}),
+    );
+    timed(
+        &mut server,
+        json!({"type":"set_framing","framing":"crop","restart_loops":false}),
+    );
+    let reply = server.tool(
+        "noh_app_do",
+        json!({"app_id":app_id,"action":{"type":"export","short":true}}),
+    );
+    assert_eq!(reply["result"]["started"], true, "{reply}");
+    server.state_until(&app_id, |v| v["job"] == false);
+    let short = f.path("scenario-short.mp4");
+    assert!(short.is_file(), "the short was not written");
+    let decoded = f.packets(&short, false, true, false);
+    assert!(decoded.contains("#dimensions 0: "), "{decoded}");
     let closed = server.tool("noh_app_close", json!({"app_id":app_id}));
     assert_eq!(closed["state"], "closed", "{closed}");
 }

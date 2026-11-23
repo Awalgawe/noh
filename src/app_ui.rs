@@ -1466,17 +1466,8 @@ impl NohApp {
                 self.start_project(ctx, false, true);
             }
         }
-        if cancel && self.cancel_project_preparation() {
-            self.cancelling = true;
-        } else if cancel && let Some(job) = &self.job {
-            job.cancel();
-            self.cancelling = true;
-        } else if cancel && self.shorts.running.is_some() {
-            self.shorts.cancel_preparation();
-            self.cancelling = true;
-        } else if cancel && self.captions.running.is_some() {
-            self.captions.cancel_preparation();
-            self.cancelling = true;
+        if cancel {
+            self.cancel_work();
         }
         BarLayout {
             height: ui.min_rect().height(),
@@ -1593,6 +1584,47 @@ impl NohApp {
         self.receive_shorts(ctx);
         self.prepare_views(ctx);
         self.poll_mini_preview(ctx);
+    }
+    /// The bar's « Annuler »: the running work is asked to stop. True if
+    /// something was running.
+    pub(super) fn cancel_work(&mut self) -> bool {
+        if self.cancel_project_preparation() {
+            self.cancelling = true;
+        } else if let Some(job) = &self.job {
+            job.cancel();
+            self.cancelling = true;
+        } else if self.shorts.running.is_some() {
+            self.shorts.cancel_preparation();
+            self.cancelling = true;
+        } else if self.captions.running.is_some() {
+            self.captions.cancel_preparation();
+            self.cancelling = true;
+        } else {
+            return false;
+        }
+        true
+    }
+    /// « Arrêter et quitter » in the close question.
+    pub(super) fn stop_and_quit(&mut self, ctx: &egui::Context) {
+        self.job.take();
+        self.cancel_project_preparation();
+        self.project.work = None;
+        self.project.work_cancel = None;
+        self.project.running = None;
+        self.project.generating = false;
+        self.project.generation = None;
+        if self.shorts.running.is_some() {
+            self.shorts.cancel_preparation();
+            self.shorts.reaped();
+        }
+        if self.captions.running.is_some() {
+            self.captions.cancel_preparation();
+            self.captions.reaped();
+        }
+        self.subtitles.running = false;
+        self.cancelling = false;
+        self.close_question = false;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
     /// A job of the window runs (or is being stopped).
     pub(super) fn busy(&self) -> bool {
@@ -1792,25 +1824,7 @@ impl NohApp {
                             self.close_question = false;
                         }
                         if style::button(ui, l.text("stop_quit"), true, false, 0.0).clicked() {
-                            self.job.take();
-                            self.cancel_project_preparation();
-                            self.project.work = None;
-                            self.project.work_cancel = None;
-                            self.project.running = None;
-                            self.project.generating = false;
-                            self.project.generation = None;
-                            if self.shorts.running.is_some() {
-                                self.shorts.cancel_preparation();
-                                self.shorts.reaped();
-                            }
-                            if self.captions.running.is_some() {
-                                self.captions.cancel_preparation();
-                                self.captions.reaped();
-                            }
-                            self.subtitles.running = false;
-                            self.cancelling = false;
-                            self.close_question = false;
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            self.stop_and_quit(&ctx);
                         }
                     });
                 });

@@ -399,6 +399,14 @@ impl NohApp {
                 | Action::ChooseEffect { .. }
                 | Action::SetSafeArea { .. }
                 | Action::SetRange { .. }
+                | Action::RemoveClip { .. }
+                | Action::MoveClip { .. }
+                | Action::SetFades { .. }
+                | Action::SetConvertAll { .. }
+                | Action::SetEffectSettings { .. }
+                | Action::SetFraming { .. }
+                | Action::SetDestination { .. }
+                | Action::Export { .. }
         );
         if locked_by_job && self.busy() {
             return Err(refusal(
@@ -545,10 +553,187 @@ impl NohApp {
                 self.driven_mark();
                 Ok(serde_json::Value::Null)
             }
-            Action::Answer {
-                answer,
-                user_confirmed,
-            } => self.driven_answer_question(answer, user_confirmed),
+            Action::Answer { answer, path } => self.driven_answer_question(ctx, answer, path),
+            Action::RemoveClip { clip_id } => {
+                if self.remove_clip(clip_id) {
+                    self.driven_mark();
+                    Ok(serde_json::Value::Null)
+                } else {
+                    refused("No clip with that id.")
+                }
+            }
+            Action::MoveClip { clip_id, to_index } => {
+                let Some(from) = self.clips.iter().position(|c| c.id == clip_id) else {
+                    return refused("No clip with that id.");
+                };
+                if to_index >= self.clips.len() {
+                    return refused("to_index is past the last clip.");
+                }
+                self.move_clip(from, to_index);
+                self.driven_mark();
+                Ok(serde_json::Value::Null)
+            }
+            Action::SetFades {
+                fade_in_seconds,
+                fade_out_seconds,
+                clip_audio,
+            } => {
+                let bad = |v: Option<f64>| v.is_some_and(|s| !s.is_finite() || s < 0.0);
+                if bad(fade_in_seconds) || bad(fade_out_seconds) {
+                    return refused("A fade is a number of seconds, 0 or more.");
+                }
+                let before = (
+                    self.in_enabled,
+                    self.fade_in,
+                    self.out_enabled,
+                    self.fade_out,
+                    self.clip_audio,
+                );
+                if let Some(s) = fade_in_seconds {
+                    self.in_enabled = s > 0.0;
+                    if s > 0.0 {
+                        self.fade_in = s;
+                    }
+                }
+                if let Some(s) = fade_out_seconds {
+                    self.out_enabled = s > 0.0;
+                    if s > 0.0 {
+                        self.fade_out = s;
+                    }
+                }
+                if let Some(on) = clip_audio {
+                    self.clip_audio = on;
+                }
+                if !self.fades_valid() {
+                    (
+                        self.in_enabled,
+                        self.fade_in,
+                        self.out_enabled,
+                        self.fade_out,
+                        self.clip_audio,
+                    ) = before;
+                    return refused(
+                        "These fades do not fit the montage (together longer than it).",
+                    );
+                }
+                self.invalidated();
+                self.driven_mark();
+                Ok(serde_json::Value::Null)
+            }
+            Action::SetConvertAll { convert_all } => {
+                if self.partial == convert_all {
+                    self.partial = !convert_all;
+                    self.invalidated();
+                }
+                self.driven_mark();
+                Ok(serde_json::Value::Null)
+            }
+            Action::SetEffectSettings {
+                preset,
+                values,
+                size,
+                placement,
+                show_on_video,
+            } => self.driven_effect_settings(preset, values, size, placement, show_on_video),
+            Action::SetFraming {
+                framing,
+                restart_loops,
+            } => {
+                let before = (self.project.restart_loops, self.project.framing);
+                if let Some(framing) = framing {
+                    self.project.framing = framing;
+                }
+                if let Some(on) = restart_loops {
+                    self.project.restart_loops = on;
+                }
+                // As the range row does: only the short changes, one revision.
+                if before != (self.project.restart_loops, self.project.framing) {
+                    self.project.short_revision = self.project.short_revision.wrapping_add(1);
+                    self.project.failure = None;
+                    self.project.outcome = None;
+                }
+                self.driven_mark();
+                Ok(serde_json::Value::Null)
+            }
+            Action::SetDestination { path, short_name } => {
+                if let Some(path) = path {
+                    let fine = path.is_absolute()
+                        && path
+                            .extension()
+                            .is_some_and(|e| e.eq_ignore_ascii_case("mp4"))
+                        && path.parent().is_some_and(|p| p.is_dir());
+                    let (Some(folder), Some(name)) = (path.parent(), path.file_name()) else {
+                        return refused("The destination needs a folder and a file name.");
+                    };
+                    if !fine {
+                        return refused(
+                            "The destination must be an absolute .mp4 path in an existing folder.",
+                        );
+                    }
+                    self.output_folder = folder.to_path_buf();
+                    self.output_name = name.to_string_lossy().into_owned();
+                    self.output_base = self.output_name.clone();
+                    self.destination_edited();
+                }
+                if let Some(name) = short_name {
+                    if super::app_destination::syntax(&name).is_some() {
+                        return refused("That short name cannot be a file name.");
+                    }
+                    self.project.short_name = name;
+                    self.project.short_named = true;
+                }
+                self.driven_mark();
+                Ok(serde_json::json!({ "output": self.output }))
+            }
+            Action::Export { short } => {
+                let status = self.status();
+                let available = if short {
+                    status.montage.as_ref().and_then(|m| m.short.clone())
+                } else {
+                    Some(status.export.clone())
+                };
+                let l = self.locale.language;
+                match available {
+                    Some(a) if a.enabled => {}
+                    Some(a) => {
+                        let mut refusal = refusal("app.export_unavailable", &a.reason.render(l));
+                        refusal.details = Some(serde_json::json!({ "reason": a.reason.key }));
+                        return Err(refusal);
+                    }
+                    None => return refused("No short: set a range first."),
+                }
+                let conflict = status
+                    .montage
+                    .as_ref()
+                    .is_some_and(|m| if short { m.short_conflict } else { m.conflict });
+                if conflict {
+                    return Err(refusal(
+                        "app.output_exists",
+                        "The destination is taken; nothing is ever overwritten. Choose another (set_destination).",
+                    ));
+                }
+                self.start_project(ctx, false, short);
+                if self.busy() {
+                    self.driven_mark();
+                    Ok(serde_json::json!({ "started": true }))
+                } else {
+                    let why = self
+                        .notice
+                        .as_ref()
+                        .or(self.error.as_ref())
+                        .map(|m| m.render(l))
+                        .unwrap_or_else(|| self.status().headline.render(l));
+                    Err(refusal("app.not_started", &why))
+                }
+            }
+            Action::Cancel {} => {
+                if self.cancel_work() {
+                    self.driven_mark();
+                    Ok(serde_json::Value::Null)
+                } else {
+                    refused("No job is running.")
+                }
+            }
             Action::Seek { .. } | Action::Play {} | Action::Pause {} => {
                 unreachable!("playhead gestures are queued")
             }
@@ -557,45 +742,118 @@ impl NohApp {
 
     fn driven_answer_question(
         &mut self,
+        ctx: &egui::Context,
         answer: Answer,
-        user_confirmed: bool,
+        path: Option<PathBuf>,
     ) -> Result<serde_json::Value, Refusal> {
         let question = self.open_question();
-        let destructive = matches!(
-            answer,
-            Answer::ModifySrt | Answer::KeepLyrics | Answer::KeepSrt
-        );
-        if destructive && !user_confirmed {
-            let mut refusal = refusal(
-                "app.confirmation_required",
-                "This answer rewrites or replaces a file: ask the person in the conversation, then answer with user_confirmed.",
-            );
-            refusal.details = Some(serde_json::json!({ "question": question }));
-            return Err(refusal);
-        }
-        let wrong = |q: Option<&str>| {
-            let mut refusal = refusal(
-                "app.no_such_question",
-                "That answer is not for the open question.",
-            );
+        let wrong = |q: Option<&str>, why: &str| {
+            let mut refusal = refusal("app.no_such_question", why);
             refusal.details = Some(serde_json::json!({ "question": q }));
             Err(refusal)
         };
-        match (question, answer) {
-            (Some("first_edit"), Answer::ModifySrt) => {
-                let Some(source) = self.project.edit.as_ref().map(|e| e.path.clone()) else {
-                    return wrong(question);
-                };
-                self.consent_first_edit(source);
+        if answer == Answer::WorkOnCopy {
+            let fine = path.as_ref().is_some_and(|p| {
+                p.is_absolute()
+                    && !p.exists()
+                    && p.extension().is_some_and(|e| e.eq_ignore_ascii_case("srt"))
+            });
+            if !fine {
+                return Err(refusal(
+                    "app.output_invalid",
+                    "work_on_copy needs a free absolute path ending in .srt.",
+                ));
             }
-            (Some("first_edit"), Answer::Cancel) => self.cancel_first_edit(),
+        }
+        match (question, answer) {
             (Some("lyrics_truth"), Answer::KeepLyrics) => self.answer_lyrics(),
             (Some("lyrics_truth"), Answer::KeepSrt) => self.answer_srt(),
             (Some("lyrics_truth"), Answer::Later) => self.close_lyrics_question(),
-            _ => return wrong(question),
+            (Some("lyrics_truth"), _) => {
+                return wrong(
+                    question,
+                    "lyrics_truth takes keep_lyrics, keep_srt or later.",
+                );
+            }
+            (Some("close_while_working"), Answer::Cancel) => self.close_question = false,
+            (Some("close_while_working"), Answer::Discard) => self.stop_and_quit(ctx),
+            (Some("close_while_working"), _) => {
+                return wrong(question, "close_while_working takes cancel or discard.");
+            }
+            (Some(_), _) => {
+                if let Err(why) = self.answer_lyrics_question(answer, path, ctx) {
+                    return wrong(question, why);
+                }
+            }
+            (None, _) => return wrong(None, "No question is open."),
         }
         self.driven_mark();
         Ok(serde_json::json!({ "question": self.open_question() }))
+    }
+
+    /// The applied effect's preset and settings, Classique's size and
+    /// placement, « afficher sur la vidéo »: as the style panel does them.
+    fn driven_effect_settings(
+        &mut self,
+        preset: Option<String>,
+        values: std::collections::BTreeMap<String, serde_json::Value>,
+        size: Option<noh::captions::CaptionSize>,
+        placement: Option<noh::captions::CaptionPlacement>,
+        show_on_video: Option<bool>,
+    ) -> Result<serde_json::Value, Refusal> {
+        let refused = |message: String| Err(refusal("app.refused", &message));
+        if show_on_video == Some(true) && !self.has_lyrics() {
+            return refused("Captions can be shown once there are lyrics.".into());
+        }
+        let before = (
+            self.project.apply_subtitles,
+            self.project.caption_style.clone(),
+        );
+        if preset.is_some() || !values.is_empty() {
+            let Some(choice) = self.project.effect.clone() else {
+                return refused("No effect is chosen (choose_effect).".into());
+            };
+            let Some(effect) = self.effect_of(&choice) else {
+                return refused(format!("The effect {} is not available.", choice.id));
+            };
+            let mut next = choice.clone();
+            if let Some(preset) = preset {
+                if !effect.presets.iter().any(|(id, _)| *id == preset) {
+                    let ids: Vec<&str> = effect.presets.iter().map(|(id, _)| id.as_str()).collect();
+                    return refused(format!("No preset {preset}; presets: {}.", ids.join(", ")));
+                }
+                next.preset = preset;
+                next.values.clear();
+            }
+            for (key, value) in values {
+                let Some(p) = effect.params.iter().find(|p| p.id == key) else {
+                    let ids: Vec<&str> = effect.params.iter().map(|p| p.id.as_str()).collect();
+                    return refused(format!("No setting {key}; settings: {}.", ids.join(", ")));
+                };
+                if !p.accepts(&value) {
+                    return refused(format!("{value} is not a value {key} takes."));
+                }
+                next.values.insert(key, value);
+            }
+            if next != choice {
+                self.choose_effect(Some(next));
+            }
+        }
+        if let Some(size) = size {
+            self.project.caption_style.size = size;
+        }
+        if let Some(placement) = placement {
+            self.project.caption_style.placement = placement;
+        }
+        if let Some(on) = show_on_video {
+            self.project.apply_subtitles = on;
+            if !on {
+                self.end_try();
+            }
+        }
+        self.after_style_change(before);
+        self.driven_mark();
+        Ok(serde_json::Value::Null)
     }
 
     /// Where the person is (note §4.2).

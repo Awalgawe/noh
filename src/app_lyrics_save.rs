@@ -399,6 +399,88 @@ impl NohApp {
 
     /// « Annuler » in the close question: stay open, and forget any close that
     /// was waiting on a save.
+    /// The agent's answer to a lyrics question of a driven window (the
+    /// buttons of `lyrics_save_dialogs`, without the file dialog: a copy goes
+    /// to `path`). Err: that answer is not for this question.
+    pub(super) fn answer_lyrics_question(
+        &mut self,
+        answer: noh::driven::Answer,
+        path: Option<PathBuf>,
+        ctx: &egui::Context,
+    ) -> Result<(), &'static str> {
+        use noh::driven::Answer;
+        let s = &self.lyrics_save;
+        if s.asking {
+            match answer {
+                Answer::ModifySrt if s.copy_only => {
+                    return Err("only work_on_copy is offered for these lyrics");
+                }
+                Answer::ModifySrt => {
+                    let source = self.project.edit.as_ref().map(|e| e.path.clone());
+                    let source = source.ok_or("no lyrics change is waiting")?;
+                    self.consent_first_edit(source);
+                    return Ok(());
+                }
+                Answer::Cancel => {
+                    self.cancel_first_edit();
+                    return Ok(());
+                }
+                Answer::WorkOnCopy => {
+                    let path = path.ok_or("work_on_copy needs a path")?;
+                    let take_back = self.lyrics_save.cancel_edit;
+                    self.lyrics_save.asking = false;
+                    self.save_lyrics_to(path, true);
+                    if self.has_unsaved_lyrics() && self.lyrics_save.failed.is_none() {
+                        self.lyrics_save.cancel_edit = take_back;
+                        self.cancel_first_edit();
+                    }
+                    return Ok(());
+                }
+                _ => return Err("not an answer to first_edit"),
+            }
+        }
+        if s.closing {
+            match answer {
+                Answer::Cancel => self.cancel_closing(),
+                Answer::Discard => {
+                    self.project.edit = None;
+                    self.lyrics_save.closing = false;
+                    self.close_now = true;
+                }
+                Answer::Save => {
+                    self.lyrics_save.close_after = true;
+                    self.save_lyrics();
+                }
+                _ => return Err("not an answer to unsaved_on_close"),
+            }
+            return Ok(());
+        }
+        if let Some(pending) = self.lyrics_save.pending.clone() {
+            match answer {
+                Answer::Cancel => self.lyrics_save.pending = None,
+                Answer::Discard => {
+                    self.lyrics_save.pending = None;
+                    self.project.edit = None;
+                    self.run_pending_lyrics(pending, ctx);
+                }
+                _ => return Err("not an answer to lyrics_action"),
+            }
+            return Ok(());
+        }
+        if self.lyrics_save.failed.is_some() {
+            match answer {
+                Answer::Dismiss => self.lyrics_save.failed = None,
+                Answer::Retry => {
+                    self.lyrics_save.failed = None;
+                    self.save_lyrics();
+                }
+                _ => return Err("not an answer to save_failed"),
+            }
+            return Ok(());
+        }
+        Err("no lyrics question is open")
+    }
+
     fn cancel_closing(&mut self) {
         self.lyrics_save.closing = false;
         self.lyrics_save.close_after = false;

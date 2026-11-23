@@ -1602,27 +1602,246 @@ mod tests {
         assert!(w.app.driven.as_ref().unwrap().look.is_none());
     }
 
+    fn ok(answer: &ToServer) -> bool {
+        matches!(answer, ToServer::Done { error: None, .. })
+    }
+
     #[test]
-    fn a_destructive_answer_needs_the_person_s_confirmation() {
+    fn the_montage_gestures_change_what_the_clicks_change() {
+        use driven::Action;
+        let mut w = window(true);
+        // Move the second clip first, then remove the first.
+        assert!(ok(&w.act(
+            1,
+            Action::MoveClip {
+                clip_id: 2,
+                to_index: 0
+            }
+        )));
+        assert_eq!(w.app.clips.iter().map(|c| c.id).collect::<Vec<_>>(), [2, 1]);
+        assert_eq!(
+            refusal_code(&w.act(
+                2,
+                Action::MoveClip {
+                    clip_id: 2,
+                    to_index: 5
+                }
+            )),
+            Some("app.refused")
+        );
+        assert!(ok(&w.act(3, Action::RemoveClip { clip_id: 1 })));
+        assert_eq!(w.app.clips.iter().map(|c| c.id).collect::<Vec<_>>(), [2]);
+        assert_eq!(
+            refusal_code(&w.act(4, Action::RemoveClip { clip_id: 1 })),
+            Some("app.refused")
+        );
+        // Fades and the clips' sound; a fade that cannot be is refused whole.
+        let answer = w.act(
+            5,
+            Action::SetFades {
+                fade_in_seconds: Some(1.5),
+                fade_out_seconds: Some(0.0),
+                clip_audio: Some(true),
+            },
+        );
+        assert!(ok(&answer), "{answer:?}");
+        assert!(w.app.in_enabled && w.app.fade_in == 1.5 && !w.app.out_enabled && w.app.clip_audio);
+        assert_eq!(
+            refusal_code(&w.act(
+                6,
+                Action::SetFades {
+                    fade_in_seconds: Some(-1.0),
+                    fade_out_seconds: None,
+                    clip_audio: None,
+                }
+            )),
+            Some("app.refused")
+        );
+        assert_eq!(w.app.fade_in, 1.5);
+        assert!(ok(&w.act(7, Action::SetConvertAll { convert_all: true })));
+        assert!(!w.app.partial);
+        // The short's framing and loops.
+        let short_revision = w.app.project.short_revision;
+        let answer = w.act(
+            8,
+            Action::SetFraming {
+                framing: Some(noh::shorts::Framing::Crop),
+                restart_loops: Some(true),
+            },
+        );
+        assert!(ok(&answer), "{answer:?}");
+        assert_eq!(w.app.project.framing, noh::shorts::Framing::Crop);
+        assert!(w.app.project.restart_loops);
+        assert_ne!(
+            w.app.project.short_revision, short_revision,
+            "the short is a new one"
+        );
+        // The destination: an absolute .mp4 in a folder that exists.
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("final.mp4");
+        let answer = w.act(
+            9,
+            Action::SetDestination {
+                path: Some(path.clone()),
+                short_name: Some("final-short.mp4".into()),
+            },
+        );
+        assert!(ok(&answer), "{answer:?}");
+        assert_eq!(w.app.output.as_deref(), Some(path.as_path()));
+        assert_eq!(w.app.project.short_name, "final-short.mp4");
+        assert_eq!(
+            refusal_code(&w.act(
+                10,
+                Action::SetDestination {
+                    path: Some("relative.mp4".into()),
+                    short_name: None,
+                }
+            )),
+            Some("app.refused")
+        );
+        // Nothing to cancel; a job running locks the montage gestures.
+        assert_eq!(
+            refusal_code(&w.act(11, Action::Cancel {})),
+            Some("app.refused")
+        );
+        w.app.cancelling = true;
+        assert_eq!(
+            refusal_code(&w.act(12, Action::RemoveClip { clip_id: 2 })),
+            Some("app.job_running")
+        );
+    }
+
+    #[test]
+    fn effect_settings_and_export_follow_the_style_panel_and_the_bar() {
+        use driven::Action;
+        let mut w = window(true);
+        let answer = w.act(
+            1,
+            Action::SetEffectSettings {
+                preset: None,
+                values: Default::default(),
+                size: Some(noh::captions::CaptionSize::Large),
+                placement: Some(noh::captions::CaptionPlacement::Top),
+                show_on_video: Some(true),
+            },
+        );
+        assert!(ok(&answer), "{answer:?}");
+        assert!(w.app.project.apply_subtitles);
+        assert_eq!(
+            w.app.project.caption_style.size,
+            noh::captions::CaptionSize::Large
+        );
+        assert_eq!(
+            w.app.project.caption_style.placement,
+            noh::captions::CaptionPlacement::Top
+        );
+        // A preset of no effect, or a setting the effect does not have.
+        w.app.project.effect = None;
+        let answer = w.act(
+            2,
+            Action::SetEffectSettings {
+                preset: Some("glow".into()),
+                values: Default::default(),
+                size: None,
+                placement: None,
+                show_on_video: None,
+            },
+        );
+        assert_eq!(refusal_code(&answer), Some("app.refused"));
+        // The export is refused with the bar's own reason when it cannot start.
+        let answer = w.act(3, Action::Export { short: false });
+        assert!(
+            matches!(
+                refusal_code(&answer),
+                Some("app.export_unavailable" | "app.not_started")
+            ),
+            "{answer:?}"
+        );
+        assert!(!w.app.busy());
+    }
+
+    #[test]
+    fn the_lyrics_questions_take_the_answers_of_their_buttons() {
+        use driven::{Action, Answer};
+        let mut w = window(true);
+        let source = w.app.project.track.path.clone().unwrap();
+        let original = std::fs::read_to_string(&source).unwrap();
+        // First edit: a copy, the original kept.
+        w.app
+            .edit_track(|t| noh::subtitle_edit::set_text(t, 0, "Changed by the agent"));
+        assert_eq!(w.app.open_question(), Some("first_edit"));
+        let folder = tempfile::tempdir().unwrap();
+        let copy = folder.path().join("copy.srt");
+        let answer = w.act(
+            1,
+            Action::Answer {
+                answer: Answer::WorkOnCopy,
+                path: Some("relative.srt".into()),
+            },
+        );
+        assert_eq!(refusal_code(&answer), Some("app.output_invalid"));
+        let answer = w.act(
+            2,
+            Action::Answer {
+                answer: Answer::WorkOnCopy,
+                path: Some(copy.clone()),
+            },
+        );
+        assert!(ok(&answer), "{answer:?}");
+        assert!(
+            std::fs::read_to_string(&copy)
+                .unwrap()
+                .contains("Changed by the agent")
+        );
+        assert_eq!(std::fs::read_to_string(&source).unwrap(), original);
+        assert_eq!(w.app.project.track.path.as_deref(), Some(copy.as_path()));
+        // A failed save: dismissed.
+        w.app.lyrics_save.failed = Some("disk full".into());
+        assert_eq!(w.app.open_question(), Some("save_failed"));
+        assert_eq!(
+            refusal_code(&w.act(
+                3,
+                Action::Answer {
+                    answer: Answer::KeepSrt,
+                    path: None,
+                }
+            )),
+            Some("app.no_such_question")
+        );
+        assert!(ok(&w.act(
+            4,
+            Action::Answer {
+                answer: Answer::Dismiss,
+                path: None,
+            }
+        )));
+        assert_eq!(w.app.open_question(), None);
+        // A lyrics action that would drop unsaved changes: cancel keeps them.
+        w.app.lyrics_save.pending = Some(super::super::app_lyrics::PendingLyrics::Remove);
+        assert_eq!(w.app.open_question(), Some("lyrics_action"));
+        assert!(ok(&w.act(
+            6,
+            Action::Answer {
+                answer: Answer::Cancel,
+                path: None,
+            }
+        )));
+        assert_eq!(w.app.open_question(), None);
+    }
+
+    #[test]
+    fn a_destructive_answer_is_given_as_any_other() {
         use driven::{Action, Answer};
         let mut w = window(true);
         w.app
             .edit_track(|t| noh::subtitle_edit::set_text(t, 0, "Changed by the agent"));
-        assert_eq!(w.app.open_question(), Some("first_edit"));
-        let answer = w.act(
-            1,
-            Action::Answer {
-                answer: Answer::ModifySrt,
-                user_confirmed: false,
-            },
-        );
-        assert_eq!(refusal_code(&answer), Some("app.confirmation_required"));
-        assert_eq!(w.app.open_question(), Some("first_edit"));
+        // The state names the question the agent answers.
+        assert_eq!(w.latest_state()["question"], "first_edit");
         let answer = w.act(
             2,
             Action::Answer {
                 answer: Answer::KeepSrt,
-                user_confirmed: true,
+                path: None,
             },
         );
         assert_eq!(refusal_code(&answer), Some("app.no_such_question"));
@@ -1630,7 +1849,7 @@ mod tests {
             3,
             Action::Answer {
                 answer: Answer::ModifySrt,
-                user_confirmed: true,
+                path: None,
             },
         );
         assert!(

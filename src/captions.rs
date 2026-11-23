@@ -24,6 +24,8 @@ pub(crate) const FILTER: &str = "subtitles=filename=captions.ass:fontsdir=fonts:
 const UNSUPPORTED_WRAP: &str = "libass wasn't built with ASS_FEATURE_WRAP_UNICODE support";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "mcp", derive(rmcp::schemars::JsonSchema))]
+#[cfg_attr(feature = "mcp", schemars(crate = "rmcp::schemars"))]
 #[serde(rename_all = "snake_case")]
 pub enum CaptionSize {
     Small,
@@ -33,6 +35,8 @@ pub enum CaptionSize {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "mcp", derive(rmcp::schemars::JsonSchema))]
+#[cfg_attr(feature = "mcp", schemars(crate = "rmcp::schemars"))]
 #[serde(rename_all = "snake_case")]
 pub enum CaptionPlacement {
     #[default]

@@ -270,8 +270,17 @@ The agent acts with `noh_app_do`: `add` (files, as a drop), `set_photo_duration`
 `edit_line` (`set_text`, `set_start`, `set_end`, `shift`, `add`, `delete`, with an
 optional `based_on` lyrics revision: lyrics reloaded since are not changed,
 `app.state_changed`), `undo`, `redo`, `choose_effect`, `set_safe_area`,
-`set_range`, `seek`, `play`, `pause` and `answer` (the open question; answers that
-rewrite or replace a file need `user_confirmed`, after asking the person). Each
+`set_range`, `remove_clip`, `move_clip`, `set_fades` (and the clips' own sound),
+`set_convert_all`, `set_effect_settings` (preset, settings, Classique's size and
+placement, captions shown on the video), `set_framing`, `set_destination`,
+`export` (the montage or the short; started or why not), `cancel`, `seek`, `play`,
+`pause` and `answer` (the open question: `modify_srt`, `cancel`, `work_on_copy`
+with a free `.srt` path, `keep_lyrics`, `keep_srt`, `later`, `discard`, `save`,
+`retry`, `dismiss`; the state names the open question, so the agent knows what
+it answers; whether to ask the person first is the agent's and its user's
+choice, as NOH keeps what it keeps for anyone: the replaced lyrics file beside,
+undo). Gestures the interface locks while a
+job runs are refused then (`app.job_running`). Each
 gesture calls what the matching click calls and answers with the state revision
 it led to. `noh_app_state` gives what the window shows, as data, by revision (it
 can wait up to 30 s for a newer one); position-only changes during playback are
