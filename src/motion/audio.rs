@@ -22,14 +22,13 @@ impl Audio {
 
     /// From mono samples in -1..1 at `hz` samples per second.
     pub fn analyse(samples: &[f32], hz: u32) -> Self {
-        let hop = (f64::from(hz) / RATE).round() as usize;
-        if hop == 0 {
-            return Self::silent();
-        }
-        let raw: Vec<f32> = samples
-            .chunks_exact(hop)
-            .map(|c| (c.iter().map(|s| s * s).sum::<f32>() / hop as f32).sqrt())
-            .collect();
+        let mut loudness = Loudness::new(hz);
+        loudness.push(samples);
+        Self::from_loudness(loudness.finish())
+    }
+
+    /// From the loudness of each hundredth of a second (`Loudness`).
+    pub fn from_loudness(raw: Vec<f32>) -> Self {
         // Onsets: rises of the log envelope over 30 ms, above a local threshold
         // (mean + 2 deviations over a second around), 150 ms apart at least.
         let log: Vec<f32> = raw.iter().map(|v| (v + 1e-4).ln()).collect();
@@ -103,9 +102,72 @@ impl Audio {
     }
 }
 
+/// The loudness (root mean square) of each hundredth of a second of mono
+/// samples at their own rate, as they come: the sound is never held whole (two
+/// hours at 48 kHz would be 1.4 GB). Each hop is `hz / 100` samples, truncated,
+/// summed in f64: the prototype's analysis exactly, which the scenes seen so far
+/// were made with.
+pub struct Loudness {
+    hop: usize,
+    filled: usize,
+    acc: f64,
+    out: Vec<f32>,
+}
+
+impl Loudness {
+    pub fn new(hz: u32) -> Self {
+        Self {
+            hop: (f64::from(hz) / RATE) as usize,
+            filled: 0,
+            acc: 0.0,
+            out: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, samples: &[f32]) {
+        if self.hop == 0 {
+            return;
+        }
+        for &s in samples {
+            self.acc += f64::from(s) * f64::from(s);
+            self.filled += 1;
+            if self.filled == self.hop {
+                self.out.push((self.acc / self.hop as f64).sqrt() as f32);
+                self.acc = 0.0;
+                self.filled = 0;
+            }
+        }
+    }
+
+    /// One value per whole hop (a last partial hop is dropped).
+    pub fn finish(self) -> Vec<f32> {
+        self.out
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Audio;
+    use super::{Audio, Loudness};
+
+    /// Pushed in pieces or at once, the same loudness; a hop is hz / 100
+    /// samples, truncated, and a partial last hop is dropped.
+    #[test]
+    fn loudness_is_the_same_however_the_samples_come() {
+        let s: Vec<f32> = (0..44_100 + 300)
+            .map(|i| ((i % 97) as f32 / 97.0) - 0.5)
+            .collect();
+        let mut whole = Loudness::new(44_100);
+        whole.push(&s);
+        let mut pieces = Loudness::new(44_100);
+        for c in s.chunks(1000) {
+            pieces.push(c);
+        }
+        let (a, b) = (whole.finish(), pieces.finish());
+        assert_eq!(a, b);
+        assert_eq!(a.len(), (44_100 + 300) / 441);
+        let first = (s[..441].iter().map(|v| f64::from(*v).powi(2)).sum::<f64>() / 441.0).sqrt();
+        assert_eq!(a[0], first as f32);
+    }
 
     /// Silence then a loud burst every half second: one onset per burst, and an
     /// energy that rises with the bursts.

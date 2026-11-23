@@ -11,9 +11,6 @@ use std::path::Path;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
-/// Samples per second the sound is decoded at for the analysis: enough for an
-/// envelope at 100 per second and onsets 30 ms apart.
-const ANALYSIS_HZ: u32 = 8000;
 /// Longest decode of the sound (a two-hour source decodes in well under this).
 const DECODE_DEADLINE: Duration = Duration::from_secs(120);
 
@@ -65,18 +62,30 @@ pub fn safe_fractions(safe: SafeArea, w: u32, h: u32) -> [f32; 4] {
 /// Run FFmpeg to its end within `deadline` (killed past it, and with this
 /// process), keeping its output and the start of its error output.
 pub(crate) fn capture(
-    mut cmd: std::process::Command,
+    cmd: std::process::Command,
     deadline: Duration,
 ) -> Result<(std::process::ExitStatus, Vec<u8>, String), String> {
+    capture_with(cmd, deadline, |mut out| {
+        let mut bytes = Vec::new();
+        out.read_to_end(&mut bytes).map(|_| bytes)
+    })
+}
+
+/// `capture`, with FFmpeg's output read as it comes by `read`.
+pub(crate) fn capture_with<T: Send + 'static>(
+    mut cmd: std::process::Command,
+    deadline: Duration,
+    read: impl FnOnce(Box<dyn Read + Send>) -> std::io::Result<T> + Send + 'static,
+) -> Result<(std::process::ExitStatus, T, String), String> {
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut tree = crate::process::Tree::spawn(cmd, true).map_err(|e| format!("FFmpeg: {e}"))?;
-    let mut out = tree.0.stdout().take().ok_or("FFmpeg: no output")?;
+    let out = tree.0.stdout().take().ok_or("FFmpeg: no output")?;
     let mut err = tree.0.stderr().take().ok_or("FFmpeg: no error output")?;
     let reader = std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        out.read_to_end(&mut bytes).map(|_| bytes)
+        let out: Box<dyn Read + Send> = Box::new(out);
+        read(out)
     });
     let errors = std::thread::spawn(move || {
         let mut text = String::new();
@@ -102,9 +111,10 @@ pub(crate) fn capture(
     Ok((status, bytes, errors.join().unwrap_or_default()))
 }
 
-/// The source's first audio stream as mono samples at `ANALYSIS_HZ`, or None
-/// when it has none.
-pub fn decode_sound(ffmpeg: &Path, source: &Path) -> Result<Option<Vec<f32>>, String> {
+/// The loudness of the source's first audio stream, mono at its own sample
+/// rate (`audio::Loudness`), or None when it has none. FFmpeg writes it as a
+/// WAV of 32-bit floats, whose header gives the rate; it is read as it comes.
+pub fn sound_loudness(ffmpeg: &Path, source: &Path) -> Result<Option<Vec<f32>>, String> {
     let mut cmd = crate::command(ffmpeg);
     cmd.args(["-hide_banner", "-nostdin", "-v", "error", "-i"])
         .arg(source)
@@ -116,27 +126,87 @@ pub fn decode_sound(ffmpeg: &Path, source: &Path) -> Result<Option<Vec<f32>>, St
             "-dn",
             "-ac",
             "1",
-            "-ar",
-            &ANALYSIS_HZ.to_string(),
+            "-c:a",
+            "pcm_f32le",
             "-f",
-            "f32le",
+            "wav",
             "pipe:1",
         ]);
-    let (status, bytes, log) = capture(cmd, DECODE_DEADLINE)?;
+    let (status, loudness, log) = capture_with(cmd, DECODE_DEADLINE, read_wav_loudness)?;
     if !status.success() {
         return Err(format!("FFmpeg could not decode the sound: {}", log.trim()));
     }
-    if bytes.is_empty() {
-        return Ok(None);
+    Ok(loudness)
+}
+
+/// A mono WAV of 32-bit floats, streamed: its loudness per hundredth of a
+/// second, or None when FFmpeg wrote nothing (no audio stream).
+fn read_wav_loudness(mut r: Box<dyn Read + Send>) -> std::io::Result<Option<Vec<f32>>> {
+    use std::io::{Error, ErrorKind};
+    let bad = |what: &str| Error::new(ErrorKind::InvalidData, format!("sound: {what}"));
+    let mut head = [0u8; 12];
+    match r.read_exact(&mut head) {
+        Err(e) if e.kind() == ErrorKind::UnexpectedEof => return Ok(None),
+        other => other?,
     }
-    Ok(Some(
-        bytes
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .map(|c| f32::from_le_bytes(*c))
-            .collect(),
-    ))
+    if &head[0..4] != b"RIFF" || &head[8..12] != b"WAVE" {
+        return Err(bad("not a WAV"));
+    }
+    let mut hz = 0u32;
+    loop {
+        let mut chunk = [0u8; 8];
+        r.read_exact(&mut chunk)?;
+        let size = u32::from_le_bytes([chunk[4], chunk[5], chunk[6], chunk[7]]);
+        if &chunk[0..4] == b"data" {
+            break;
+        }
+        // Headers are small; a size past this is not one FFmpeg writes.
+        if size > 1 << 20 {
+            return Err(bad("header chunk too large"));
+        }
+        let mut body = vec![0u8; size as usize + (size as usize & 1)];
+        r.read_exact(&mut body)?;
+        if &chunk[0..4] == b"fmt " {
+            if body.len() < 16 {
+                return Err(bad("short format chunk"));
+            }
+            let format = u16::from_le_bytes([body[0], body[1]]);
+            let channels = u16::from_le_bytes([body[2], body[3]]);
+            let bits = u16::from_le_bytes([body[14], body[15]]);
+            // 3: IEEE float; 0xFFFE: the extensible form FFmpeg may write.
+            if !matches!(format, 3 | 0xFFFE) || channels != 1 || bits != 32 {
+                return Err(bad("not mono 32-bit float"));
+            }
+            hz = u32::from_le_bytes([body[4], body[5], body[6], body[7]]);
+        }
+    }
+    if hz == 0 {
+        return Err(bad("no format before the samples"));
+    }
+    let mut loudness = super::audio::Loudness::new(hz);
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut carry = 0usize;
+    let mut samples = Vec::with_capacity(buf.len() / 4);
+    loop {
+        let n = r.read(&mut buf[carry..])?;
+        if n == 0 {
+            break;
+        }
+        let have = carry + n;
+        let whole = have / 4 * 4;
+        samples.clear();
+        samples.extend(
+            buf[..whole]
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|c| f32::from_le_bytes(*c)),
+        );
+        loudness.push(&samples);
+        buf.copy_within(whole..have, 0);
+        carry = have - whole;
+    }
+    Ok(Some(loudness.finish()))
 }
 
 /// The inputs of a scene drawn on a frame of `w` x `h` over `source` (its
@@ -157,13 +227,13 @@ pub fn gather(
     let mut notes = Vec::new();
     // FFmpeg refuses an output with no stream: a video without sound is not
     // decoded at all.
-    let samples = if sound {
-        decode_sound(ffmpeg, source)?
+    let loudness = if sound {
+        sound_loudness(ffmpeg, source)?
     } else {
         None
     };
-    let audio = match samples {
-        Some(samples) => Audio::analyse(&samples, ANALYSIS_HZ),
+    let audio = match loudness {
+        Some(raw) => Audio::from_loudness(raw),
         None => {
             notes.push("the video has no sound: energy is 0 and there is no onset".into());
             Audio::silent()
