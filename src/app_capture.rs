@@ -893,6 +893,9 @@ pub struct Tweaks {
     pub font: Option<String>,
     /// `font_open=1`: the font picker's list open.
     pub font_open: bool,
+    /// `motion=found|checking|use|refused|details`: the scene beside the song
+    /// listed, or checked (with a click) until that state.
+    pub motion: Option<String>,
 }
 pub fn parse_tweaks(value: &str) -> Result<Tweaks, String> {
     let mut tweaks = Tweaks::default();
@@ -922,6 +925,9 @@ pub fn parse_tweaks(value: &str) -> Result<Tweaks, String> {
             ("more", "1") => tweaks.more = true,
             ("font", _) if !item.is_empty() => tweaks.font = Some(item.into()),
             ("font_open", "1") => tweaks.font_open = true,
+            ("motion", "found" | "checking" | "use" | "refused" | "details") => {
+                tweaks.motion = Some(item.into())
+            }
             ("playhead", _) if item.parse::<u64>().is_ok() => tweaks.playhead = Some(item.into()),
             ("scroll", _) => {
                 tweaks.scroll = item
@@ -1978,6 +1984,10 @@ impl NohApp {
         {
             egui::Popup::open_id(ctx, egui::Id::new(popup));
         }
+        // `motion=` clicks « Vérifier et employer » once the scene is listed.
+        if self.capture_overlay_step >= 1 {
+            self.motion_capture_step(ctx);
+        }
         // `effect=` applies a caption effect once, as a click on its card would;
         // `style=settings` then shows its settings (compact: in the sheet).
         if self.capture_overlay_step >= 1
@@ -2080,7 +2090,10 @@ impl NohApp {
                 .is_some_and(|at| at.elapsed() > Duration::from_secs(15))
         } else {
             // Real media over the overlay need decoding, waveform and diagnosis.
-            let limit = if self.capture_overlay.is_some() {
+            let limit = if self.capture_motion().is_some() {
+                // A scene is checked in the worker, then prepared by the window.
+                240
+            } else if self.capture_overlay.is_some() {
                 25
             } else {
                 15
@@ -2128,6 +2141,9 @@ impl NohApp {
                         && !self.project.track.loading())
                     || self.diagnosis_error.is_some()
             };
+        if let Some(motion) = self.capture_motion() {
+            capture_ready &= self.motion_capture_ready(&motion);
+        }
         if let Some(percent) = std::env::var("NOH_CAPTURE_TRANSCRIPTION_PROGRESS")
             .ok()
             .and_then(|value| value.parse::<u32>().ok())

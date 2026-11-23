@@ -49,18 +49,21 @@ cargo --offline dev verify --media --mcp --offline
 | `noh_diagnose` | `request`; optional `level` (`exact` by default, or `quick`) | Diagnosis job ID |
 | `noh_export` | `request`, `diagnosis_job_id` | Checked export job ID |
 | `noh_preview` | `request` | Preview job ID; full montage at reduced quality |
-| `noh_export_project` | `request`; optional `short`, `captions`, `preview` | Full montage or selected project interval using the current WAV/media/SRT |
+| `noh_export_project` | `request`; optional `short`, `captions`, `motion`, `preview` | Full montage or selected project interval using the current WAV/media/SRT |
 | `noh_transcribe` | `source`, `output`, `transcriber`, `model`, `vad_model`; optional `language` and `ffmpeg` | Local transcription job ID |
 | `noh_burn_subtitles` | `source`, `subtitles`, `output`; optional `ffmpeg`, `size`, `placement`, `effect`, `preview` | Caption render job ID; result is an exported MP4 |
-| `noh_make_short` | `source`, `output`, `start_ms`, `end_ms`; optional `ffmpeg`, `framing`, `captions`, `preview` | Vertical clip job ID; result includes the measured duration and exported MP4 |
+| `noh_make_short` | `source`, `output`, `start_ms`, `end_ms`; optional `ffmpeg`, `framing`, `captions`, `motion`, `preview` | Vertical clip job ID; result includes the measured duration and exported MP4 |
 | `noh_job` | `job_id` | Current status, optionally waiting for a change and returning the result |
 | `noh_cancel` | `job_id` | Cancellation request/current status |
-| `noh_list_effects` | none | The caption effects `effect.id` can name, their presets and settings, the folders read and refused |
+| `noh_list_effects` | none | The caption effects `effect.id` can name, their presets and settings, the folders read and refused; in a build with motion scenes, `motion` (format, functions, caps, format reference) |
 | `noh_app_open` | `title` | A NOH window the agent drives: `app_id`, its state and every window of this session |
 | `noh_app_do` | `app_id`, `action` | One gesture in the window; the state revision it led to |
 | `noh_app_state` | `app_id`; optional `after_revision`, `wait_ms` | What the window shows, as data, with `user_position` |
 | `noh_app_look` | `app_id`, `output`; optional `scope`, `at_ms` | A PNG of the window or its monitor, written to a free path |
 | `noh_app_close` | `app_id` | The window closed, or why nothing was closed |
+| `noh_scene_check` | `scene`, `source`, `subtitles`, `output` (a new folder); optional `truth`, `safe_area`, `from_ms`, `to_ms`, `vertical`, `ffmpeg` | Experimental. Scene check job ID; `report.json` in the folder |
+| `noh_scene_look` | `scene`, `source`, `subtitles`, `output` (a new folder); optional `mode`, `at_ms`, `count`, `from_ms`, `to_ms`, `bare`, `grid`, `vertical`, `app_id`, `truth`, `safe_area`, `ffmpeg` | Experimental. Frames of the scene as PNGs (or a measure as JSON) and `look.json` |
+| `noh_scene_clip` | `scene`, `source`, `subtitles`, `start_ms`, `end_ms`, `output`; optional `truth`, `safe_area`, `vertical`, `ffmpeg` | Experimental. A clip of at most 30 s with the scene, preview quality |
 
 `noh_transcribe` processes an explicitly selected local audio file or the first
 audio stream in a selected video using local CPU transcription. All paths are
@@ -111,6 +114,56 @@ older than 7.1, such as Ubuntu 24.04's 6.1), the job warns with
 `warning.caption_colors_old_ffmpeg`: the colours may be slightly off; nothing is
 corrected. NOH measures this by drawing one red box with that FFmpeg.
 
+Motion scenes (experimental; only in a build with the `motion` feature, whose
+tools then appear): a scene is a script file that draws the lyrics, shapes,
+particles and layers over a video, checked before anything is drawn and again on
+every frame drawn. The format reference is `docs/MOTION_AUTHORING.md`, also served in
+`noh_list_effects` (`motion.guide`), with the format line, the functions, the caps
+and the faces; no tool names the language. `noh_scene_check` evaluates every frame
+of the interval at the video's frame rate and writes `report.json`: a refused
+scene fails the job (`error.scene_refused`, with the instant and the reason) and
+publishes nothing; otherwise the counted maxima against the caps, warnings, what
+was not checked, and two times measured on this machine for information (the
+script's, and the whole frame's on up to eight frames). `noh_scene_look` checks
+the same way, then draws frames with the export's engine over the video:
+`stills` (`at_ms`, up to 16), `strip` (eight frames over the second at `at_ms`),
+`sheet` (`count` frames spread over the interval) and their `sheet.png`, or
+`measure` (each text's box, JSON). `grid` draws the frame's edges, a line every
+tenth and the safe area; `bare` shows the video alone. `noh_scene_clip` and
+`noh_burn_subtitles` with `motion: {"scene": …}` draw the scene instead of the
+captions (refused with `effect`, `size` or `placement`). A scene can reframe the
+picture at the video's own size (`video()`: zoom up to 1.5, a light turn, a crop):
+the export resamples the full-size picture before the mix, a look reframes its frame
+the same way at the same instant. With `vertical`, the scene tools draw on a vertical
+Short (1080 x 1920) made from the whole picture by the scene's `video()` (covering and
+centred without one), as `noh_make_short` with `framing: "scene"` exports it; a
+vertical frame needs `safe_area`. With `app_id`, a window the agent drives shows
+the person where the agent looks: its playhead moves to the first instant (a
+sheet: `from_ms`), waiting while the person navigates as `seek` does, and its
+monitor shows the frame's grid (with `grid`) and, on the short, the safe area,
+while the playhead stays there (the window's clock is its montage's: the same as
+the video's when it holds that video or its song); an invalid look moves no
+playhead, and a refusal of the window starts no job. The
+frames are still drawn by the export's engine, in the heavy-job slot. A scene's layer shaders
+(WGSL files in `<scene>.shaders/`, at most 8) are validated with the scene, then
+compiled and drawn once in the worker; a driver that dies on one stops the worker
+and the job fails with `error.scene_worker_stopped`, nothing published. The worker's
+OpenGL context is robust where the driver offers it: a GPU reset during an export
+fails it cleanly. OpenGL is required
+(`error.motion_gl_unavailable`), there is no libass fallback. The video's sound
+gives the scene's energy and onsets; its size is the canvas. A vertical video
+requires `safe_area` (`error.safe_area_required`): the agent asks the user which
+platform the video is for. Output folders must not exist; a folder is published
+whole by a rename, or not at all. One job at a time applies to scene jobs too: a
+look started during an export is refused with `mcp.busy`. `noh_export_project` with
+`motion: {"scene": …}` draws the scene over a montage or its short, instead of the
+captions (it needs `captions`, without `effect`, `size` or `placement`, and is
+refused with `preview`: `error.scene_preview`): the song's
+WAV gives the energy and onsets, the project's size is the canvas, and the scene sees
+the song's clock (a short's first frame is at its `start_ms`); it is validated at the
+export's frames before anything starts. The scene tools still take one video
+(`source`): look at a montage's scene over one of its clips.
+
 Subtitles and their lyrics file (`noh_burn_subtitles`, and `captions` in
 `noh_make_short` and `noh_export_project`): `subtitles` is an `.srt` or its NOH
 lyrics file `<name>.noh-lyrics.json` (the lyrics with their word times; the
@@ -145,7 +198,11 @@ publication behavior. See [PROJECT_EXPORT.md](PROJECT_EXPORT.md) for clocks, fad
 and frame-boundary details.
 
 `noh_make_short` uses source playback milliseconds and a half-open interval.
-`framing` is `pad` (default) or centered `crop`. Optional `captions` is
+`framing` is `pad` (default), centered `crop`, or (experimental, in a build with
+scenes) `scene`: the scene in `motion: {"scene": …}` frames the Short from the
+whole picture and draws the lyrics of `captions.subtitles`, with `captions.safe_area`
+required and no `size`, `placement` or `effect`; `motion` is refused with the other
+framings. Optional `captions` is
 `{"subtitles":"C:/media/reviewed.srt","size":"medium","placement":"bottom"}`
 with source-timed SRT cues; style defaults match caption rendering. Full output is
 1080x1920 and `preview: true` produces the same composition at 360x640. It shares
@@ -281,7 +338,12 @@ state's `lyrics` lists the declared voices' names and each line's `voices`), `un
 `set_convert_all`, `set_effect_settings` (preset, settings, Classique's size and
 placement, captions shown on the video), `set_framing`, `set_destination`,
 `export` (the montage or the short; started or why not), `cancel`, `seek`, `play`,
-`pause` and `answer` (the open question: `modify_srt`, `cancel`, `work_on_copy`
+`pause`, `set_scene` (experimental, a build with motion scenes: the scene file
+the agent writes, by absolute path; the window looks at it every 2 s and, when
+it changed, checks that it loads and draws its first frame, in `state.scene`:
+`path`, `revision`, `status` `checking`, `loads`, `refused` with its `reason`,
+or `missing`; the whole check stays `noh_scene_check`'s, and the window does not
+draw the scene yet) and `answer` (the open question: `modify_srt`, `cancel`, `work_on_copy`
 with a free `.srt` path, `keep_lyrics`, `keep_srt`, `later`, `discard`, `save`,
 `retry`, `dismiss`; the state names the open question, so the agent knows what
 it answers; whether to ask the person first is the agent's and its user's

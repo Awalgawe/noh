@@ -320,6 +320,9 @@ fn gpu_checks() {
     an_installed_font_draws_on_the_gpu_like_the_bundled_face();
     a_failing_encoder_returns_its_diagnostics();
     super::engine_features_tests::gpu_engine_features();
+    // Motion scenes draw through the same engine, so on this thread.
+    #[cfg(feature = "motion")]
+    crate::motion::tests::motion_gpu_checks();
     let other = std::thread::spawn(|| {
         super::gl::GlRenderer::headless(8, 8, 8.0, 8.0, super::shaders::Output::PremulGamma).err()
     });
@@ -572,8 +575,9 @@ fn a_failing_encoder_returns_its_diagnostics() {
         workspace: temp.path().into(),
         width: 64,
         height: 36,
+        source: (64, 36),
         matrix: super::gl::Matrix::Bt601,
-        scene,
+        scene: super::export::Layer::Plugin(Box::new(scene)),
         deadline: std::time::Duration::from_secs(60),
     };
     match super::export::run(job, |_| {}) {

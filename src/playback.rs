@@ -1730,6 +1730,7 @@ mod tests {
         clip_audio: bool,
     ) -> crate::project::ProjectRequest {
         crate::project::ProjectRequest {
+            motion: None,
             montage: crate::engine::ExportRequest {
                 items: vec![a.into(), b.into()],
                 wav,
