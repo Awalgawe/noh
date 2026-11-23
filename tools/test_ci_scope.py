@@ -1,4 +1,6 @@
 """Check conservative platform selection and the required PR gate."""
+import itertools
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -20,6 +22,29 @@ MAY_NAME_RELEASE_ONLY = READ_RELEASE_ONLY | {
 MAY_NAME_THOSE_READERS = {".github/workflows/windows-installers.yml"}
 
 
+def platforms(paths, event_name="pull_request"):
+    """The native platforms a change selects; the plugin check is tested on its own below."""
+    scope = ci_scope.select(paths, event_name)
+    return {"windows": scope["windows"], "unix": scope["unix"]}
+
+
+def embedded_effects(text):
+    """Plugin folders an include macro builds into the binary: each include!/include_str!/include_bytes!
+    call is read to its balanced closing parenthesis, so concat!(env!(…), "…") is read whole. A call
+    naming assets/effects without a folder is returned whole, to be looked at."""
+    found = set()
+    for macro in re.finditer(r"\binclude(?:_str|_bytes)?!\s*\(", text):
+        depth, end = 1, macro.end()
+        while end < len(text) and depth:
+            depth += {"(": 1, ")": -1}.get(text[end], 0)
+            end += 1
+        call = text[macro.end():end - 1]
+        if "effects" in call.lower():
+            folder = re.search(r"assets/effects/([^/\"]+)/", call)
+            found.add(folder.group(1) if folder else call)
+    return found
+
+
 def executable_text(path, data):
     """The part of a tracked file a job can act on: a Rust comment names a file without running it."""
     if not path.endswith(".rs"):
@@ -29,7 +54,7 @@ def executable_text(path, data):
 
 class ScopeTests(unittest.TestCase):
     def test_docs_need_no_native_build(self):
-        self.assertEqual(ci_scope.select(["README.md", "docs/APP.md", "CONTRIBUTING.md",
+        self.assertEqual(platforms(["README.md", "docs/APP.md", "CONTRIBUTING.md",
                                               "SECURITY.md", ".github/pull_request_template.md"]),
                          {"windows": False, "unix": False})
 
@@ -37,29 +62,29 @@ class ScopeTests(unittest.TestCase):
         none = {"windows": False, "unix": False}
         for path in sorted(ci_scope.SITE_ONLY) + ["site/template.html", "site/i18n/fr.json"]:
             with self.subTest(path=path):
-                self.assertEqual(ci_scope.select([path]), none)
-        self.assertEqual(ci_scope.select([".github/workflows/pages.yml"]), none)
+                self.assertEqual(platforms([path]), none)
+        self.assertEqual(platforms([".github/workflows/pages.yml"]), none)
         # A page change beside an app change still builds the app everywhere.
-        self.assertEqual(ci_scope.select(["site/template.html", "src/main.rs"]), {"windows": True, "unix": True})
+        self.assertEqual(platforms(["site/template.html", "src/main.rs"]), {"windows": True, "unix": True})
         # The app reads its own words: a locale change still builds everywhere, even though the site shows some.
-        self.assertEqual(ci_scope.select(["locales/fr.lang"]), {"windows": True, "unix": True})
+        self.assertEqual(platforms(["locales/fr.lang"]), {"windows": True, "unix": True})
 
     def test_release_tooling_needs_no_native_build(self):
         none = {"windows": False, "unix": False}
         for path in sorted(ci_scope.RELEASE_ONLY):
             with self.subTest(path=path):
-                self.assertEqual(ci_scope.select([path]), none)
-        self.assertEqual(ci_scope.select(sorted(ci_scope.RELEASE_ONLY) + ["docs/RELEASING.md"]), none)
-        self.assertEqual(ci_scope.select(["tools/release_publication.py", "tools/windows-qa.ps1"]),
+                self.assertEqual(platforms([path]), none)
+        self.assertEqual(platforms(sorted(ci_scope.RELEASE_ONLY) + ["docs/RELEASING.md"]), none)
+        self.assertEqual(platforms(["tools/release_publication.py", "tools/windows-qa.ps1"]),
                          {"windows": True, "unix": False})
-        self.assertEqual(ci_scope.select(["tools/release_publication.py", "src/media.rs"]),
+        self.assertEqual(platforms(["tools/release_publication.py", "src/media.rs"]),
                          {"windows": True, "unix": True})
         # Neighbours of the listed files are not release-only because they look alike.
         for path in ("tools/release_notes.py", "tools/test_release_other.py", ".github/workflows/rust-audit.yml",
                      "assets/upgrade-baseline.lock.json.bak", "assets/linux-desktop-images.yaml",
                      "tools/linux_matrix.py", "docs/release-evidence/linux-0.2.0-inputs.json"):
             with self.subTest(path=path):
-                self.assertEqual(ci_scope.select([path]), {"windows": True, "unix": True})
+                self.assertEqual(platforms([path]), {"windows": True, "unix": True})
 
     def test_release_tooling_is_a_list_of_existing_files(self):
         # Adding a file is a decision: it changes what the required check asks before a merge.
@@ -135,13 +160,13 @@ class ScopeTests(unittest.TestCase):
                 self.assertIn("          " + command + "\n", controls[0] + "\n")
 
     def test_windows_tools_are_isolated(self):
-        self.assertEqual(ci_scope.select(["tools/windows-qa.ps1", "docs/BUILDING.md"]),
+        self.assertEqual(platforms(["tools/windows-qa.ps1", "docs/BUILDING.md"]),
                          {"windows": True, "unix": False})
-        self.assertEqual(ci_scope.select(["tools/public-installer.py", "tools/installer/public-verify.iss"]),
+        self.assertEqual(platforms(["tools/public-installer.py", "tools/installer/public-verify.iss"]),
                          {"windows": True, "unix": False})
 
     def test_unix_checks_keep_all_unix_architectures(self):
-        self.assertEqual(ci_scope.select(["tools/verify-unix.sh"]),
+        self.assertEqual(platforms(["tools/verify-unix.sh"]),
                          {"windows": False, "unix": True})
 
     def test_shared_inputs_require_every_platform(self):
@@ -150,17 +175,17 @@ class ScopeTests(unittest.TestCase):
                      "tools/dev.rs", "tools/delivery.py", "tests/media.rs", ".github/workflows/pr.yml",
                      "tools/ci_scope.py", "future/input.dat", "docs/embedded.bin"):
             with self.subTest(path=path):
-                self.assertEqual(ci_scope.select([path]), {"windows": True, "unix": True})
+                self.assertEqual(platforms([path]), {"windows": True, "unix": True})
 
     def test_mixed_changes_take_union(self):
-        self.assertEqual(ci_scope.select(["tools/windows-qa.ps1", "tools/verify-unix.sh"]),
+        self.assertEqual(platforms(["tools/windows-qa.ps1", "tools/verify-unix.sh"]),
                          {"windows": True, "unix": True})
 
     def test_missing_comparison_builds_all(self):
         for event_name, event in (("workflow_dispatch", {}), ("push", {"before": "0" * 40}),
                                   ("pull_request", {}), ("push", {"before": "--bad"})):
             self.assertEqual(ci_scope.select(ci_scope.changed_paths(event_name, event)),
-                             {"windows": True, "unix": True})
+                             {"windows": True, "unix": True, "plugins": True})
 
     def test_real_git_diff_includes_renames_deletions_and_many_files(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -186,23 +211,104 @@ class ScopeTests(unittest.TestCase):
             self.assertEqual(len(paths), 307)
             self.assertIn("src/removed.rs", paths)
             self.assertIn("docs/moved.md", paths)
-            self.assertEqual(ci_scope.select(paths), {"windows": True, "unix": True})
+            self.assertEqual(platforms(paths), {"windows": True, "unix": True})
             self.assertIsNone(ci_scope.changed_paths("push", {"before": "a" * 40}, root))
 
     def test_gate_accepts_only_expected_success_or_skip(self):
-        for windows, unix in ((False, False), (True, False), (False, True), (True, True)):
-            scope = {"windows": windows, "unix": unix}
+        for windows, unix, plugins in itertools.product((False, True), repeat=3):
+            scope = {"windows": windows, "unix": unix, "plugins": plugins}
             results = {"scope": "success", "audit": "success" if windows or unix else "skipped",
                        "windows": "success" if windows else "skipped",
-                       "unix": "success" if unix else "skipped"}
+                       "unix": "success" if unix else "skipped",
+                       "plugins": "success" if plugins else "skipped"}
             self.assertTrue(ci_scope.passed(scope, results))
             for job in results:
                 for failure in ("failure", "cancelled", None):
                     with self.subTest(scope=scope, job=job, failure=failure):
                         self.assertFalse(ci_scope.passed(scope, {**results, job: failure}))
-            for job, needed in (("windows", windows), ("unix", unix)):
+            for job, needed in (("windows", windows), ("unix", unix), ("plugins", plugins)):
                 if needed:
                     self.assertFalse(ci_scope.passed(scope, {**results, job: "skipped"}))
+
+
+class PluginTests(unittest.TestCase):
+    def test_a_style_plugin_alone_builds_nothing_on_a_pr_and_runs_the_light_check(self):
+        for paths in (["assets/effects/neon/effect.json"],
+                      ["assets/effects/neon/effect.json", "assets/effects/neon/notes/read me.txt",
+                       "assets/effects/drop/effect.json", "docs/EFFECTS.md"]):
+            with self.subTest(paths=paths):
+                self.assertEqual(ci_scope.select(paths), {"windows": False, "unix": False, "plugins": True})
+        # A deleted or renamed plugin is listed on both sides of the diff: still a plugin change.
+        self.assertEqual(ci_scope.select(["assets/effects/old/effect.json", "assets/effects/new/effect.json"]),
+                         {"windows": False, "unix": False, "plugins": True})
+
+    def test_main_and_dispatch_build_everything_for_a_plugin(self):
+        # The Rust tests that read assets/effects run after each merge, and build the pack the PRs use.
+        for event_name in ("push", "workflow_dispatch"):
+            with self.subTest(event_name=event_name):
+                self.assertEqual(ci_scope.select(["assets/effects/neon/effect.json"], event_name),
+                                 {"windows": True, "unix": True, "plugins": True})
+                self.assertEqual(ci_scope.select(["docs/APP.md"], event_name),
+                                 {"windows": False, "unix": False, "plugins": False})
+
+    def test_classique_is_compiled_in_and_builds_everywhere(self):
+        for path in ("assets/effects/classique/effect.json", "assets/effects/classique/other.png"):
+            with self.subTest(path=path):
+                self.assertEqual(ci_scope.select([path]), {"windows": True, "unix": True, "plugins": True})
+
+    def test_paths_that_are_not_inside_a_plugin_folder_build_everywhere(self):
+        for path in ("assets/effects/README.md", "assets/effects/effect.json", "assets/effects/neon/",
+                     "assets/effects-old/neon/effect.json", "assets/effect/neon/effect.json",
+                     "src/assets/effects/neon/effect.json", "tests/fixtures/fx/wipe/effect.json",
+                     "tests/fixtures/fx-instances-linux.txt"):
+            with self.subTest(path=path):
+                self.assertEqual(platforms([path]), {"windows": True, "unix": True})
+        # A plugin beside app code: the app builds everywhere and the light check runs with that build.
+        self.assertEqual(ci_scope.select(["assets/effects/neon/effect.json", "src/fx/plugin.rs"]),
+                         {"windows": True, "unix": True, "plugins": True})
+
+    def test_the_light_check_runs_when_its_own_files_change(self):
+        for path in sorted(ci_scope.PLUGIN_CHECK):
+            with self.subTest(path=path):
+                self.assertTrue(ci_scope.select([path])["plugins"])
+                self.assertTrue((ROOT / path).is_file())
+        for path in ("README.md", "src/main.rs", "site/template.html", "tools/release_next.py"):
+            with self.subTest(path=path):
+                self.assertFalse(ci_scope.select([path])["plugins"])
+
+    def test_only_classique_is_compiled_into_the_app(self):
+        # A plugin folder named by include!/include_str!/include_bytes! is part of the binary: it cannot be
+        # style-only.
+        tracked = subprocess.run(["git", "ls-files", "-z", "--", "*.rs"], cwd=ROOT, capture_output=True,
+                                 check=True).stdout.decode("utf-8").rstrip(chr(0)).split(chr(0))
+        embedded = set()
+        for item in tracked:
+            text = executable_text(item, (ROOT / item).read_bytes()).decode("utf-8", errors="replace")
+            embedded |= embedded_effects(text)
+        self.assertEqual(embedded, ci_scope.COMPILED_EFFECTS)
+        # And no build script or manifest reads the plugin folders at compile time.
+        scripts = subprocess.run(["git", "ls-files", "-z", "--", "build.rs", "*/build.rs", "Cargo.toml",
+                                  "*/Cargo.toml"], cwd=ROOT, capture_output=True,
+                                 check=True).stdout.decode("utf-8").rstrip(chr(0)).split(chr(0))
+        self.assertIn("build.rs", scripts)
+        for path in scripts:
+            with self.subTest(path=path):
+                self.assertNotIn(b"assets/effects", (ROOT / path).read_bytes())
+
+    def test_every_include_form_is_seen(self):
+        for source, expected in (
+            ('pub const C: &str = include_str!("../../assets/effects/classique/effect.json");', {"classique"}),
+            ('include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/effects/drop/effect.json"))', {"drop"}),
+            ('include!("../../assets/effects/drop/gen.rs");', {"drop"}),
+            ('static B: &[u8] = include_bytes! (\n    "../assets/effects/neon/glyphs.bin"\n);', {"neon"}),
+            ('include!(concat!(env!("OUT_DIR"), "/build_info.rs"));', set()),
+            ('let p = Path::new("assets/effects/drop"); // read at run time', set()),
+            ('my_include!("assets/effects/drop/x")', set()),
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(embedded_effects(source), expected)
+        # A call naming the effects folder without a plugin folder is reported whole.
+        self.assertEqual(embedded_effects('include_str!(EFFECTS_DIR)'), {"EFFECTS_DIR"})
 
 
 if __name__ == "__main__":

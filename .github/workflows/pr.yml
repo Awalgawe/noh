@@ -22,13 +22,16 @@ jobs:
     outputs:
       windows: ${{ steps.scope.outputs.windows }}
       unix: ${{ steps.scope.outputs.unix }}
+      plugins: ${{ steps.scope.outputs.plugins }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
       - name: Verify routing and merge-gate controls
-        run: python3 -m unittest discover -s tools -p test_ci_scope.py
+        run: |
+          python3 -m unittest discover -s tools -p test_ci_scope.py
+          python3 -m unittest discover -s tools -p test_check_style_plugins.py
       - name: Check the download site builder with a recorded release
         run: python3 -m unittest discover -s tools -p test_build_site.py
       - name: Select native platforms from the complete Git diff
@@ -172,10 +175,40 @@ jobs:
     with:
       skip_audit: true
 
+  plugins:
+    name: Style plugins
+    # A style plugin is read at run time: check it with a NOH already built, this run's or main's.
+    needs: [scope, unix]
+    if: ${{ !cancelled() && needs.scope.outputs.plugins == 'true' && (needs.unix.result == 'success' || needs.unix.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read  # to find and download the pack another run kept
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0  # to compare the pack's commit with this PR's base
+      - name: Fetch a NOH built by this run, or by main for the same app
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UNIX_RESULT: ${{ needs.unix.result }}
+        run: python3 tools/check_style_plugins.py fetch --out "$RUNNER_TEMP/noh-plugin-check"
+      - name: Install the runtime the prebuilt NOH needs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg xvfb xauth libgl1-mesa-dri libegl1             libxkbcommon-x11-0 libasound2t64
+          missing="$(ldd "$RUNNER_TEMP/noh-plugin-check/noh" "$RUNNER_TEMP/noh-plugin-check/noh-lib-tests" | grep 'not found' || true)"
+          if [[ -n "$missing" ]]; then echo "$missing" >&2; exit 1; fi
+      - name: Run the effect tests on these plugins and draw every changed preset
+        timeout-minutes: 15
+        run: python3 tools/check_style_plugins.py check --bundle "$RUNNER_TEMP/noh-plugin-check"
+
   required:
     name: PR checks
     if: always()
-    needs: [scope, audit, windows, unix]
+    needs: [scope, audit, windows, unix, plugins]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
