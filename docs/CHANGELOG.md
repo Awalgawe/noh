@@ -20,7 +20,8 @@ builds are not public releases.
   knows where you are on the timeline, and never takes the playhead from you
   while you navigate. In such a window you can play, pause and
   move through the video, and point out a clip or a lyrics line; editing is the
-  agent's. **Stop driving** gives the window back to you. A window opens only
+  agent's. **History** in its badge lists what the agent did there, and
+  **Stop driving** gives the window back to you. A window opens only
   if the computer has the memory for it, and stays open after the agent's
   session as an ordinary NOH window.
 

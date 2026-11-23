@@ -254,6 +254,8 @@ pause and move through the video, and cannot edit: they ask the agent. A click
 on a clip or a lyrics line designates it. **Stop driving** in the badge, or
 closing the window, gives the window back to the person as an ordinary NOH;
 the agent can then no longer act in it (`app.released_by_user`, `app.closed`).
+**History** in the badge shows the person the last twenty gestures that
+applied, with their time; refused gestures and looks are not listed.
 
 A window opens only if the machine has room for it. Free memory, and on
 Windows free graphics memory, are measured at each open; each window already

@@ -232,6 +232,10 @@ pub(super) struct Driven {
     /// A heavy job the agent started here runs; `job_done` goes when it ends.
     pub agent_job: bool,
     pub agent_cancelled: bool,
+    /// What the agent did, newest last: its time of day and its text.
+    pub history: std::collections::VecDeque<(String, String)>,
+    /// The history menu under the badge is open.
+    pub history_open: bool,
 }
 
 impl Driven {
@@ -285,6 +289,8 @@ impl Driven {
             asked_turn: None,
             agent_job: false,
             agent_cancelled: false,
+            history: Default::default(),
+            history_open: false,
         }
     }
 
@@ -642,7 +648,9 @@ impl NohApp {
         if marked {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
+        let history_open = stop && d.history_open;
         let mut stop_clicked = false;
+        let mut history_clicked = false;
         let mut badge_rect = None;
         if !text.is_empty() {
             // Above `egui::Modal` (Foreground): « Arrêter le pilotage » stays
@@ -672,6 +680,15 @@ impl NohApp {
                                 ui.add_space(18.0);
                                 ui.label(egui::RichText::new(&text).color(t.text));
                                 if stop {
+                                    history_clicked = style::button(
+                                        ui,
+                                        l.text("driven.history"),
+                                        true,
+                                        history_open,
+                                        0.0,
+                                    )
+                                    .on_hover_text(l.text("driven.history_hint"))
+                                    .clicked();
                                     stop_clicked =
                                         style::button(ui, l.text("driven.stop"), true, false, 0.0)
                                             .on_hover_text(l.text("driven.stop_hint"))
@@ -681,6 +698,33 @@ impl NohApp {
                         });
                 });
             badge_rect = Some(area.response.rect);
+        }
+        // The history menu, under the badge and above questions too.
+        let mut menu_rect = None;
+        if let (true, Some(badge), Some(d)) = (history_open, badge_rect, &self.driven) {
+            let area = egui::Area::new(egui::Id::new("driven-history"))
+                .order(egui::Order::Tooltip)
+                .fixed_pos(badge.left_bottom() + vec2(0.0, 4.0))
+                .interactable(true)
+                .show(ctx, |ui| {
+                    let t = style::tokens(ui);
+                    egui::Frame::popup(ui.style()).show(ui, |ui| {
+                        ui.set_min_width(badge.width().max(240.0));
+                        if d.history.is_empty() {
+                            ui.label(
+                                egui::RichText::new(l.text("driven.history_empty")).color(t.text_2),
+                            );
+                        }
+                        // Newest first.
+                        for (at, what) in d.history.iter().rev() {
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(at).color(t.text_2).monospace());
+                                ui.label(egui::RichText::new(what).color(t.text));
+                            });
+                        }
+                    });
+                });
+            menu_rect = Some(area.response.rect);
         }
         if let Some((pos, at)) = bubble
             && now < at + BUBBLE
@@ -697,6 +741,12 @@ impl NohApp {
         }
         if let Some(rect) = badge_rect {
             self.driven_allow(rect, Zone::Badge);
+        }
+        if let Some(rect) = menu_rect {
+            self.driven_allow(rect, Zone::Badge);
+        }
+        if history_clicked && let Some(d) = &mut self.driven {
+            d.history_open = !d.history_open;
         }
         if stop_clicked {
             self.release_piloting(ctx);
@@ -1361,6 +1411,63 @@ mod tests {
             ToServer::Done { error: Some(e), .. } => Some(e.code.as_str()),
             _ => None,
         }
+    }
+
+    #[test]
+    fn the_history_keeps_the_last_twenty_gestures_that_applied() {
+        use driven::Action;
+        let mut w = window(true);
+        for k in 0..22u64 {
+            let answer = w.act(
+                k + 1,
+                Action::SetRange {
+                    start_ms: Some(1_000 + k * 100),
+                    end_ms: Some(8_000),
+                },
+            );
+            assert!(
+                matches!(answer, ToServer::Done { error: None, .. }),
+                "{answer:?}"
+            );
+        }
+        // Refused: not listed.
+        let answer = w.act(40, Action::RemoveClip { clip_id: 999 });
+        assert_eq!(refusal_code(&answer), Some("app.refused"));
+        let answer = w.act(41, Action::Seek { ms: 3_000 });
+        assert!(
+            matches!(answer, ToServer::Done { error: None, .. }),
+            "{answer:?}"
+        );
+        let l = w.app.locale.language;
+        let history = &w.app.driven.as_ref().unwrap().history;
+        assert_eq!(history.len(), 20);
+        let texts: Vec<&str> = history.iter().map(|(_, t)| t.as_str()).collect();
+        assert_eq!(
+            texts[19],
+            l.format("driven.h.seek", &[noh::timeline::format_time(3_000)])
+        );
+        assert_eq!(
+            texts[18],
+            l.format(
+                "driven.h.range",
+                &[
+                    noh::timeline::format_time(3_100),
+                    noh::timeline::format_time(8_000)
+                ]
+            )
+        );
+        // The three oldest ranges are gone.
+        assert_eq!(
+            texts[0],
+            l.format(
+                "driven.h.range",
+                &[
+                    noh::timeline::format_time(1_300),
+                    noh::timeline::format_time(8_000)
+                ]
+            )
+        );
+        assert!(history.iter().all(|(at, _)| at.len() == 8));
     }
 
     #[test]
