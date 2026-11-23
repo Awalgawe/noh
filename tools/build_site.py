@@ -33,7 +33,7 @@ REPO = "Awalgawe/noh"
 SITE_URL = "https://awalgawe.github.io/noh/"
 # The NOH version the drawings were made from (they follow its interface, not the latest release).
 # Redrawing for another version: change DRAWN, then run --snapshot-app-strings v<DRAWN>.
-DRAWN = "0.3.1"
+DRAWN = "0.4.0"
 # Release files offered by the page, by their published names.
 ASSETS = {
     "web": r"NOH-(?P<v>[0-9][^-]*)-windows-x64-Web-Setup\.exe",
