@@ -30,9 +30,12 @@ pub const ATLAS_BUDGET: f64 = 0.6;
 
 /// The glyph shader's hooks for motion scenes, inside the plugin shader profile
 /// (no loop, no helper call, no texture of its own; validated as plugins are).
-/// The dissolve's noise is computed from where the pixel is on the canvas
-/// (`frame` times the canvas, which is the export's size in the preview too),
-/// so a scene dissolves alike at every pixel scale.
+/// The dissolve's grain lives on the letter: its noise is computed from where
+/// the pixel is in the glyph, from its centre, in canvas pixels of the text at scale 1 (`time`
+/// carries the glyph's size and its place in the line, `grain_key`). So the
+/// grain is 7 pixels on a text at scale 1 and grows with the text's scale, as
+/// in the scenes made with the prototype, and it is the same at every pixel
+/// scale (the canvas is the export's size in the preview too).
 pub const MOTION_HOOKS: &str = r#"
 fn shade(i: GlyphIn) -> vec4<f32> {
   let q = i.local * 2.0 - vec2<f32>(1.0);
@@ -52,7 +55,14 @@ fn shade(i: GlyphIn) -> vec4<f32> {
   if (i.progress <= 0.0) {
     return i.color * i.coverage;
   }
-  let px = i.frame * g.canvas;
+  let m = floor(i.time / 16.0);
+  let k = i.time - 16.0 * m;
+  let gw = floor(m / 1024.0);
+  let gh = m - 1024.0 * gw;
+  // From the glyph's centre: its sprite's margin depends on the raster, evenly
+  // on both sides.
+  let glyph = (i.local - vec2<f32>(0.5)) * vec2<f32>(gw, gh) * 4.0 + vec2<f32>(k * 97.0, k * 41.0);
+  let px = select(i.frame * g.canvas, glyph, i.time > 0.5);
   let c1 = px / 7.0;
   let b1 = floor(c1);
   let f1 = fract(c1);
@@ -80,6 +90,15 @@ fn shade(i: GlyphIn) -> vec4<f32> {
   return (i.color * (1.0 - edge) * alive + i.color2 * edge) * i.coverage;
 }
 "#;
+
+/// What a glyph's dissolve grain is laid by, for the hooks' `time`: the glyph's
+/// size in canvas pixels at scale 1, in 4-pixel steps (up to 4092), and its
+/// index in the line modulo 16 (the next glyphs' grains are offset), packed in
+/// a whole number under 2^24 so that a 32-bit float holds it exactly.
+pub(crate) fn grain_key(w: f32, h: f32, index: usize) -> f32 {
+    let q = |v: f32| (v / 4.0).round().clamp(0.0, 1023.0) as u32;
+    ((q(w) * 1024 + q(h)) * 16 + (index % 16) as u32) as f32
+}
 
 fn srgb_to_linear(c: f32) -> f32 {
     if c <= 0.04045 {
@@ -469,7 +488,7 @@ impl Painter {
                             color: premul(col, a),
                             color2: premul(edge, a),
                             params: [0.0, 0.0, 0.0, g.ppt],
-                            extra: [-1.0, 0.0, dis, g.index as f32],
+                            extra: [-1.0, grain_key(g.w, g.h, g.index), dis, g.index as f32],
                         };
                         if let Some((c, o, blur, dy)) = shadow {
                             main.push(Inst {

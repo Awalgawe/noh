@@ -1233,6 +1233,7 @@ pub(crate) fn motion_gpu_checks() {
     the_export_overlay_is_the_m2_render();
     shader_layers_draw_or_hide();
     the_paths_frame_the_picture_alike();
+    the_dissolve_grain_grows_with_the_text();
     a_vertical_frame_is_made_from_a_wide_picture();
     compositor_memory();
     shape_timings();
@@ -2042,7 +2043,7 @@ fn blocks(px: &[u8], w: usize, h: usize, n: usize) -> Vec<f64> {
 
 /// A dissolving title dissolves alike at two pixel scales of the same canvas
 /// (the preview draws the export's canvas at the monitor's size): its noise
-/// comes from where the pixel is on the canvas, not from the glyph atlas.
+/// comes from where the pixel is in the letter, not from the glyph atlas.
 /// Compared block by block (16 canvas pixels, a few grains of the noise): a
 /// noise laid differently would leave other blocks dissolved; a 0.05 change of
 /// the dissolve is the scale of difference the check must stay under.
@@ -2081,11 +2082,63 @@ fn dissolve_is_the_same_at_every_pixel_scale() {
     assert!(scales < step / 2.0, "scales {scales}, step {step}");
 }
 
+/// The dissolve's grain lives on the letter and grows with the text's scale (7
+/// canvas pixels at scale 1, as the scenes made with the prototype show it): a
+/// title at scale 2 dissolves as the same title at scale 1 seen twice as close
+/// (both centred, so the scale-2 frame shows the middle half of the scale-1
+/// frame). Compared block by block, against the gap a 0.05 change of the
+/// dissolve makes; a grain fixed on the canvas would differ by more.
+fn the_dissolve_grain_grows_with_the_text() {
+    let at = |d: f64, s: f64| {
+        format!(
+            "fn frame(t, ctx) {{ draw(text(\"DISSOLVE\").size(0.3).scale({s:.1}).dissolve({d:.2}).color(\"#FFFFFF\")); }}"
+        )
+    };
+    let (w, h) = (1280usize, 720usize);
+    // The middle half of a frame, as its own image.
+    let middle = |px: &[u8]| -> Vec<u8> {
+        let mut out = Vec::with_capacity(w * h);
+        for y in h / 4..h * 3 / 4 {
+            out.extend_from_slice(&px[(y * w + w / 4) * 4..(y * w + w * 3 / 4) * 4]);
+        }
+        out
+    };
+    let one = |d: f64| {
+        blocks(
+            &middle(&render(&at(d, 1.0), 1280, 720, (1280, 720), 0.0)),
+            w / 2,
+            h / 2,
+            8,
+        )
+    };
+    let two = blocks(
+        &render(&at(0.45, 2.0), 1280, 720, (1280, 720), 0.0),
+        w,
+        h,
+        16,
+    );
+    let (one, shifted) = (one(0.45), one(0.50));
+    let mean = |a: &[f64], b: &[f64]| {
+        let (s, n) = a
+            .iter()
+            .zip(b)
+            .filter(|(x, y)| **x > 0.0 || **y > 0.0)
+            .fold((0.0, 0), |(s, n), (x, y)| (s + (x - y).abs(), n + 1));
+        s / f64::from(n.max(1))
+    };
+    let (scaled, step) = (mean(&one, &two), mean(&one, &shifted));
+    eprintln!(
+        "dissolve grain: scale 2 vs scale 1 seen closer {scaled:.2}/255 per block; dissolve 0.45 vs 0.50 {step:.2}/255"
+    );
+    assert!(scaled < step / 2.0, "scaled {scaled}, step {step}");
+}
+
 /// What NOH draws matches what the prototype drew, scene by scene, at the
 /// prototype's size (its `--compare … --dump` images; their folder is given by
 /// NOH_MOTION_PROTOTYPE_REF, a local check: the images are not in the
-/// repository). Dissolving text is left out: its noise now comes from the
-/// canvas, not from the atlas, so it is a different noise by design. With
+/// repository). Dissolving text is left out: its noise now comes from where the
+/// pixel is in the letter, not from the atlas, so its holes fall elsewhere (the
+/// same grain size). With
 /// layers at full opacity the reference is the prototype's
 /// one-pass image (`-old`): its layered one (`-new`) carries the 8-bit error of
 /// its passes (its own log: 11 bytes off by 3 at 2.5 s), which NOH no longer has.
