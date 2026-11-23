@@ -1229,6 +1229,7 @@ impl NohApp {
                             lines: 3,
                             lose: 2,
                             hand: true,
+                            voices_lost: 0,
                             srt_time: Some("14:32".into()),
                             lyrics_time: Some("14:05".into()),
                         },
@@ -2500,6 +2501,7 @@ mod tests {
         let result = noh::subtitles::SubtitleResult {
             output: "speech.srt".into(),
             track: noh::subtitle_track::SubtitleTrack {
+                voices: Vec::new(),
                 language: None,
                 duration_ms: 1000,
                 cues: vec![],

@@ -32,6 +32,7 @@ pub fn parse(text: &str, duration_ms: u64) -> Result<SubtitleTrack, SrtError> {
         return Err(SrtError::InputLimit);
     }
     let mut track = SubtitleTrack {
+        voices: Vec::new(),
         language: None,
         duration_ms,
         cues: Vec::new(),
@@ -122,6 +123,7 @@ pub fn parse(text: &str, duration_ms: u64) -> Result<SubtitleTrack, SrtError> {
         }
         locations.push((timing_line, text_line));
         track.cues.push(SubtitleCue {
+            voices: Vec::new(),
             start_ms,
             end_ms,
             text: cue_text,
@@ -230,11 +232,13 @@ mod tests {
 
     fn track(cues: impl IntoIterator<Item = (u64, u64, String)>) -> SubtitleTrack {
         SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: MAX_DURATION_MS,
             cues: cues
                 .into_iter()
                 .map(|(start_ms, end_ms, text)| SubtitleCue {
+                    voices: Vec::new(),
                     start_ms,
                     end_ms,
                     text,

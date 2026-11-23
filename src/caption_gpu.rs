@@ -435,6 +435,7 @@ pub(crate) fn job_for_test(input: &[&str], finish: Option<&str>) -> Job {
         size: (1080, 1920),
         matrix: crate::color::Matrix::Bt709,
         track: SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 1_000,
             cues: Vec::new(),

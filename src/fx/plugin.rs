@@ -3724,6 +3724,7 @@ fn chunked(lines: &[Line], c: Chunk, preroll: f64) -> Vec<Line> {
                 None => l.end,
             };
             out.push(Line {
+                voices: l.voices.clone(),
                 start,
                 end,
                 words: words.to_vec(),

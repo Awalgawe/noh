@@ -7,6 +7,8 @@ pub struct Word {
     pub end: f64,
     /// A word cut into syllables (Task 41 S6), in order; empty otherwise.
     pub syllables: Vec<Syllable>,
+    /// A backing vocal: inside a `(…)` group of its cue (`backing_flags`).
+    pub backing: bool,
 }
 
 /// A syllable of a word: its first character in the word, and its time.
@@ -27,6 +29,8 @@ pub struct Line {
     /// Indices of the words that start a line typed in the cue (never 0), for
     /// effects that keep the cue's own line breaks (`layout.line_breaks`).
     pub breaks: Vec<usize>,
+    /// The voices that sing the line (voice numbers, sorted; empty: unknown).
+    pub voices: Vec<u8>,
 }
 
 /// Where a cue's own lines start, as indices of its whitespace-separated words:
@@ -55,6 +59,7 @@ pub fn split_words(start: f64, end: f64, words: &[String], sep: &str) -> Line {
         .map(|w| {
             let d = (end - start) * weight(w) / total;
             let word = Word {
+                backing: false,
                 text: w.clone(),
                 start: t,
                 end: t + d,
@@ -65,6 +70,7 @@ pub fn split_words(start: f64, end: f64, words: &[String], sep: &str) -> Line {
         })
         .collect();
     Line {
+        voices: Vec::new(),
         start,
         end,
         words,
@@ -106,6 +112,7 @@ fn timed_line(
                 })
                 .collect();
             Word {
+                backing: false,
                 text: w.text.clone(),
                 start: s(w.start_ms),
                 end,
@@ -114,6 +121,7 @@ fn timed_line(
         })
         .collect();
     Line {
+        voices: Vec::new(),
         start: s(c.start_ms),
         end: s(c.end_ms),
         words,
@@ -144,6 +152,14 @@ pub fn from_track(track: &crate::subtitle_track::SubtitleTrack) -> Vec<Line> {
                 // Both branches carry the text's own words (words_fit requires the
                 // same words), so the text's breaks always index them.
                 line.breaks = typed_breaks(&c.text);
+                line.voices = c.voices.clone();
+                for (w, b) in line
+                    .words
+                    .iter_mut()
+                    .zip(crate::subtitle_track::backing_flags(&c.text))
+                {
+                    w.backing = b;
+                }
                 line
             })
         })
@@ -164,6 +180,7 @@ mod tests {
         assert!(super::typed_breaks("a b").is_empty());
         let line = |cue: SubtitleCue| {
             super::from_track(&SubtitleTrack {
+                voices: Vec::new(),
                 language: None,
                 duration_ms: 5000,
                 cues: vec![cue],
@@ -230,6 +247,7 @@ mod tests {
             },
         ]);
         let track = SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 5000,
             cues: vec![cue],
@@ -284,6 +302,7 @@ mod tests {
             },
         ]);
         let track = SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 5000,
             cues: vec![cue],
@@ -318,6 +337,7 @@ mod tests {
             },
         ]);
         let track = SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 5000,
             cues: vec![cue, SubtitleCue::new(3000, 4000, "a bb")],
@@ -333,5 +353,21 @@ mod tests {
         );
         // No times: the letter split, as before (1 and 2 letters).
         assert!((lines[1].words[1].start - (3.0 + 1.0 / 3.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn lines_carry_their_voices_and_words_their_backing_flag() {
+        let mut cue = SubtitleCue::new(1000, 3000, "jusqu'au matin (au matin)");
+        cue.voices = vec![2];
+        let lines = super::from_track(&SubtitleTrack {
+            voices: vec![crate::subtitle_track::Voice::default(); 2],
+            language: None,
+            duration_ms: 5000,
+            cues: vec![cue, SubtitleCue::new(3000, 4000, "plain")],
+        });
+        assert_eq!(lines[0].voices, [2]);
+        let back: Vec<bool> = lines[0].words.iter().map(|w| w.backing).collect();
+        assert_eq!(back, [false, false, true, true]);
+        assert!(lines[1].voices.is_empty() && !lines[1].words[0].backing);
     }
 }

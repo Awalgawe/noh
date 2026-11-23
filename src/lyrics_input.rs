@@ -349,6 +349,13 @@ fn unify(
             let mut chosen = srt_track.expect("an .srt that reads");
             words::merge(&mut chosen, &words::to_lyrics_json(&lyrics.track, None));
             chosen.language = lyrics.track.language.clone();
+            let voices_lost = words::carry_voices(&lyrics.track, &mut chosen);
+            if voices_lost > 0 {
+                notes.push(Note {
+                    code: "lyrics_input.voices_lost",
+                    args: vec![voices_lost.to_string()],
+                });
+            }
             // Not `<stem>.replaced.noh-lyrics.json`: that would read as the
             // lyrics file of a `<stem>.replaced.srt`.
             words::ensure_writable(lyrics_path)
@@ -620,12 +627,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let srt = dir.path().join("song.srt");
         std::fs::write(&srt, A).unwrap();
-        std::fs::write(words::lyrics_path(&srt), br#"{"version":3,"cues":[]}"#).unwrap();
+        std::fs::write(words::lyrics_path(&srt), br#"{"version":4,"cues":[]}"#).unwrap();
         let resolved = resolve(&srt, None, no_terminal).unwrap();
         assert_eq!(resolved.notes[0].code, "lyrics_input.unusable");
         assert_eq!(
             std::fs::read(words::lyrics_path(&srt)).unwrap(),
-            br#"{"version":3,"cues":[]}"#
+            br#"{"version":4,"cues":[]}"#
         );
     }
 
@@ -685,5 +692,38 @@ mod tests {
         assert_eq!("srt".parse::<Truth>(), Ok(Truth::Srt));
         assert!("paroles".parse::<Truth>().is_err());
         assert_eq!(serde_json::to_string(&Truth::Srt).unwrap(), "\"srt\"");
+    }
+
+    #[test]
+    fn truth_srt_keeps_the_voices_it_can_and_names_how_many_lines_lose_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let srt = dir.path().join("song.srt");
+        // Same times for the first line, new times and text for the second.
+        std::fs::write(
+            &srt,
+            "1\n00:00:01,000 --> 00:00:03,000\nla la la\n\n2\n00:00:04,100 --> 00:00:05,000\nlo lu\n\n",
+        )
+        .unwrap();
+        let mut voiced = lyrics(A);
+        voiced.voices = vec![crate::subtitle_track::Voice::default(); 2];
+        voiced.cues[0].voices = vec![1];
+        voiced.cues[1].voices = vec![1, 2];
+        words::write_lyrics(&words::lyrics_path(&srt), &voiced, None).unwrap();
+        let resolved = resolve(&srt, Some(Truth::Srt), no_terminal).unwrap();
+        assert!(resolved.notes.contains(&Note {
+            code: "lyrics_input.voices_lost",
+            args: vec!["1".into()],
+        }));
+        let now = words::read_lyrics(&words::lyrics_path(&srt))
+            .unwrap()
+            .unwrap()
+            .track;
+        assert_eq!(now.voices, voiced.voices, "the declared voices stay");
+        assert_eq!(now.cues[0].voices, [1]);
+        assert!(now.cues[1].voices.is_empty());
+        assert_eq!(
+            note_text(resolved.notes.last().unwrap()),
+            "The lyrics file was replaced by the .srt."
+        );
     }
 }

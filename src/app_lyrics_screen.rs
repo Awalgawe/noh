@@ -4518,6 +4518,7 @@ mod tests {
             })
             .collect();
         app.replace_lyrics(Arc::new(SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 60_000,
             cues,
@@ -4951,6 +4952,7 @@ mod tests {
         for size in windows() {
             let mut app = app(folder.path());
             app.replace_lyrics(Arc::new(SubtitleTrack {
+                voices: Vec::new(),
                 language: None,
                 duration_ms: 60_000,
                 cues: vec![SubtitleCue::new(1000, 31_000, line.clone())],
@@ -5038,6 +5040,7 @@ mod tests {
             app.set_language_packs(noh::languages::scan(std::slice::from_ref(&packs)));
             app.subtitles.language = "en".into();
             app.replace_lyrics(Arc::new(SubtitleTrack {
+                voices: Vec::new(),
                 language: None,
                 duration_ms: 60_000,
                 cues: vec![SubtitleCue::new(1000, 31_000, line.clone())],
@@ -5108,6 +5111,7 @@ mod tests {
             .collect();
         app.project.duration_ms = duration;
         app.replace_lyrics(Arc::new(SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: duration,
             cues,

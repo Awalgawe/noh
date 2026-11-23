@@ -481,9 +481,11 @@ fn karaoke_wipes_a_word_cut_into_syllables_one_syllable_at_a_time() {
     // The fill glyphs of "Something", left to right: S(ung), W(iping) or R(est).
     let mut glyphs = |syllables: Vec<Syllable>, t: f64| -> String {
         let line = Line {
+            voices: Vec::new(),
             start: 1.0,
             end: 2.6,
             words: vec![Word {
+                backing: false,
                 text: "Something".into(),
                 start: 1.0,
                 end: 2.6,
@@ -687,9 +689,11 @@ fn word_lead_moves_words_and_syllables_earlier_but_not_the_line() {
     let effect = wipe_with_lead(serde_json::json!(0.3)).unwrap();
     let mut fonts = Fonts::load().unwrap();
     let line = |syllables: Vec<Syllable>| Line {
+        voices: Vec::new(),
         start: 1.0,
         end: 2.6,
         words: vec![Word {
+            backing: false,
             text: "Something".into(),
             start: 1.0,
             end: 2.6,
@@ -939,12 +943,14 @@ fn plain_effect(layout: serde_json::Value) -> Result<super::plugin::Effect, Stri
 fn vitrines() -> Line {
     use super::line::Word;
     let w = |text: &str, start: f64, end: f64| Word {
+        backing: false,
         text: text.into(),
         start,
         end,
         syllables: Vec::new(),
     };
     Line {
+        voices: Vec::new(),
         start: 8.2,
         end: 11.0,
         words: vec![
@@ -1472,16 +1478,19 @@ fn a_wipe_draws_its_sung_side_at_alpha2_and_the_rest_at_alpha() {
     .unwrap();
     let mut fonts = Fonts::load().unwrap();
     let line = Line {
+        voices: Vec::new(),
         start: 1.0,
         end: 3.0,
         words: vec![
             Word {
+                backing: false,
                 text: "la".into(),
                 start: 1.0,
                 end: 2.0,
                 syllables: Vec::new(),
             },
             Word {
+                backing: false,
                 text: "lu".into(),
                 start: 2.0,
                 end: 3.0,
@@ -1547,16 +1556,19 @@ fn a_second_colour_on_a_shadow_or_glow_pass_is_refused() {
 fn a_glow_with_alpha2_splits_at_the_wipe_and_one_without_does_not() {
     use super::line::Word;
     let line = || Line {
+        voices: Vec::new(),
         start: 1.0,
         end: 3.0,
         words: vec![
             Word {
+                backing: false,
                 text: "la".into(),
                 start: 1.0,
                 end: 2.0,
                 syllables: Vec::new(),
             },
             Word {
+                backing: false,
                 text: "lu".into(),
                 start: 2.0,
                 end: 3.0,
