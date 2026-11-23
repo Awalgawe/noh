@@ -5,7 +5,15 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
-## Unreleased
+## 0.4.0
+
+Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.4.0).
+
+### Caption styles
+
+- Seven new caption styles: Readable band, Highlighter, Lit word, Punched
+  words, Stickers, Scrolling lyrics and Fade to dust. NOH now ships thirteen.
+  Each has its own settings in the style panel.
 
 ### Caption effects
 
@@ -17,7 +25,46 @@ builds are not public releases.
   pixel's place in the frame, the letter's number, the line's time, the pass
   being drawn, the letter's row, the time since the line was sung and the
   effect's own settings. The bundled styles draw exactly as before. The format is described
-  in the [effect format guide](https://github.com/Awalgawe/noh/blob/main/docs/EFFECTS.md).
+  in the [effect format guide](https://github.com/Awalgawe/noh/blob/v0.4.0/docs/EFFECTS.md).
+
+### Lyrics
+
+- The lyrics can say who sings each line. On the lyrics screen, **Voices**
+  above the text declares two voices; you can rename them, add up to four and
+  remove the last one. Each line has a badge with its voices: a click opens a
+  menu to set them, Ctrl+1 to Ctrl+4 give the current line one voice,
+  Ctrl+Shift+1 to Ctrl+Shift+4 add or remove one, and Ctrl+0 removes them all.
+  Both tracks show a line's voices as a coloured band. No caption style draws
+  the voices yet.
+- Words between parentheses are backing vocals. The lyrics screen draws them
+  dimmer and underlined, and gives them their own band on the track. Select
+  some words and type "(" to put them between parentheses. The sync game gains
+  a **Backing** pass that times only those words; the other passes skip them.
+- A lyrics file that holds voices, or a word held past backing vocals, is
+  written as version 3 of the format; 0.3.1 and older versions see it as newer
+  and do not save over it. Every other lyrics file is written as before.
+- When you choose the .srt over the lyrics file, a line keeps its voices from
+  the line with the same times or, failing that, the same text. NOH says how
+  many lines lose theirs. The .srt itself holds no voices.
+- Exports, shorts and burned captions read the voices from the lyrics file
+  beside the .srt.
+- The lyrics screen fits in every language at both window sizes: the footer
+  takes a second row when its text needs one, a long line to sing is written
+  smaller and slides so that the word to sing stays in view, and the speeds
+  read 1×, 0.75×, 0.5×.
+
+### Updates
+
+- An update can install while an assistant such as Claude keeps NOH's MCP
+  server open. When only such servers hold the NOH folder, they stop by
+  themselves once they have no job left, and refuse new jobs meanwhile.
+  **Restart to update** waits for them, with a button to cancel. Afterwards,
+  reconnect the server in the assistant (Claude Code: `/mcp`, then
+  Reconnect): NOH says so.
+- When something else holds the NOH folder, the message says what, once per
+  kind of program, instead of repeating the same path.
+- NOH looks for a new version every 4 hours instead of once a day. The header
+  shows **Update ready** or **New version** as a button.
 
 ### MCP
 
@@ -26,7 +73,8 @@ builds are not public releases.
   `noh_app_close`): it adds, removes and orders media, sets fades, edits lyrics
   lines, chooses the effect and its settings, the short's range, framing and safe
   area, the destination, exports or cancels, moves the playhead and looks at the
-  window. It answers NOH's questions, which it reads in the window's state. One
+  window. It also declares the voices of the lyrics and sets who sings each
+  line. It answers NOH's questions, which it reads in the window's state. One
   heavy job runs at a time across the agent's windows and its other tools, and
   the windows prepare their previews one after another. It
   knows where you are on the timeline, and never takes the playhead from you
@@ -50,6 +98,28 @@ builds are not public releases.
   Windows the decoders, the encoders and the downloads NOH starts also end
   with it when NOH is killed or crashes. The installer of an update is not
   concerned: it goes on after NOH closes, as before.
+
+### Known issues
+
+- The update from 0.3.1 to this version still waits for the idle MCP servers
+  of 0.3.1, which do not know how to stop for an update. Close the assistant's
+  session that uses NOH, or cancel and update later; after 20 seconds NOH says
+  that a server which does not stop is probably from an older version.
+- No caption style draws the voices yet: setting who sings a line changes
+  nothing on the video in this version.
+- Two lines still cannot be sung at the same time: a lyrics file or an .srt
+  whose lines overlap is refused, as before. Words sung together go on one
+  line, with both voices.
+- When the main words of a line are timed again, its backing words are spread
+  again, and backing words timed by hand are reset without warning if they
+  end up out of order.
+- Updates carry no signature of their own. NOH trusts GitHub's HTTPS and the
+  digests GitHub reports for the files of the latest release. The Windows
+  installers are not Authenticode-signed.
+- The other known issues of [0.3.1](https://github.com/Awalgawe/noh/releases/tag/v0.3.1)
+  remain, including those it carries from 0.3.0 and 0.2.0.
+- The automated tests use software rendering and virtual audio. They test no
+  real graphics card, sound card, NVENC or CUDA device.
 
 ## 0.3.1
 
