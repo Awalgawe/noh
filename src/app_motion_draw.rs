@@ -526,6 +526,7 @@ mod tests {
             language: None,
             duration_ms: 1000,
             cues: Vec::new(),
+            voices: Vec::new(),
         };
         let key = |path: std::path::PathBuf| Key {
             stamp: super::super::app_motion::stamp(&path),

@@ -382,11 +382,14 @@ impl NohApp {
                         l.format("pair.srt_time", &[s.clone()])
                     ),
                     _ => format!("{}.", l.plural("pair.body", *lines)),
-                } + &if *voices_lost > 0 {
+                } + (if *voices_lost > 0 {
                     format!(" {}", l.plural("pair.voices_lost", *voices_lost))
                 } else {
                     String::new()
-                },
+                })
+                // As &str: another `Add` for String (a scene engine's string
+                // type) leaves `&String` uncoerced.
+                .as_str(),
                 Some(if unsaved {
                     l.text("pair.srt_unsaved").to_owned()
                 } else if *lose == 0 {
