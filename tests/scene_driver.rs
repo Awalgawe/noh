@@ -55,6 +55,7 @@ fn a_driver_that_dies_on_a_shader_fails_the_scene_job_cleanly() {
     // SAFETY: the only test of this binary, before it starts any thread.
     unsafe { std::env::set_var("NOH_TEST_SHADER_ABORT", "1") };
     let request = SceneRequest {
+        project: None,
         scene: f.path("scene.noh-motion.rhai"),
         source: f.path("source.mp4"),
         subtitles: f.path("reviewed.srt"),

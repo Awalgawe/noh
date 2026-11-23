@@ -195,6 +195,7 @@ fn invalid(detail: &str) -> SessionError {
 impl SceneCheckInput {
     pub(crate) fn into_request(self, default_ffmpeg: &Path) -> Result<SceneRequest, SessionError> {
         let request = SceneRequest {
+            project: None,
             scene: absolute(&self.scene)?,
             source: absolute(&self.source)?,
             subtitles: absolute(&self.subtitles)?,
@@ -240,6 +241,7 @@ impl SceneLookInput {
             },
         };
         let request = SceneRequest {
+            project: None,
             scene: absolute(&self.scene)?,
             source: absolute(&self.source)?,
             subtitles: absolute(&self.subtitles)?,

@@ -201,6 +201,7 @@ pub fn run(options: Options) -> Result<()> {
             framing: Default::default(),
         }),
         effect: None,
+        motion: None,
         captions: Some(ShortCaptions {
             subtitles: dir.join("ma-chanson.srt"),
             style: Default::default(),

@@ -1563,6 +1563,7 @@ mod tests {
     #[cfg(feature = "gui")]
     fn montage_request(items: Vec<crate::input::MediaItem>) -> ProjectRequest {
         ProjectRequest {
+            motion: None,
             montage: crate::engine::ExportRequest {
                 items,
                 wav: "song.wav".into(),
@@ -1905,6 +1906,7 @@ fn main() {
             .collect();
         let snapshot = Snapshot(paths.iter().map(|p| FileStamp::read(p).unwrap()).collect());
         let mut project = ProjectRequest {
+            motion: None,
             montage: ExportRequest {
                 items: vec![paths[0].clone().into(), paths[1].clone().into()],
                 wav: paths[2].clone(),
@@ -2009,6 +2011,7 @@ fn main() {
                 .collect(),
         );
         let project = ProjectRequest {
+            motion: None,
             montage: ExportRequest {
                 items: vec![paths[0].clone().into(), paths[1].clone().into()],
                 wav: paths[2].clone(),
@@ -2118,6 +2121,7 @@ fn main() {
         std::fs::write(&subtitles, "1\n00:00:14,000 --> 00:00:16,000\nCAPTION\n").unwrap();
         let snapshot = Snapshot(vec![FileStamp::read(&subtitles).unwrap()]);
         let mut project = ProjectRequest {
+            motion: None,
             montage: ExportRequest {
                 items: vec![],
                 wav: "unused.wav".into(),

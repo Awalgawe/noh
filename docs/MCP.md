@@ -49,13 +49,13 @@ cargo --offline dev verify --media --mcp --offline
 | `noh_diagnose` | `request`; optional `level` (`exact` by default, or `quick`) | Diagnosis job ID |
 | `noh_export` | `request`, `diagnosis_job_id` | Checked export job ID |
 | `noh_preview` | `request` | Preview job ID; full montage at reduced quality |
-| `noh_export_project` | `request`; optional `short`, `captions`, `preview` | Full montage or selected project interval using the current WAV/media/SRT |
+| `noh_export_project` | `request`; optional `short`, `captions`, `motion`, `preview` | Full montage or selected project interval using the current WAV/media/SRT |
 | `noh_transcribe` | `source`, `output`, `transcriber`, `model`, `vad_model`; optional `language` and `ffmpeg` | Local transcription job ID |
 | `noh_burn_subtitles` | `source`, `subtitles`, `output`; optional `ffmpeg`, `size`, `placement`, `effect`, `preview` | Caption render job ID; result is an exported MP4 |
 | `noh_make_short` | `source`, `output`, `start_ms`, `end_ms`; optional `ffmpeg`, `framing`, `captions`, `motion`, `preview` | Vertical clip job ID; result includes the measured duration and exported MP4 |
 | `noh_job` | `job_id` | Current status, optionally waiting for a change and returning the result |
 | `noh_cancel` | `job_id` | Cancellation request/current status |
-| `noh_list_effects` | none | The caption effects `effect.id` can name, their presets and settings, the folders read and refused; in a build with motion scenes, `motion` (format, functions, caps, author guide) |
+| `noh_list_effects` | none | The caption effects `effect.id` can name, their presets and settings, the folders read and refused; in a build with motion scenes, `motion` (format, functions, caps, format reference) |
 | `noh_app_open` | `title` | A NOH window the agent drives: `app_id`, its state and every window of this session |
 | `noh_app_do` | `app_id`, `action` | One gesture in the window; the state revision it led to |
 | `noh_app_state` | `app_id`; optional `after_revision`, `wait_ms` | What the window shows, as data, with `user_position` |
@@ -117,7 +117,7 @@ corrected. NOH measures this by drawing one red box with that FFmpeg.
 Motion scenes (experimental; only in a build with the `motion` feature, whose
 tools then appear): a scene is a script file that draws the lyrics, shapes,
 particles and layers over a video, checked before anything is drawn and again on
-every frame drawn. The author guide is `docs/MOTION_AUTHORING.md`, also served in
+every frame drawn. The format reference is `docs/MOTION_AUTHORING.md`, also served in
 `noh_list_effects` (`motion.guide`), with the format line, the functions, the caps
 and the faces; no tool names the language. `noh_scene_check` evaluates every frame
 of the interval at the video's frame rate and writes `report.json`: a refused
@@ -155,10 +155,13 @@ gives the scene's energy and onsets; its size is the canvas. A vertical video
 requires `safe_area` (`error.safe_area_required`): the agent asks the user which
 platform the video is for. Output folders must not exist; a folder is published
 whole by a rename, or not at all. One job at a time applies to scene jobs too: a
-look started during an export is refused with `mcp.busy`. In this version the scene
-tools take one video (`source`), the case of a caption burn; the montage form (a
-song WAV, ordered clips, the project's size) is to come with `noh_export_project`
-and a scene, as an additional field exclusive with `source`.
+look started during an export is refused with `mcp.busy`. `noh_export_project` with
+`motion: {"scene": …}` draws the scene over a montage or its short, instead of the
+captions (it needs `captions`, without `effect`, `size` or `placement`): the song's
+WAV gives the energy and onsets, the project's size is the canvas, and the scene sees
+the song's clock (a short's first frame is at its `start_ms`); it is validated at the
+export's frames before anything starts. The scene tools still take one video
+(`source`): look at a montage's scene over one of its clips.
 
 Subtitles and their lyrics file (`noh_burn_subtitles`, and `captions` in
 `noh_make_short` and `noh_export_project`): `subtitles` is an `.srt` or its NOH

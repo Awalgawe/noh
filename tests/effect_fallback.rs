@@ -22,6 +22,7 @@ use support::Fixture;
 /// `effect`: "classic" (bundled Classique) or a test-only effect of tests/fixtures/fx.
 fn request(f: &Fixture, effect: &str, preset: &str) -> ProjectRequest {
     ProjectRequest {
+        motion: None,
         montage: ExportRequest {
             items: vec![f.path("clip.mp4").into()],
             wav: f.path("song.wav"),

@@ -131,8 +131,8 @@ fn a_script_can_call_these_functions_and_no_other() {
     );
 }
 
-/// The author page (served to agents by noh_list_effects) names every function
-/// a scene can call, and says the ones NOH does not draw yet are refused.
+/// The format page (served to agents by noh_list_effects) names every function
+/// a scene can call. It is a reference: no suggested values or craft advice.
 #[test]
 fn the_author_page_names_every_function() {
     let page = include_str!("../../docs/MOTION_AUTHORING.md");
@@ -146,10 +146,14 @@ fn the_author_page_names_every_function() {
         .collect();
     assert!(missing.is_empty(), "not on the author page: {missing:?}");
     assert!(page.starts_with(
-        "# Writing a motion scene
+        "# Motion scene format
 
 **Experimental"
     ));
+    assert!(
+        !page.contains("(try "),
+        "a suggested value on the format page"
+    );
     assert!(page.contains("`video()`") && page.contains("## Layer shaders"));
 }
 

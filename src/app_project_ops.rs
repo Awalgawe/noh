@@ -167,6 +167,7 @@ impl NohApp {
                     .map(|c| self.styled(c).request())
             };
             let request = ProjectRequest {
+                motion: None,
                 montage,
                 short: selected,
                 effect,

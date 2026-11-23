@@ -114,6 +114,7 @@ fn wait(job: &Job) -> Vec<Event> {
 
 fn request(f: &Fixture, mode: SceneMode, out: &str, scene: &str) -> SceneRequest {
     SceneRequest {
+        project: None,
         scene: f.path(scene),
         source: f.path("source.mp4"),
         subtitles: f.path("reviewed.srt"),
@@ -554,5 +555,132 @@ fn scene_jobs_check_look_burn_clip_and_refuse() {
     assert!(why.contains("t=1.5") || why.contains("t=1.52"), "{why}");
     assert!(!f.path("refused").exists());
     refused(&burn(&f, "too_many.noh-motion.rhai", None, "refused.mp4"));
+    assert!(!f.path("refused.mp4").exists());
+}
+
+/// A project export (the montage, then its short) of `scene`, with the song's
+/// WAV and the reviewed lyrics.
+fn project(f: &Fixture, scene: &str, short: Option<[u64; 2]>, out: &str) -> Vec<Event> {
+    use noh::{
+        engine::ExportRequest,
+        project::{ProjectRequest, ProjectShort},
+        scene_request::ProjectScene,
+        shorts::{Framing, ShortCaptions},
+    };
+    let request = ProjectRequest {
+        montage: ExportRequest {
+            items: vec![f.path("source.mp4").into()],
+            wav: f.path("song.wav"),
+            output: f.path(out),
+            ffmpeg: f.ffmpeg.clone(),
+            fade_in: 0.0,
+            fade_out: 0.0,
+            partial_fades: false,
+            preview: false,
+            clip_audio: false,
+            force_encode: false,
+        },
+        short: short.map(|[start_ms, end_ms]| ProjectShort {
+            start_ms,
+            end_ms,
+            restart_loops: false,
+            framing: Framing::Pad,
+        }),
+        effect: None,
+        motion: Some(ProjectScene {
+            scene: f.path(scene),
+        }),
+        captions: Some(ShortCaptions {
+            subtitles: f.path("reviewed.srt"),
+            style: CaptionStyle {
+                safe_area: if short.is_some() {
+                    SafeArea::YoutubeShorts
+                } else {
+                    SafeArea::None
+                },
+                ..Default::default()
+            },
+        }),
+    };
+    wait(&Job::project_with_worker(request, f.exe.clone(), || {}))
+}
+
+/// The montage form (M4): a scene checked on the song alone, at the project's
+/// frame; the montage exported with it draws what a caption burn of the same
+/// video draws; its short keeps the song's clock; a scene over a cap is
+/// refused before anything is published.
+#[test]
+#[ignore = "needs an OpenGL 3.3 GPU and FFmpeg on PATH"]
+fn a_montage_checks_and_draws_its_scene() {
+    let f = Fixture::new();
+    media(&f);
+    f.ff(args![
+        "-i",
+        f.path("source.mp4"),
+        "-vn",
+        "-c:a",
+        "pcm_s16le",
+        f.path("song.wav")
+    ]);
+    // The check, on the song alone.
+    let check = SceneRequest {
+        project: Some(noh::scene_request::SceneProject {
+            width: 640,
+            height: 360,
+            fps: 25.0,
+        }),
+        source: f.path("song.wav"),
+        ..request(
+            &f,
+            SceneMode::Check,
+            "montage-check",
+            "song.noh-motion.rhai",
+        )
+    };
+    let check = SceneRequest {
+        grid: false,
+        ..check
+    };
+    ok(&wait(&Job::scene_with_cancel(
+        check,
+        f.exe.clone(),
+        Arc::new(AtomicBool::new(false)),
+        || {},
+    )));
+    let report: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(f.path("montage-check").join("report.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(report["canvas"], serde_json::json!([640, 360]));
+    assert_eq!(report["fps"], serde_json::json!(25.0));
+    assert!(report["max"]["draws"].as_u64().unwrap() >= 2, "{report}");
+    // The montage, against a burn of the same video.
+    ok(&project(&f, "song.noh-motion.rhai", None, "montage.mp4"));
+    ok(&burn(&f, "song.noh-motion.rhai", None, "burn.mp4"));
+    for at in [0.5, 1.5] {
+        let d = mean_difference(
+            &frame_at(&f, &f.path("montage.mp4"), at),
+            &frame_at(&f, &f.path("burn.mp4"), at),
+        );
+        assert!(d < 3.0, "montage and burn differ by {d} at {at} s");
+    }
+    // The short keeps the song's clock: white from its first frame.
+    ok(&project(
+        &f,
+        "from_one.noh-motion.rhai",
+        Some([1_000, 2_500]),
+        "short.mp4",
+    ));
+    let first = frame_at(&f, &f.path("short.mp4"), 0.0);
+    let mean = first.iter().map(|&v| f64::from(v)).sum::<f64>() / first.len() as f64;
+    assert!(mean > 200.0, "the short's first frame is not white: {mean}");
+    // Over the draw cap from 1.5 s: refused, nothing published.
+    let reason = refused(&project(
+        &f,
+        "too_many.noh-motion.rhai",
+        None,
+        "refused.mp4",
+    ));
+    assert!(reason.contains("1.5"), "{reason}");
     assert!(!f.path("refused.mp4").exists());
 }

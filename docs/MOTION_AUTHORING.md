@@ -1,11 +1,12 @@
-# Writing a motion scene
+# Motion scene format
 
 **Experimental: this format can change without notice; a scene written today may
 no longer be read by a later version of NOH.** No compatibility is promised.
 
-A motion scene draws over a video what a style could not: the lyrics set as you
-want them, shapes, particles, layers, all moving with the song. It is one text
-file, a script, which NOH checks before it draws anything.
+A motion scene is one text file, a script, that says for any instant what NOH draws
+over the video, the lyrics included: texts, shapes, particles, layers. NOH checks it
+before it draws anything. This page is the reference of the format: what exists,
+its limits, and the tools that check and show a scene.
 
 ## The file
 
@@ -51,6 +52,7 @@ With NOH's MCP tools (or the same options on the command line, `docs/CLI.md`):
 3. `noh_scene_clip`: a short MP4 (at most 30 s) to judge a rhythm.
 4. `noh_burn_subtitles` with `motion: {"scene": …}`: the video with the scene,
    instead of the captions (the scene draws the lyrics itself).
+   `noh_export_project` with `motion` does the same for a montage and its short.
 
 For a **vertical** video, the safe area of the platform is required: ask the user
 which platform the video is for (propose YouTube Shorts). If you cannot ask yet,
@@ -62,9 +64,14 @@ frame).
 NOH runs one job at a time: a look started while an export runs is refused
 (busy); start it again when the export is done.
 
-In this version a scene is drawn over one video (a caption burn): the video's sound
-gives the energy and onsets, its length is the song's, its size is the canvas.
-Scenes over a montage (a song and several clips) come later.
+Over one video (a caption burn), the video's sound gives the energy and onsets, its
+length is the song's, its size is the canvas. Over a montage (`noh_export_project`),
+the song's WAV gives them, the project's size is the canvas, and the scene sees the
+song's clock: a short's first frame is at its start. The scene tools take one video:
+check and look at a montage's scene over one of its clips with the song's sound.
+
+In NOH's window, a scene beside the song is listed under Motion; the user checks it
+and uses it in one click, and NOH draws it in the preview and the export.
 
 ## The language
 
@@ -120,11 +127,11 @@ changes that variable.
 | `.scale(v)` | 1 | About the anchor point; does not re-wrap; at most 4 |
 | `.color(c)` | `#FFFFFF` | |
 | `.opacity(v)` | 1 | |
-| `.shadow(opacity, blur, dy)` | none | A soft shadow; blur (at most 1) and offset (−2 to 2) in em (try 0.5, 0.08, 0.04) |
-| `.outline(c, width)` | none | A contour; width in em, at most 0.25 (try 0.04) |
+| `.shadow(opacity, blur, dy)` | none | A soft shadow; blur (at most 1) and offset (−2 to 2) in em |
+| `.outline(c, width)` | none | A contour; width in em, at most 0.25 |
 | `.dissolve(v)` | 0 | 0 = whole, 1 = gone: the letters are eaten away |
 | `.edge(c)` | `#FFB060` | Colour of the lit edge of the dissolve |
-| `.glow(v)` | 0 | Halo of that lit edge (try 1 to 3); nothing without a dissolve |
+| `.glow(v)` | 0 | Halo of that lit edge; nothing without a dissolve |
 
 Per word (`k` counts words from 0, at most 32 per text): `.word(k, opacity, dy,
 scale)` (`dy` in em, positive down), `.word_dissolve(k, v)`, `.word_color(k, c)`.
