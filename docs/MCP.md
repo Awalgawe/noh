@@ -157,7 +157,8 @@ platform the video is for. Output folders must not exist; a folder is published
 whole by a rename, or not at all. One job at a time applies to scene jobs too: a
 look started during an export is refused with `mcp.busy`. `noh_export_project` with
 `motion: {"scene": …}` draws the scene over a montage or its short, instead of the
-captions (it needs `captions`, without `effect`, `size` or `placement`): the song's
+captions (it needs `captions`, without `effect`, `size` or `placement`, and is
+refused with `preview`: `error.scene_preview`): the song's
 WAV gives the energy and onsets, the project's size is the canvas, and the scene sees
 the song's clock (a short's first frame is at its `start_ms`); it is validated at the
 export's frames before anything starts. The scene tools still take one video
