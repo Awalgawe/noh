@@ -12,6 +12,9 @@
 // Every pass keeps alpha 1 in effect.json so the opacity reaches the hooks as
 // set; the looks below (shadow 0.5, edge 0.9) are applied here.
 //
+// The rise is the window's glide (effect.json): when the next line shows, this
+// line moves up into the window's past slot and keeps dissolving there.
+//
 // Passes (effect.json): a blurred black shadow, the white fill, and a sharp
 // shadow pass in the edge colour that draws the warm edge only. The two shadow
 // passes are told apart by their colour: the edge pass is the one not black.
@@ -26,7 +29,10 @@ fn shade(i: GlyphIn) -> vec4<f32> {
 
   // Being read: drawn as set, the shadow at half opacity, no edge.
   if (a >= 0.0 && a <= 1.5) {
-    if (is_edge) {
+    // A line past its span (the window's past line) has ended, so it is
+    // dissolving; it reaches this range only when the window's glide fades
+    // it out as it leaves (its opacity scaled down): it is gone by then.
+    if (i.line_time.y < 0.0 || is_edge) {
       return vec4<f32>(0.0, 0.0, 0.0, 0.0);
     }
     if (is_shadow) {
@@ -41,6 +47,7 @@ fn shade(i: GlyphIn) -> vec4<f32> {
   let q = -0.05 + 1.35 * tau;
 
   // Grains of 2 px at a short side of 1080 px, the same at every export size.
+  // The noise is Dave Hoskins' « Hash without Sine » (hash12, MIT licence).
   let short = min(g.canvas.x, g.canvas.y);
   let cell = floor(i.frame * g.canvas / (2.0 * short / 1080.0));
   var p3 = fract(vec3<f32>(cell.x, cell.y, cell.x) * 0.1031);

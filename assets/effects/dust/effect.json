@@ -32,21 +32,16 @@
     "anchor": "unit",
     "word_lead": 0.08,
     "preroll": 0.25,
-    "hold": 1.3,
-    "window": {"before": 1, "after": 0, "lead": 0, "gap": 0}
+    "hold": 10,
+    "window": {"before": 1, "after": 0, "lead": 0, "gap": 0, "glide": {"duration": 0.7, "curve": "ease_out_cubic"}}
   },
   "animate": [
     {"unit": "line", "slot": "enter", "property": "opacity", "duration": 0.25, "curve": "ease_out_cubic", "keys": [[0, 0], [1, 1]]},
     {"unit": "line", "slot": "past", "property": "opacity", "duration": 1.5, "curve": "linear",
      "keys": [[0, {"choose": ["$direction", {"left": 8, "centre": -8}]}], [0.04, {"choose": ["$direction", {"left": 8, "centre": -8}]}],
               [1, {"mul": [{"choose": ["$direction", {"left": 1, "centre": -1}]}, {"sub": [8, {"div": [1.44, {"choose": ["$duration", {"short": 0.7, "medium": 0.9, "long": 1.2}]}]}]}]}]]},
-    {"unit": "line", "slot": "past", "property": "offset_y", "duration": 0.76, "curve": "ease_out_cubic",
-     "keys": [[0, {"by_state": {"past": 1.2, "active": 0, "next": 0}}], [0.0789, {"by_state": {"past": 1.2, "active": 0, "next": 0}}],
-              [1, {"add": [{"by_state": {"past": 1.2, "active": 0, "next": 0}}, {"choose": ["$duration", {"short": -1.2, "medium": 0, "long": 0}]}]}]]},
-    {"unit": "line", "slot": "past", "property": "offset_y", "duration": 0.96, "curve": "ease_out_cubic",
-     "keys": [[0, 0], [0.0625, 0], [1, {"choose": ["$duration", {"short": 0, "medium": -1.2, "long": 0}]}]]},
-    {"unit": "line", "slot": "past", "property": "offset_y", "duration": 1.26, "curve": "ease_out_cubic",
-     "keys": [[0, 0], [0.0476, 0], [1, {"choose": ["$duration", {"short": 0, "medium": 0, "long": -1.2}]}]]},
+    {"unit": "line", "slot": "enter", "property": "offset_y", "duration": 0.7, "curve": "ease_out_cubic",
+     "keys": [[0, {"mul": [-1.2, {"min": [1, "@line_index"]}]}], [1, 0]]},
     {"unit": "word", "slot": "future", "property": "opacity", "value": 0.7},
     {"unit": "word", "slot": "enter", "property": "opacity", "duration": 0.12, "curve": "ease_out_cubic", "keys": [[0, 0.7], [1, 1]]}
   ],
