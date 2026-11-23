@@ -805,7 +805,6 @@ voices.together=Zusammen
 lyrics_screen.voices=Stimmen
 lyrics_screen.voices_tip=Angeben, wer jede Zeile singt: ein Duett, Backgroundgesang
 lyrics_screen.voice_badge=Stimmen von Zeile {0}: {1}. Umschalt+Klick: die Zeilen bis hierher bekommen dieselben Stimmen
-lyrics_screen.voice_together=Zusammen ({0} und {1})
 lyrics_screen.voice_toggle_add={0} zu den Stimmen dieser Zeile hinzufügen
 lyrics_screen.voice_toggle_remove={0} aus den Stimmen dieser Zeile entfernen
 lyrics_screen.voice_menu_hint=„+“ fügt den Stimmen der Zeile eine Stimme hinzu: Mehrere Stimmen singen dieselben Wörter. Umschalt+Klick auf das Abzeichen einer anderen Zeile: Alle Zeilen bis dorthin bekommen dieselben Stimmen.

@@ -805,7 +805,6 @@ voices.together=Juntas
 lyrics_screen.voices=Voces
 lyrics_screen.voices_tip=Decir quién canta cada línea: un dúo, coros
 lyrics_screen.voice_badge=Voces de la línea {0}: {1}. Mayús+clic: las líneas hasta aquí toman las mismas voces
-lyrics_screen.voice_together=Juntas ({0} y {1})
 lyrics_screen.voice_toggle_add=Añadir {0} a las voces de esta línea
 lyrics_screen.voice_toggle_remove=Quitar {0} de las voces de esta línea
 lyrics_screen.voice_menu_hint=«+» añade una voz a las de la línea: varias voces cantan las mismas palabras. Mayús+clic en la insignia de otra línea: todas las líneas hasta ella toman las mismas voces.

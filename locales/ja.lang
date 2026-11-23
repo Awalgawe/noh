@@ -805,7 +805,6 @@ voices.together=一緒に
 lyrics_screen.voices=声
 lyrics_screen.voices_tip=各行を誰が歌うかを指定します（デュエット、コーラス）
 lyrics_screen.voice_badge={0} 行目の声: {1}。Shift+クリックで、ここまでの行に同じ声を設定します
-lyrics_screen.voice_together=一緒に（{0} と {1}）
 lyrics_screen.voice_toggle_add=この行の声に {0} を加える
 lyrics_screen.voice_toggle_remove=この行の声から {0} を外す
 lyrics_screen.voice_menu_hint=「+」で行の声を加えます（複数の声が同じ言葉を歌う）。別の行のバッジを Shift+クリックすると、そこまでのすべての行に同じ声を設定します。

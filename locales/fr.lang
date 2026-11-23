@@ -805,7 +805,6 @@ voices.together=Ensemble
 lyrics_screen.voices=Voix
 lyrics_screen.voices_tip=Dire qui chante chaque ligne : un duo, des chœurs
 lyrics_screen.voice_badge=Voix de la ligne {0} : {1}. Maj+clic : les lignes jusqu’ici prennent les mêmes voix
-lyrics_screen.voice_together=Ensemble ({0} et {1})
 lyrics_screen.voice_toggle_add=Ajouter {0} aux voix de cette ligne
 lyrics_screen.voice_toggle_remove=Retirer {0} des voix de cette ligne
 lyrics_screen.voice_menu_hint=« + » ajoute une voix à celles de la ligne : plusieurs voix chantent les mêmes mots. Maj+clic sur le badge d’une autre ligne : toutes les lignes jusqu’à elle prennent les mêmes voix.

@@ -805,7 +805,6 @@ voices.together=Together
 lyrics_screen.voices=Voices
 lyrics_screen.voices_tip=Say who sings each line: a duet, backing vocals
 lyrics_screen.voice_badge=Voices of line {0}: {1}. Shift+click: the lines up to here take the same voices
-lyrics_screen.voice_together=Together ({0} and {1})
 lyrics_screen.voice_toggle_add=Add {0} to this line’s voices
 lyrics_screen.voice_toggle_remove=Remove {0} from this line’s voices
 lyrics_screen.voice_menu_hint=“+” adds a voice to the line’s voices: several voices sing the same words. Shift+click another line’s badge: every line up to it takes the same voices.

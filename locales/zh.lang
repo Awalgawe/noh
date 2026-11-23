@@ -805,7 +805,6 @@ voices.together=一起
 lyrics_screen.voices=声部
 lyrics_screen.voices_tip=标明每行由谁演唱：对唱、和声
 lyrics_screen.voice_badge=第 {0} 行的声部：{1}。Shift+单击：到此为止的各行使用相同声部
-lyrics_screen.voice_together=一起（{0} 和 {1}）
 lyrics_screen.voice_toggle_add=将 {0} 加入此行的声部
 lyrics_screen.voice_toggle_remove=从此行的声部中去掉 {0}
 lyrics_screen.voice_menu_hint=“+”为此行添加一个声部：多个声部演唱相同的词。Shift+单击另一行的标记：到该行为止的所有行使用相同声部。
