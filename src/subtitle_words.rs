@@ -576,10 +576,31 @@ fn worded_cues(json: &[u8]) -> Option<(Vec<WorkingCue>, Option<String>)> {
     }
 }
 
-/// Give `track`'s cues the word times of the identical cues in `json` (version 1
-/// or 2); returns how many cues got them. An unreadable, newer or foreign file
-/// changes nothing.
+/// Give `track`'s cues the word times of the identical cues in `json` (version
+/// 1, 2 or 3), and, from versions 2 and 3, who sings: the declared voices and
+/// each identical cue's voices, with or without word times (an export reads the
+/// lyrics through here). Returns how many cues got word times. An unreadable,
+/// newer or foreign file changes nothing.
 pub fn merge(track: &mut SubtitleTrack, json: &[u8]) -> usize {
+    if let Ok(lyrics) = parse_lyrics(json) {
+        let mut merged = 0;
+        track.voices = lyrics.track.voices;
+        for lc in lyrics.track.cues {
+            let at = track.cues.partition_point(|c| c.start_ms < lc.start_ms);
+            if let Some(cue) = track.cues.get_mut(at)
+                && cue.start_ms == lc.start_ms
+                && cue.end_ms == lc.end_ms
+                && cue.text == lc.text
+            {
+                cue.voices = lc.voices;
+                if let Some(words) = lc.words.filter(|w| cue.words_fit(w)) {
+                    cue.words = Some(words);
+                    merged += 1;
+                }
+            }
+        }
+        return merged;
+    }
     let Some((cues, _)) = worded_cues(json) else {
         return 0;
     };
@@ -1418,5 +1439,39 @@ mod tests {
         let sets: Vec<Vec<u8>> = to.cues.iter().map(|c| c.voices.clone()).collect();
         assert_eq!(sets, [vec![1], vec![2], vec![]]);
         assert!(to.validate().is_ok());
+    }
+
+    #[test]
+    fn an_export_reading_the_lyrics_beside_its_srt_gets_the_voices_and_a_short_keeps_them() {
+        let folder = tempfile::tempdir().unwrap();
+        let srt = folder.path().join("song.srt");
+        let lyrics = voiced();
+        std::fs::write(&srt, lyrics.to_srt().unwrap()).unwrap();
+        write_lyrics(&lyrics_path(&srt), &lyrics, None).unwrap();
+        // As a burn and a project export read it: the .srt, then the file beside.
+        let mut track =
+            crate::subtitle_srt::parse(&std::fs::read_to_string(&srt).unwrap(), 10_000).unwrap();
+        read_beside(&srt, &mut track);
+        assert_eq!(track.voices, lyrics.voices);
+        assert_eq!(track.cues[0].voices, [1]);
+        // The second line has no word times: its voices come anyway.
+        assert!(track.cues[1].words.is_none());
+        assert_eq!(track.cues[1].voices, [1, 2]);
+        assert!(track.validate().is_ok());
+        // A short (trim) keeps them, and the engine's lines carry them.
+        let short = track.trim(3500, 5000).unwrap();
+        assert_eq!(short.cues[0].voices, [1, 2]);
+        assert_eq!(short.voices, lyrics.voices);
+        // A cue changed in the .srt since gets no voices.
+        let mut changed = crate::subtitle_srt::parse(
+            &std::fs::read_to_string(&srt)
+                .unwrap()
+                .replace("lo lo", "lo la"),
+            10_000,
+        )
+        .unwrap();
+        read_beside(&srt, &mut changed);
+        assert!(changed.cues[1].voices.is_empty());
+        assert!(changed.validate().is_ok());
     }
 }
