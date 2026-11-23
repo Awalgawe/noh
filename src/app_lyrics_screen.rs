@@ -5583,8 +5583,10 @@ mod tests {
         assert!(voices_of(&app)[2].is_empty());
         let mut app = song_app(folder.path(), Language::Fr, "-voices");
         cursor(&mut app, &ctx, 3, 0);
-        let both = Modifiers::COMMAND | Modifiers::SHIFT;
-        // Ctrl+n: that voice alone; Ctrl+Maj+n: added, then removed; Ctrl+0: none.
+        // Ctrl+Shift is the Ctrl key on every system (on macOS Cmd+Shift+3 and
+        // +4 take screenshots).
+        let both = Modifiers::CTRL | Modifiers::SHIFT;
+        // Ctrl+n: that voice alone; Ctrl+Shift+n: added, then removed; Ctrl+0: none.
         for (k, m, want) in [
             (Key::Num2, Modifiers::COMMAND, vec![2]),
             (Key::Num1, both, vec![1, 2]),
@@ -5594,7 +5596,7 @@ mod tests {
             frame(&mut app, &ctx, vec![key(k, m)]);
             assert_eq!(voices_of(&app)[3], want, "{k:?} {m:?}");
         }
-        // With Maj a QWERTY « 1 » reads « ! »: the key's place counts.
+        // With Shift a QWERTY « 1 » reads « ! »: the key's place counts.
         frame(
             &mut app,
             &ctx,
@@ -5605,6 +5607,13 @@ mod tests {
                 repeat: false,
                 modifiers: both,
             }],
+        );
+        assert_eq!(voices_of(&app)[3], [1]);
+        // Cmd+Shift (macOS) is not the toggle: nothing changes.
+        frame(
+            &mut app,
+            &ctx,
+            vec![key(Key::Num2, Modifiers::MAC_CMD | Modifiers::COMMAND | Modifiers::SHIFT)],
         );
         assert_eq!(voices_of(&app)[3], [1]);
         // Voice 3 is not declared: nothing changes, NOH says so.

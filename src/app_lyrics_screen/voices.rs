@@ -1,8 +1,9 @@
 //! Who sings each line, in the lyrics screen (voices mockup): « Voix » in the
 //! text's header declares two voices; a badge before each line opens a menu of
 //! voices (a single voice, « Ensemble », none, and a « + » per voice to build
-//! any set); Ctrl+1 to Ctrl+4 give the current line that voice alone,
-//! Ctrl+Maj+1 to 4 add or remove it, Ctrl+0 none (maintainer, Q2); Maj+clic on
+//! any set); Ctrl+1 to Ctrl+4 (Cmd on macOS) give the current line that voice
+//! alone, Ctrl+Shift+1 to 4 (Ctrl on every system) add or remove it, Ctrl+0
+//! none (maintainer, Q2); Shift+click on
 //! another badge gives the lines in between the set chosen last. Every change
 //! is one undo step.
 use super::*;
@@ -37,13 +38,14 @@ fn command_only(m: Modifiers) -> bool {
     m.command && !m.alt && !m.shift
 }
 
-/// Ctrl+Maj (Cmd+Maj on macOS).
-fn command_shift(m: Modifiers) -> bool {
-    m.command && !m.alt && m.shift
+/// Ctrl+Maj, on every system: on macOS the Ctrl key itself, since Cmd+Maj+3
+/// and Cmd+Maj+4 take screenshots there and never reach NOH.
+fn ctrl_shift(m: Modifiers) -> bool {
+    m.ctrl && m.shift && !m.alt && !m.mac_cmd
 }
 
-/// A digit key, by its place on the keyboard: with Maj a QWERTY « 1 » reads
-/// « ! », and an AZERTY digit needs Maj; the place is the same. Events made
+/// A digit key, by its place on the keyboard: with Shift a QWERTY « 1 » reads
+/// « ! », and an AZERTY digit needs Shift; the place is the same. Events made
 /// without a physical key (tests, an agent) are read by their key.
 fn take_digit(i: &mut egui::InputState, digit: Key, want: impl Fn(Modifiers) -> bool) -> bool {
     let mut hit = false;
@@ -95,8 +97,8 @@ impl NohApp {
         self.edit_track_as(label, |t| edit::declare_voices(t, voices))
     }
 
-    /// Ctrl+1 to Ctrl+4 (that voice alone), Ctrl+Maj+1 to 4 (that voice added
-    /// to the line's voices, or removed) and Ctrl+0 (none) on line `i`. Returns
+    /// Ctrl+1 to Ctrl+4 (that voice alone), Ctrl+Shift+1 to 4 (that voice
+    /// added to the line's voices, or removed) and Ctrl+0 (none) on line `i`. Returns
     /// whether a key was taken (the keys do nothing while no voice is
     /// declared; a voice not declared says so).
     pub(super) fn ls_voice_keys(&mut self, ctx: &egui::Context, i: usize, declared: usize) -> bool {
@@ -108,7 +110,7 @@ impl NohApp {
             DIGITS.iter().enumerate().find_map(|(n, key)| {
                 if take_digit(input, *key, command_only) {
                     Some((n as u8, false))
-                } else if n > 0 && take_digit(input, *key, command_shift) {
+                } else if n > 0 && take_digit(input, *key, ctrl_shift) {
                     Some((n as u8, true))
                 } else {
                     None
