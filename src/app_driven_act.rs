@@ -50,6 +50,8 @@ pub(super) enum Playhead {
     Play,
     Pause,
     Look(Look),
+    /// A scene look of the agent: the playhead there, its marker drawn.
+    SceneLook(super::app_driven_scene::SceneMarker),
 }
 
 /// A `look` under way.
@@ -103,6 +105,15 @@ impl NohApp {
             Action::Seek { ms } => Some(Playhead::Seek(*ms)),
             Action::Play {} => Some(Playhead::Play),
             Action::Pause {} => Some(Playhead::Pause),
+            Action::ShowSceneLook {
+                at_ms,
+                safe_area,
+                grid,
+            } => Some(Playhead::SceneLook(super::app_driven_scene::SceneMarker {
+                at_ms: *at_ms,
+                safe_area: *safe_area,
+                grid: *grid,
+            })),
             _ => None,
         };
         if let Some(gesture) = playhead {
@@ -380,6 +391,16 @@ impl NohApp {
                 self.driven_record(what);
                 Some(Ok(serde_json::Value::Null))
             }
+            Playhead::SceneLook(mut marker) => {
+                self.navigate(marker.at_ms, true);
+                // Where the playhead landed (the end of the song at most).
+                marker.at_ms = self.mini_preview.cursor_ms;
+                if let Some(d) = &mut self.driven {
+                    d.marker = Some(marker);
+                }
+                self.driven_mark();
+                Some(Ok(serde_json::json!({ "ms": marker.at_ms })))
+            }
             Playhead::Look(mut look) => {
                 if let Some(ms) = look.at_ms {
                     self.navigate(ms, true);
@@ -471,7 +492,7 @@ impl NohApp {
     }
 
     /// The agent's mark: the window shows that the agent just acted.
-    fn driven_mark(&mut self) {
+    pub(super) fn driven_mark(&mut self) {
         if let Some(d) = &mut self.driven {
             d.acted_at = Some(Instant::now());
         }
@@ -853,7 +874,11 @@ impl NohApp {
                     refused("No job is running.")
                 }
             }
-            Action::Seek { .. } | Action::Play {} | Action::Pause {} => {
+            Action::SetScene { path } => self.driven_set_scene(path),
+            Action::Seek { .. }
+            | Action::Play {}
+            | Action::Pause {}
+            | Action::ShowSceneLook { .. } => {
                 unreachable!("playhead gestures are queued")
             }
         }
@@ -1085,6 +1110,7 @@ impl NohApp {
             "duration_ms": self.project.duration_ms,
             "lyrics": lyrics,
             "effect": effect,
+            "scene": self.driven_scene_state(),
             "captions_on_video": self.project.apply_subtitles,
             "safe_area": self.project.short_safe_area,
             "range": self.project.range.map(|r| serde_json::json!({ "start_ms": r.start_ms, "end_ms": r.end_ms })),

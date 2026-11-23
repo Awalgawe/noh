@@ -1274,6 +1274,16 @@ impl NohApp {
         if self.mini_preview.short && !self.project.hide_safe_area {
             paint_safe_area(ui, monitor, self.project.short_safe_area, l);
         }
+        // Where the agent's scene look is: the frame's grid, and on the short
+        // the safe area it asked for.
+        if let Some(marker) = self.driven_scene_marker() {
+            if marker.grid {
+                super::app_driven_scene::paint_grid(ui, monitor);
+            }
+            if self.mini_preview.short {
+                paint_safe_area(ui, monitor, marker.safe_area, l);
+            }
+        }
         if let Some(error) = self.mini_preview.error.clone() {
             let mut inside = ui.new_child(
                 egui::UiBuilder::new()

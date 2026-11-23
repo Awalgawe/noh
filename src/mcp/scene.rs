@@ -122,6 +122,15 @@ pub struct SceneLookInput {
     /// drawn over each frame.
     #[serde(default)]
     pub grid: bool,
+    /// A NOH window you drive (noh_app_open): it shows the person where you
+    /// look. Its playhead moves to the first instant (a sheet: from_ms) as
+    /// seek does, waiting while the person navigates, and its monitor shows
+    /// the frame's grid (with `grid`) and, on the short, the safe area, while
+    /// the playhead stays there. The frames are still drawn by the export's
+    /// engine, as a job of the heavy-job slot.
+    #[serde(default)]
+    #[schemars(length(min = 1))]
+    pub app_id: Option<String>,
     /// Draw on a vertical frame (a Short, 1080 x 1920) made from the video by
     /// the scene's framing (`video()`; covering and centred without one), as
     /// noh_make_short with framing "scene" exports it. Needs a safe_area.
@@ -204,6 +213,19 @@ impl SceneCheckInput {
 }
 
 impl SceneLookInput {
+    /// What the driven window `app_id` is sent: the instant looked at first.
+    pub(crate) fn marker(&self) -> crate::driven::Action {
+        let at_ms = match self.mode {
+            LookMode::Sheet => self.from_ms,
+            _ => self.at_ms.first().copied(),
+        };
+        crate::driven::Action::ShowSceneLook {
+            at_ms: at_ms.unwrap_or(0),
+            safe_area: self.safe_area.into(),
+            grid: self.grid,
+        }
+    }
+
     pub(crate) fn into_request(self, default_ffmpeg: &Path) -> Result<SceneRequest, SessionError> {
         let mode = match self.mode {
             LookMode::Stills => SceneMode::Stills { at_ms: self.at_ms },
@@ -415,14 +437,45 @@ mod tests {
             to_ms: None,
             bare: false,
             grid: false,
+            app_id: None,
             vertical: false,
             output: root("noh-scene-look-test"),
             ffmpeg: None,
         };
         assert!(
-            look.into_request(ffmpeg).is_err(),
+            look.clone().into_request(ffmpeg).is_err(),
             "a strip takes one instant"
         );
+        // What a driven window is sent: the first instant looked at.
+        let marker = |mode, at_ms: Vec<u64>, from_ms| {
+            SceneLookInput {
+                mode,
+                at_ms,
+                from_ms,
+                grid: true,
+                safe_area: CaptionSafeArea::Tiktok,
+                ..look.clone()
+            }
+            .marker()
+        };
+        let shown = |a| match a {
+            crate::driven::Action::ShowSceneLook {
+                at_ms,
+                safe_area,
+                grid,
+            } => (at_ms, safe_area, grid),
+            other => panic!("{other:?}"),
+        };
+        let tiktok = crate::safe_area::SafeArea::Tiktok;
+        assert_eq!(
+            shown(marker(LookMode::Stills, vec![1500, 900], None)),
+            (1500, tiktok, true)
+        );
+        assert_eq!(
+            shown(marker(LookMode::Sheet, vec![], Some(4000))),
+            (4000, tiktok, true)
+        );
+        assert_eq!(shown(marker(LookMode::Sheet, vec![], None)).0, 0);
     }
 
     #[test]
