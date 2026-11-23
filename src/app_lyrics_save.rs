@@ -939,6 +939,7 @@ mod tests {
             },
         ]);
         let mut track = noh::subtitle_track::SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 5000,
             cues: vec![cue],
@@ -1233,7 +1234,7 @@ mod tests {
         let source = folder.path().join("song.srt");
         std::fs::write(
             noh::subtitle_words::lyrics_path(&source),
-            br#"{"version":3,"cues":[]}"#,
+            br#"{"version":4,"cues":[]}"#,
         )
         .unwrap();
         app.edit_track(|t| edit::set_text(t, 0, "x"));
@@ -1330,7 +1331,7 @@ mod tests {
         let lyrics = words::lyrics_path(&source);
         let srt_before = std::fs::read(&source).unwrap();
         // Newer: the save stops before writing either file.
-        let newer = br#"{"version":3,"cues":[]}"#;
+        let newer = br#"{"version":4,"cues":[]}"#;
         std::fs::write(&lyrics, newer).unwrap();
         observe(&mut app);
         app.edit_track(|t| edit::set_text(t, 0, "Something has to give"));

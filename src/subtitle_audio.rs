@@ -122,22 +122,26 @@ mod tests {
     #[test]
     fn silence_edges_preserve_clock_quiet_audio_internal_gaps_and_final_word() {
         let mut track = SubtitleTrack {
+            voices: Vec::new(),
             language: Some("en".into()),
             duration_ms: 90000,
             cues: vec![
                 SubtitleCue {
+                    voices: Vec::new(),
                     start_ms: 0,
                     end_ms: 10000,
                     text: "first".into(),
                     words: None,
                 },
                 SubtitleCue {
+                    voices: Vec::new(),
                     start_ms: 20000,
                     end_ms: 25000,
                     text: "silence".into(),
                     words: None,
                 },
                 SubtitleCue {
+                    voices: Vec::new(),
                     start_ms: 71000,
                     end_ms: 90000,
                     text: "last".into(),

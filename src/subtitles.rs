@@ -954,12 +954,14 @@ fn parse_track(bytes: &[u8], duration_ms: u64, eot: u32) -> Result<SubtitleTrack
         ));
     };
     let mut track = SubtitleTrack {
+        voices: Vec::new(),
         language,
         duration_ms,
         cues: document
             .transcription
             .into_iter()
             .map(|cue| SubtitleCue {
+                voices: Vec::new(),
                 start_ms: cue.offsets.from,
                 end_ms: cue.offsets.to,
                 text: cue.text.trim().to_owned(),

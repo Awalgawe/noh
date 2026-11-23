@@ -123,7 +123,9 @@ mirrors it. Before the job starts the two are kept identical, as in the app:
 - a lyrics file given uses the `.srt` beside it, rebuilt from it when missing;
 - when the two differ, the answer is required and unifies them:
   `--truth lyrics` rewrites the `.srt`, `--truth srt` replaces the lyrics (lines
-  the `.srt` keeps unchanged keep their word times). The replaced file is first
+  the `.srt` keeps unchanged keep their word times; a line keeps its voices when
+  the `.srt` has a line with the same times, or else with the same text, and
+  stderr counts the lines that lose them). The replaced file is first
   kept beside it (`<name>.replaced.srt` or `<name>.noh-lyrics.replaced.json`, the
   next free name), and stderr names it. In a terminal (stdin and stderr) NOH asks;
   otherwise, or with `--json`, a missing `--truth` stops the command before
@@ -137,6 +139,16 @@ The files are unified before the media is checked: a job that then fails (for
 example subtitles longer than the video) leaves them unified, with the replaced
 file beside. When the `.srt` cannot be read as SRT, only `--truth lyrics` is
 accepted.
+
+The lyrics file can also say who sings each line. Its top-level `voices` lists
+the declared voices (at most four, each with an optional `name` of at most 32
+characters), and a cue's `voices` is the set of voice numbers that sing it,
+sorted (`[1]`, `[2]`, `[1, 2]` for both together; absent: not known). Words
+between parentheses in a cue's text are backing vocals; a word's known `end_ms`
+may then run past the backing vocals that follow it. A file holding voices, or
+such an end, is written as version 3, which a NOH that only knows version 2
+treats as newer and never writes; every other lyrics file stays version 2. The
+`.srt` holds no voices.
 
 ## Local transcription
 

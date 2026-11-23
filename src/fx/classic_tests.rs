@@ -628,6 +628,7 @@ fn typed_lines_are_kept_by_classique_only() {
     let mut fonts = Fonts::load().unwrap();
     let lines = |text: &str| {
         super::line::from_track(&crate::subtitle_track::SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 3000,
             cues: vec![crate::subtitle_track::SubtitleCue::new(0, 2000, text)],

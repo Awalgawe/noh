@@ -58,11 +58,13 @@ pub(crate) fn mockup_lines() -> Vec<Line> {
             raw.get(k + 1).map_or(11.0, |next| next[0].1)
         };
         lines.push(Line {
+            voices: Vec::new(),
             start: words[0].1,
             end,
             words: words
                 .iter()
                 .map(|&(text, start, end)| Word {
+                    backing: false,
                     text: text.into(),
                     start,
                     end,

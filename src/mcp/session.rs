@@ -1411,6 +1411,7 @@ mod tests {
         let result = RetainedResult::Subtitles(SubtitleResult {
             output: PathBuf::from("x".repeat(MAX_SUBTITLE_RESULT)),
             track: crate::subtitle_track::SubtitleTrack {
+                voices: Vec::new(),
                 language: None,
                 duration_ms: 1,
                 cues: Vec::new(),

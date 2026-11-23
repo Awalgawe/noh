@@ -346,6 +346,9 @@ pub fn split_at(track: &mut SubtitleTrack, i: usize, ms: u64) -> bool {
         .clamp(1, texts.len() - 1);
     let mut first = SubtitleCue::new(cue.start_ms, ms, texts[..k].join(" "));
     let mut second = SubtitleCue::new(ms, cue.end_ms, texts[k..].join(" "));
+    // Both halves are sung by the voices of the line they come from.
+    first.voices = cue.voices.clone();
+    second.voices = cue.voices.clone();
     if let Some(w) = &cue.words {
         // The first part now ends at `ms`: its last word's known end is clamped there.
         let mut head = w[..k].to_vec();
@@ -372,6 +375,8 @@ pub fn join_next_with(track: &mut SubtitleTrack, i: usize, sep: &str) -> bool {
     }
     let (a, b) = (track.cues[i].clone(), track.cues[i + 1].clone());
     let mut joined = SubtitleCue::new(a.start_ms, b.end_ms, format!("{}{sep}{}", a.text, b.text));
+    // The joined line keeps the first line's voices (the screen says so).
+    joined.voices = a.voices.clone();
     if let (Some(x), Some(y)) = (&a.words, &b.words) {
         let mut all: Vec<WordTime> = x.iter().chain(y).cloned().collect();
         joined.fit_ends(&mut all);
@@ -947,6 +952,7 @@ mod tests {
             word("give", 2500, WordSource::Whisper),
         ]);
         SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 20_000,
             cues: vec![a, SubtitleCue::new(4000, 6000, "and nothing disappears")],
@@ -1353,6 +1359,7 @@ mod tests {
             word("d", 3500, WordSource::Whisper),
         ]);
         let mut t = SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 10_000,
             cues: vec![cue],
@@ -1376,6 +1383,7 @@ mod tests {
             word("z", 2000, WordSource::Hand),
         ]);
         let mut t = SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 10_000,
             cues: vec![cue],
@@ -1526,5 +1534,26 @@ mod tests {
         assert!(split_at(&mut t, 1, 5000));
         assert_eq!(t.cues[1].text, "and nothing");
         assert!(!split_at(&mut t, 1, 4100), "each part keeps 200 ms");
+    }
+
+    #[test]
+    fn cut_lines_keep_their_voices_and_joined_lines_keep_the_first_ones() {
+        let mut t = SubtitleTrack {
+            voices: vec![crate::subtitle_track::Voice::default(); 2],
+            language: None,
+            duration_ms: 10_000,
+            cues: vec![
+                SubtitleCue::new(1000, 3000, "a b c"),
+                SubtitleCue::new(3000, 4000, "d"),
+            ],
+        };
+        t.cues[0].voices = vec![1, 2];
+        t.cues[1].voices = vec![2];
+        assert!(split_at_word(&mut t, 0, 1));
+        assert_eq!(t.cues[0].voices, [1, 2]);
+        assert_eq!(t.cues[1].voices, [1, 2]);
+        assert!(join_next_with(&mut t, 1, " "));
+        assert_eq!(t.cues[1].text, "b c d");
+        assert_eq!(t.cues[1].voices, [1, 2], "the first line's voices");
     }
 }

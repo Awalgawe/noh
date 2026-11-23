@@ -11,6 +11,10 @@ pub const MAX_DURATION_MS: u64 = 359_999_999;
 pub const MAX_CUES: usize = 10_000;
 pub const MAX_CUE_TEXT_BYTES: usize = 4096;
 pub const MAX_TEXT_BYTES: usize = 256 * 1024;
+/// The most voices a track declares (a duet, a trio, a lead and three).
+pub const MAX_VOICES: usize = 4;
+/// The longest voice name, in characters.
+pub const MAX_VOICE_NAME_CHARS: usize = 32;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -20,6 +24,20 @@ pub struct SubtitleTrack {
     pub language: Option<String>,
     pub duration_ms: u64,
     pub cues: Vec<SubtitleCue>,
+    /// The declared voices, in number order: voice `n` is `voices[n - 1]`.
+    /// Only the last one can be removed, so numbers never shift. Empty: the
+    /// lyrics say nothing about who sings.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub voices: Vec<Voice>,
+}
+
+/// A declared voice: one singer or one group.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Voice {
+    /// Shown instead of « Voix n » when set (at most 32 characters).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -32,6 +50,58 @@ pub struct SubtitleCue {
     /// The words' texts are the cue text split on whitespace; see `words_fit`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub words: Option<Vec<WordTime>>,
+    /// The set of voices that sing this cue: voice numbers (1-based, see
+    /// `SubtitleTrack::voices`), sorted, no repeats. Several voices sing the
+    /// same words together; empty: no voice is known.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub voices: Vec<u8>,
+}
+
+/// Which of a text's whitespace-separated words are backing vocals: the words
+/// of a group between `(` and `)`. A group may span typed line breaks; an
+/// unclosed `(` or a stray `)` makes no backing at all in the text.
+pub fn backing_flags(text: &str) -> Vec<bool> {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let mut back = vec![false; words.len()];
+    let (mut depth, mut open) = (0usize, 0usize);
+    for (i, w) in words.iter().enumerate() {
+        for ch in w.chars() {
+            match ch {
+                '(' => {
+                    if depth == 0 {
+                        open = i;
+                    }
+                    depth += 1;
+                }
+                ')' if depth == 0 => return vec![false; words.len()],
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        back[open..=i].iter_mut().for_each(|b| *b = true);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if depth > 0 {
+        return vec![false; words.len()];
+    }
+    back
+}
+
+/// Whether a text has an unclosed `(` or a stray `)`: the editor marks it.
+pub fn unbalanced_parentheses(text: &str) -> bool {
+    let mut depth = 0usize;
+    for ch in text.chars() {
+        match ch {
+            '(' => depth += 1,
+            ')' if depth == 0 => return true,
+            ')' => depth -= 1,
+            _ => {}
+        }
+    }
+    depth > 0
 }
 
 /// Where a word or syllable time comes from.
@@ -83,18 +153,47 @@ impl SubtitleCue {
             end_ms,
             text: text.into(),
             words: None,
+            voices: Vec::new(),
         }
     }
 
     /// Clamp the known ends of `words` to where each unit may end: a word before
-    /// the next word's start (or the cue end), a syllable before the next
-    /// syllable (or its word's end). An end that no longer follows its start is
-    /// dropped, so the unit lasts until the next start again.
+    /// the next word of its kind starts (or the cue end), a syllable before the
+    /// next syllable (or its word's end). Kinds are the cue's main words and its
+    /// backing vocals (`backing_flags`): a main word held while backing vocals
+    /// start may end after them, and the other way round. Without backing
+    /// vocals the next word of its kind is simply the next word. An end that no
+    /// longer follows its start is dropped, so the unit lasts until the next
+    /// start again.
     pub fn fit_ends(&self, words: &mut [WordTime]) {
+        let flags = backing_flags(&self.text);
+        let kinds = if flags.len() == words.len() {
+            flags
+        } else {
+            vec![false; words.len()]
+        };
+        self.fit_ends_by(words, &kinds);
+    }
+
+    /// Whether `words` hold a known end past the next word of another kind: a
+    /// file with one needs the version that keeps it (`fit_ends` with no kinds
+    /// would clamp it).
+    pub fn has_backing_overlap(&self, words: &[WordTime]) -> bool {
+        let mut plain = words.to_vec();
+        self.fit_ends_by(&mut plain, &vec![false; words.len()]);
+        plain != words
+    }
+
+    fn fit_ends_by(&self, words: &mut [WordTime], kinds: &[bool]) {
         let starts: Vec<u64> = words.iter().map(|w| w.start_ms).collect();
         for (i, w) in words.iter_mut().enumerate() {
+            // A unit without a known end lasts until the next word, whatever its
+            // kind (unchanged); a known end may reach the next word of its kind.
             let bound = starts.get(i + 1).copied().unwrap_or(self.end_ms);
-            w.end_ms = w.end_ms.map(|e| e.min(bound)).filter(|e| *e > w.start_ms);
+            let reach = (i + 1..starts.len())
+                .find(|&j| kinds[j] == kinds[i])
+                .map_or(self.end_ms, |j| starts[j]);
+            w.end_ms = w.end_ms.map(|e| e.min(reach)).filter(|e| *e > w.start_ms);
             if let Some(syllables) = &mut w.syllables {
                 // A word end at or before its last syllable's start would hide it.
                 let last_start = syllables.last().map_or(w.start_ms, |s| s.start_ms);
@@ -188,6 +287,14 @@ pub enum ValidationError {
     ControlCharacter { cue: usize },
     #[error("Cue {cue} has word times that do not match its text or timing")]
     Words { cue: usize },
+    #[error(
+        "The track declares more than {} voices, or a voice name that is empty, longer than {} characters or has control characters",
+        MAX_VOICES,
+        MAX_VOICE_NAME_CHARS
+    )]
+    VoiceList,
+    #[error("Cue {cue} names voices that are not declared, repeated or out of order")]
+    Voices { cue: usize },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -223,6 +330,7 @@ impl SubtitleTrack {
                 (start < end).then(|| {
                     let mut out =
                         SubtitleCue::new(start - start_ms, end - start_ms, cue.text.clone());
+                    out.voices = cue.voices.clone();
                     out.words = cue.words.as_ref().and_then(|words| {
                         let shifted: Option<Vec<WordTime>> = words
                             .iter()
@@ -255,6 +363,7 @@ impl SubtitleTrack {
             language: self.language.clone(),
             duration_ms: end_ms - start_ms,
             cues,
+            voices: self.voices.clone(),
         })
     }
 
@@ -273,6 +382,18 @@ impl SubtitleTrack {
         if self.cues.len() > MAX_CUES {
             return Err(ValidationError::CueCount);
         }
+        if self.voices.len() > MAX_VOICES
+            || self.voices.iter().any(|v| {
+                v.name.as_ref().is_some_and(|n| {
+                    n.trim().is_empty()
+                        || n.chars().count() > MAX_VOICE_NAME_CHARS
+                        || n.chars().any(char::is_control)
+                })
+            })
+        {
+            return Err(ValidationError::VoiceList);
+        }
+        let declared = self.voices.len() as u8;
         let (mut previous_end, mut text_bytes) = (0, 0usize);
         for (index, cue) in self.cues.iter().enumerate() {
             let number = index + 1;
@@ -309,6 +430,11 @@ impl SubtitleTrack {
                 .is_some_and(|words| !cue.words_fit(words))
             {
                 return Err(ValidationError::Words { cue: number });
+            }
+            if cue.voices.iter().any(|&v| v == 0 || v > declared)
+                || cue.voices.windows(2).any(|p| p[0] >= p[1])
+            {
+                return Err(ValidationError::Voices { cue: number });
             }
         }
         Ok(text_bytes)
@@ -381,6 +507,7 @@ mod tests {
         ] {
             assert!(!bad.words_fit(bad.words.as_ref().unwrap()), "{bad:?}");
             let track = SubtitleTrack {
+                voices: Vec::new(),
                 language: None,
                 duration_ms: 5000,
                 cues: vec![bad],
@@ -470,6 +597,7 @@ mod tests {
         cue = worded(1000, 3000, "a b", &[1000, 2000]);
         cue.words = Some(w.clone());
         let track = SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 5000,
             cues: vec![cue],
@@ -487,6 +615,7 @@ mod tests {
     #[test]
     fn trimming_shifts_word_times_and_drops_those_a_cut_leaves_outside() {
         let track = SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: 10_000,
             cues: vec![
@@ -513,11 +642,13 @@ mod tests {
 
     fn track(cues: impl IntoIterator<Item = (u64, u64, String)>) -> SubtitleTrack {
         SubtitleTrack {
+            voices: Vec::new(),
             language: None,
             duration_ms: MAX_DURATION_MS,
             cues: cues
                 .into_iter()
                 .map(|(start_ms, end_ms, text)| SubtitleCue {
+                    voices: Vec::new(),
                     start_ms,
                     end_ms,
                     text,
@@ -572,24 +703,28 @@ mod tests {
             trimmed.cues,
             [
                 SubtitleCue {
+                    voices: Vec::new(),
                     start_ms: 0,
                     end_ms: 100,
                     text: "左端を越える".into(),
                     words: None,
                 },
                 SubtitleCue {
+                    voices: Vec::new(),
                     start_ms: 100,
                     end_ms: 200,
                     text: "相接する一".into(),
                     words: None,
                 },
                 SubtitleCue {
+                    voices: Vec::new(),
                     start_ms: 200,
                     end_ms: 500,
                     text: "Café 👋".into(),
                     words: None,
                 },
                 SubtitleCue {
+                    voices: Vec::new(),
                     start_ms: 500,
                     end_ms: 600,
                     text: "右端を越える".into(),
@@ -776,6 +911,7 @@ mod tests {
         assert!(boundary.to_srt().is_ok());
         let mut excess = boundary;
         excess.cues.push(SubtitleCue {
+            voices: Vec::new(),
             start_ms: MAX_CUES as u64,
             end_ms: MAX_CUES as u64 + 1,
             text: "x".into(),
@@ -798,6 +934,7 @@ mod tests {
         assert!(boundary.to_srt().is_ok());
         let mut excess = boundary;
         excess.cues.push(SubtitleCue {
+            voices: Vec::new(),
             start_ms: 64,
             end_ms: 65,
             text: "x".into(),
@@ -826,5 +963,149 @@ mod tests {
         let input: SubtitleTrack = serde_json::from_str(r#"{"duration_ms":1,"cues":[]}"#).unwrap();
         assert_eq!(input.language, None);
         assert_eq!(input.to_srt().unwrap(), "");
+    }
+
+    #[test]
+    fn parentheses_mark_backing_vocals_only_when_they_balance() {
+        assert_eq!(
+            backing_flags("jusqu'au matin (au matin)"),
+            [false, false, true, true]
+        );
+        assert_eq!(
+            backing_flags("(oh) yeah (oh\nyeah) baby"),
+            [true, false, true, true, false]
+        );
+        assert_eq!(backing_flags("((deep)) end"), [true, false]);
+        // An unclosed group or a stray parenthesis makes no backing at all.
+        assert_eq!(backing_flags("a (b c"), [false; 3]);
+        assert_eq!(backing_flags("a b) c"), [false; 3]);
+        assert!(unbalanced_parentheses("a (b c") && unbalanced_parentheses("a) (b"));
+        assert!(!unbalanced_parentheses("a (b) c") && !unbalanced_parentheses("plain"));
+    }
+
+    fn held(text: &str, units: &[(&str, u64, Option<u64>)]) -> (SubtitleCue, Vec<WordTime>) {
+        let cue = SubtitleCue::new(1000, 5000, text);
+        let words = units
+            .iter()
+            .map(|&(t, start_ms, end_ms)| WordTime {
+                text: t.into(),
+                start_ms,
+                end_ms,
+                source: WordSource::Hand,
+                syllables: None,
+            })
+            .collect();
+        (cue, words)
+    }
+
+    #[test]
+    fn a_word_held_while_backing_vocals_start_keeps_its_end() {
+        let (cue, words) = held(
+            "matin (au matin)",
+            &[
+                ("matin", 1000, Some(4000)),
+                ("(au", 2000, Some(2400)),
+                ("matin)", 2500, Some(4800)),
+            ],
+        );
+        let mut fitted = words.clone();
+        cue.fit_ends(&mut fitted);
+        assert_eq!(fitted, words, "each end reaches past the other kind");
+        assert!(cue.words_fit(&words) && cue.has_backing_overlap(&words));
+
+        // An end may not pass the next word of its own kind.
+        let (cue, words) = held(
+            "a (b) c",
+            &[
+                ("a", 1000, Some(4500)),
+                ("(b)", 2000, None),
+                ("c", 3000, None),
+            ],
+        );
+        let mut fitted = words.clone();
+        cue.fit_ends(&mut fitted);
+        assert_eq!(fitted[0].end_ms, Some(3000));
+    }
+
+    #[test]
+    fn without_backing_vocals_ends_are_clamped_as_before() {
+        let (cue, words) = held(
+            "a b c",
+            &[
+                ("a", 1000, Some(4000)),
+                ("b", 2000, None),
+                ("c", 3000, None),
+            ],
+        );
+        let mut fitted = words.clone();
+        cue.fit_ends(&mut fitted);
+        assert_eq!(fitted[0].end_ms, Some(2000));
+        assert!(!cue.has_backing_overlap(&fitted));
+        // Unbalanced parentheses: ordinary words, ordinary clamping.
+        let (cue, words) = held(
+            "a (b c",
+            &[
+                ("a", 1000, Some(4000)),
+                ("(b", 2000, None),
+                ("c", 3000, None),
+            ],
+        );
+        let mut fitted = words.clone();
+        cue.fit_ends(&mut fitted);
+        assert_eq!(fitted[0].end_ms, Some(2000));
+    }
+
+    #[test]
+    fn cue_voices_must_be_declared_sorted_and_unique() {
+        let mut t = SubtitleTrack {
+            voices: vec![Voice::default(); 2],
+            language: None,
+            duration_ms: 10_000,
+            cues: vec![
+                SubtitleCue::new(0, 1000, "a"),
+                SubtitleCue::new(1000, 2000, "b"),
+            ],
+        };
+        t.cues[0].voices = vec![1, 2];
+        t.cues[1].voices = vec![2];
+        assert!(t.validate().is_ok());
+        for bad in [vec![3], vec![0], vec![2, 1], vec![1, 1]] {
+            t.cues[1].voices = bad.clone();
+            assert_eq!(
+                t.validate(),
+                Err(ValidationError::Voices { cue: 2 }),
+                "{bad:?}"
+            );
+        }
+        t.cues[1].voices = vec![2];
+        t.voices = vec![Voice::default(); MAX_VOICES + 1];
+        assert_eq!(t.validate(), Err(ValidationError::VoiceList));
+        t.voices = vec![
+            Voice {
+                name: Some("x".repeat(MAX_VOICE_NAME_CHARS + 1)),
+            },
+            Voice::default(),
+        ];
+        assert_eq!(t.validate(), Err(ValidationError::VoiceList));
+        t.voices[0].name = Some("Léa".into());
+        assert!(t.validate().is_ok());
+    }
+
+    #[test]
+    fn a_trimmed_track_keeps_its_voices() {
+        let mut t = SubtitleTrack {
+            voices: vec![Voice::default(); 2],
+            language: None,
+            duration_ms: 10_000,
+            cues: vec![
+                SubtitleCue::new(1000, 3000, "a b"),
+                SubtitleCue::new(4000, 6000, "c"),
+            ],
+        };
+        t.cues[0].voices = vec![2];
+        let cut = t.trim(2000, 5000).unwrap();
+        assert_eq!(cut.voices, t.voices);
+        assert_eq!(cut.cues[0].voices, [2]);
+        assert!(cut.cues[1].voices.is_empty());
     }
 }
