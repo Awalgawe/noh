@@ -48,6 +48,9 @@ const STATES: &[&str] = &[
     "lyrics-screen-game-missed",
     "lyrics-screen-summary",
     "lyrics-screen-read-only",
+    "lyrics-screen-voices",
+    "lyrics-screen-voices-menu",
+    "lyrics-screen-voices-remove",
     "lyrics-first-edit",
     "lyrics-unsaved",
     "lyrics-srt-stale",
@@ -292,6 +295,13 @@ const LAYOUT: &[LayoutCase] = &[
     ("lyrics-screen-game-missed", "", "de", "light", COMPACT, ""),
     ("lyrics-screen-summary", "", "ja", "dark", COMPACT, ""),
     ("lyrics-screen-read-only", "", "ja", "light", COMPACT, ""),
+    // Who sings each line (voices mockup).
+    ("lyrics-screen-voices", "", "fr", "dark", WIDE, ""),
+    ("lyrics-screen-voices", "", "fr", "light", WIDE, ""),
+    ("lyrics-screen-voices-menu", "", "fr", "dark", WIDE, ""),
+    ("lyrics-screen-voices-menu", "", "de", "light", COMPACT, ""),
+    ("lyrics-screen-voices-remove", "", "fr", "dark", WIDE, ""),
+    ("lyrics-screen-voices", "", "ja", "dark", COMPACT, ""),
     ("lyrics-lane-tip", "", "fr", "dark", WIDE, ""),
     ("lyrics-lane-tip", "", "de", "light", WIDE, ""),
     // Additional popup states.

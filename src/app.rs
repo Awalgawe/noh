@@ -37,6 +37,7 @@ mod app_subtitles;
 mod app_timeline;
 mod app_track;
 mod app_ui;
+mod app_voices;
 use app_job::{Event, Job, PreviewFile, Request};
 use app_locale::Locale;
 use app_media::{Clip, Metadata};

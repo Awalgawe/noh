@@ -104,6 +104,18 @@ pub enum LineEdit {
     Delete {
         index: usize,
     },
+    /// Who sings the line: the set of declared voice numbers (1 first; `[1, 2]`
+    /// both together; empty: no voice known).
+    SetVoices {
+        index: usize,
+        voices: Vec<u8>,
+    },
+    /// Declare the voices, in number order, each with an optional name (at
+    /// most 4; `[]` says nothing about who sings). Lines lose the numbers no
+    /// longer declared.
+    NameVoices {
+        names: Vec<Option<String>>,
+    },
 }
 
 /// One answer to a question of the application, as its button gives it.

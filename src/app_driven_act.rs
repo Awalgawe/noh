@@ -153,6 +153,12 @@ impl NohApp {
                 LineEdit::Delete { index } => {
                     l.format("driven.h.line_delete", &[(index + 1).to_string()])
                 }
+                LineEdit::SetVoices { index, .. } => {
+                    l.format("driven.h.line_voices", &[(index + 1).to_string()])
+                }
+                LineEdit::NameVoices { names } => {
+                    l.format("driven.h.voices", &[names.len().to_string()])
+                }
             },
             Action::Undo {} => l.text("driven.h.undo").into(),
             Action::Redo {} => l.text("driven.h.redo").into(),
@@ -594,6 +600,18 @@ impl NohApp {
                             added.is_some()
                         }
                         LineEdit::Delete { index } => *index < n && e::delete(t, *index).is_some(),
+                        LineEdit::SetVoices { index, voices } => {
+                            *index < n && e::set_voices(t, *index, *index, voices)
+                        }
+                        LineEdit::NameVoices { names } => e::declare_voices(
+                            t,
+                            names
+                                .iter()
+                                .map(|name| noh::subtitle_track::Voice {
+                                    name: name.clone().filter(|n| !n.trim().is_empty()),
+                                })
+                                .collect(),
+                        ),
                     }
                 });
                 if changed {
@@ -601,7 +619,7 @@ impl NohApp {
                     Ok(serde_json::json!({ "added": added, "question": self.open_question() }))
                 } else {
                     refused(
-                        "Nothing changed: no lyrics, no such line, no room there, the lyrics locked by a job, or a lyrics question waiting for its answer.",
+                        "Nothing changed: no lyrics, no such line, no room there, a voice not declared (name_voices first), the lyrics locked by a job, or a lyrics question waiting for its answer.",
                     )
                 }
             }
@@ -1064,8 +1082,10 @@ impl NohApp {
                         "start_ms": c.start_ms,
                         "end_ms": c.end_ms,
                         "text": c.text.chars().take(LINE_TEXT).collect::<String>(),
+                        "voices": c.voices,
                     })
                 }).collect::<Vec<_>>()),
+                "voices": track.as_ref().map(|t| t.voices.iter().map(|v| v.name.clone()).collect::<Vec<_>>()),
                 "lines_truncated": shown > lines,
             })
         });

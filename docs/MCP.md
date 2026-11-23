@@ -272,9 +272,11 @@ back or closed by hand still count while they run: they are still this server's
 children.
 
 The agent acts with `noh_app_do`: `add` (files, as a drop), `set_photo_duration`,
-`edit_line` (`set_text`, `set_start`, `set_end`, `shift`, `add`, `delete`, with an
-optional `based_on` lyrics revision: lyrics reloaded since are not changed,
-`app.state_changed`), `undo`, `redo`, `choose_effect`, `set_safe_area`,
+`edit_line` (`set_text`, `set_start`, `set_end`, `shift`, `add`, `delete`, and who
+sings: `name_voices` declares up to four voices with optional names, `set_voices`
+gives a line the set of voice numbers that sing it; with an optional `based_on`
+lyrics revision: lyrics reloaded since are not changed, `app.state_changed`; the
+state's `lyrics` lists the declared voices' names and each line's `voices`), `undo`, `redo`, `choose_effect`, `set_safe_area`,
 `set_range`, `remove_clip`, `move_clip`, `set_fades` (and the clips' own sound),
 `set_convert_all`, `set_effect_settings` (preset, settings, Classique's size and
 placement, captions shown on the video), `set_framing`, `set_destination`,
