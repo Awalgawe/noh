@@ -533,6 +533,24 @@ fn what_holds_the_folder_is_grouped_by_the_program_that_started_it() {
         ]
     );
     assert!(holders(&[], own).is_empty());
+    // A server with only the windows it opened for its agent (noh_app_open)
+    // is idle: the windows count as windows, with their own FFmpeg.
+    let driven = [
+        p(70, 900, "noh-mcp.exe"),
+        p(71, 70, "noh.exe"),
+        p(72, 70, "noh.exe"),
+        p(73, 72, "ffmpeg.exe"),
+    ];
+    assert_eq!(
+        holders(&driven, own),
+        [
+            Holder::Servers {
+                count: 1,
+                working: 0,
+            },
+            Holder::Windows(2),
+        ]
+    );
 }
 
 #[test]

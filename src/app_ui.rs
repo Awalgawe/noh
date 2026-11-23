@@ -285,6 +285,8 @@ impl NohApp {
         let resources = self.resource_inputs();
         self.resources.sync(resources, ctx);
         self.retry_resource_media(ctx);
+        // A driven window decodes its waveform at its preparation turn only.
+        self.project.waveform_held = self.driven_holds_preparation();
         self.project.sync_inputs(
             self.wav_id,
             self.wav.as_ref(),

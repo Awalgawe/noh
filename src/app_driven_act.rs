@@ -718,6 +718,10 @@ impl NohApp {
                 }
                 self.start_project(ctx, false, short);
                 if self.busy() {
+                    if let Some(d) = &mut self.driven {
+                        d.agent_job = true;
+                        d.agent_cancelled = false;
+                    }
                     self.driven_mark();
                     Ok(serde_json::json!({ "started": true }))
                 } else {
@@ -731,6 +735,9 @@ impl NohApp {
                 }
             }
             Action::Cancel {} => {
+                if let Some(d) = &mut self.driven {
+                    d.agent_cancelled = true;
+                }
                 if self.cancel_work() {
                     self.driven_mark();
                     Ok(serde_json::Value::Null)
@@ -1040,6 +1047,70 @@ impl NohApp {
             state,
         });
         d.revision
+    }
+
+    /// A driven window waits for its preparation turn: its light copies and
+    /// its waveform wait too (note §5). Not once the person took it back or
+    /// the agent left: it is then an ordinary NOH.
+    pub(super) fn driven_holds_preparation(&self) -> bool {
+        self.driven.as_ref().is_some_and(|d| d.locked() && !d.turn)
+    }
+
+    /// Copies being made or waiting, or a waveform to decode.
+    fn preparation_pending(&self) -> bool {
+        let copies = self.clips.iter().any(|c| {
+            !c.item.is_image()
+                && c.info.is_some()
+                && c.error.is_none()
+                && noh::copies::state(c.item.path()) == noh::copies::State::Preparing
+        });
+        copies || self.project.waveform_loading || self.project.waveform_wanted()
+    }
+
+    /// Each frame: ask for the turn when there is something to prepare; give
+    /// it back when there is nothing left.
+    pub(super) fn driven_turn_frame(&mut self) {
+        let pending = self.preparation_pending();
+        let urgent = self.mini_playing();
+        let Some(d) = &mut self.driven else {
+            return;
+        };
+        if !d.locked() {
+            return;
+        }
+        if d.turn && !pending {
+            d.turn = false;
+            let _ = d.send_message(&ToServer::Prepared);
+        } else if !d.turn && pending && d.asked_turn != Some(urgent) {
+            // Asked again only to say the person now plays it.
+            if d.asked_turn.is_none() || urgent {
+                d.asked_turn = Some(urgent);
+                let _ = d.send_message(&ToServer::NeedsPrepare { urgent });
+            }
+        }
+    }
+
+    /// Each frame: the end of a heavy job the agent started here gives the
+    /// server's slot back, even after the person took the window back.
+    pub(super) fn driven_job_frame(&mut self) {
+        let busy = self.busy();
+        let outcome = if self.project.failure.is_some() || self.error.is_some() {
+            "failed"
+        } else if self.driven.as_ref().is_some_and(|d| d.agent_cancelled) {
+            "cancelled"
+        } else {
+            "succeeded"
+        };
+        let Some(d) = &mut self.driven else {
+            return;
+        };
+        if d.agent_job && !busy {
+            d.agent_job = false;
+            d.agent_cancelled = false;
+            let _ = d.send_message(&ToServer::JobDone {
+                outcome: outcome.into(),
+            });
+        }
     }
 
     /// The monitor as painted this frame, and whether its picture is the one

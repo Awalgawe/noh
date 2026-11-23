@@ -225,6 +225,13 @@ pub(super) struct Driven {
     pub look: Option<super::app_driven_act::LookJob>,
     /// When the agent last changed something (the badge marks it).
     pub acted_at: Option<Instant>,
+    /// The server gave this window the preparation turn.
+    pub turn: bool,
+    /// It asked for the turn (and whether as urgent), not yet given.
+    pub asked_turn: Option<bool>,
+    /// A heavy job the agent started here runs; `job_done` goes when it ends.
+    pub agent_job: bool,
+    pub agent_cancelled: bool,
 }
 
 impl Driven {
@@ -274,6 +281,10 @@ impl Driven {
             monitor: None,
             look: None,
             acted_at: None,
+            turn: false,
+            asked_turn: None,
+            agent_job: false,
+            agent_cancelled: false,
         }
     }
 
@@ -367,13 +378,24 @@ impl NohApp {
                     at_ms,
                     output,
                 })) => self.driven_look(ctx, id, scope, at_ms, output),
+                Incoming::Message(Inbound::Message(ToApp::Prepare { go })) => {
+                    if let Some(d) = &mut self.driven {
+                        d.turn = go;
+                        if go {
+                            d.asked_turn = None;
+                        }
+                    }
+                    ctx.request_repaint();
+                }
                 Incoming::Message(Inbound::Unsupported { id: None }) => {}
                 Incoming::Disconnected => self.end_piloting(ctx, true),
             }
         }
-        // The agent's playhead gestures waiting for the person; then what the
-        // window shows, if it changed.
+        // The agent's playhead gestures waiting for the person; the end of its
+        // job; the preparation turn; then what the window shows, if it changed.
         self.driven_pending(ctx);
+        self.driven_job_frame();
+        self.driven_turn_frame();
         self.driven_state(false);
         let Some(d) = &mut self.driven else {
             return;
@@ -1840,6 +1862,41 @@ mod tests {
             }
         )));
         assert_eq!(w.app.open_question(), None);
+    }
+
+    #[test]
+    fn the_window_asks_for_its_turn_holds_meanwhile_and_says_when_done() {
+        let mut w = window(true);
+        assert!(w.app.driven_holds_preparation(), "held until its turn");
+        // Something to prepare: it asks once.
+        w.app.project.waveform_loading = true;
+        assert_eq!(w.next(), Some(ToServer::NeedsPrepare { urgent: false }));
+        w.frame(vec![]);
+        assert!(w.from_app.recv_timeout(Duration::from_millis(100)).is_err());
+        // Its turn: no longer held; once nothing is left, it gives the turn back.
+        w.send(&ToApp::Prepare { go: true });
+        for _ in 0..20 {
+            w.frame(vec![]);
+            if !w.app.driven_holds_preparation() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!w.app.driven_holds_preparation());
+        w.app.project.waveform_loading = false;
+        assert_eq!(w.next(), Some(ToServer::Prepared));
+        assert!(w.app.driven_holds_preparation());
+        // A job the agent started ends: the slot's owner is told.
+        w.app.driven.as_mut().unwrap().agent_job = true;
+        assert_eq!(
+            w.next(),
+            Some(ToServer::JobDone {
+                outcome: "succeeded".into()
+            })
+        );
+        // The person takes the window back: an ordinary NOH prepares freely.
+        w.app.release_piloting(&w.ctx.clone());
+        assert!(!w.app.driven_holds_preparation());
     }
 
     #[test]

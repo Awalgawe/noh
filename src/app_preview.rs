@@ -626,8 +626,9 @@ impl NohApp {
         }
         // No copy is encoded while an export or another job runs, as no still or
         // scrub picture is decoded then.
+        // A driven window also waits for its preparation turn (app_driven_act.rs).
         if let Some(warmer) = &self.mini_preview.warmer {
-            warmer.hold(self.preview_blocked());
+            warmer.hold(self.preview_blocked() || self.driven_holds_preparation());
         }
         self.mini_preview.receive_thumbnails(ctx);
         if self.project.range.is_none() {
