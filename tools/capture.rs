@@ -316,15 +316,34 @@ const LAYOUT: &[LayoutCase] = &[
     ("song-only", "", "fr", "dark", WIDE, ""),
     ("song-only", "", "de", "light", COMPACT, ""),
 ];
-/// Caption plugins whose own settings are captured (state `ready`, fr and de at
-/// both sizes), their choices named in the language.
-const PLUGIN_SETTINGS: &[&str] = &[
-    "noh.karaoke-simple",
-    "noh.drop",
-    "noh.sweep",
-    "noh.breath",
-    "noh.block",
-];
+/// Every caption style NOH ships has its own settings captured (state `ready`,
+/// fr and de at both sizes), their choices named in the language. The styles
+/// are read from the shipped catalogue, so a new one is captured without
+/// touching this file.
+fn plugin_settings() -> Result<Vec<String>> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("assets")
+        .join("effects");
+    let mut ids = Vec::new();
+    for entry in fs::read_dir(&root).map_err(|e| format!("{}: {e}", root.display()))? {
+        let manifest = entry?.path().join("effect.json");
+        if !manifest.is_file() {
+            continue;
+        }
+        let text = fs::read_to_string(&manifest)?;
+        let value: Value =
+            serde_json::from_str(&text).map_err(|e| format!("{}: {e}", manifest.display()))?;
+        let id = value["id"]
+            .as_str()
+            .ok_or_else(|| format!("{}: no \"id\"", manifest.display()))?;
+        ids.push(id.to_owned());
+    }
+    if ids.is_empty() {
+        return Err(format!("{}: no caption style", root.display()).into());
+    }
+    ids.sort();
+    Ok(ids)
+}
 /// A plugin's font setting: the picker open, and an installed family missing,
 /// with a fixed folder as the installed fonts (NOH_CAPTURE_FONTS).
 const FONT_SETTINGS: &[&str] = &[
@@ -458,8 +477,8 @@ fn layout_cases(options: &Options) -> Result<Vec<Case>> {
     let ready = filter
         .as_ref()
         .is_none_or(|f| f.iter().any(|s| s == "ready"));
-    let extras = PLUGIN_SETTINGS
-        .iter()
+    let extras = plugin_settings()?
+        .into_iter()
         .map(|id| format!("effect={id},style=settings"))
         .chain(FONT_SETTINGS.iter().map(|s| s.to_string()));
     for extra in extras.filter(|_| ready) {
@@ -970,11 +989,28 @@ mod tests {
     }
 
     #[test]
+    fn every_shipped_style_has_its_settings_captured() {
+        let folders = fs::read_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/effects"))
+            .unwrap()
+            .filter(|e| e.as_ref().unwrap().path().join("effect.json").is_file())
+            .count();
+        let ids = plugin_settings().unwrap();
+        assert_eq!(ids.len(), folders);
+        assert!(ids.iter().any(|id| id == "noh.classic"), "{ids:?}");
+        let cases = build_cases(&options(None)).unwrap();
+        for id in &ids {
+            let tweak = format!("effect={id},style=settings");
+            let captured = cases.iter().filter(|c| c.tweaks == tweak).count();
+            assert_eq!(captured, 4, "{id}: fr and de at both sizes");
+        }
+    }
+
+    #[test]
     fn layout_matrix_names_every_reference_once_with_valid_tweaks() {
         let cases = build_cases(&options(None)).unwrap();
         assert_eq!(
             cases.len(),
-            LAYOUT.len() + 4 * (PLUGIN_SETTINGS.len() + FONT_SETTINGS.len())
+            LAYOUT.len() + 4 * (plugin_settings().unwrap().len() + FONT_SETTINGS.len())
         );
         let boards: BTreeSet<_> = cases
             .iter()
