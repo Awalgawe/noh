@@ -27,44 +27,32 @@ fn lines() -> Vec<Line> {
     ]
 }
 
-/// NOH ships Classique and the caption plugins of lyrics step 7; the engine's
-/// other features are exercised by the test-only effects in tests/fixtures/fx
-/// (never packaged).
+/// Every folder of assets/effects loads, Classique among them (built in through
+/// `catalog::CLASSIC_JSON`). A style is added by its folder alone: the list of
+/// bundled styles is not written here. The engine's other features are exercised
+/// by the test-only effects in tests/fixtures/fx (never packaged).
 #[test]
 fn bundled_effects_load() {
     let bundled = scan(&[repo("assets/effects")]);
-    assert_eq!(
-        bundled
-            .effects
-            .iter()
-            .map(|e| e.effect.id.as_str())
-            .collect::<Vec<_>>(),
-        [
-            "noh.block",
-            "noh.breath",
-            "noh.classic",
-            "noh.drop",
-            "noh.karaoke-simple",
-            "noh.sweep"
-        ]
-    );
+    assert!(bundled.rejected.is_empty(), "{:?}", bundled.rejected);
+    let folders = std::fs::read_dir(repo("assets/effects"))
+        .unwrap()
+        .filter(|e| e.as_ref().unwrap().path().is_dir())
+        .count();
+    assert_eq!(bundled.effects.len(), folders, "every folder is an effect");
+    assert!(bundled.effects.iter().any(|e| e.effect.id == "noh.classic"));
     let catalog = scan(&[repo("assets/effects"), repo("tests/fixtures/fx")]);
     assert!(catalog.rejected.is_empty(), "{:?}", catalog.rejected);
     let mut ids: Vec<&str> = catalog
         .effects
         .iter()
         .map(|e| e.effect.id.as_str())
+        .filter(|id| id.starts_with("test."))
         .collect();
     ids.sort();
     assert_eq!(
         ids,
         [
-            "noh.block",
-            "noh.breath",
-            "noh.classic",
-            "noh.drop",
-            "noh.karaoke-simple",
-            "noh.sweep",
             "test.compose",
             "test.glow",
             "test.motion",
@@ -211,10 +199,21 @@ fn bundled_presets_match_the_recorded_instances() {
     }
     let recorded = std::fs::read_to_string(&path).expect("recorded instances");
     let recorded = recorded.replace("\r\n", "\n");
-    for (now, before) in out.lines().zip(recorded.lines()) {
-        assert_eq!(now, before, "bundled effects draw different instances");
+    // Every recorded line is drawn again, the same. An effect with no line yet (a
+    // style added by its folder alone) is drawn by the other tests and recorded
+    // later by a run with NOH_FX_GOLDEN_WRITE on each system.
+    let id = |line: &str| line.split(' ').next().unwrap_or("").to_string();
+    let known: std::collections::HashSet<String> = recorded.lines().map(id).collect();
+    let now: Vec<&str> = out.lines().filter(|l| known.contains(&id(l))).collect();
+    let unrecorded: std::collections::BTreeSet<String> =
+        out.lines().map(id).filter(|i| !known.contains(i)).collect();
+    if !unrecorded.is_empty() {
+        eprintln!("not recorded yet, not compared: {unrecorded:?}");
     }
-    assert_eq!(out.lines().count(), recorded.lines().count());
+    for (now, before) in now.iter().zip(recorded.lines()) {
+        assert_eq!(*now, before, "bundled effects draw different instances");
+    }
+    assert_eq!(now.len(), recorded.lines().count());
 }
 
 #[test]
