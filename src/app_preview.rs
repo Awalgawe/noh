@@ -476,6 +476,10 @@ impl NohApp {
             captions,
         })
     }
+    /// The light copies wait (see `preview_blocked`).
+    pub(super) fn preview_held(&self) -> bool {
+        self.preview_blocked()
+    }
     /// No still or scrub decode while project work, an export (any kind,
     /// preparation included) or a cancellation runs.
     fn preview_blocked(&self) -> bool {
@@ -484,6 +488,11 @@ impl NohApp {
             || self.cancelling
             || self.captions.running.is_some()
             || self.shorts.running.is_some()
+            // A driven window waiting for its preparation turn decodes no
+            // preview picture either (the plan's « playback waits for the
+            // copies »): its decoding would take the machine from the window
+            // that prepares or exports.
+            || self.driven_holds_preparation()
     }
     /// The monitor asks for no picture of the time it is on: for a capture's
     /// closing window, whose decoder would outlive it.
@@ -626,6 +635,7 @@ impl NohApp {
         }
         // No copy is encoded while an export or another job runs, as no still or
         // scrub picture is decoded then.
+        // A driven window also waits for its preparation turn (app_driven_act.rs).
         if let Some(warmer) = &self.mini_preview.warmer {
             warmer.hold(self.preview_blocked());
         }
@@ -1280,6 +1290,22 @@ impl NohApp {
             if style::button(&mut inside, l.text("preview.retry"), true, false, 0.0).clicked() {
                 self.mini_preview.invalidate();
             }
+        } else if !has_texture
+            && !scrub_visible
+            && (loading || still_loading || self.ready())
+            && self.driven_holds_preparation()
+        {
+            // A driven window waiting for its preparation turn says so without
+            // animating: a spinner repaints every frame, and several waiting
+            // windows would take a core from the job they wait for.
+            self.mini_preview.painted.1 = true;
+            ui.painter().text(
+                monitor.center(),
+                egui::Align2::CENTER_CENTER,
+                self.locale.language.text("preview.loading"),
+                egui::FontId::proportional(style::text::SMALL),
+                egui::Color32::from_gray(200),
+            );
         } else if !has_texture && !scrub_visible && (loading || still_loading || self.ready()) {
             self.mini_preview.painted.1 = true;
             let spinner = egui::Rect::from_center_size(monitor.center(), egui::vec2(24.0, 24.0));

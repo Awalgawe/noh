@@ -8,7 +8,11 @@
 //! and a window that has not read for 5 s is `lost`. A window outlives the
 //! session: at the end the server says `session_end` and closes its pipes,
 //! neither killing nor waiting for it, and the window becomes an ordinary NOH.
-use super::{machine, types::*};
+use super::{
+    machine,
+    slot::{Holder, Slot},
+    types::*,
+};
 use crate::driven::{self, Outbox, ToApp, ToServer, Unsent};
 use std::{
     collections::HashMap,
@@ -204,6 +208,15 @@ struct Window {
     /// The window's latest `state`, by revision.
     view: Option<(u64, serde_json::Value)>,
     released: bool,
+    /// It holds the heavy-job slot for the agent's job, until `job_done` or
+    /// its process ends (never because it is only `lost`).
+    holds_slot: bool,
+    /// It has copies or a waveform to prepare, waiting for its turn.
+    needs_prepare: bool,
+    /// The person plays it: its turn comes first.
+    urgent: bool,
+    /// When the agent last acted in it: the latest comes first.
+    acted_at: Option<Instant>,
     /// Why the window could not start, as it said.
     failure: Option<String>,
     closed_by_person: bool,
@@ -264,6 +277,10 @@ impl Window {
 
 struct State {
     windows: Vec<Window>,
+    /// The window whose preparation turn it is, and whether a heavy job has
+    /// paused it.
+    turn: Option<String>,
+    turn_paused: bool,
     next_window: u64,
     next_request: u64,
     ended: bool,
@@ -277,6 +294,8 @@ struct Shared {
     launch: Box<dyn Launch>,
     read_machine: Box<dyn Fn() -> machine::Machine + Send + Sync>,
     timing: Timing,
+    /// The heavy-job slot, shared with the session's headless tools.
+    slot: Slot,
 }
 
 /// This session's windows.
@@ -285,19 +304,31 @@ pub struct Apps(Arc<Shared>);
 
 impl Default for Apps {
     fn default() -> Self {
-        Self::new(Box::new(Beside), Box::new(machine::read), Timing::default())
+        Self::new(
+            Box::new(Beside),
+            Box::new(machine::read),
+            Timing::default(),
+            Slot::default(),
+        )
     }
 }
+
+/// How often the preparation turn is looked at again without an event (a
+/// headless job's end frees the slot without a word to the windows).
+const TURN_TICK: Duration = Duration::from_millis(500);
 
 impl Apps {
     pub fn new(
         launch: Box<dyn Launch>,
         read_machine: Box<dyn Fn() -> machine::Machine + Send + Sync>,
         timing: Timing,
+        slot: Slot,
     ) -> Self {
-        Self(Arc::new(Shared {
+        let apps = Self(Arc::new(Shared {
             state: Mutex::new(State {
                 windows: Vec::new(),
+                turn: None,
+                turn_paused: false,
                 next_window: 1,
                 next_request: 1,
                 ended: false,
@@ -307,7 +338,25 @@ impl Apps {
             launch,
             read_machine,
             timing,
-        }))
+            slot,
+        }));
+        let weak = Arc::downgrade(&apps.0);
+        let _ = std::thread::Builder::new()
+            .name("noh-app-turn".into())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(TURN_TICK);
+                    let Some(shared) = weak.upgrade() else {
+                        return;
+                    };
+                    let mut state = shared.state.lock().unwrap();
+                    if state.ended {
+                        return;
+                    }
+                    schedule(&mut state, &shared.slot);
+                }
+            });
+        apps
     }
 
     /// Open a window, if the machine has room for one more (`machine::admit`).
@@ -364,6 +413,10 @@ impl Apps {
                 answers: HashMap::new(),
                 view: None,
                 released: false,
+                holds_slot: false,
+                needs_prepare: false,
+                urgent: false,
+                acted_at: Some(Instant::now()),
                 failure: None,
                 closed_by_person: false,
                 closed_by_agent: false,
@@ -575,9 +628,65 @@ impl Apps {
         })
     }
 
-    /// One gesture in a window the agent drives (`noh_app_do`).
+    /// One gesture in a window the agent drives (`noh_app_do`). A heavy one
+    /// (an export) takes the server's one slot first: refused at once if a
+    /// headless job or another window holds it, given back if the window does
+    /// not start it.
     pub fn act(&self, app_id: &str, action: driven::Action) -> Result<AppDoReply, AppError> {
-        let result = self.ask(app_id, |id| ToApp::Act { id, action })?;
+        let heavy = matches!(action, driven::Action::Export { .. });
+        let holder = Holder::Window(app_id.into());
+        {
+            let mut state = self.0.state.lock().unwrap();
+            if let Some(window) = find(&mut state.windows, app_id) {
+                window.acted_at = Some(Instant::now());
+            }
+        }
+        if heavy
+            && let Err(current) = {
+                // Taken and marked under the windows' lock, before the gesture
+                // goes out: a job_done read at any time after finds it held.
+                let mut state = self.0.state.lock().unwrap();
+                let taken = self.0.slot.take(holder.clone());
+                if taken.is_ok()
+                    && let Some(window) = find(&mut state.windows, app_id)
+                {
+                    window.holds_slot = true;
+                }
+                taken
+            }
+        {
+            let mut error = AppError::new(
+                "noh.busy_elsewhere",
+                format!(
+                    "One heavy job at a time: {}. Try again once it ends.",
+                    current.describe()
+                ),
+            );
+            error.details = Some(serde_json::json!({
+                "holder": match &current {
+                    Holder::Headless(id) => serde_json::json!({ "job_id": id }),
+                    Holder::Window(id) => serde_json::json!({ "app_id": id }),
+                }
+            }));
+            return Err(error);
+        }
+        let result = self.ask(app_id, |id| ToApp::Act { id, action });
+        if heavy {
+            let started = result
+                .as_ref()
+                .is_ok_and(|r| r["started"] == serde_json::Value::Bool(true));
+            let mut state = self.0.state.lock().unwrap();
+            if !started {
+                // Not started: given back, unless its job_done already did.
+                let held = find(&mut state.windows, app_id)
+                    .map_or(true, |window| std::mem::take(&mut window.holds_slot));
+                if held {
+                    self.0.slot.release(&holder);
+                }
+            }
+            schedule(&mut state, &self.0.slot);
+        }
+        let result = result?;
         Ok(AppDoReply {
             version: 1,
             app_id: app_id.into(),
@@ -704,7 +813,23 @@ impl Apps {
                     window.answers.insert(id, (result, error));
                 }
             }
-            ToServer::Released => window.released = true,
+            ToServer::Released => {
+                window.released = true;
+                window.needs_prepare = false;
+            }
+            ToServer::NeedsPrepare { urgent } => {
+                window.needs_prepare = true;
+                window.urgent = urgent;
+            }
+            ToServer::Prepared => {
+                window.needs_prepare = false;
+                window.urgent = false;
+            }
+            ToServer::JobDone { .. } => {
+                if std::mem::take(&mut window.holds_slot) {
+                    self.0.slot.release(&Holder::Window(id.into()));
+                }
+            }
             ToServer::Failed { reason } => window.failure = Some(reason),
             ToServer::Closed => window.closed_by_person = true,
             ToServer::State { revision, state } => {
@@ -713,16 +838,121 @@ impl Apps {
                 }
             }
         }
+        schedule(&mut state, &self.0.slot);
         self.0.changed.notify_all();
     }
 
     fn pipe_ended(&self, id: &str) {
-        let mut state = self.0.state.lock().unwrap();
-        if let Some(window) = find(&mut state.windows, id) {
-            window.pipe_ended = true;
-            window.refresh();
+        {
+            let mut state = self.0.state.lock().unwrap();
+            if let Some(window) = find(&mut state.windows, id) {
+                window.pipe_ended = true;
+                window.refresh();
+            }
+            self.0.changed.notify_all();
         }
-        self.0.changed.notify_all();
+        // The slot is given back when the process has ended too, not on the
+        // pipe's end alone; the process normally ends right after. This is the
+        // reader's own thread, which has nothing else left to do.
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            {
+                let mut state = self.0.state.lock().unwrap();
+                let Some(window) = find(&mut state.windows, id) else {
+                    return;
+                };
+                window.refresh();
+                if window.exit.is_some() {
+                    if std::mem::take(&mut window.holds_slot) {
+                        self.0.slot.release(&Holder::Window(id.into()));
+                    }
+                    schedule(&mut state, &self.0.slot);
+                    self.0.changed.notify_all();
+                    return;
+                }
+            }
+            if Instant::now() >= deadline {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+}
+
+/// The preparation turn (note §5): one window prepares at a time, the person's
+/// playing one first, then the one the agent acted in last; none while a heavy
+/// job holds the slot (the turn holder is paused, then resumed).
+fn schedule(state: &mut State, slot: &Slot) {
+    // A window holding the slot that is gone (forgotten, or its process
+    // ended) cannot say job_done any more: its slot is freed here.
+    if let Some(Holder::Window(id)) = slot.holder() {
+        let gone = match find(&mut state.windows, &id) {
+            None => true,
+            Some(window) => {
+                window.refresh();
+                window.exit.is_some()
+            }
+        };
+        if gone {
+            if let Some(window) = find(&mut state.windows, &id) {
+                window.holds_slot = false;
+            }
+            slot.release(&Holder::Window(id));
+        }
+    }
+    if state.ended {
+        return;
+    }
+    let busy = slot.holder().is_some();
+    // A turn whose window can no longer prepare ends.
+    if let Some(id) = state.turn.clone() {
+        let gone = find(&mut state.windows, &id).is_none_or(|w| {
+            !w.needs_prepare
+                || w.released
+                || w.closed_by_person
+                || w.closed_by_agent
+                || w.pipe_ended
+                || w.exit.is_some()
+        });
+        if gone {
+            state.turn = None;
+            state.turn_paused = false;
+        }
+    }
+    if let Some(id) = state.turn.clone() {
+        if busy != state.turn_paused {
+            state.turn_paused = busy;
+            if let Some(window) = find(&mut state.windows, &id) {
+                let _ = window.send(&ToApp::Prepare { go: !busy });
+            }
+        }
+        return;
+    }
+    if busy {
+        return;
+    }
+    let next = state
+        .windows
+        .iter()
+        .enumerate()
+        .filter(|(_, w)| {
+            w.needs_prepare
+                && w.version.is_some()
+                && !w.released
+                && !w.closed_by_person
+                && !w.closed_by_agent
+                && !w.pipe_ended
+                && w.exit.is_none()
+        })
+        .max_by_key(|(i, w)| (w.urgent, w.acted_at, std::cmp::Reverse(*i)))
+        .map(|(_, w)| w.id.clone());
+    if let Some(id) = next {
+        if let Some(window) = find(&mut state.windows, &id)
+            && window.send(&ToApp::Prepare { go: true }).is_ok()
+        {
+            state.turn = Some(id);
+            state.turn_paused = false;
+        }
     }
 }
 
@@ -892,6 +1122,7 @@ mod tests {
         apps: Apps,
         launched: Arc<AtomicUsize>,
         processes: Arc<Mutex<Vec<FakeProcess>>>,
+        slot: Slot,
     }
     fn harness(
         script: impl Fn(Box<dyn BufRead + Send>, Box<dyn Write + Send>, FakeProcess)
@@ -903,6 +1134,7 @@ mod tests {
     ) -> Harness {
         let launched = Arc::new(AtomicUsize::new(0));
         let processes = Arc::new(Mutex::new(Vec::new()));
+        let slot = Slot::default();
         let apps = Apps::new(
             Box::new(FakeLaunch {
                 script: Arc::new(script),
@@ -912,11 +1144,13 @@ mod tests {
             }),
             Box::new(move || machine.clone()),
             timing(),
+            slot.clone(),
         );
         Harness {
             apps,
             launched,
             processes,
+            slot,
         }
     }
 
@@ -1306,6 +1540,254 @@ mod tests {
             (reply.width, reply.height, reply.at_ms),
             (640, 360, Some(5000))
         );
+    }
+
+    /// A window that exports when asked (started), then ends its job when
+    /// `finish` is set, and reports every Prepare it gets.
+    fn exporter(
+        finish: Arc<Mutex<bool>>,
+        prepares: Arc<Mutex<Vec<bool>>>,
+        quit: Arc<Mutex<bool>>,
+    ) -> impl Fn(Box<dyn BufRead + Send>, Box<dyn Write + Send>, FakeProcess) + Send + Sync {
+        move |input, output, process| {
+            let output = Arc::new(Mutex::new(output));
+            ready(&mut *output.lock().unwrap());
+            send(
+                &mut *output.lock().unwrap(),
+                &ToServer::NeedsPrepare { urgent: false },
+            );
+            let (finish, quit_watch, out) = (finish.clone(), quit.clone(), output.clone());
+            let watcher = thread::spawn(move || {
+                let mut sent = false;
+                loop {
+                    thread::sleep(Duration::from_millis(10));
+                    if *quit_watch.lock().unwrap() {
+                        return;
+                    }
+                    if !sent && *finish.lock().unwrap() {
+                        sent = true;
+                        send(
+                            &mut *out.lock().unwrap(),
+                            &ToServer::JobDone {
+                                outcome: "succeeded".into(),
+                            },
+                        );
+                    }
+                }
+            });
+            let mut input = input;
+            while let Some(message) = next(&mut input) {
+                match message {
+                    driven::Inbound::Message(ToApp::Act { id, action }) => {
+                        let started = matches!(action, driven::Action::Export { short: false });
+                        let reply = if started {
+                            ToServer::Done {
+                                id,
+                                result: Some(serde_json::json!({ "started": true })),
+                                error: None,
+                            }
+                        } else {
+                            ToServer::Done {
+                                id,
+                                result: None,
+                                error: Some(driven::Refusal::new("app.not_started", "No.")),
+                            }
+                        };
+                        send(&mut *output.lock().unwrap(), &reply);
+                    }
+                    driven::Inbound::Message(ToApp::Prepare { go }) => {
+                        prepares.lock().unwrap().push(go);
+                    }
+                    _ => {}
+                }
+                if *quit.lock().unwrap() {
+                    break;
+                }
+            }
+            *quit.lock().unwrap() = true;
+            let _ = watcher.join();
+            *process.exit.lock().unwrap() = Some(Some(0));
+        }
+    }
+
+    fn eventually(what: &str, check: impl Fn() -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !check() {
+            assert!(Instant::now() < deadline, "never: {what}");
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn one_heavy_job_at_a_time_across_windows_and_headless_tools() {
+        let finish = Arc::new(Mutex::new(false));
+        let prepares = Arc::new(Mutex::new(Vec::new()));
+        let quit = Arc::new(Mutex::new(false));
+        let h = harness(
+            exporter(finish.clone(), prepares.clone(), quit.clone()),
+            roomy(),
+            None,
+        );
+        h.apps.open("First").unwrap();
+        h.apps.open("Second").unwrap();
+        let export = |short| driven::Action::Export { short };
+        // A refused export gives its reservation back.
+        assert_eq!(
+            h.apps.act("app-1", export(true)).unwrap_err().code,
+            "app.not_started"
+        );
+        assert_eq!(h.slot.holder(), None);
+        // A started one holds the slot: the other window and the headless tools wait.
+        assert!(h.apps.act("app-1", export(false)).is_ok());
+        assert_eq!(h.slot.holder(), Some(Holder::Window("app-1".into())));
+        let refused = h.apps.act("app-2", export(false)).unwrap_err();
+        assert_eq!(refused.code, "noh.busy_elsewhere");
+        assert_eq!(refused.details.unwrap()["holder"]["app_id"], "app-1");
+        assert!(h.slot.take(Holder::Headless("job-1".into())).is_err());
+        // Lost is not the end of its job: the slot stays.
+        {
+            let mut state = h.apps.0.state.lock().unwrap();
+            find(&mut state.windows, "app-1").unwrap().overflowed = true;
+        }
+        assert_eq!(h.apps.windows()[0].state, AppState::Lost);
+        thread::sleep(Duration::from_millis(100));
+        assert_eq!(h.slot.holder(), Some(Holder::Window("app-1".into())));
+        // Its job_done gives it back.
+        *finish.lock().unwrap() = true;
+        eventually("the slot given back on job_done", || {
+            h.slot.holder().is_none()
+        });
+        // A headless job now holds it: a window's export is refused, naming it.
+        h.slot.take(Holder::Headless("job-2".into())).unwrap();
+        let refused = h.apps.act("app-2", export(false)).unwrap_err();
+        assert_eq!(refused.details.unwrap()["holder"]["job_id"], "job-2");
+        h.slot.release(&Holder::Headless("job-2".into()));
+        *quit.lock().unwrap() = true;
+    }
+
+    #[test]
+    fn a_window_that_dies_holding_the_slot_gives_it_back_when_its_process_ends() {
+        let finish = Arc::new(Mutex::new(false));
+        let prepares = Arc::new(Mutex::new(Vec::new()));
+        let quit = Arc::new(Mutex::new(false));
+        let h = harness(exporter(finish, prepares, quit.clone()), roomy(), None);
+        h.apps.open("Dies").unwrap();
+        assert!(
+            h.apps
+                .act("app-1", driven::Action::Export { short: false })
+                .is_ok()
+        );
+        assert!(h.slot.holder().is_some());
+        // It stops: its output ends, then its process.
+        *quit.lock().unwrap() = true;
+        let _ = h.apps.act("app-1", driven::Action::Cancel {});
+        eventually("the slot given back once the process ended", || {
+            h.slot.holder().is_none()
+        });
+    }
+
+    #[test]
+    fn a_job_done_read_before_the_answer_never_leaves_the_slot_held() {
+        // The window's job ends at once: its job_done comes before its done.
+        let h = harness(
+            |mut input, mut output, _| {
+                ready(&mut output);
+                while let Some(message) = next(&mut input) {
+                    if let driven::Inbound::Message(ToApp::Act { id, .. }) = message {
+                        send(
+                            &mut output,
+                            &ToServer::JobDone {
+                                outcome: "failed".into(),
+                            },
+                        );
+                        thread::sleep(Duration::from_millis(50));
+                        send(
+                            &mut output,
+                            &ToServer::Done {
+                                id,
+                                result: Some(serde_json::json!({ "started": true })),
+                                error: None,
+                            },
+                        );
+                    }
+                }
+            },
+            roomy(),
+            None,
+        );
+        h.apps.open("Quick").unwrap();
+        assert!(
+            h.apps
+                .act("app-1", driven::Action::Export { short: false })
+                .is_ok()
+        );
+        assert_eq!(h.slot.holder(), None);
+    }
+
+    #[test]
+    fn a_holder_whose_process_ended_frees_the_slot_even_without_its_output_end() {
+        let finish = Arc::new(Mutex::new(false));
+        let prepares = Arc::new(Mutex::new(Vec::new()));
+        let quit = Arc::new(Mutex::new(false));
+        let h = harness(exporter(finish, prepares, quit.clone()), roomy(), None);
+        h.apps.open("Ends").unwrap();
+        assert!(
+            h.apps
+                .act("app-1", driven::Action::Export { short: false })
+                .is_ok()
+        );
+        // Its process is gone while its pipe stays open (a grandchild holding it).
+        *h.processes.lock().unwrap()[0].exit.lock().unwrap() = Some(None);
+        eventually("the scheduler frees the slot", || h.slot.holder().is_none());
+        *quit.lock().unwrap() = true;
+    }
+
+    #[test]
+    fn the_preparation_turn_goes_one_window_at_a_time_and_pauses_for_a_job() {
+        let finish = Arc::new(Mutex::new(false));
+        let quit = Arc::new(Mutex::new(false));
+        let (first, second) = (
+            Arc::new(Mutex::new(Vec::new())),
+            Arc::new(Mutex::new(Vec::new())),
+        );
+        let order = Arc::new(Mutex::new(vec![first.clone(), second.clone()]));
+        let (finish2, quit2) = (finish.clone(), quit.clone());
+        let h = harness(
+            move |input, output, process| {
+                let prepares = order.lock().unwrap().remove(0);
+                exporter(finish2.clone(), prepares, quit2.clone())(input, output, process)
+            },
+            roomy(),
+            None,
+        );
+        h.apps.open("One").unwrap();
+        eventually("the first window's turn", || {
+            first.lock().unwrap().as_slice() == [true]
+        });
+        h.apps.open("Two").unwrap();
+        thread::sleep(Duration::from_millis(200));
+        assert!(
+            second.lock().unwrap().is_empty(),
+            "one window prepares at a time"
+        );
+        // A heavy job pauses the turn, its end resumes it.
+        h.slot.take(Holder::Headless("job-1".into())).unwrap();
+        eventually("the turn paused", || {
+            first.lock().unwrap().as_slice() == [true, false]
+        });
+        h.slot.release(&Holder::Headless("job-1".into()));
+        eventually("the turn resumed", || {
+            first.lock().unwrap().as_slice() == [true, false, true]
+        });
+        // The first has prepared everything: the turn goes to the second.
+        {
+            let mut state = h.apps.0.state.lock().unwrap();
+            find(&mut state.windows, "app-1").unwrap().needs_prepare = false;
+        }
+        eventually("the second window's turn", || {
+            second.lock().unwrap().as_slice() == [true]
+        });
+        *quit.lock().unwrap() = true;
     }
 
     #[test]

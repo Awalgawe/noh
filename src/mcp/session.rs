@@ -41,6 +41,8 @@ struct Owner {
 struct Shared {
     state: Mutex<State>,
     changed: Condvar,
+    /// One heavy job at a time, shared with the driven windows (`super::slot`).
+    slot: super::slot::Slot,
 }
 struct State {
     prefix: String,
@@ -120,6 +122,7 @@ impl Session {
                     retained_bytes: 0,
                 }),
                 changed: Condvar::new(),
+                slot: super::slot::Slot::default(),
             }),
             default_ffmpeg,
             launch: Mutex::new(()),
@@ -267,7 +270,15 @@ impl Session {
                 "One job is already active. Wait for it or cancel it before starting another.",
             ));
         }
+        if let Some(holder @ super::slot::Holder::Window(_)) = self.0.shared.slot.holder() {
+            return Err(window_busy(&holder));
+        }
         Ok(())
+    }
+
+    /// The slot this session shares with its driven windows.
+    pub fn slot(&self) -> super::slot::Slot {
+        self.0.shared.slot.clone()
     }
 
     fn start(&self, operation: Operation) -> Result<StartReply, SessionError> {
@@ -290,6 +301,16 @@ impl Session {
                 ));
             }
             let id = format!("{}{:016x}", state.prefix, state.next_id);
+            // Taken with the job, under the same lock: a window cannot take it
+            // between the check and the start.
+            if let Err(holder) = self
+                .0
+                .shared
+                .slot
+                .take(super::slot::Holder::Headless(id.clone()))
+            {
+                return Err(window_busy(&holder));
+            }
             state.next_id = state
                 .next_id
                 .checked_add(1)
@@ -758,6 +779,17 @@ fn collect(shared: &Shared, id: &str, job: &Job) -> Terminal {
     }
 }
 
+/// A start refused because a driven window holds the heavy-job slot.
+fn window_busy(holder: &super::slot::Holder) -> SessionError {
+    SessionError::new(
+        "mcp.busy",
+        &format!(
+            "One heavy job at a time: {}. Wait for it or cancel it before starting another.",
+            holder.describe()
+        ),
+    )
+}
+
 fn finish(shared: &Shared, id: &str, terminal: Terminal) {
     // Serialize/count potentially large results before acquiring the status lock.
     let (terminal_state, result, error, result_bytes) = prepare_terminal(terminal, MAX_RETAINED);
@@ -776,6 +808,9 @@ fn finish(shared: &Shared, id: &str, terminal: Terminal) {
             return;
         }
         let mut record = state.active.take().unwrap().record;
+        shared
+            .slot
+            .release(&super::slot::Holder::Headless(record.id.clone()));
         state.last_finished = Some(Instant::now());
         record.state = terminal_state;
         record.result = result;
@@ -921,6 +956,27 @@ fn resolve_lyrics(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_window_holding_the_slot_makes_headless_starts_wait() {
+        let session = Session::with_prefix(PathBuf::from("ffmpeg"), "test-".into());
+        let window = super::super::slot::Holder::Window("app-1".into());
+        session.slot().take(window.clone()).unwrap();
+        let path = std::env::temp_dir()
+            .join("noh-slot-test.mp4")
+            .display()
+            .to_string();
+        let refused = session
+            .inspect(InspectInput {
+                path,
+                kind: MediaKind::Video,
+                ffmpeg: None,
+            })
+            .unwrap_err();
+        assert_eq!(refused.code, "mcp.busy");
+        assert!(refused.detail.contains("app-1"), "{}", refused.detail);
+        session.slot().release(&window);
+    }
 
     /// A job's warning keeps the missing installed family as its argument, so
     /// the MCP result names it (`Reporter::warning` parses it, `bounded_phase` keeps it).

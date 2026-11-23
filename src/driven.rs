@@ -53,6 +53,10 @@ pub enum ToApp {
         at_ms: Option<u64>,
         output: std::path::PathBuf,
     },
+    /// The preparation turn (note §5): `go`, this window may make its light
+    /// copies and decode its waveform now; else it holds them. One window
+    /// prepares at a time, never during a heavy job.
+    Prepare { go: bool },
 }
 
 /// What `look` captures.
@@ -307,6 +311,14 @@ pub enum ToServer {
     /// without showing the dialog an ordinary start shows, since nobody may
     /// be there to close it.
     Failed { reason: String },
+    /// The window has copies or a waveform to prepare and waits for its turn;
+    /// `urgent`: the person plays it and waits for them.
+    NeedsPrepare { urgent: bool },
+    /// Nothing left to prepare: the turn can go to the next window.
+    Prepared,
+    /// The heavy job the agent started here ended: `succeeded`, `failed` or
+    /// `cancelled`. Sent even after the person took the window back.
+    JobDone { outcome: String },
     /// What the window shows, as data; only the latest counts.
     State {
         revision: u64,
@@ -687,8 +699,12 @@ mod tests {
             Some(Inbound::Unsupported { id: Some(9) })
         );
         assert_eq!(
-            parse_to_app(br#"{"v":1,"type":"prepare","go":true}"#),
+            parse_to_app(br#"{"v":1,"type":"later_step","go":true}"#),
             Some(Inbound::Unsupported { id: None })
+        );
+        assert_eq!(
+            parse_to_app(br#"{"v":1,"type":"prepare","go":true}"#),
+            Some(Inbound::Message(ToApp::Prepare { go: true }))
         );
         // A known type with a malformed body is not served either.
         assert_eq!(

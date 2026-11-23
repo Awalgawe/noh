@@ -366,10 +366,21 @@ impl NohApp {
                 Rect::from_min_size(thumb.right_bottom() - vec2(26.0, 26.0), vec2(20.0, 20.0));
             ui.painter()
                 .rect_filled(chip, style::radius::S, egui::Color32::from_black_alpha(160));
-            ui.put(
-                chip.shrink(3.0),
-                egui::Spinner::new().size(14.0).color(egui::Color32::WHITE),
-            );
+            if self.preview_held() {
+                // Waiting (a job runs, or a driven window waits for its turn):
+                // a still mark, as a spinner repaints the window every frame
+                // for as long as the wait lasts.
+                ui.painter().circle_stroke(
+                    chip.center(),
+                    5.0,
+                    egui::Stroke::new(1.5, egui::Color32::WHITE),
+                );
+            } else {
+                ui.put(
+                    chip.shrink(3.0),
+                    egui::Spinner::new().size(14.0).color(egui::Color32::WHITE),
+                );
+            }
             ui.interact(chip, tile_id.with("preparing"), Sense::hover())
                 .on_hover_text(l.text("strip.preparing"));
         }

@@ -225,6 +225,13 @@ pub(super) struct Driven {
     pub look: Option<super::app_driven_act::LookJob>,
     /// When the agent last changed something (the badge marks it).
     pub acted_at: Option<Instant>,
+    /// The server gave this window the preparation turn.
+    pub turn: bool,
+    /// It asked for the turn (and whether as urgent), not yet given.
+    pub asked_turn: Option<bool>,
+    /// A heavy job the agent started here runs; `job_done` goes when it ends.
+    pub agent_job: bool,
+    pub agent_cancelled: bool,
 }
 
 impl Driven {
@@ -274,6 +281,10 @@ impl Driven {
             monitor: None,
             look: None,
             acted_at: None,
+            turn: false,
+            asked_turn: None,
+            agent_job: false,
+            agent_cancelled: false,
         }
     }
 
@@ -367,13 +378,24 @@ impl NohApp {
                     at_ms,
                     output,
                 })) => self.driven_look(ctx, id, scope, at_ms, output),
+                Incoming::Message(Inbound::Message(ToApp::Prepare { go })) => {
+                    if let Some(d) = &mut self.driven {
+                        d.turn = go;
+                        if go {
+                            d.asked_turn = None;
+                        }
+                    }
+                    ctx.request_repaint();
+                }
                 Incoming::Message(Inbound::Unsupported { id: None }) => {}
                 Incoming::Disconnected => self.end_piloting(ctx, true),
             }
         }
-        // The agent's playhead gestures waiting for the person; then what the
-        // window shows, if it changed.
+        // The agent's playhead gestures waiting for the person; the end of its
+        // job; the preparation turn; then what the window shows, if it changed.
         self.driven_pending(ctx);
+        self.driven_job_frame();
+        self.driven_turn_frame();
         self.driven_state(false);
         let Some(d) = &mut self.driven else {
             return;
@@ -845,6 +867,8 @@ mod tests {
         from_app: mpsc::Receiver<ToServer>,
         /// The `state` lines, apart.
         states: mpsc::Receiver<ToServer>,
+        /// The preparation turn's lines, apart.
+        turns: mpsc::Receiver<ToServer>,
         _folder: tempfile::TempDir,
     }
 
@@ -897,6 +921,7 @@ mod tests {
             app.driven = Some(Driven::new("Test window", app_reads, app_writes, &ctx));
             let (tx, rx) = mpsc::channel();
             let (state_tx, state_rx) = mpsc::channel();
+            let (turn_tx, turn_rx) = mpsc::channel();
             driven::spawn_reader(
                 "test-server",
                 server_reads,
@@ -905,6 +930,9 @@ mod tests {
                     Some(state @ ToServer::State { .. }) => {
                         let _ = state_tx.send(state);
                     }
+                    Some(turn @ (ToServer::NeedsPrepare { .. } | ToServer::Prepared)) => {
+                        let _ = turn_tx.send(turn);
+                    }
                     Some(message) => {
                         let _ = tx.send(message);
                     }
@@ -912,17 +940,21 @@ mod tests {
                 },
                 || {},
             );
-            (Some(server_writes), (rx, state_rx))
+            (Some(server_writes), (rx, state_rx, turn_rx))
         } else {
-            (None, (mpsc::channel().1, mpsc::channel().1))
+            (
+                None,
+                (mpsc::channel().1, mpsc::channel().1, mpsc::channel().1),
+            )
         };
-        let (from_app, states) = from_app;
+        let (from_app, states, turns) = from_app;
         let mut w = Window {
             app,
             ctx,
             to_app,
             from_app,
             states,
+            turns,
             _folder: folder,
         };
         for _ in 0..3 {
@@ -1827,6 +1859,71 @@ mod tests {
             }
         )));
         assert_eq!(w.app.open_question(), None);
+    }
+
+    #[test]
+    fn the_window_asks_for_its_turn_holds_meanwhile_and_says_when_done() {
+        let mut w = window(true);
+        assert!(w.app.driven_holds_preparation(), "held until its turn");
+        // Something to prepare (its project's check, here): it asks once.
+        let turn = |w: &mut Window| {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                w.frame(vec![]);
+                if let Ok(message) = w.turns.recv_timeout(Duration::from_millis(20)) {
+                    return Some(message);
+                }
+                if Instant::now() > deadline {
+                    return None;
+                }
+            }
+        };
+        assert_eq!(turn(&mut w), Some(ToServer::NeedsPrepare { urgent: false }));
+        w.frame(vec![]);
+        assert!(w.turns.recv_timeout(Duration::from_millis(100)).is_err());
+        // Its turn: no longer held; once nothing is left, it gives the turn back.
+        w.send(&ToApp::Prepare { go: true });
+        for _ in 0..20 {
+            w.frame(vec![]);
+            if !w.app.driven_holds_preparation() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!w.app.driven_holds_preparation());
+        // A check already asked for this project (here it failed) is not run
+        // again: it no longer keeps the turn, which goes back.
+        w.app.project.waveform_loading = false;
+        w.app.diagnosis_error = Some("diagnosis.cancelled".into());
+        w.app.preflight = Some(super::super::app_diagnosis::Preflight::dormant(
+            w.app.diagnostic_request(),
+        ));
+        assert_eq!(turn(&mut w), Some(ToServer::Prepared));
+        // A changed project would be checked again: that is pending anew.
+        w.app.fade_in = 0.5;
+        w.app.in_enabled = true;
+        assert!(
+            !w.app
+                .preflight
+                .as_ref()
+                .unwrap()
+                .asked(&w.app.diagnostic_request())
+        );
+        // Nothing left for the rest of this test.
+        w.app.clips.clear();
+        w.app.diagnosis_error = None;
+        assert!(w.app.driven_holds_preparation());
+        // A job the agent started ends: the slot's owner is told.
+        w.app.driven.as_mut().unwrap().agent_job = true;
+        assert_eq!(
+            w.next(),
+            Some(ToServer::JobDone {
+                outcome: "succeeded".into()
+            })
+        );
+        // The person takes the window back: an ordinary NOH prepares freely.
+        w.app.release_piloting(&w.ctx.clone());
+        assert!(!w.app.driven_holds_preparation());
     }
 
     #[test]

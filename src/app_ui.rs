@@ -285,6 +285,8 @@ impl NohApp {
         let resources = self.resource_inputs();
         self.resources.sync(resources, ctx);
         self.retry_resource_media(ctx);
+        // A driven window decodes its waveform at its preparation turn only.
+        self.project.waveform_held = self.driven_holds_preparation();
         self.project.sync_inputs(
             self.wav_id,
             self.wav.as_ref(),
@@ -332,6 +334,11 @@ impl NohApp {
             || (self.capture_overlay.as_deref() == Some("analyzing")
                 && self.capture_overlay_step >= 2)
         {
+            return;
+        }
+        // A driven window checks its project at its preparation turn only
+        // (app_driven_act.rs): the check decodes media too.
+        if self.driven_holds_preparation() && !self.inspecting {
             return;
         }
         let request = self.diagnostic_request();

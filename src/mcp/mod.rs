@@ -2,6 +2,7 @@
 pub mod apps;
 pub mod machine;
 pub mod session;
+pub mod slot;
 mod transport;
 pub mod types;
 
@@ -296,7 +297,12 @@ where
     });
     let transport = transport::BoundedStdio::new(read, write, shutdown.clone());
     let watch = tokio::spawn(stop_for_update(session.clone(), shutdown.clone()));
-    let apps = apps::Apps::default();
+    let apps = apps::Apps::new(
+        Box::new(apps::Beside),
+        Box::new(machine::read),
+        apps::Timing::default(),
+        session.slot(),
+    );
     let result = match (Server {
         session: session.clone(),
         apps: apps.clone(),

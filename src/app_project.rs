@@ -70,6 +70,11 @@ pub struct State {
     pub short_revision: u64,
     pub waveform: Option<Arc<Waveform>>,
     pub waveform_loading: bool,
+    /// The waveform waits (a driven window's preparation turn): its decoding
+    /// starts once this is false.
+    pub waveform_held: bool,
+    /// The decoding asked for while held: (song, FFmpeg).
+    waveform_waiting: Option<(PathBuf, PathBuf)>,
     pub waveform_error: Option<String>,
     pub duration_ms: u64,
     pub running: Option<Running>,
@@ -148,12 +153,9 @@ impl State {
             self.duration_ms = 0;
             self.viewport = None;
             if let Some(path) = wav {
-                let worker = self.waveform_worker.get_or_insert_with(|| {
-                    let ctx = ctx.clone();
-                    WaveformWorker::new(move || ctx.request_repaint())
-                });
-                worker.request(path.clone(), ffmpeg.cloned().unwrap_or_default());
+                self.waveform_waiting = Some((path.clone(), ffmpeg.cloned().unwrap_or_default()));
             } else {
+                self.waveform_waiting = None;
                 if let Some(worker) = &self.waveform_worker {
                     worker.cancel();
                 }
@@ -162,6 +164,7 @@ impl State {
             }
             self.short_revision = self.short_revision.wrapping_add(1);
         }
+        self.pump_waveform(ctx);
         if let Some(seconds) = seconds.filter(|s| s.is_finite() && *s > 0.0) {
             let ms = (seconds * 1_000.0).round() as u64;
             if ms != self.duration_ms {
@@ -267,6 +270,25 @@ impl State {
             .as_ref()
             .is_some_and(|a| a.stamp == self.stamp(revision, true))
     }
+    /// A decoding asked for and not started yet (held).
+    pub fn waveform_wanted(&self) -> bool {
+        self.waveform_waiting.is_some()
+    }
+
+    /// Start the decoding asked for, unless it is held.
+    fn pump_waveform(&mut self, ctx: &eframe::egui::Context) {
+        if self.waveform_held {
+            return;
+        }
+        if let Some((path, ffmpeg)) = self.waveform_waiting.take() {
+            let worker = self.waveform_worker.get_or_insert_with(|| {
+                let ctx = ctx.clone();
+                WaveformWorker::new(move || ctx.request_repaint())
+            });
+            worker.request(path, ffmpeg);
+        }
+    }
+
     pub fn retry_waveform(&mut self, ctx: &eframe::egui::Context) {
         if let Some((_, Some(wav), ffmpeg)) = &self.input {
             let worker = self.waveform_worker.get_or_insert_with(|| {
