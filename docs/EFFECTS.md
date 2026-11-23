@@ -11,8 +11,13 @@ unknown field, property, value or unit is refused, never ignored.
 The engine knows layouts, tracks and passes; it knows no effect by name. The six
 bundled effects in [`assets/effects`](../assets/effects) are complete examples.
 
-Some features below are marked **(after 0.3.1)**: NOH 0.3.1 and earlier refuse an
-effect that uses them (as an unknown field or property). `engine` stays `1`.
+Some features below are marked **(after 0.3.1)**. NOH 0.3.1 and earlier refuse an
+effect that uses one of them (an unknown field, property, value, operator or pass
+kind, or a shader hook reading a `GlyphIn` field they lack), with one exception: a
+`past` track with its own `duration` loads there but is drawn wrong. Those versions
+accept `duration` on any track and hold a past track at its first key, so the timed
+return never happens (a word coloured on its end stays coloured). An effect meant
+for 0.3.1 too must not rely on a timed past track. `engine` stays `1`.
 
 ## Top level
 
@@ -169,7 +174,7 @@ letters):
 | `exit` | the last `duration` seconds of the line's visible span | over `duration` |
 | `loop` | always | — (keys read their first key; use `wave`, `noise` or `value`) |
 | `active` | while the unit is sung | over the unit's sung span |
-| `past` | once the unit has ended | — ; **(after 0.3.1)** with its own `duration`, the keys run over that time from the unit's end: a timed return, held at the last key after |
+| `past` | once the unit has ended | — ; **(after 0.3.1)** with its own `duration`, the keys run over that time from the unit's end: a timed return, held at the last key after (0.3.1 loads it but holds the first key) |
 | `future` | before the unit starts | — |
 
 `duration` and `stagger` are constant seconds (default 0.3 and 0). A `past` track
