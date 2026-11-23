@@ -26,6 +26,10 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
   being drawn, the letter's row, the time since the line was sung and the
   effect's own settings. The bundled styles draw exactly as before. The format is described
   in the [effect format guide](https://github.com/Awalgawe/noh/blob/v0.4.0/docs/EFFECTS.md).
+- A caption effect that draws a great deal in one frame (letters, covered
+  surface or blurs) is still drawn, and the export warns that it may be slow,
+  with the time it first happens; the command line and the MCP job's warnings
+  say it too (`warning.effect_heavy`). No bundled style comes near that.
 
 ### Lyrics
 
@@ -113,6 +117,9 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
 - When the main words of a line are timed again, its backing words are spread
   again, and backing words timed by hand are reset without warning if they
   end up out of order.
+- The preview does not show the warning about a caption effect that draws a
+  great deal at once; only the export does. Its German, Spanish, Japanese,
+  Korean and Chinese texts were written without a native speaker's review.
 - Updates carry no signature of their own. NOH trusts GitHub's HTTPS and the
   digests GitHub reports for the files of the latest release. The Windows
   installers are not Authenticode-signed. From this version GitHub keeps an
