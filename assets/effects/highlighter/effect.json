@@ -1,0 +1,54 @@
+{
+  "engine": 1,
+  "id": "noh.highlighter",
+  "name": {"fr": "Surligneur", "en": "Highlighter", "de": "Textmarker", "es": "Resaltador", "ja": "蛍光ペン", "ko": "형광펜", "zh": "荧光笔"},
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "target": "text",
+  "params": [
+    {"id": "marker", "type": "color", "default": "#FFE600", "level": 1, "label": {"fr": "Couleur du surligneur", "en": "Highlighter colour", "de": "Markerfarbe", "es": "Color del resaltador", "ja": "蛍光ペンの色", "ko": "형광펜 색", "zh": "荧光笔颜色"}},
+    {"id": "size", "type": "choice", "default": "medium", "choices": ["small", "medium", "large"], "choice_labels": {"small": {"fr": "Petite", "en": "Small", "de": "Klein", "es": "Pequeño", "ja": "小", "ko": "작게", "zh": "小"}, "medium": {"fr": "Moyenne", "en": "Medium", "de": "Mittel", "es": "Mediano", "ja": "中", "ko": "보통", "zh": "中"}, "large": {"fr": "Grande", "en": "Large", "de": "Groß", "es": "Grande", "ja": "大", "ko": "크게", "zh": "大"}}, "level": 1, "label": {"fr": "Taille", "en": "Size", "de": "Größe", "es": "Tamaño", "ja": "サイズ", "ko": "크기", "zh": "大小"}},
+    {"id": "ink", "type": "color", "default": "#121212", "level": 2, "label": {"fr": "Couleur du texte surligné", "en": "Highlighted text colour", "de": "Farbe des markierten Texts", "es": "Color del texto resaltado", "ja": "マーカー上の文字色", "ko": "형광펜 위 글자 색", "zh": "高亮文字颜色"}},
+    {"id": "placement", "type": "choice", "default": "bottom", "choices": ["bottom", "top"], "choice_labels": {"bottom": {"fr": "En bas", "en": "Bottom", "de": "Unten", "es": "Abajo", "ja": "下", "ko": "아래", "zh": "底部"}, "top": {"fr": "En haut", "en": "Top", "de": "Oben", "es": "Arriba", "ja": "上", "ko": "위", "zh": "顶部"}}, "level": 2, "label": {"fr": "Position", "en": "Position", "de": "Position", "es": "Posición", "ja": "位置", "ko": "위치", "zh": "位置"}},
+    {"id": "font", "type": "font", "default": "inter_semibold", "level": 2, "label": {"fr": "Police", "en": "Font", "de": "Schrift", "es": "Fuente", "ja": "フォント", "ko": "글꼴", "zh": "字体"}}
+  ],
+  "presets": [
+    {"id": "yellow", "name": {"fr": "Jaune fluo", "en": "Neon yellow", "de": "Neongelb", "es": "Amarillo flúor", "ja": "蛍光イエロー", "ko": "형광 노랑", "zh": "荧光黄"}, "values": {"marker": "#FFE600", "ink": "#121212"}},
+    {"id": "pink", "name": {"fr": "Rose", "en": "Pink", "de": "Rosa", "es": "Rosa", "ja": "ピンク", "ko": "핑크", "zh": "粉色"}, "values": {"marker": "#FF7AB8", "ink": "#121212"}},
+    {"id": "cyan", "name": {"fr": "Cyan", "en": "Cyan", "de": "Cyan", "es": "Cian", "ja": "シアン", "ko": "시안", "zh": "青色"}, "values": {"marker": "#4FE3FF", "ink": "#121212"}}
+  ],
+  "layout": {
+    "mode": "line",
+    "font": "$font",
+    "size": {"mul": ["@short", {"choose": ["$size", {"small": 0.05084, "medium": 0.062, "large": 0.0744}]}]},
+    "line_height": 1.45,
+    "box": {
+      "x": 0.5,
+      "width": {"add": [0.88, {"mul": ["@safe", 0.12]}]},
+      "y": {"choose": ["$placement", {"bottom": {"add": [0.84, {"mul": ["@safe", 0.16]}]}, "top": {"mul": [0.16, {"sub": [1, "@safe"]}]}}]},
+      "anchor": {"choose": ["$placement", {"bottom": "bottom", "top": "top"}]}
+    },
+    "visible": "line",
+    "anchor": "unit",
+    "word_lead": 0.06,
+    "preroll": 0.15,
+    "hold": 0.35
+  },
+  "animate": [
+    {"unit": "line", "slot": "enter", "property": "opacity", "duration": 0.15, "curve": "ease_out_cubic", "keys": [[0, 0], [1, 1]]},
+    {"unit": "line", "slot": "exit", "property": "opacity", "duration": 0.15, "curve": "ease_in_cubic", "keys": [[0, 1], [1, 0]]},
+    {"unit": "word", "slot": "future", "property": "plate_opacity", "value": 0},
+    {"unit": "word", "slot": "enter", "property": "plate_wipe", "duration": 0.09, "curve": "ease_out_cubic", "keys": [[0, 0], [1, 1]]},
+    {"unit": "word", "slot": "enter", "property": "color", "duration": 0.09, "curve": "linear", "keys": [[0, "#FFFFFF"], [0.1566, "#FFFFFF"], [0.2063, {"mix": ["#FFFFFF", "$ink", 0.3333]}], [0.2632, {"mix": ["#FFFFFF", "$ink", 0.6667]}], [0.3306, "$ink"], [1, "$ink"]]},
+    {"unit": "word", "slot": "past", "property": "plate_opacity", "duration": 0.2, "curve": "ease_in_cubic", "keys": [[0, 1], [0.3, 1], [1, 0]]},
+    {"unit": "word", "slot": "past", "property": "color", "duration": 0.2, "curve": "ease_in_cubic", "keys": [[0, "$ink"], [0.3, "$ink"], [1, "#FFFFFF"]]}
+  ],
+  "render": {
+    "passes": [
+      {"kind": "plate", "on": "word", "color": "$marker", "alpha": 1, "margin_x": 0.1, "margin_y": 0, "radius": 0.14},
+      {"kind": "shadow", "color": "#000000", "alpha": 0.55, "offset_y": 0.04, "blur": {"mul": ["@short", {"choose": ["$size", {"small": 0.005592, "medium": 0.00682, "large": 0.008184}]}]}},
+      {"kind": "fill", "color": "#FFFFFF"}
+    ]
+  },
+  "shader": "shade.wgsl"
+}
