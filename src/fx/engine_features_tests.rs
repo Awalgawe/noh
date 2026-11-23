@@ -357,6 +357,104 @@ fn a_letter_plate_sits_behind_each_letter() {
     }
 }
 
+/// Plates (line, word, letter) and their letters at 1.5 s, with this layout
+/// anchor and these tracks; each plate pass `on` its unit.
+fn plated(on: &str, anchor: &str, animate: Value) -> (Vec<Inst>, Vec<Inst>) {
+    let mut layout = sans();
+    layout["anchor"] = json!(anchor);
+    let e = effect(
+        layout,
+        animate,
+        json!([{"kind": "plate", "on": on}, {"kind": "fill", "color": "#FFFFFF"}]),
+    )
+    .unwrap();
+    let m = at(&e, ab_cd(), 1.5).1;
+    (plates(&m), letters(&m))
+}
+
+fn spaced(v: f64) -> Value {
+    json!([{"unit": "line", "slot": "loop", "property": "tracking", "value": v}])
+}
+
+fn edges(p: &Inst) -> (f32, f32) {
+    (p.center[0] - p.uv[0] * 0.5, p.center[0] + p.uv[0] * 0.5)
+}
+
+#[test]
+fn plates_follow_letter_spacing_on_every_unit() {
+    // A line's row: its edges move with its first and last letters.
+    let (p0, l0) = plated("line", "unit", spaced(0.0));
+    let (p1, l1) = plated("line", "unit", spaced(0.5));
+    let moved = |k: usize| l1[k].center[0] - l0[k].center[0];
+    assert!(moved(3) - moved(0) > 60.0, "the letters spread");
+    assert!(close(edges(&p1[0]).0 - edges(&p0[0]).0, moved(0), 1e-3));
+    assert!(close(edges(&p1[0]).1 - edges(&p0[0]).1, moved(3), 1e-3));
+    // A word: its edges move with its own first and last letters.
+    let (p0, _) = plated("word", "unit", spaced(0.0));
+    let (p1, _) = plated("word", "unit", spaced(0.5));
+    for (w, (a, b)) in [(0usize, (0usize, 1usize)), (1, (2, 3))] {
+        assert!(
+            close(edges(&p1[w]).0 - edges(&p0[w]).0, moved(a), 1e-3),
+            "word {w}"
+        );
+        assert!(
+            close(edges(&p1[w]).1 - edges(&p0[w]).1, moved(b), 1e-3),
+            "word {w}"
+        );
+    }
+    // A letter: its plate moves with it.
+    let (p0, _) = plated("letter", "unit", spaced(0.0));
+    let (p1, _) = plated("letter", "unit", spaced(0.5));
+    for k in 0..4 {
+        assert!(
+            close(p1[k].center[0] - p0[k].center[0], moved(k), 1e-3),
+            "letter {k}"
+        );
+    }
+}
+
+#[test]
+fn a_letter_plate_follows_its_letter_when_the_word_scales_about_its_centre() {
+    let grown = json!([{"unit": "word", "slot": "loop", "property": "scale", "value": 2}]);
+    for anchor in ["word", "unit"] {
+        let (p0, l0) = plated("letter", anchor, json!([]));
+        let (p1, l1) = plated("letter", anchor, grown.clone());
+        // About the word's centre its letters spread; each letter scales in place.
+        let gap = |l: &[Inst]| l[1].center[0] - l[0].center[0];
+        let spread = if anchor == "word" { 2.0 } else { 1.0 };
+        assert!(close(gap(&l1), spread * gap(&l0), 1e-3), "{anchor}");
+        // The plate is scaled with its letter: rigidly attached, twice the size.
+        for k in 0..4 {
+            let (before, after) = (
+                p0[k].center[0] - l0[k].center[0],
+                p1[k].center[0] - l1[k].center[0],
+            );
+            assert!(
+                close(after, 2.0 * before, 1e-3),
+                "{anchor} letter {k}: {before} then {after}"
+            );
+            assert!(close(p1[k].uv[0], 2.0 * p0[k].uv[0], 1e-3));
+            assert!(close(
+                p1[k].center[1] - l1[k].center[1],
+                2.0 * (p0[k].center[1] - l0[k].center[1]),
+                1e-3
+            ));
+        }
+        // A word plate spans its scaled letters, edge to edge.
+        let (w1, _) = plated("word", anchor, grown.clone());
+        for w in 0..2 {
+            assert!(
+                close(edges(&w1[w]).0, edges(&p1[2 * w]).0, 1e-3),
+                "{anchor} word {w}"
+            );
+            assert!(
+                close(edges(&w1[w]).1, edges(&p1[2 * w + 1]).1, 1e-3),
+                "{anchor} word {w}"
+            );
+        }
+    }
+}
+
 #[test]
 fn plate_mistakes_are_refused_with_their_field() {
     let refused = |layout: Value, animate: Value, passes: Value, says: &str| {

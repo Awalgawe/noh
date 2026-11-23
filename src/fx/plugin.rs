@@ -3108,6 +3108,21 @@ impl PluginScene {
             inst.xform[3] = clip_of(&inst);
             Some(inst)
         };
+        // Plates are measured on the letters as drawn: where letter spacing (the
+        // line's em) moves each letter, and where a scaled letter's pen edges land.
+        let spaced = |g: &Glyph| (line_st.tracking * g.row_pos as f64) as f32 * p.em;
+        let anchor_kind = self.effect.layout.anchor;
+        let anchor_of = |g: &Glyph, wb: &WordBox| -> [f32; 2] {
+            match anchor_kind {
+                Anchor::Unit => [g.cx, g.cy],
+                Anchor::Word => [(wb.x0 + wb.x1) * 0.5, g.cy],
+                Anchor::WordXGlyphY => [(wb.x0 + wb.x1) * 0.5, g.cy],
+                Anchor::Baseline => [(wb.x0 + wb.x1) * 0.5, g.cy],
+                Anchor::Pivot => wb.pivot,
+            }
+        };
+        // A letter's pen edge `x` once the letter is scaled by `sx` about `ax` and spaced.
+        let edge = |g: &Glyph, x: f32, ax: f32, sx: f32| ax + (x - ax) * sx + spaced(g);
         for &(pass, pl) in plate_passes.iter().filter(|(_, pl)| pl.on == Unit::Line) {
             for (r, &(top, bottom)) in p.rows.iter().enumerate() {
                 let (x0, x1) = p
@@ -3115,7 +3130,7 @@ impl PluginScene {
                     .iter()
                     .filter(|g| g.row == r)
                     .fold((f32::MAX, f32::MIN), |(a, b), g| {
-                        (a.min(g.pen[0]), b.max(g.pen[1]))
+                        (a.min(g.pen[0] + spaced(g)), b.max(g.pen[1] + spaced(g)))
                     });
                 if x0 <= x1 {
                     plates.extend(plate_of(
@@ -3194,22 +3209,27 @@ impl PluginScene {
                 wi,
                 &wctx,
             );
-            // A word's plate: around its pen span on its first letter's row, moved
-            // with the word (its offsets, and its scale about its centre unless each
-            // letter scales in place).
+            // A word's plate: from its first letter's drawn pen edge to its last's
+            // (spaced, and scaled by the word as its letters are), on its first
+            // letter's row, moved by the word's offsets.
             if let Some(first) = by_word[wi].first() {
                 if let Some(&(top, bottom)) = p.rows.get(first.row) {
                     let em = first.font_size;
-                    let in_place = self.effect.layout.anchor == Anchor::Unit;
+                    let (sx, s) = (
+                        (word_st.scale * word_st.scale_x) as f32,
+                        word_st.scale as f32,
+                    );
+                    let (x0, x1) = by_word[wi].iter().fold((f32::MAX, f32::MIN), |(a, b), g| {
+                        let ax = anchor_of(g, wb)[0];
+                        (
+                            a.min(edge(g, g.pen[0], ax, sx)),
+                            b.max(edge(g, g.pen[1], ax, sx)),
+                        )
+                    });
+                    let ay = anchor_of(first, wb)[1];
+                    let bx = [x0, ay + (top - ay) * s, x1, ay + (bottom - ay) * s];
                     let xf = UnitXform {
-                        scale: if in_place {
-                            [1.0, 1.0]
-                        } else {
-                            [
-                                (word_st.scale * word_st.scale_x) as f32,
-                                word_st.scale as f32,
-                            ]
-                        },
+                        scale: [sx, s],
                         rot: word_st.rotation as f32,
                         offset: [word_st.offset_x as f32 * em, word_st.offset_y as f32 * em],
                     };
@@ -3221,7 +3241,7 @@ impl PluginScene {
                             &word_st,
                             line_st.opacity * word_st.opacity,
                             em,
-                            [wb.x0, top, wb.x1, bottom],
+                            bx,
                             xf,
                         ));
                     }
@@ -3282,13 +3302,7 @@ impl PluginScene {
                 let alpha = (line_st.opacity * st.opacity) as f32;
                 let (s, sx) = (st.scale as f32, (st.scale * st.scale_x) as f32);
                 // anchor, then scale -> rotate -> translate
-                let anchor = match self.effect.layout.anchor {
-                    Anchor::Unit => [g.cx, g.cy],
-                    Anchor::Word => [(wb.x0 + wb.x1) * 0.5, g.cy],
-                    Anchor::WordXGlyphY => [(wb.x0 + wb.x1) * 0.5, g.cy],
-                    Anchor::Baseline => [(wb.x0 + wb.x1) * 0.5, g.cy],
-                    Anchor::Pivot => wb.pivot,
-                };
+                let anchor = anchor_of(g, wb);
                 let rot = st.rotation as f32 + if compose { wb.rot } else { 0.0 };
                 let (dx, dy) = ((g.cx - anchor[0]) * sx, (g.cy - anchor[1]) * s);
                 let (c, sn) = (rot.cos(), rot.sin());
@@ -3298,8 +3312,15 @@ impl PluginScene {
                 } else {
                     (dx, dy)
                 };
-                // A letter's plate: its pen span on its row, moved and scaled with it.
+                // A letter's plate: its drawn pen span (spaced, scaled about the
+                // letter's anchor as the letter is) on its row, moved with it.
                 if let Some(&(top, bottom)) = p.rows.get(g.row) {
+                    let bx = [
+                        edge(g, g.pen[0], anchor[0], sx),
+                        anchor[1] + (top - anchor[1]) * s,
+                        edge(g, g.pen[1], anchor[0], sx),
+                        anchor[1] + (bottom - anchor[1]) * s,
+                    ];
                     let xf = UnitXform {
                         scale: [sx, s],
                         rot,
@@ -3313,7 +3334,7 @@ impl PluginScene {
                             &st,
                             line_st.opacity * st.opacity,
                             em,
-                            [g.pen[0], top, g.pen[1], bottom],
+                            bx,
                             xf,
                         ));
                     }
@@ -3489,9 +3510,11 @@ impl PluginScene {
         main.splice(plates_at..plates_at, plates);
     }
 
-    /// A plate around `bx` (x0, y0, x1, y1 in canvas px as laid out): grown by its
-    /// margins, scaled and wiped by its unit's plate properties, moved with its
-    /// unit (`unit_xf`, about the box centre), then with its line (`lx`, `moved`).
+    /// A plate around `bx` (x0, y0, x1, y1 in canvas px: its unit's letters as
+    /// drawn, before their offsets): grown by its margins (in the unit's em, which
+    /// the unit's scale enlarges as it does its letters), scaled and wiped by its
+    /// unit's plate properties, turned by the unit's rotation about its centre and
+    /// moved by its offsets, then moved with its line (`lx`, `moved`).
     #[allow(clippy::too_many_arguments)]
     fn plate(
         &self,
@@ -3508,30 +3531,27 @@ impl PluginScene {
     ) -> Option<Inst> {
         let a = (num(&eval(&pass.alpha, ctx)) * alpha * unit.plate_opacity) as f32;
         let grow = unit.plate_margin as f32;
-        let mx = (num(&eval(&pl.margin_x, ctx)) as f32 + grow) * em;
-        let my = (num(&eval(&pl.margin_y, ctx)) as f32 + grow) * em;
-        let (x0, x1) = (bx[0] - mx, bx[2] + mx);
-        let mut w = (x1 - x0) * unit.plate_scale_x as f32;
-        let h = bx[3] - bx[1] + 2.0 * my;
-        // The box centre: the unit's own scale and rotation turn about it.
-        let centre = [(bx[0] + bx[2]) * 0.5, (bx[1] + bx[3]) * 0.5];
-        let mut cx = centre[0];
-        if let Some(wp) = unit.plate_wipe {
-            let left = cx - w * 0.5;
-            w *= wp as f32;
-            cx = left + w * 0.5;
-        }
+        let mx = (num(&eval(&pl.margin_x, ctx)) as f32 + grow) * em * unit_xf.scale[0].abs();
+        let my = (num(&eval(&pl.margin_y, ctx)) as f32 + grow) * em * unit_xf.scale[1].abs();
+        let (x0, x1) = (bx[0].min(bx[2]), bx[0].max(bx[2]));
+        let (y0, y1) = (bx[1].min(bx[3]), bx[1].max(bx[3]));
+        let full = (x1 - x0 + 2.0 * mx) * unit.plate_scale_x as f32;
+        let h = y1 - y0 + 2.0 * my;
+        let centre = [(x0 + x1) * 0.5, (y0 + y1) * 0.5];
+        // A wiped plate keeps its left edge: its centre moves left along the unit.
+        let (w, d) = match unit.plate_wipe {
+            Some(wp) => (full * wp as f32, -full * (1.0 - wp as f32) * 0.5),
+            None => (full, 0.0),
+        };
         if a <= 0.0 || w <= 0.0 || h <= 0.0 {
             return None;
         }
-        // The unit's scale and rotation about the box centre, then its offsets.
         let (c, s) = (unit_xf.rot.cos(), unit_xf.rot.sin());
-        let d = [(cx - centre[0]) * unit_xf.scale[0], 0.0];
         let mut at = [
-            centre[0] + d[0] * c - d[1] * s + unit_xf.offset[0],
-            centre[1] + d[0] * s + d[1] * c + unit_xf.offset[1],
+            centre[0] + d * c + unit_xf.offset[0],
+            centre[1] + d * s + unit_xf.offset[1],
         ];
-        let (mut w, mut h) = (w * unit_xf.scale[0].abs(), h * unit_xf.scale[1].abs());
+        let (mut w, mut h) = (w, h);
         let mut rot = unit_xf.rot;
         if let Some(x) = lx {
             at = x.apply(at);
@@ -3560,8 +3580,9 @@ impl PluginScene {
     }
 }
 
-/// A unit's own move for its plate: scale (x, y) and rotation about the plate's
-/// box centre, then an offset, in canvas px.
+/// A unit's own move for its plate: its scale (x, y; the box already holds it,
+/// margins and radius take it), its rotation about the plate's centre, then an
+/// offset, in canvas px.
 #[derive(Clone, Copy)]
 struct UnitXform {
     scale: [f32; 2],

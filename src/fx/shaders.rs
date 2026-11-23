@@ -37,7 +37,7 @@ pub struct Inst {
     pub aux: [f32; 4],
 }
 
-/// `GlyphIn.pass` values: what an instance draws.
+/// `GlyphIn.pass_kind` values: what an instance draws.
 pub const PASS_FILL: f32 = 0.0;
 pub const PASS_OUTLINE: f32 = 1.0;
 pub const PASS_SHADOW: f32 = 2.0;

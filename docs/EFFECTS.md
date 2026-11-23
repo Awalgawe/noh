@@ -238,15 +238,18 @@ A plate is a rounded rectangle drawn behind text, measured on its box:
 
 `margin_x` and `margin_y` grow it on each side, `radius` rounds its corners, all
 in the unit's em (negative margins shrink it). Plates are drawn under every letter
-of their line, whatever the pass order; line mode only.
+of their line, whatever the pass order, and above the glow layer (an opaque plate
+hides its line's glow); line mode only.
 
-The unit's plate properties animate it: `plate_opacity` multiplies its opacity,
-`plate_margin` adds a margin on every side (em), `plate_scale_x` scales it across
-about its centre, and `plate_wipe` (0 to 1) draws only that share of it from its
-left edge. A plate also takes its unit's opacity (and the line's), its offsets, and
-its scale and rotation (a word plate scales with its word unless the layout
-`anchor` is `unit`, where each letter scales in place). A plate property needs a
-plate pass on its unit, and a syllable has no plate.
+A plate is measured on its letters as they are drawn: the line's letter spacing
+(`tracking`) and, for a word or letter plate, the unit's scale about the layout
+`anchor` move its edges with the letters' (a line plate follows the line's own
+scale and rotation, not its words'). The unit's plate properties animate it:
+`plate_opacity` multiplies its opacity, `plate_margin` adds a margin on every side
+(em), `plate_scale_x` scales it across about its centre, and `plate_wipe` (0 to 1)
+draws only that share of it from its left edge. A plate also takes its unit's
+opacity (and the line's), its offsets, and its rotation about its centre. A plate
+property needs a plate pass on its unit, and a syllable has no plate.
 
 A highlighter on the sung word, as an example:
 
