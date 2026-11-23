@@ -99,7 +99,11 @@ fn main() {
                     },
                     Event::Progress { percent: 100, .. } => {
                         published = true;
-                        assert_eq!(std::fs::read(&output).unwrap(), b"rendered");
+                        assert_eq!(
+                            std::fs::read(&output).unwrap(),
+                            b"rendered",
+                            "short {short}, {scenario}"
+                        );
                         if scenario == "late-cancel" {
                             cancel.store(true, Ordering::Release);
                         }
@@ -110,12 +114,13 @@ fn main() {
             if matches!(scenario, "success" | "late-cancel")
                 || (short && scenario == "ten-warnings")
             {
+                // The whole error, so that a rare failure says which step and why.
                 assert!(
                     matches!(result,Ok(Outcome::Export(ref value)) if value.output==output),
-                    "{scenario}: {:?}",
-                    result.err()
+                    "short {short}, {scenario}: {:?}",
+                    result.as_ref().err()
                 );
-                assert!(published);
+                assert!(published, "short {short}, {scenario}");
             } else {
                 let expected = match scenario {
                     "cancel" => "status.export_cancelled",
@@ -126,21 +131,25 @@ fn main() {
                     _ if short => "error.short_result",
                     _ => "error.caption_result",
                 };
-                assert_eq!(result.err().unwrap().code, expected, "{scenario}");
-                assert!(!published);
+                assert!(
+                    matches!(&result, Err(e) if e.code == expected),
+                    "short {short}, {scenario}: expected {expected}, got {:?} (ok: {})",
+                    result.as_ref().err(),
+                    result.is_ok()
+                );
+                assert!(!published, "short {short}, {scenario}");
                 if scenario == "collision" {
                     assert_eq!(std::fs::read(&output).unwrap(), b"other publisher");
                 } else {
-                    assert!(!output.exists());
+                    assert!(!output.exists(), "short {short}, {scenario}");
                 }
             }
-            assert!(!std::fs::read_dir(folder.path()).unwrap().any(|entry| {
-                entry
-                    .unwrap()
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with(".noh-")
-            }));
+            let left: Vec<_> = std::fs::read_dir(folder.path())
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                .filter(|name| name.starts_with(".noh-"))
+                .collect();
+            assert!(left.is_empty(), "short {short}, {scenario}: left {left:?}");
         }
     }
 }
