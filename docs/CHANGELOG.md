@@ -150,9 +150,11 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
   words, Stickers and Scrolling lyrics, which draw big words by design, can
   leave it on long lines. NOH warns that the text leaves the Short's safe area.
 - Motion scenes are experimental: their format may change in a later
-  version. The preview does not reframe the picture as a scene asks, and leaves
-  its shader layers out unless asked; the export does both. When NOH refuses a
-  scene, the reason after the instant is in English.
+  version. The preview does not reframe the picture as a scene asks; the export
+  does. In the preview, a scene's shader layers are left out whole, words
+  included, unless **Show shader layers in the preview** is on; the export
+  draws them. When NOH refuses a scene, the reason after the instant is in
+  English.
 - The preview does not show the warning about a caption effect that draws a
   great deal at once; only the export does. Its German, Spanish, Japanese,
   Korean and Chinese texts were written without a native speaker's review.
