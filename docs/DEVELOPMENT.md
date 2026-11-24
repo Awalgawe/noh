@@ -82,7 +82,11 @@ Screenshot success is not a human interaction test.
 
 The lyrics screen has its own states, all in the layout campaign:
 `lyrics-screen` (as it opens), `-cut`, `-word`, `-syllables`, `-game`,
-`-game-hold`, `-game-missed`, `-summary` and `-read-only`. They need a project
+`-game-hold`, `-game-missed`, `-summary` and `-read-only`, and who sings each
+line: `-voices` (two voices, the lines as a duet), `-voices-menu` (a badge's menu
+open) and `-voices-remove` (the last voice asked to go), and backing vocals:
+`-backing` (echoes between parentheses, an unclosed one, the sync bar on
+« Chœurs ») and `-backing-game` (a game of that pass). They need a project
 whose song has an `.srt` beside it. For the screen alone:
 
 ```sh

@@ -36,6 +36,8 @@ pub mod lyrics_input;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 pub mod media;
+#[cfg(feature = "motion")]
+pub mod motion;
 pub mod plan;
 #[cfg(feature = "gui")]
 pub mod playback;
@@ -45,11 +47,14 @@ mod progress;
 pub mod project;
 pub mod resources;
 pub mod safe_area;
+pub mod scene_request;
 #[cfg(feature = "gui")]
 pub mod scrub;
 mod sequence;
 pub mod shorts;
 mod storage;
+#[cfg(feature = "effects")]
+pub mod style;
 pub mod subtitle_edit;
 pub mod subtitle_srt;
 pub mod subtitle_track;

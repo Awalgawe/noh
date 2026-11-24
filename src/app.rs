@@ -7,6 +7,7 @@ mod app_destination;
 mod app_diagnosis;
 mod app_driven;
 mod app_driven_act;
+mod app_driven_scene;
 mod app_effects;
 mod app_font_rows;
 mod app_icons;
@@ -18,6 +19,8 @@ mod app_lyrics_pair;
 mod app_lyrics_save;
 mod app_lyrics_screen;
 mod app_media;
+mod app_motion;
+mod app_motion_draw;
 mod app_navigation;
 mod app_options;
 mod app_preview;
@@ -37,6 +40,7 @@ mod app_subtitles;
 mod app_timeline;
 mod app_track;
 mod app_ui;
+mod app_voices;
 use app_job::{Event, Job, PreviewFile, Request};
 use app_locale::Locale;
 use app_media::{Clip, Metadata};
@@ -54,6 +58,7 @@ struct NohApp {
     strip: app_strip::State,
     mini_preview: app_preview::State,
     effects: app_effects::State,
+    motion: app_motion::State,
     style_panel: app_style_panel::State,
     lyrics_edit: app_lyrics_edit::State,
     lyrics_screen: app_lyrics_screen::State,
@@ -163,6 +168,7 @@ impl Default for NohApp {
             strip: app_strip::State::default(),
             mini_preview: app_preview::State::default(),
             effects: app_effects::State::default(),
+            motion: app_motion::State::default(),
             style_panel: app_style_panel::State::default(),
             lyrics_edit: app_lyrics_edit::State::default(),
             lyrics_screen: app_lyrics_screen::State::default(),

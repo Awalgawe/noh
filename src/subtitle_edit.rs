@@ -25,7 +25,7 @@ fn letters(w: &str) -> u64 {
 }
 
 /// Starts for `words` spread by letter count over [a, b), as the engine does
-/// without word times (fx/line.rs split_words), on whole milliseconds.
+/// without word times (style/line.rs split_words), on whole milliseconds.
 fn spread(words: &[&str], a: u64, b: u64) -> Vec<u64> {
     let total: u64 = words.iter().map(|w| letters(w)).sum::<u64>().max(1);
     let mut acc = 0;
@@ -307,14 +307,65 @@ pub fn add_cue(track: &mut SubtitleTrack, ms: u64, text: &str) -> Option<usize> 
     let len = (b - a).min(2000);
     let start = ms.saturating_sub(len / 2).clamp(a, b - len);
     let at = track.cues.partition_point(|c| c.start_ms < start);
-    track
-        .cues
-        .insert(at, SubtitleCue::new(start, start + len, text.trim()));
+    let mut cue = SubtitleCue::new(start, start + len, text.trim());
+    // A line added after another is sung by the same voices.
+    if let Some(before) = at.checked_sub(1).and_then(|p| track.cues.get(p)) {
+        cue.voices = before.voices.clone();
+    }
+    track.cues.insert(at, cue);
     if track.validate().is_err() {
         track.cues.remove(at);
         return None;
     }
     Some(at)
+}
+
+/// Give cues `lo..=hi` the set `voices` (sorted and made unique here). Refused
+/// (nothing changes) when a number is not declared or nothing would change.
+pub fn set_voices(track: &mut SubtitleTrack, lo: usize, hi: usize, voices: &[u8]) -> bool {
+    let mut set = voices.to_vec();
+    set.sort_unstable();
+    set.dedup();
+    if hi >= track.cues.len()
+        || lo > hi
+        || set
+            .iter()
+            .any(|&v| v == 0 || v as usize > track.voices.len())
+        || track.cues[lo..=hi].iter().all(|c| c.voices == set)
+    {
+        return false;
+    }
+    for cue in &mut track.cues[lo..=hi] {
+        cue.voices = set.clone();
+    }
+    true
+}
+
+/// Declare `voices` (at most `MAX_VOICES`). Lines lose the numbers that are no
+/// longer declared (only the last voices can go, so numbers never shift).
+pub fn declare_voices(
+    track: &mut SubtitleTrack,
+    voices: Vec<crate::subtitle_track::Voice>,
+) -> bool {
+    if voices.len() > crate::subtitle_track::MAX_VOICES || voices == track.voices {
+        return false;
+    }
+    let before = track.clone();
+    let count = voices.len() as u8;
+    track.voices = voices;
+    for cue in &mut track.cues {
+        cue.voices.retain(|&v| v <= count);
+    }
+    if track.validate().is_err() {
+        *track = before;
+        return false;
+    }
+    true
+}
+
+/// How many lines sing voice `n`.
+pub fn lines_with_voice(track: &SubtitleTrack, n: u8) -> usize {
+    track.cues.iter().filter(|c| c.voices.contains(&n)).count()
 }
 
 pub fn delete(track: &mut SubtitleTrack, i: usize) -> Option<SubtitleCue> {
@@ -605,12 +656,83 @@ pub fn propose_syllables(
     cut
 }
 
-/// What a sync game takes: a whole cue, a word, or a syllable.
+/// What a sync game takes: a whole cue, a word, a syllable, or a backing
+/// vocal (a word between parentheses). The Words and Syllables levels take the
+/// cue's main words only: one key cannot hold a word and tap a backing vocal
+/// that overlaps it, so backing vocals have a pass of their own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Level {
     Line,
     Word,
     Syllable,
+    Backing,
+}
+
+/// The kinds of a cue's words for the game: true for a backing vocal. Words
+/// that do not match the text (they cannot here) are all main words.
+fn kinds(cue: &SubtitleCue, words: usize) -> Vec<bool> {
+    let flags = crate::subtitle_track::backing_flags(&cue.text);
+    if flags.len() == words {
+        flags
+    } else {
+        vec![false; words]
+    }
+}
+
+/// Backing vocals nobody took that now sit out of text order (a main word
+/// taken before them, or after them) are spread again between their
+/// neighbours, by letters (Estimated, no end): a main word taken by hand never
+/// moves because of them.
+fn respread_untaken_backing(
+    cue: &SubtitleCue,
+    words: &mut [WordTime],
+    kind: &[bool],
+    taken: &[(usize, usize)],
+) {
+    let n = words.len();
+    let mut i = 0;
+    while i < n {
+        if !kind[i] || taken.iter().any(|t| t.0 == i) {
+            i += 1;
+            continue;
+        }
+        let mut j = i;
+        while j + 1 < n && kind[j + 1] && !taken.iter().any(|t| t.0 == j + 1) {
+            j += 1;
+        }
+        let low = i
+            .checked_sub(1)
+            .map_or(cue.start_ms, |p| last_start(&words[p]) + MIN_WORD_GAP_MS);
+        let high = words
+            .get(j + 1)
+            .map_or(cue.end_ms, |w| w.start_ms)
+            .saturating_sub(MIN_WORD_GAP_MS);
+        let in_order = words[i..=j]
+            .iter()
+            .all(|w| w.start_ms >= low && last_start(w) <= high)
+            && words[i..=j]
+                .windows(2)
+                .all(|p| p[1].start_ms >= last_start(&p[0]) + MIN_WORD_GAP_MS);
+        if !in_order && high > low {
+            let texts: Vec<&str> = words[i..=j].iter().map(|w| w.text.as_str()).collect();
+            let starts = spread(&texts, low, high);
+            for (w, start_ms) in words[i..=j].iter_mut().zip(starts) {
+                w.start_ms = start_ms;
+                w.end_ms = None;
+                w.source = WordSource::Estimated;
+                w.syllables = None;
+            }
+        }
+        i = j + 1;
+    }
+}
+
+/// The start of a word's last unit (its last syllable, or the word itself).
+fn last_start(w: &WordTime) -> u64 {
+    w.syllables
+        .as_ref()
+        .and_then(|s| s.last())
+        .map_or(w.start_ms, |s| s.start_ms.max(w.start_ms))
 }
 
 /// One held key in the sync game: pressed at `start_ms`, released at `end_ms`
@@ -715,14 +837,37 @@ pub fn apply_holds(track: &SubtitleTrack, level: Level, holds: &[Hold]) -> Optio
                     settle(&next, moved)
                 });
             }
-            Level::Word | Level::Syllable => {
+            Level::Word | Level::Syllable | Level::Backing => {
                 let mut words = words_or_estimate(&cue);
+                let kind = kinds(&cue, words.len());
+                let backing = level == Level::Backing;
                 // (word, syllable) of every taken unit; a whole word is syllable 0.
                 let mut taken: Vec<(usize, usize)> = Vec::new();
                 for h in &group {
+                    // Each pass takes its own kind of words only.
+                    if *kind.get(h.word)? != backing {
+                        return None;
+                    }
+                    let mut h = *h;
+                    if backing {
+                        // A backing vocal keeps text order: its start stays
+                        // between its neighbours' starts, which never move.
+                        let low = h
+                            .word
+                            .checked_sub(1)
+                            .map_or(cue.start_ms, |p| last_start(&words[p]) + MIN_WORD_GAP_MS);
+                        let high = words
+                            .get(h.word + 1)
+                            .map_or(cue.end_ms, |w| w.start_ms)
+                            .saturating_sub(MIN_WORD_GAP_MS);
+                        if low > high {
+                            return None;
+                        }
+                        h.start_ms = h.start_ms.clamp(low, high);
+                    }
                     let w = words.get_mut(h.word)?;
                     let end = h.end_ms.max(h.start_ms + 1);
-                    let whole = level == Level::Word || w.syllables.is_none();
+                    let whole = level != Level::Syllable || w.syllables.is_none();
                     if whole {
                         if level == Level::Syllable && h.syllable != 0 {
                             return None;
@@ -768,7 +913,10 @@ pub fn apply_holds(track: &SubtitleTrack, level: Level, holds: &[Hold]) -> Optio
                         taken.push((h.word, h.syllable));
                     }
                 }
-                push_covered(&mut words, &taken, level);
+                push_covered(&mut words, &taken, level, &kind);
+                if !backing {
+                    respread_untaken_backing(&cue, &mut words, &kind, &taken);
+                }
                 let first = words.first()?.start_ms;
                 let last_end = words
                     .iter()
@@ -846,9 +994,15 @@ fn pull_previous_end(t: &mut SubtitleTrack, c: usize, start: u64) {
 /// (Estimated, no end), each 50 ms after the one before: a word whole at the
 /// Words level (its syllables shifted with it), a syllable at the Syllables
 /// level (its word's start following its syllable 0).
-fn push_covered(words: &mut [WordTime], taken: &[(usize, usize)], level: Level) {
+fn push_covered(words: &mut [WordTime], taken: &[(usize, usize)], level: Level, kind: &[bool]) {
     let mut floor = 0u64;
+    let backing = level == Level::Backing;
     for (wi, w) in words.iter_mut().enumerate() {
+        // Only the words of the pass's kind: a held main word never pushes a
+        // backing vocal it overlaps, nor the other way round.
+        if kind.get(wi).copied().unwrap_or(false) != backing {
+            continue;
+        }
         match (level, w.syllables.as_mut()) {
             (Level::Syllable, Some(syl)) => {
                 for (si, s) in syl.iter_mut().enumerate() {
@@ -1555,5 +1709,122 @@ mod tests {
         assert!(join_next_with(&mut t, 1, " "));
         assert_eq!(t.cues[1].text, "b c d");
         assert_eq!(t.cues[1].voices, [1, 2], "the first line's voices");
+    }
+
+    #[test]
+    fn voices_are_set_on_lines_and_declared_voices_can_shrink() {
+        let mut t = SubtitleTrack {
+            voices: vec![crate::subtitle_track::Voice::default(); 2],
+            language: None,
+            duration_ms: 20_000,
+            cues: vec![
+                SubtitleCue::new(1000, 2000, "a"),
+                SubtitleCue::new(3000, 4000, "b"),
+                SubtitleCue::new(9000, 10_000, "c"),
+            ],
+        };
+        assert!(set_voices(&mut t, 0, 1, &[2, 1, 2]));
+        assert_eq!(t.cues[0].voices, [1, 2]);
+        assert_eq!(t.cues[1].voices, [1, 2]);
+        assert!(!set_voices(&mut t, 0, 1, &[1, 2]), "nothing to change");
+        assert!(!set_voices(&mut t, 2, 2, &[3]), "voice 3 is not declared");
+        // A line added after another takes its voices.
+        let i = add_cue(&mut t, 6000, "new").unwrap();
+        assert_eq!(t.cues[i].voices, [1, 2]);
+        assert_eq!(lines_with_voice(&t, 2), 3);
+        // Declaring one voice takes voice 2 from every line.
+        assert!(declare_voices(
+            &mut t,
+            vec![crate::subtitle_track::Voice::default()]
+        ));
+        assert!(t.cues.iter().all(|c| !c.voices.contains(&2)));
+        assert!(!declare_voices(
+            &mut t,
+            vec![crate::subtitle_track::Voice::default(); 5]
+        ));
+    }
+
+    fn duet() -> SubtitleTrack {
+        SubtitleTrack {
+            voices: Vec::new(),
+            language: None,
+            duration_ms: 20_000,
+            cues: vec![SubtitleCue::new(1000, 5000, "jusqu'au matin (au matin)")],
+        }
+    }
+
+    fn take(word: usize, start_ms: u64, end_ms: u64) -> Hold {
+        Hold {
+            cue: 0,
+            word,
+            syllable: 0,
+            start_ms,
+            end_ms,
+        }
+    }
+
+    #[test]
+    fn a_main_word_held_over_the_backing_vocals_keeps_its_end_and_does_not_push_them() {
+        let t = duet();
+        let out =
+            apply_holds(&t, Level::Word, &[take(0, 1000, 1800), take(1, 1900, 4600)]).unwrap();
+        let w = out.cues[0].words.as_ref().unwrap();
+        assert_eq!(
+            (w[1].start_ms, w[1].end_ms),
+            (1900, Some(4600)),
+            "matin held to 4600"
+        );
+        // The backing vocals were not taken and not pushed to 4600: still estimated,
+        // after « matin » starts, in text order.
+        assert_eq!(w[2].source, WordSource::Estimated);
+        assert!(w[2].start_ms > 1900 && w[2].start_ms < 4600, "{:?}", w[2]);
+        assert!(w[3].start_ms > w[2].start_ms);
+        // The main pass never takes a backing vocal.
+        assert!(apply_holds(&t, Level::Word, &[take(2, 2000, 2500)]).is_none());
+    }
+
+    #[test]
+    fn the_backing_pass_takes_backing_vocals_only_and_never_moves_a_main_word() {
+        let t = duet();
+        let main =
+            apply_holds(&t, Level::Word, &[take(0, 1000, 1800), take(1, 1900, 4600)]).unwrap();
+        let out = apply_holds(
+            &main,
+            Level::Backing,
+            &[take(2, 3000, 3500), take(3, 3600, 4900)],
+        )
+        .unwrap();
+        let w = out.cues[0].words.as_ref().unwrap();
+        assert_eq!(
+            (w[0].start_ms, w[1].start_ms, w[1].end_ms),
+            (1000, 1900, Some(4600))
+        );
+        assert_eq!((w[2].start_ms, w[2].source), (3000, WordSource::Hand));
+        assert_eq!((w[3].start_ms, w[3].end_ms), (3600, Some(4900)));
+        assert!(
+            out.cues[0].has_backing_overlap(w),
+            "the held word runs past them"
+        );
+        assert!(apply_holds(&main, Level::Backing, &[take(1, 3000, 3500)]).is_none());
+        // A backing vocal tapped before the main word it follows stays after it.
+        let early = apply_holds(&main, Level::Backing, &[take(2, 1200, 1500)]).unwrap();
+        let w = early.cues[0].words.as_ref().unwrap();
+        assert_eq!(w[2].start_ms, 1900 + MIN_WORD_GAP_MS);
+        assert_eq!(w[1].start_ms, 1900, "the main word did not move");
+    }
+
+    #[test]
+    fn untaken_backing_vocals_out_of_order_are_spread_again_between_their_neighbours() {
+        let mut t = duet();
+        t.cues[0] = SubtitleCue::new(1000, 5000, "a (b c) d");
+        // « d » is taken early: « (b c) » would sit after it.
+        let out =
+            apply_holds(&t, Level::Word, &[take(0, 1000, 1200), take(3, 1600, 4000)]).unwrap();
+        let w = out.cues[0].words.as_ref().unwrap();
+        assert_eq!((w[3].start_ms, w[3].source), (1600, WordSource::Hand));
+        assert!(
+            w[1].start_ms >= 1000 + MIN_WORD_GAP_MS && w[2].start_ms + MIN_WORD_GAP_MS <= 1600,
+            "{w:?}"
+        );
     }
 }

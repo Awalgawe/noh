@@ -1,0 +1,333 @@
+{
+  "schema_version": 1,
+  "platform": "windows-x64",
+  "version": "0.4.0",
+  "scope": "Dependency and dataset input materials only; the final candidate and its qualification are separate.",
+  "baseline_source_commit": "034b16515e5e7c8d2b8b48b984375fa14ddeece2",
+  "prior_input_review": {
+    "path": "docs/release-evidence/windows-0.3.1-inputs.json",
+    "sha256": "3c5ba5faaba898f0c03be445dbd350f51b9866be1220aebfa0d3f20d7037d41a"
+  },
+  "inputs": {
+    "Cargo.lock": "30ea2022c41ea0360bc376054475e06273eaad70780ee581265c282488cc2d64",
+    "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "assets/delivery-windows.lock.json": "29ef275d01c409cee973d1869c11f36379cfaaef704a3684e44bea6812f5f544",
+    "assets/preview-runtime.json": "72c92e5eb5d128913798f80a06a03294db798519809201458d0b17c29a4112a4",
+    "assets/rust-notices.lock.json": "e4ea74c8c09a97c44b3f1d598a57aa649f29bf82c1c602d0d253b5fd19341f11",
+    "assets/speech-bundle.json": "4bef71e92e5f3857e6d06e3a0b95971bc60448e838a6cf822fe9045d344c089f",
+    "assets/syllable-sources.lock.json": "a1d6be0dadb87a80181df37b47c0cf49360680e49837cdce5bb86728fc646bf2",
+    "assets/windows-native.lock.json": "de8481277cc2e37a70773f69dcc304eb13be44f2db65c84d6f3324d1e26331ed",
+    "rust_standard_library_source": "be1816e7f6c40abb90245ad6e024bed2a7e88d7dda4561e4d5470207df616b9f",
+    "tools/build_syllable_dicts.py": "76413ca0f84eaa5fe815539ca16a0b48af34b36c3949805ba7e172c7831c0366",
+    "tools/rust_notices.py": "16d8215d716f1bf5b318e984f14687dad9b1a7f34dda103b13202d271da1cb44",
+    "tools/windows_runtime.py": "090d182a40c72503f982457c1b2e1225586bdcfdb378e27d5b8573e23863c860"
+  },
+  "changed_input_paths": [
+    "Cargo.lock",
+    "assets/rust-notices.lock.json"
+  ],
+  "new_input_paths": [],
+  "unchanged_input_paths": [
+    "LICENSE",
+    "assets/delivery-windows.lock.json",
+    "assets/preview-runtime.json",
+    "assets/speech-bundle.json",
+    "assets/syllable-sources.lock.json",
+    "assets/windows-native.lock.json",
+    "rust_standard_library_source",
+    "tools/build_syllable_dicts.py",
+    "tools/rust_notices.py",
+    "tools/windows_runtime.py"
+  ],
+  "third_party_cargo_records_unchanged": 457,
+  "changed_sources": [
+    {
+      "license": "MIT",
+      "license_file": null,
+      "name": "castaway",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "0.2.4",
+      "package_sha256": "dec551ab6e7578819132c713a93c022a05d60159dc86e7a7050223577484c55a",
+      "notice_files": [
+        {
+          "path": "LICENSE",
+          "sha256": "f98e09091d5ae02b2f2ec1ead4f7f28c4c44d1cb98b078739ba67091637e170c",
+          "origin": "vendored-crate"
+        }
+      ]
+    },
+    {
+      "license": "MIT",
+      "license_file": null,
+      "name": "compact_str",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "0.10.0",
+      "package_sha256": "79fcda08c33bb58b97008b2cdada6622500e949e060f5913361763121abd2416",
+      "notice_files": [
+        {
+          "path": "LICENSE",
+          "sha256": "0d52feec79589df30138dad3800323fe5686b764b73347330a2dfef8ac83efe8",
+          "origin": "vendored-crate"
+        }
+      ]
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "license_file": null,
+      "name": "const-random",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "0.1.18",
+      "package_sha256": "87e00182fe74b066627d63b85fd550ac2998d4b0bd86bfed477a0ae4c7c71359",
+      "notice_files": [
+        {
+          "path": "LICENSE-APACHE",
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "origin": "vendored-crate"
+        },
+        {
+          "path": "LICENSE-MIT",
+          "sha256": "ff8f68cb076caf8cefe7a6430d4ac086ce6af2ca8ce2c4e5a2004d4552ef52a2",
+          "origin": "vendored-crate"
+        }
+      ]
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "license_file": null,
+      "name": "const-random-macro",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "0.1.16",
+      "package_sha256": "f9d839f2a20b0aee515dc581a6172f2321f96cab76c1a38a4c584a194955390e",
+      "notice_files": [
+        {
+          "path": "LICENSE-APACHE",
+          "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "origin": "vendored-crate"
+        },
+        {
+          "path": "LICENSE-MIT",
+          "sha256": "ff8f68cb076caf8cefe7a6430d4ac086ce6af2ca8ce2c4e5a2004d4552ef52a2",
+          "origin": "vendored-crate"
+        }
+      ]
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "license_file": null,
+      "name": "rhai",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "1.27.0",
+      "package_sha256": "c3925b784c0bee6542637e425ed7511a63257bf11b7ecf51ffd845e2d24d9163",
+      "notice_files": [
+        {
+          "path": "LICENSE-APACHE.txt",
+          "sha256": "6d1d968fb225eca367cb7f0b8831ab012a35d92b547e945e17ef8e7b05c3e5cc",
+          "origin": "vendored-crate"
+        },
+        {
+          "path": "LICENSE-MIT.txt",
+          "sha256": "36516aefdc84c5d5a1e7485425913a22dbda69eb1930c5e84d6ae4972b5194b9",
+          "origin": "vendored-crate"
+        }
+      ]
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "license_file": null,
+      "name": "rhai_codegen",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "3.3.0",
+      "package_sha256": "3d9661edb4a4b8145b017582d634c5eb88ff1a5284a5aa701f83a28f0657a826",
+      "notice_files": [
+        {
+          "git_blob": "d9a10c0d8e868ebf8da0b3dc95bb0be634c34bfe",
+          "path": "LICENSE-APACHE.txt",
+          "sha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9",
+          "url": "https://raw.githubusercontent.com/rhaiscript/rhai/aaf90906bfa7eae090fc236b8572a67528cab3ed/LICENSE-APACHE.txt",
+          "origin": "pinned-upstream",
+          "revision": "aaf90906bfa7eae090fc236b8572a67528cab3ed"
+        },
+        {
+          "git_blob": "31aa79387f27e730e33d871925e152e35e428031",
+          "path": "LICENSE-MIT.txt",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "url": "https://raw.githubusercontent.com/rhaiscript/rhai/aaf90906bfa7eae090fc236b8572a67528cab3ed/LICENSE-MIT.txt",
+          "origin": "pinned-upstream",
+          "revision": "aaf90906bfa7eae090fc236b8572a67528cab3ed"
+        }
+      ],
+      "source_revision_limit": "Published VCS metadata marks the tree dirty. These are the upstream MIT and Apache-2.0 texts at the repository root at its recorded base revision (the crate is the codegen/ folder of that repository), consistent with the published MIT OR Apache-2.0 declaration; they do not establish an identical source tree."
+    },
+    {
+      "license": "MPL-2.0+",
+      "license_file": null,
+      "name": "smartstring",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "1.0.1",
+      "package_sha256": "3fb72c633efbaa2dd666986505016c32c3044395ceaf881518399d2f4127ee29",
+      "notice_files": [
+        {
+          "path": "LICENCE.md",
+          "sha256": "e6b6566f085df5746515c6d7e2edcaec0d2b77d527ac40d91409d783fb6c8508",
+          "origin": "vendored-crate"
+        }
+      ]
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "license_file": null,
+      "name": "thin-vec",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "0.2.21",
+      "package_sha256": "d6a4b9ba8738cb4a4f399d37e266becfd475e75eb73425b87a05a2f2039ba63e",
+      "notice_files": [
+        {
+          "path": "LICENSE-APACHE",
+          "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+          "origin": "vendored-crate"
+        },
+        {
+          "path": "LICENSE-MIT",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "origin": "vendored-crate"
+        }
+      ]
+    },
+    {
+      "license": "CC0-1.0",
+      "license_file": null,
+      "name": "tiny-keccak",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "version": "2.0.2",
+      "package_sha256": "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237",
+      "notice_files": [
+        {
+          "path": "LICENSE",
+          "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
+          "origin": "vendored-crate"
+        }
+      ]
+    }
+  ],
+  "changes": [
+    "Cargo.lock differs from the 0.3.1 file (sha256 db3686948be29fddd9815d8bcd64c0943d4c2efede3cc9bcebca9f0e0e977809): its 532 third-party records become 472. 457 are byte-identical, 9 are added, 69 are removed, and 6 keep their version and checksum but list other dependencies.",
+    "Added: castaway 0.2.4, compact_str 0.10.0, const-random 0.1.18, const-random-macro 0.1.16, rhai 1.27.0, rhai_codegen 3.3.0, smartstring 1.0.1, thin-vec 0.2.21, tiny-keccak 2.0.2. They come with rhai (pinned =1.27.0), the scripting language of the experimental motion scenes (#99): an optional dependency enabled only by the motion feature, and a dev-dependency of the tests.",
+    "From 0.4.0 the release packages are built with the motion feature (cargo dev build --gui --mcp --motion, tools/delivery-build.ps1), so rhai is compiled in. cargo tree --locked --offline -e normal --features gui,mcp,motion, for x86_64-pc-windows-gnu and x86_64-unknown-linux-gnu, gives three groups. Linked into the binaries: rhai, smartstring, thin-vec (through rhai) and const-random (through ahash, under eframe and egui, once rhai turns on ahash's compile-time-rng). Run only while compiling, never linked: rhai_codegen and const-random-macro (procedural macros) and tiny-keccak (a dependency of const-random-macro). Not reached: compact_str and castaway. All nine travel in the vendored source materials, which cover the whole locked graph.",
+    "Removed: the 69 records listed in removed_cargo_records, mostly the HTTP and TLS stack of the update prototype removed in #73 (reqwest, hyper, rustls, ring, quinn, the icu and zerovec families, zip). A removed record needs no reading: none of its texts is distributed any more.",
+    "Same version and checksum, so the same archive, with another dependency list: ahash 0.8.12 (+ const-random), getrandom 0.2.17 (- js-sys, wasm-bindgen), getrandom 0.4.3 (- js-sys, rand_core, wasm-bindgen), once_cell 1.21.4 (+ portable-atomic), semver 1.0.28 (- serde, serde_core), smallvec 1.16.5 (+ serde).",
+    "The noh package's own entry: version 0.3.1 to 0.4.0; base64 0.22.1, quick-xml, reqwest, ring, semver, windows-sys 0.61.2 and zip leave its dependencies, rhai joins them.",
+    "assets/rust-notices.lock.json gains one notice supplement, for rhai_codegen 3.3.0, published without a licence file. It pins https://github.com/rhaiscript/rhai at aaf90906bfa7eae090fc236b8572a67528cab3ed, the commit in the crate's .cargo_vcs_info.json (path_in_vcs codegen, marked dirty), and the repository root's LICENSE-APACHE.txt and LICENSE-MIT.txt by Git blob and SHA-256. They are the texts rhai 1.27.0 ships from the same commit, with LF line ends where the published rhai archive has CRLF (identical once CR is removed).",
+    "Every other hashed input is byte-identical to its 0.3.1 value."
+  ],
+  "licence_reading": {
+    "method": "By hand, for the nine added records: each notice file the generator selects was opened and compared with the declared licence. The notices were then generated from the whole vendored graph (cargo vendor --locked --offline as tools/delivery.py sources runs it, 472 crates): missing_notice_texts is empty; missing_original_notice_texts lists only dispatch-0.2.0, as before, covered by its declared-licence supplement.",
+    "records_read": 9,
+    "readings": {
+      "castaway-0.2.4": "MIT; LICENSE is the MIT text, Copyright (c) 2021 Stephen M. Coakley.",
+      "compact_str-0.10.0": "MIT; LICENSE is the MIT text, Copyright (c) 2021 Parker Timmerman.",
+      "const-random-0.1.18": "MIT OR Apache-2.0; LICENSE-MIT (Copyright (c) 2016 Amanieu d'Antras) and LICENSE-APACHE are those texts.",
+      "const-random-macro-0.1.16": "MIT OR Apache-2.0; the same two files as const-random 0.1.18, byte-identical.",
+      "rhai-1.27.0": "MIT OR Apache-2.0; LICENSE-MIT.txt and LICENSE-APACHE.txt are those texts, without a copyright line.",
+      "rhai_codegen-3.3.0": "MIT OR Apache-2.0; no licence file in the archive; the pinned upstream supplement above supplies the two texts.",
+      "smartstring-1.0.1": "MPL-2.0+ (the deprecated SPDX form of MPL-2.0 or later); LICENCE.md is the Mozilla Public License 2.0 and src/lib.rs carries the MPL 2.0 header. MPL 2.0 is a file-level licence: the source of covered files must be available to those who receive an executable form. The crate is linked into the release binaries (through rhai, with the motion feature). Its obligations are those already met for symphonia 0.5.5 and four symphonia-* crates (MPL-2.0), linked through rodio in every release: the complete unmodified source of each covered file travels in the release's -materials.zip (vendor/smartstring-1.0.1), and LICENCE.md is copied into RUST-NOTICES.txt, which every package carries under licenses/rust. NOH does not modify the crate.",
+      "thin-vec-0.2.21": "MIT OR Apache-2.0; LICENSE-MIT and LICENSE-APACHE are those texts, without a copyright line.",
+      "tiny-keccak-2.0.2": "CC0-1.0; LICENSE is the Creative Commons CC0 1.0 Universal text."
+    },
+    "limits": [
+      "Read by a person, not compared word by word with canonical texts.",
+      "Source headers other than smartstring's src/lib.rs, and files the generator does not select, were not read.",
+      "No licence alternative is selected."
+    ]
+  },
+  "dataset_licences": {
+    "record": "assets/syllable-sources.lock.json and docs/THIRD-PARTY.md, section Syllable dictionaries",
+    "moby": "Moby Hyphenation List: public domain by grant from the author, as recorded in the lock (read 2026-11-10); accepted by the project maintainer on 2026-11-10 for worldwide distribution.",
+    "lexique": "Lexique 3.83: CC BY-SA 4.0. README-Lexique.txt, read 2026-11-09, is byte-identical in the reviewed archive and in the repacked one (sha256 f7501cf57c88894e839d4deb233c19863b935abc60a510447747828e9fe5ddfe, compared 2026-11-18). The repacked archive adds CC.BY.SA.txt (sha256 28a9529c7d0bb4dc51f4bf5c116a3d16ef247a052f7591466768ddf563fd1cf5), byte-identical to https://creativecommons.org/licenses/by-sa/4.0/legalcode.txt as served on 2026-11-18.",
+    "unchanged": "assets/syllable-sources.lock.json and docs/THIRD-PARTY.md are byte-identical to their 0.3.1 files; the dataset review carried by the 0.3.1 record, back to 0.2.0's mirrors and repacked Lexique archive, is carried unchanged.",
+    "third_party_md_sha256": "bfdf3e77604ab18623fae2a2f5676859b840e0494c6220c5d693d41cfaeceda6"
+  },
+  "verification": {
+    "cargo_lock_diff": "v0.3.1:Cargo.lock and this Cargo.lock compared block by block (name and version): 9 added, 69 removed, 6 changed in their dependency list only, 457 byte-identical, plus noh's own entry.",
+    "third_party_packages_in_lock": 472,
+    "notices_generated": "tools/rust_notices.py generate over the vendored graph on 2026-11-24, with the new supplement fetched from its pinned URL and checked by Git blob and SHA-256.",
+    "release_graph": "cargo tree --locked --offline -e normal --features gui,mcp,motion -i <crate>, for both targets: rhai, smartstring, thin-vec and const-random are linked; rhai_codegen, const-random-macro and tiny-keccak sit under procedural macros; compact_str and castaway are not reached. With gui,mcp alone (before motion was added to the packages) none of the nine is reached. symphonia-core is reached through rodio with gui,mcp.",
+    "other_inputs_compared": "Each other hashed input was hashed in the release commit's tree and equals the value of the 0.3.1 record.",
+    "datasets_acquired": "On 2026-11-24, tools/delivery.py acquire-datasets into an empty cache fetched both archives with their pinned sha256 (the first Moby address answered 503; the next mirror served the archive).",
+    "open_points_carried": "Those of the prior reviews are unchanged, including the objc2 0.6.5 point recorded in the 0.1.6 review.",
+    "not_verified": [
+      "Final build materials: required after the candidate build.",
+      "Which crates are compiled into this platform's binary was not determined beyond the nine added ones, as in the prior reviews."
+    ]
+  },
+  "removed_cargo_records": [
+    "base64-0.22.1",
+    "base64-0.23.1",
+    "chacha20-0.10.2",
+    "constant_time_eq-0.6.1",
+    "displaydoc-0.2.7",
+    "form_urlencoded-1.2.2",
+    "http-1.5.0",
+    "http-body-1.1.0",
+    "http-body-util-0.1.5",
+    "httparse-1.10.1",
+    "hyper-1.12.0",
+    "hyper-rustls-0.27.10",
+    "hyper-util-0.1.21",
+    "icu_collections-2.4.0",
+    "icu_locale_core-2.4.0",
+    "icu_normalizer-2.4.0",
+    "icu_normalizer_data-2.4.0",
+    "icu_properties-2.4.0",
+    "icu_properties_data-2.4.0",
+    "icu_provider-2.4.0",
+    "idna-1.1.0",
+    "idna_adapter-1.2.2",
+    "ipnet-2.12.2",
+    "litemap-0.8.3",
+    "lru-slab-0.1.3",
+    "potential_utf-0.1.6",
+    "quinn-0.11.12",
+    "quinn-proto-0.11.19",
+    "quinn-udp-0.5.16",
+    "rand-0.10.3",
+    "rand_core-0.10.1",
+    "rand_pcg-0.10.2",
+    "reqwest-0.12.28",
+    "ring-0.17.14",
+    "rustls-0.23.46",
+    "rustls-pki-types-1.16.0",
+    "rustls-webpki-0.103.17",
+    "ryu-1.0.23",
+    "serde_urlencoded-0.7.1",
+    "stable_deref_trait-1.2.1",
+    "subtle-2.6.1",
+    "sync_wrapper-1.0.2",
+    "synstructure-0.14.0",
+    "tinystr-0.8.5",
+    "tokio-rustls-0.26.6",
+    "tower-0.5.3",
+    "tower-http-0.6.11",
+    "tower-layer-0.3.3",
+    "tower-service-0.3.3",
+    "try-lock-0.2.5",
+    "typed-path-0.13.0",
+    "untrusted-0.9.0",
+    "url-2.5.8",
+    "utf8_iter-1.1.0",
+    "utf_types-1.0.0",
+    "want-0.3.2",
+    "webpki-roots-1.0.12",
+    "writeable-0.6.4",
+    "yoke-0.8.4",
+    "yoke-derive-0.8.4",
+    "zerofrom-0.1.8",
+    "zerofrom-derive-0.1.8",
+    "zeroize-1.9.1",
+    "zeroize_derive-1.5.0",
+    "zerotrie-0.2.5",
+    "zerovec-0.11.9",
+    "zerovec-derive-0.11.7",
+    "zip-9.5.1",
+    "zopfli-0.8.4"
+  ]
+}

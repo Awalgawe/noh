@@ -1,8 +1,8 @@
 //! Step A2 (Task 39): effects know their surface and choose a space per element.
 use super::line::{Line, split_words};
 use super::plugin::{Effect, PluginScene};
-use super::shaders::{Inst, Upload};
-use super::text::Fonts;
+use crate::fx::shaders::{Inst, Upload};
+use crate::fx::text::Fonts;
 use std::path::Path;
 
 struct NoGpu;

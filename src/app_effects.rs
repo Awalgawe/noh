@@ -4,11 +4,13 @@
 //! engine starts at the first frame drawn with an effect: nothing at app start.
 use eframe::{egui, egui_glow, glow};
 use noh::fx::{
-    catalog::{self, Catalog},
     gl::GlRenderer,
+    text::{Fonts, InstalledFonts, families_of, system_fonts},
+};
+use noh::style::{
+    catalog::{self, Catalog},
     line::Line,
     plugin::{Effect, PluginScene, localized},
-    text::{Fonts, InstalledFonts, families_of, system_fonts},
 };
 use std::{
     io::Write,
@@ -292,7 +294,7 @@ impl State {
             None => Some(track.clone()),
         };
         let lines = trimmed
-            .map(|t| noh::fx::line::from_track(&t))
+            .map(|t| noh::style::line::from_track(&t))
             .unwrap_or_default();
         layer.wanted = Some(Wanted { key, effect, lines });
     }
@@ -452,10 +454,12 @@ impl Layer {
             self.scene.as_mut().unwrap(),
             self.fonts.as_mut().unwrap(),
         );
-        let (glow_i, gain, main, _) = scene.frame(fonts, &*gpu, t);
+        let (frame, _) = scene.describe(fonts, &*gpu, t);
         self.overflow |= scene.overflowed();
         self.font_missing = scene.font_missing().map(str::to_string);
-        gpu.frame(&glow_i, gain, &main, false)?;
+        // A style's frame takes the engine's direct path: one call of the
+        // renderer on egui's context, no pass more.
+        noh::fx::paint::draw(gpu, &frame, t, false, None)?;
         let gl = painter.gl();
         unsafe {
             use glow::HasContext;
@@ -572,6 +576,14 @@ impl super::NohApp {
         if !self.project.apply_subtitles {
             return;
         }
+        // A scene in use draws the lyrics, unless a style is being tried on;
+        // until the window has prepared it, the style stays on screen.
+        if self.style_panel.trying.is_none() && self.motion.used_scene().is_some() {
+            let t = self.monitor_seconds(scrub_visible);
+            if self.paint_scene(ui, monitor, t) {
+                return;
+            }
+        }
         // The tried style when there is one: the exports keep the applied one.
         let Some(choice) = self.shown_effect().map(|c| self.styled(c)) else {
             return;
@@ -632,16 +644,7 @@ impl super::NohApp {
         };
         let (start, end) = self.mini_bounds();
         let range = self.mini_preview.short.then_some((start, end));
-        // The clock of the picture on the monitor: the player's frame, also
-        // while it is the one a stopped player left there.
-        let t =
-            if self.mini_preview.player_stamp.is_some() || self.mini_preview.shows_left_picture() {
-                self.mini_preview.player_position
-            } else if scrub_visible && let Some(scrubber) = &self.mini_preview.scrubber {
-                scrubber.snapshot().time_ms.saturating_sub(start) as f64 / 1000.0
-            } else {
-                self.mini_preview.cursor_ms.saturating_sub(start) as f64 / 1000.0
-            };
+        let t = self.monitor_seconds(scrub_visible);
         let Some(canvas) = self.effect_canvas() else {
             return;
         };
@@ -665,6 +668,20 @@ impl super::NohApp {
         self.effects.paint(ui, monitor, t);
     }
 
+    /// The clock of the picture on the monitor, in seconds from the montage's
+    /// start (a short's): the player's frame, also while it is the one a
+    /// stopped player left there; else the scrub's, else the playhead's.
+    pub(super) fn monitor_seconds(&self, scrub_visible: bool) -> f64 {
+        let (start, _) = self.mini_bounds();
+        if self.mini_preview.player_stamp.is_some() || self.mini_preview.shows_left_picture() {
+            self.mini_preview.player_position
+        } else if scrub_visible && let Some(scrubber) = &self.mini_preview.scrubber {
+            scrubber.snapshot().time_ms.saturating_sub(start) as f64 / 1000.0
+        } else {
+            self.mini_preview.cursor_ms.saturating_sub(start) as f64 / 1000.0
+        }
+    }
+
     /// Apply a choice from the menu. Between two effects only the layer changes: no
     /// new preview, no restart. To or from "none", the preview restarts (libass).
     pub(super) fn choose_effect(&mut self, choice: Option<Choice>) {
@@ -683,18 +700,7 @@ impl super::NohApp {
         } else {
             // Effect to effect keeps the preview playing (same revision), but the
             // last exports were made with the previous effect: no longer current.
-            if let Some(a) = &mut self.export_artifact {
-                a.revision = a.revision.wrapping_sub(1);
-            }
-            for a in [
-                &mut self.project.full_export_artifact,
-                &mut self.project.short_export_artifact,
-            ]
-            .into_iter()
-            .flatten()
-            {
-                a.stamp.revision = a.stamp.revision.wrapping_sub(1);
-            }
+            self.outdate_exports();
         }
     }
 
@@ -752,7 +758,7 @@ mod tests {
     fn installed_fonts_landing_rebuild_a_scene_that_waited_for_them() {
         use noh::fx::text::{Fonts, system_fonts};
         let effects = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/effects");
-        let catalog = noh::fx::catalog::scan(&[effects.clone()]);
+        let catalog = noh::style::catalog::scan(&[effects.clone()]);
         let drop = catalog
             .effects
             .iter()
@@ -760,7 +766,7 @@ mod tests {
             .unwrap()
             .effect
             .clone();
-        let line = noh::fx::line::split_words(1.0, 3.0, &["la".to_string()], " ");
+        let line = noh::style::line::split_words(1.0, 3.0, &["la".to_string()], " ");
         let choice = Choice {
             id: "noh.drop".into(),
             preset: "white".into(),
@@ -785,7 +791,7 @@ mod tests {
             let values = [("font".to_string(), serde_json::json!(value))]
                 .into_iter()
                 .collect();
-            let mut scene = noh::fx::plugin::PluginScene::new(
+            let mut scene = noh::style::plugin::PluginScene::new(
                 drop.clone(),
                 1920,
                 1080,
@@ -910,8 +916,8 @@ mod tests {
     }
 
     /// Classique, plus the test-only effects (tests/fixtures/fx).
-    fn bundled_catalog() -> noh::fx::catalog::Catalog {
-        noh::fx::catalog::scan(&[
+    fn bundled_catalog() -> noh::style::catalog::Catalog {
+        noh::style::catalog::scan(&[
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("assets")
                 .join("effects"),
@@ -951,7 +957,7 @@ mod tests {
             )
             .unwrap();
         assert!(
-            matches!(anchor, noh::fx::plugin::R::Text(ref t) if t == "top"),
+            matches!(anchor, noh::style::plugin::R::Text(ref t) if t == "top"),
             "{anchor:?}"
         );
         // An invalid value is refused, not ignored.
@@ -975,7 +981,7 @@ mod tests {
         // Without Classique installed nothing is chosen (libass draws), and it is
         // looked for once only.
         let mut bare = NohApp::default();
-        bare.effects.catalog = Some(noh::fx::catalog::scan(&[]));
+        bare.effects.catalog = Some(noh::style::catalog::scan(&[]));
         bare.ensure_default_effect();
         assert!(bare.project.effect.is_none());
         bare.effects.catalog = Some(bundled_catalog());

@@ -93,6 +93,7 @@ enum Operation {
     Captions(crate::captions::CaptionRequest),
     Short(crate::shorts::ShortRequest),
     Project(crate::project::ProjectRequest),
+    Scene(crate::scene_request::SceneRequest),
 }
 
 impl Session {
@@ -228,6 +229,15 @@ impl Session {
     pub fn short(&self, input: ShortInput) -> Result<StartReply, SessionError> {
         check_request_size(&input)?;
         let truth = input.captions.as_ref().and_then(|c| c.truth);
+        // A short that follows its scene is the scene's burn on a vertical frame.
+        if input.framing == super::types::MakeShortFraming::Scene {
+            let mut request = input.into_scene_request(&self.0.default_ffmpeg)?;
+            self.ready_to_start()?;
+            let lyrics = resolve_lyrics(&mut request.subtitles, truth)?;
+            return self
+                .start(Operation::Captions(request))
+                .map(|reply| StartReply { lyrics, ..reply });
+        }
         let mut request = input.into_request(&self.0.default_ffmpeg)?;
         self.ready_to_start()?;
         let lyrics = match &mut request.captions {
@@ -248,6 +258,56 @@ impl Session {
             None => Vec::new(),
         };
         self.start(Operation::Project(request))
+            .map(|reply| StartReply { lyrics, ..reply })
+    }
+
+    pub fn scene_check(
+        &self,
+        input: super::scene::SceneCheckInput,
+    ) -> Result<StartReply, SessionError> {
+        check_request_size(&input)?;
+        let truth = input.truth;
+        let mut request = input.into_request(&self.0.default_ffmpeg)?;
+        self.ready_to_start()?;
+        let lyrics = resolve_lyrics(&mut request.subtitles, truth)?;
+        self.start(Operation::Scene(request))
+            .map(|reply| StartReply { lyrics, ..reply })
+    }
+
+    /// A scene look's own refusals (its request, a job already running),
+    /// checked before a driven window is moved for it.
+    pub fn scene_look_ready(
+        &self,
+        input: &super::scene::SceneLookInput,
+    ) -> Result<(), SessionError> {
+        check_request_size(input)?;
+        input.clone().into_request(&self.0.default_ffmpeg)?;
+        self.ready_to_start()
+    }
+
+    pub fn scene_look(
+        &self,
+        input: super::scene::SceneLookInput,
+    ) -> Result<StartReply, SessionError> {
+        check_request_size(&input)?;
+        let truth = input.truth;
+        let mut request = input.into_request(&self.0.default_ffmpeg)?;
+        self.ready_to_start()?;
+        let lyrics = resolve_lyrics(&mut request.subtitles, truth)?;
+        self.start(Operation::Scene(request))
+            .map(|reply| StartReply { lyrics, ..reply })
+    }
+
+    pub fn scene_clip(
+        &self,
+        input: super::scene::SceneClipInput,
+    ) -> Result<StartReply, SessionError> {
+        check_request_size(&input)?;
+        let truth = input.truth;
+        let mut request = input.into_request(&self.0.default_ffmpeg)?;
+        self.ready_to_start()?;
+        let lyrics = resolve_lyrics(&mut request.subtitles, truth)?;
+        self.start(Operation::Captions(request))
             .map(|reply| StartReply { lyrics, ..reply })
     }
 
@@ -345,6 +405,7 @@ impl Session {
             Operation::Captions(request) => Job::burn_with_cancel(request, worker, cancel, || {}),
             Operation::Short(request) => Job::short_with_cancel(request, worker, cancel, || {}),
             Operation::Project(request) => Job::project_with_cancel(request, worker, cancel, || {}),
+            Operation::Scene(request) => Job::scene_with_cancel(request, worker, cancel, || {}),
         });
         {
             let mut state = self.0.shared.state.lock().unwrap();
@@ -1156,6 +1217,7 @@ mod tests {
                     language: "auto".into(),
                 }),
                 4 => Operation::Captions(crate::captions::CaptionRequest {
+                    scene: None,
                     effect: None,
                     source: folder.path().join("missing.mp4"),
                     subtitles: folder.path().join("missing.srt"),

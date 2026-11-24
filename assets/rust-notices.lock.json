@@ -890,6 +890,26 @@
       "repository": "https://github.com/aclysma/profiling",
       "revision": "8271551172eb6fa4cba47369aedd93790c623df9"
     },
+    "rhai_codegen-3.3.0": {
+      "files": [
+        {
+          "git_blob": "d9a10c0d8e868ebf8da0b3dc95bb0be634c34bfe",
+          "path": "LICENSE-APACHE.txt",
+          "sha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9",
+          "url": "https://raw.githubusercontent.com/rhaiscript/rhai/aaf90906bfa7eae090fc236b8572a67528cab3ed/LICENSE-APACHE.txt"
+        },
+        {
+          "git_blob": "31aa79387f27e730e33d871925e152e35e428031",
+          "path": "LICENSE-MIT.txt",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "url": "https://raw.githubusercontent.com/rhaiscript/rhai/aaf90906bfa7eae090fc236b8572a67528cab3ed/LICENSE-MIT.txt"
+        }
+      ],
+      "package_sha256": "3d9661edb4a4b8145b017582d634c5eb88ff1a5284a5aa701f83a28f0657a826",
+      "repository": "https://github.com/rhaiscript/rhai",
+      "revision": "aaf90906bfa7eae090fc236b8572a67528cab3ed",
+      "source_revision_limit": "Published VCS metadata marks the tree dirty. These are the upstream MIT and Apache-2.0 texts at the repository root at its recorded base revision (the crate is the codegen/ folder of that repository), consistent with the published MIT OR Apache-2.0 declaration; they do not establish an identical source tree."
+    },
     "rmcp-3.4.1": {
       "files": [
         {

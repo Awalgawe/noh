@@ -49,7 +49,7 @@ pub const PASS_GLOW: f32 = 3.0;
 /// A plate, or a compose-mode shape.
 pub const PASS_PLATE: f32 = 4.0;
 
-/// Engine glyph shader; `HOOKS` is replaced by the plugin hooks (or the defaults).
+/// Engine glyph shader; `HOOKS` is replaced by the hooks handed over (or the defaults).
 pub const SHADER: &str = r#"
 struct Globals { canvas: vec2<f32>, cov_size: f32, msdf_size: f32, msdf_range: f32, p0: f32, p1: f32, p2: f32, user: array<vec4<f32>, 4> };
 @group(0) @binding(0) var<uniform> g: Globals;
@@ -322,4 +322,37 @@ pub struct FrameTimes {
     pub gpu_ms: Option<f64>,
     pub submit_to_mapped_ms: f64,
     pub copy_out_ms: f64,
+}
+
+/// What hook code can see. Mirrors the bindings and helper types of `SHADER`.
+pub const HOOK_HEADER: &str = r#"
+struct Globals { canvas: vec2<f32>, cov_size: f32, msdf_size: f32, msdf_range: f32, p0: f32, p1: f32, p2: f32, user: array<vec4<f32>, 4> };
+@group(0) @binding(0) var<uniform> g: Globals;
+@group(0) @binding(1) var cov_tex: texture_2d<f32>;
+@group(0) @binding(2) var msdf_tex: texture_2d<f32>;
+@group(0) @binding(3) var samp: sampler;
+struct GlyphIn { coverage: f32, local: vec2<f32>, uv: vec2<f32>, color: vec4<f32>, color2: vec4<f32>, time: f32, progress: f32, frame: vec2<f32>, index: f32, line: f32, line_time: vec2<f32>, pass_kind: f32, span: vec2<f32>, line_end: f32 };
+struct VertexIn { corner: vec2<f32>, center: vec2<f32>, time: f32, index: f32 };
+"#;
+
+/// Default hooks: plain premultiplied fill, no displacement.
+pub const DEFAULT_HOOKS: &str = r#"
+fn shade(i: GlyphIn) -> vec4<f32> { return i.color * i.coverage; }
+fn displace(v: VertexIn) -> vec2<f32> { return vec2<f32>(0.0, 0.0); }
+"#;
+
+/// Hooks to splice into the glyph shader: the given ones (validated by whoever
+/// hands them over) plus defaults for the rest.
+pub fn hooks(src: Option<&str>) -> String {
+    let Some(src) = src else {
+        return DEFAULT_HOOKS.to_string();
+    };
+    let mut out = src.to_string();
+    if !src.contains("fn shade") {
+        out += "\nfn shade(i: GlyphIn) -> vec4<f32> { return i.color * i.coverage; }\n";
+    }
+    if !src.contains("fn displace") {
+        out += "\nfn displace(v: VertexIn) -> vec2<f32> { return vec2<f32>(0.0, 0.0); }\n";
+    }
+    out
 }

@@ -54,9 +54,13 @@ $env:NOH_NATIVE_NOTICES = 'C:\tools\materials\native-notices'
 $env:NOH_RUST_NOTICES = 'C:\tools\materials\rust-notices'
 py -I tools\build_syllable_dicts.py --data D:\data --out C:\tools\languages
 $env:NOH_LANGUAGES = 'C:\tools\languages'
-cargo dev build --gui --mcp --ffmpeg C:\tools\native\export\ffmpeg.exe --speech C:\tools\noh-speech
+cargo dev build --gui --mcp --motion --ffmpeg C:\tools\native\export\ffmpeg.exe --speech C:\tools\noh-speech
 .\dist\noh\noh.exe
 ```
+
+`--motion` adds the motion scenes (feature `motion`) to the app, the CLI and the
+MCP server, as release packages have them from 0.4.0. `cargo dev verify` tests
+with that feature, so its MCP tests expect the packaged server to have it.
 
 The packaging command verifies the pinned resources; it does not download them.
 `NOH_LANGUAGES` names the language packs with their syllable dictionaries, built
@@ -75,7 +79,7 @@ uploading them. The reusable `delivery-candidates.yml` engine also retains a
 private-only direct dispatch, which requires a successful Rust dependency audit
 and defaults to `compile-only`.
 It compiles GUI, CLI and MCP executables with `cargo build --release --locked
---features gui,mcp --bins`. Windows also runs the complete standard Rust unit and
+--features gui,mcp,motion --bins`. Windows also runs the complete standard Rust unit and
 integration suite using the same release profile and the locked FFmpeg export
 backend. Media cases run sequentially and missing prerequisites fail the job.
 Explicit opt-in hardware, benchmark and real recognition tests remain ignored.
@@ -159,7 +163,8 @@ open dist/NOH.app
 
 This local app depends on the installed Homebrew libraries. It is built for the
 current architecture, not as a universal binary. The packaging check rejects
-unsupported FFmpeg versions or a missing libass subtitle renderer.
+unsupported FFmpeg versions or a missing libass subtitle renderer. The caption
+effects are in `Contents/Resources/effects`; the language packs are not included.
 
 For a self-contained portable, prepare native Whisper and the pinned models
 (Python 3.12+, CMake and Xcode Command Line Tools are needed for this step):
@@ -190,7 +195,7 @@ native behavior must be established by its actual output and installation tests.
 Install the host dependencies listed in [the Linux package README](../assets/linux-README.md).
 `python3 tools/linux_host.py` verifies FFmpeg's required encoders and libmpv's
 client API before packaging. With `NOH_LANGUAGES` naming the built language
-packs (as on Windows), `cargo dev build --gui --mcp --portable --speech
+packs (as on Windows), `cargo dev build --gui --mcp --motion --portable --speech
 /path/to/prepared/speech --ffmpeg /usr/bin/ffmpeg` builds an AppDir containing
 NOH, its effects and language packs, and CPU speech; all media/desktop shared
 libraries remain on the host.

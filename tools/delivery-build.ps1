@@ -29,10 +29,10 @@ try {
     $env:RUSTUP_TOOLCHAIN = $toolchain
     # Keep the checked-in Windows GNU/LLD target configuration intact.
     $env:CARGO_NET_OFFLINE = 'false'
-    $environment = @{ platform=$Platform; build_kind=$BuildKind; commit=(git rev-parse HEAD); runner=$env:ImageOS; image=$env:ImageVersion; rust=(rustc -Vv | Out-String); cargo=(cargo -V); python=(& $python --version); linker='checked-in .cargo/config.toml'; features=@('gui','mcp'); profile='release'; status='unqualified' }
+    $environment = @{ platform=$Platform; build_kind=$BuildKind; commit=(git rev-parse HEAD); runner=$env:ImageOS; image=$env:ImageVersion; rust=(rustc -Vv | Out-String); cargo=(cargo -V); python=(& $python --version); linker='checked-in .cargo/config.toml'; features=@('gui','mcp','motion'); profile='release'; status='unqualified' }
     $environment | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $logRoot 'BUILD-ENVIRONMENT.json') -Encoding utf8NoBOM
     if ($BuildKind -eq 'compile-only') {
-        cargo build --release --locked --features gui,mcp --bins
+        cargo build --release --locked --features gui,mcp,motion --bins
         # Executables stay on the disposable runner; this mode distributes no binaries.
         return
     }
@@ -65,7 +65,7 @@ try {
     # Prepare original notices before packaging/signatures/manifests are created.
     & $python tools/delivery.py sources --cache (Join-Path $env:RUNNER_TEMP 'noh-downloads') --output (Join-Path $logRoot 'materials')
     $env:NOH_RUST_NOTICES = Join-Path $logRoot 'materials/rust-notices'
-    $arguments = @('dev','build','--gui','--mcp','--offline','--ffmpeg',$ffmpeg,'--speech',$speech)
+    $arguments = @('dev','build','--gui','--mcp','--motion','--offline','--ffmpeg',$ffmpeg,'--speech',$speech)
     if (-not $IsWindows) { $arguments += '--portable' }
     & cargo @arguments
     if ($IsWindows) {

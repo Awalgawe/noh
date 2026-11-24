@@ -236,6 +236,9 @@ pub(super) struct Driven {
     pub history: std::collections::VecDeque<(String, String)>,
     /// The history menu under the badge is open.
     pub history_open: bool,
+    /// The motion scene the agent attached, and where its last scene look is.
+    pub scene: Option<super::app_driven_scene::SceneWatch>,
+    pub marker: Option<super::app_driven_scene::SceneMarker>,
 }
 
 impl Driven {
@@ -291,6 +294,8 @@ impl Driven {
             agent_cancelled: false,
             history: Default::default(),
             history_open: false,
+            scene: None,
+            marker: None,
         }
     }
 
@@ -400,6 +405,7 @@ impl NohApp {
         // The agent's playhead gestures waiting for the person; the end of its
         // job; the preparation turn; then what the window shows, if it changed.
         self.driven_pending(ctx);
+        self.driven_scene_frame(ctx);
         self.driven_job_frame();
         self.driven_turn_frame();
         self.driven_state(false);
@@ -1238,6 +1244,33 @@ mod tests {
     }
 
     #[test]
+    fn the_volume_popup_passes_while_shown_and_not_once_closed_elsewhere() {
+        let mut w = window(true);
+        w.frame(vec![]);
+        let button = w.app.project_ui.volume.0.expect("the volume button");
+        w.click(button.center());
+        let popup = w.app.project_ui.volume.1.expect("the volume popup");
+        // The popup's own zone (other zones drawn later may overlap it).
+        let allowed = |w: &Window| {
+            let gate = &w.app.driven.as_ref().unwrap().gate;
+            gate.zones.contains(&(popup, Zone::Navigate))
+        };
+        assert!(allowed(&w));
+        // A click on the ruler, an allowed place outside it, closes it: from
+        // the next frame on, its place is not allowed.
+        let ruler = w.ruler();
+        let at = [0.1, 0.5, 0.9]
+            .map(|f| Pos2::new(ruler.left() + ruler.width() * f, ruler.center().y))
+            .into_iter()
+            .find(|p| !popup.contains(*p))
+            .expect("a place on the ruler outside the popup");
+        w.frame(vec![Event::PointerMoved(at), press(at, true)]);
+        w.frame(vec![press(at, false)]);
+        assert_eq!(w.app.project_ui.volume.1, None);
+        assert!(!allowed(&w));
+    }
+
+    #[test]
     fn the_history_menu_passes_while_shown_and_not_once_closed() {
         let mut w = window(true);
         // A question open: only the badge and its menu pass.
@@ -1567,6 +1600,57 @@ mod tests {
         );
         assert_eq!(refusal_code(&answer), Some("app.state_changed"));
         assert_eq!(w.app.lyrics_track().unwrap().cues.len(), 2);
+        // Who sings: voices declared, then a line's set, read back in the state.
+        let answer = w.act(
+            31,
+            Action::EditLine {
+                edit: LineEdit::SetVoices {
+                    index: 0,
+                    voices: vec![1],
+                },
+                based_on: None,
+            },
+        );
+        assert_eq!(
+            refusal_code(&answer),
+            Some("app.refused"),
+            "no voice declared yet"
+        );
+        for (id, edit) in [
+            (
+                32,
+                LineEdit::NameVoices {
+                    names: vec![Some("Lead".into()), None],
+                },
+            ),
+            (
+                33,
+                LineEdit::SetVoices {
+                    index: 0,
+                    voices: vec![2, 1],
+                },
+            ),
+        ] {
+            let answer = w.act(
+                id,
+                Action::EditLine {
+                    edit,
+                    based_on: None,
+                },
+            );
+            assert!(
+                matches!(answer, ToServer::Done { error: None, .. }),
+                "{answer:?}"
+            );
+        }
+        assert_eq!(w.app.lyrics_track().unwrap().cues[0].voices, [1, 2]);
+        let state = w.latest_state();
+        assert_eq!(state["lyrics"]["voices"], serde_json::json!(["Lead", null]));
+        assert_eq!(
+            state["lyrics"]["lines"][0]["voices"],
+            serde_json::json!([1, 2])
+        );
+        assert!(w.app.undo() && w.app.undo(), "two undo steps");
         let answer = w.act(4, Action::Undo {});
         assert!(
             matches!(answer, ToServer::Done { error: None, .. }),
@@ -2111,5 +2195,86 @@ mod tests {
         assert_eq!(args(&["noh-app", "--driven"]), Some(String::new()));
         assert_eq!(args(&["noh-app", "song.wav", "--driven"]), None);
         assert_eq!(args(&["noh-app"]), None);
+    }
+
+    /// The scene the agent attaches is reread when it changes, its light check
+    /// in `state.scene`; a scene look moves the playhead there and marks the
+    /// monitor as long as the playhead stays (motion overlay plan, M8).
+    #[cfg(feature = "motion")]
+    #[test]
+    fn a_followed_scene_is_reread_and_a_scene_look_marks_the_monitor() {
+        use driven::Action;
+        let mut w = window(true);
+        let dir = tempfile::tempdir().unwrap();
+        let scene = dir.path().join("song.noh-motion.rhai");
+        std::fs::write(
+            &scene,
+            "// noh-motion 0
+fn frame(t, ctx) { draw(rect(0.1, 0.1).at(0.5, 0.5)); }
+",
+        )
+        .unwrap();
+        let relative = Action::SetScene {
+            path: Some("relative.rhai".into()),
+        };
+        assert_eq!(refusal_code(&w.act(1, relative)), Some("app.refused"));
+        let attach = Action::SetScene {
+            path: Some(scene.clone()),
+        };
+        assert_eq!(refusal_code(&w.act(2, attach)), None);
+        // States go out only when they change: frames until one says `want`.
+        let wait = |w: &mut Window, want: &str| {
+            let until = Instant::now() + Duration::from_secs(20);
+            while Instant::now() < until {
+                w.frame(vec![]);
+                while let Ok(ToServer::State { state, .. }) = w.states.try_recv() {
+                    if state["scene"]["status"] == want {
+                        return state;
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            panic!("the scene never became {want}");
+        };
+        let state = wait(&mut w, "loads");
+        assert_eq!(state["scene"]["revision"], 1);
+        // Rewritten by the agent: reread at the next look at the file.
+        std::fs::write(
+            &scene,
+            "// noh-motion 0
+fn frame(t, ctx) { draw(; }
+",
+        )
+        .unwrap();
+        let state = wait(&mut w, "refused");
+        assert_eq!(state["scene"]["revision"], 2);
+        assert!(!state["scene"]["reason"].as_str().unwrap().is_empty());
+        // A scene look: the playhead there, the marker shown while it stays.
+        let look = Action::ShowSceneLook {
+            at_ms: 7_000,
+            safe_area: noh::safe_area::SafeArea::YoutubeShorts,
+            grid: true,
+        };
+        assert_eq!(refusal_code(&w.act(3, look)), None);
+        w.frame(vec![]);
+        assert_eq!(w.app.mini_preview.cursor_ms, 7_000);
+        assert_eq!(w.app.driven_scene_marker().map(|m| m.at_ms), Some(7_000));
+        assert_eq!(refusal_code(&w.act(4, Action::Seek { ms: 3_000 })), None);
+        w.frame(vec![]);
+        assert!(w.app.driven_scene_marker().is_none());
+        // Detached.
+        assert_eq!(
+            refusal_code(&w.act(5, Action::SetScene { path: None })),
+            None
+        );
+        let until = Instant::now() + Duration::from_secs(5);
+        let mut detached = false;
+        while Instant::now() < until && !detached {
+            w.frame(vec![]);
+            while let Ok(ToServer::State { state, .. }) = w.states.try_recv() {
+                detached |= state["scene"].is_null();
+            }
+        }
+        assert!(detached);
     }
 }

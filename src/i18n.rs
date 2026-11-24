@@ -74,13 +74,17 @@ impl Language {
     /// `key.one` or `key.other` with the count as `{0}`. French uses the
     /// singular for 0 and 1; Japanese, Korean and Chinese have no plural.
     pub fn plural(self, key: &str, count: usize) -> String {
+        self.plural_with(key, count, &[count.to_string()])
+    }
+    /// `plural`, the form chosen by `count` and filled with `args`.
+    pub fn plural_with(self, key: &str, count: usize, args: &[String]) -> String {
         let one = match self {
             Self::Fr => count <= 1,
             Self::Ja | Self::Ko | Self::Zh => false,
             Self::En | Self::De | Self::Es => count == 1,
         };
         let form = if one { "one" } else { "other" };
-        self.format(&format!("{key}.{form}"), &[count.to_string()])
+        self.format(&format!("{key}.{form}"), args)
     }
     pub fn decimal(self, value: f64, precision: usize) -> String {
         self.localize_decimal(format!("{value:.precision$}"))

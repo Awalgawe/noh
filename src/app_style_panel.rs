@@ -5,11 +5,10 @@
 use crate::app_effects::Choice;
 use crate::app_style::{self as style, space};
 use eframe::egui::{self, Color32, Rect, Sense, Vec2, pos2, vec2};
-use noh::fx::{
-    gl::GlRenderer,
+use noh::fx::{gl::GlRenderer, text::Fonts};
+use noh::style::{
     line::split_words,
     plugin::{Effect, Param, PluginScene, localized},
-    text::Fonts,
 };
 use serde_json::Value as J;
 use std::collections::{BTreeMap, HashMap};
@@ -242,8 +241,11 @@ fn render_sample(
     )
     .with_values(&job.values)?;
     gpu.set_hooks(job.effect.shader.as_deref(), scene.hook_user())?;
-    let (glow, gain, main, _) = scene.frame(fonts, &*gpu, 1.3);
-    let (px, _) = gpu.frame(&glow, gain, &main, true)?;
+    let (frame, _) = scene.describe(fonts, &*gpu, 1.3);
+    let noh::fx::paint::Drawn::Direct(px, _) = noh::fx::paint::draw(gpu, &frame, 1.3, true, None)?
+    else {
+        return Err("the sample was not drawn by the engine's direct path".into());
+    };
     crop(&px, SAMPLE_W as usize, SAMPLE_H as usize).ok_or_else(|| "nothing drawn".into())
 }
 
@@ -411,6 +413,8 @@ impl super::NohApp {
     fn apply_try(&mut self) {
         let failed = self.style_panel.try_failed.is_some();
         if let Some(c) = self.style_panel.trying.take() {
+            // Applying a style gives the styles back (scene or style, not both).
+            self.motion_use(false);
             self.style_panel.try_failed = None;
             self.choose_effect(Some(c));
             // A style the preview could not draw is applied like any other: the
@@ -538,7 +542,18 @@ impl super::NohApp {
                 }
             });
         }
-        let footer_h = 44.0;
+        // With a scene listed under the styles, the footer's room goes to the
+        // list while it would only say « one style for both » (a try-on or a
+        // warning keeps it).
+        let quiet = self.motion.found.is_some()
+            && self.style_panel.trying.is_none()
+            && self.has_lyrics()
+            && self.project.apply_subtitles
+            && !(self.project.effect.is_some() && self.effects.preview_failure().is_some())
+            && !(self.project.effect.is_some()
+                && self.mini_preview.short
+                && self.effects.overflow());
+        let footer_h = if quiet { 0.0 } else { 44.0 };
         let body_h = (ui.available_height() - footer_h - space::S).max(40.0);
         // A solid bar, as the page body's: beside the preview the list has a fixed
         // height, and a floating bar (shown on hover only) would hide that a third
@@ -561,12 +576,15 @@ impl super::NohApp {
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
                     ui.spacing_mut().scroll = nested;
-                    self.style_cards(ui, false)
+                    self.style_cards(ui, false);
+                    self.motion_section(ui);
                 });
         }
         ui.spacing_mut().scroll = nested;
         ui.add_space((ui.available_height() - footer_h).max(0.0));
-        self.style_footer(ui, false);
+        if !quiet {
+            self.style_footer(ui, false);
+        }
     }
 
     /// Compact: a row under the transport (header, one scrolling line of cards).
@@ -674,11 +692,13 @@ impl super::NohApp {
                 for choice in chunk {
                     let effect = self.effect_of(choice);
                     let name = effect_name(effect.as_ref(), &choice.id, &lang);
-                    let applied = self
-                        .project
-                        .effect
-                        .as_ref()
-                        .is_some_and(|a| a.id == choice.id);
+                    // A scene in use sets the styles aside: none is « in use ».
+                    let applied = !self.motion.used
+                        && self
+                            .project
+                            .effect
+                            .as_ref()
+                            .is_some_and(|a| a.id == choice.id);
                     let tried = self
                         .style_panel
                         .trying
@@ -792,8 +812,11 @@ impl super::NohApp {
                 .as_ref()
                 .is_some_and(|a| a.id == choice.id);
             // The applied card ends a try-on; another card is tried, not applied.
+            // With a scene in use, the style that was applied comes back at once.
             self.end_try();
-            if !applied {
+            if applied && self.motion.used {
+                self.motion_use(false);
+            } else if !applied {
                 self.style_panel.trying = Some(choice);
             }
         }
@@ -806,7 +829,7 @@ impl super::NohApp {
     fn font_picker(
         &mut self,
         ui: &mut egui::Ui,
-        p: &noh::fx::plugin::Param,
+        p: &noh::style::plugin::Param,
         value: &serde_json::Value,
         next: &mut Choice,
     ) {
@@ -1468,7 +1491,7 @@ mod tests {
         app.locale.language = language;
         app.project.apply_subtitles = true;
         // Classique, plus the test-only effects (tests/fixtures/fx).
-        app.effects.set_catalog(noh::fx::catalog::scan(&[
+        app.effects.set_catalog(noh::style::catalog::scan(&[
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("assets")
                 .join("effects"),
@@ -1752,7 +1775,7 @@ mod tests {
         )
         .unwrap();
         app.effects
-            .set_catalog(noh::fx::catalog::scan(&[folder.path().to_path_buf()]));
+            .set_catalog(noh::style::catalog::scan(&[folder.path().to_path_buf()]));
         let c = card(&mut app, "test.labels");
         app.choose_effect(Some(c));
         app.style_panel.settings = true;
@@ -2017,7 +2040,7 @@ mod tests {
 
     #[test]
     fn size_sliders_never_leave_the_parameter_bounds() {
-        let catalog = noh::fx::catalog::scan(&[
+        let catalog = noh::style::catalog::scan(&[
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("assets")
                 .join("effects"),
@@ -2127,7 +2150,7 @@ mod tests {
     #[test]
     #[ignore]
     fn samples_draw_every_bundled_effect() {
-        let catalog = noh::fx::catalog::scan(&[
+        let catalog = noh::style::catalog::scan(&[
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("assets")
                 .join("effects"),

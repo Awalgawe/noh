@@ -308,6 +308,8 @@ pub(crate) fn execute(
         let start_text = format!("{start:.3}");
         let span_text = format!("{span:.3}");
         let job = crate::caption_gpu::Job {
+            scene: None,
+            source_size: None,
             ffmpeg: ffmpeg.to_path_buf(),
             source: source.to_path_buf(),
             workspace: workspace.clone(),
@@ -341,6 +343,10 @@ pub(crate) fn execute(
                 }
                 if let Some(family) = &done.font_missing {
                     report.warning(&crate::caption_gpu::font_missing_warning(family));
+                }
+                if let Some((at, why)) = &done.over_caps {
+                    report.warning(&crate::caption_gpu::heavy_warning(*at));
+                    report.diagnostic(format!("Caption effect over a cap: {why}."));
                 }
                 report.diagnostic(done.diagnostic);
                 drawn = true;

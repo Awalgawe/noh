@@ -62,6 +62,11 @@ pub struct Tokens {
     pub on_accent: Color32,
     pub accent_text: Color32,
     pub accent_soft: Color32,
+    /// Who sings a lyrics line, in the editor only (the video's colours are the
+    /// style's): voice 1 to 4, always with the voice's number on it.
+    pub voice: [Color32; 4],
+    /// The number on a voice colour (≥ 4.5:1 on each).
+    pub on_voice: Color32,
     pub shadow: Shadow,
 }
 const fn rgb(hex: u32) -> Color32 {
@@ -106,6 +111,8 @@ pub const DARK: Tokens = Tokens {
     on_accent: rgb(0x06241F),
     accent_text: rgb(0x7AD6CB),
     accent_soft: rgba(0x5FCABE, 16),
+    voice: [rgb(0x79AEEF), rgb(0xE99AC8), rgb(0xB79CF2), rgb(0xD9C27A)],
+    on_voice: rgb(0x101114),
     shadow: Shadow {
         offset: [0, 12],
         blur: 32,
@@ -142,6 +149,8 @@ pub const LIGHT: Tokens = Tokens {
     on_accent: rgb(0xFFFFFF),
     accent_text: rgb(0x0A635D),
     accent_soft: rgba(0x0B6C66, 12),
+    voice: [rgb(0x2F67B0), rgb(0xB0457F), rgb(0x6B4FC0), rgb(0x80660E)],
+    on_voice: rgb(0xFFFFFF),
     shadow: Shadow {
         offset: [0, 12],
         blur: 32,
@@ -896,6 +905,11 @@ mod token_tests {
                 "on-accent" => t.on_accent,
                 "accent-text" => t.accent_text,
                 "accent-soft" => t.accent_soft,
+                "voice-1" => t.voice[0],
+                "voice-2" => t.voice[1],
+                "voice-3" => t.voice[2],
+                "voice-4" => t.voice[3],
+                "on-voice" => t.on_voice,
                 // The alternative accents are not used by the application.
                 _ => return None,
             })
@@ -914,7 +928,7 @@ mod token_tests {
                 }
             }
         }
-        assert_eq!(checked, 60, "30 colour tokens in two themes");
+        assert_eq!(checked, 70, "35 colour tokens in two themes");
     }
 
     #[test]

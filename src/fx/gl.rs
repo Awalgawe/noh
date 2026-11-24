@@ -418,9 +418,18 @@ mod headless {
             .window_handle()
             .map_err(|e| format!("window handle: {e}"))?
             .as_raw();
-        // No version requested, like eframe: the driver's newest context.
-        let ctx_attrs = ContextAttributesBuilder::new().build(Some(raw));
-        let not_current = unsafe { display.create_context(&config, &ctx_attrs) }
+        // No version requested, like eframe: the driver's newest context. A
+        // robust one first, losing the context on a GPU reset, so that an export
+        // the reset interrupts fails cleanly instead of drawing garbage: every
+        // call then answers GL_CONTEXT_LOST, which `fx::export` checks after
+        // each frame's mix (and a motion scene after each frame). The driver's
+        // ordinary context when it offers no robust one.
+        let robust = ContextAttributesBuilder::new()
+            .with_robustness(glutin::context::Robustness::RobustLoseContextOnReset)
+            .build(Some(raw));
+        let plain = ContextAttributesBuilder::new().build(Some(raw));
+        let not_current = unsafe { display.create_context(&config, &robust) }
+            .or_else(|_| unsafe { display.create_context(&config, &plain) })
             .map_err(|e| format!("GL context: {e}"))?;
         let surf_attrs = window
             .build_surface_attributes(Default::default())
@@ -567,8 +576,7 @@ impl GlRenderer {
             let blur_dyn_h = ubo(&gl, &[0.0; 8])?;
             let blur_dyn_v = ubo(&gl, &[0.0; 8])?;
             let comp_layer = ubo(&gl, &[width as f32, height as f32, 1.0, 1.0])?;
-            let inst_src =
-                super::shaders::SHADER.replace("HOOKS", &super::plugin_shader::hooks(None));
+            let inst_src = super::shaders::SHADER.replace("HOOKS", &super::shaders::hooks(None));
             let inst_prog = program(&gl, &inst_src, "vs", "fs")?;
             let blur_prog = program(&gl, super::shaders::BLUR, "vs", "fs")?;
             let down_prog = program(&gl, super::shaders::DOWNSAMPLE, "vs", "fs")?;
@@ -641,9 +649,9 @@ impl GlRenderer {
         }
     }
 
-    /// Rebuild the glyph program with plugin hooks (validated beforehand by plugin_shader).
+    /// Rebuild the glyph program with plugin hooks (validated beforehand by whoever hands them over).
     pub fn set_hooks(&mut self, plugin_src: Option<&str>, user: [f32; 16]) -> Result<(), String> {
-        let src = super::shaders::SHADER.replace("HOOKS", &super::plugin_shader::hooks(plugin_src));
+        let src = super::shaders::SHADER.replace("HOOKS", &super::shaders::hooks(plugin_src));
         let prog = unsafe { program(&self.gl, &src, "vs", "fs") }
             .map_err(|e| format!("plugin shader rejected by OpenGL: {e}"))?;
         unsafe { self.gl.delete_program(self.inst_prog) };
@@ -1177,6 +1185,13 @@ impl GlRenderer {
 
     /// Preview: draw the last output over the current viewport (premultiplied).
     pub fn present(&self) {
+        self.present_texture(self.output.tex);
+    }
+
+    /// Preview: draw `texture` (premultiplied, display-encoded RGBA, top row
+    /// first, as this renderer's output) over the current viewport: how the
+    /// window shows a motion scene's overlay, made on this context.
+    pub fn present_texture(&self, texture: glow::Texture) {
         unsafe {
             let gl = &self.gl;
             gl.enable(glow::BLEND);
@@ -1186,7 +1201,7 @@ impl GlRenderer {
             gl.bind_vertex_array(Some(self.empty_vao));
             gl.use_program(Some(self.present_prog));
             gl.active_texture(glow::TEXTURE0);
-            gl.bind_texture(glow::TEXTURE_2D, Some(self.output.tex));
+            gl.bind_texture(glow::TEXTURE_2D, Some(texture));
             gl.bind_sampler(0, Some(self.sampler));
             gl.draw_arrays(glow::TRIANGLES, 0, 3);
             gl.bind_sampler(0, None);
@@ -1199,6 +1214,14 @@ impl GlRenderer {
     /// The GL context this renderer draws with.
     pub fn context(&self) -> &Arc<glow::Context> {
         &self.gl
+    }
+
+    /// The engine's own layer after the last `frame`: premultiplied colour in
+    /// linear light, half float, the glow included, before the resolve to the
+    /// 8-bit output. A caller that stacks several frames (the motion scene
+    /// compositor) reads it, so that each pass keeps its precision.
+    pub fn layer_texture(&self) -> glow::Texture {
+        self.layer.tex
     }
 
     /// The resolved output texture (preview: egui draws it as a native texture).
@@ -1305,12 +1328,61 @@ void main() {
   ovv = vec4(quant(v), 0.0, 0.0, 1.0);
 }";
 
+/// A reframing of the picture before the mix (a motion scene's `video()`), in
+/// luma pixels measured from the top left: the output pixel `p` shows the
+/// source position `inv * (p - center) + focus` (column-major 2 x 2), black
+/// outside `crop` (x0, y0, x1, y1). The chroma planes take the same at half size.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Reframe {
+    pub inv: [f32; 4],
+    pub center: [f32; 2],
+    pub focus: [f32; 2],
+    pub crop: [f32; 4],
+}
+
+/// One plane of the picture resampled through a reframing (bilinear), black
+/// outside the crop, each code rounded to nearest.
+const FRAME_FS: &str = "#version 330 core
+uniform sampler2D src;
+uniform vec2 src_size;
+uniform mat2 inv;
+uniform vec2 center;
+uniform vec2 focus;
+uniform vec4 crop;
+uniform float black;
+out vec4 o;
+float quant(float x) { return floor(x * 255.0 + 0.5) / 255.0; }
+void main() {
+  vec2 s = inv * (gl_FragCoord.xy - center) + focus;
+  if (s.x < crop.x || s.y < crop.y || s.x > crop.z || s.y > crop.w) {
+    o = vec4(black, 0.0, 0.0, 1.0);
+    return;
+  }
+  o = vec4(quant(texture(src, s / src_size).r), 0.0, 0.0, 1.0);
+}";
+
+/// The reframing pass, made at its first use: the reframed planes, their
+/// framebuffers, the program and a bilinear sampler.
+struct Framed {
+    y: Target,
+    u: Target,
+    v: Target,
+    prog: glow::Program,
+    linear: glow::Sampler,
+}
+
 pub struct YuvMix {
     gl: Arc<glow::Context>,
     w: i32,
     h: i32,
     cw: i32,
     ch: i32,
+    /// The decoded picture's size, and its chroma's: the frame's own unless a
+    /// reframing makes the frame from a picture of another shape.
+    sw: i32,
+    sh: i32,
+    csw: i32,
+    csh: i32,
     y_in: glow::Texture,
     u_in: glow::Texture,
     v_in: glow::Texture,
@@ -1325,17 +1397,29 @@ pub struct YuvMix {
     /// are copied out of the other, so the CPU does not wait for the GPU each frame.
     pbo: [glow::Buffer; 2],
     fence: [Option<glow::Fence>; 2],
+    /// The next frames' reframing (none: the picture as decoded), and its pass.
+    reframe: Option<Reframe>,
+    framed: Option<Framed>,
 }
 
 impl YuvMix {
     pub fn new(r: &GlRenderer, matrix: Matrix) -> Result<Self, String> {
+        Self::with_source(r, matrix, (r.width, r.height))
+    }
+
+    /// A mix whose decoded picture is `source` pixels, the frame `r`'s size: a
+    /// picture of another shape is made into the frame by a reframing, which
+    /// every frame must then set (`set_reframe`).
+    pub fn with_source(r: &GlRenderer, matrix: Matrix, source: (u32, u32)) -> Result<Self, String> {
         let gl = r.gl.clone();
         let (kr, kb) = matrix.coefficients();
         let (w, h) = (r.width as i32, r.height as i32);
         let (cw, ch) = ((w + 1) / 2, (h + 1) / 2);
+        let (sw, sh) = (source.0 as i32, source.1 as i32);
+        let (csw, csh) = ((sw + 1) / 2, (sh + 1) / 2);
         unsafe {
             let r8 = |w, h| texture(&gl, w, h, glow::R8, glow::RED, glow::UNSIGNED_BYTE);
-            let (y_in, u_in, v_in) = (r8(w, h)?, r8(cw, ch)?, r8(cw, ch)?);
+            let (y_in, u_in, v_in) = (r8(sw, sh)?, r8(csw, csh)?, r8(csw, csh)?);
             let y_out = target(&gl, w, h, glow::R8, glow::RED, glow::UNSIGNED_BYTE)?;
             let (u_out, v_out) = (r8(cw, ch)?, r8(cw, ch)?);
             let uv_fbo = gl.create_framebuffer().map_err(err("fbo"))?;
@@ -1409,6 +1493,10 @@ impl YuvMix {
                 h,
                 cw,
                 ch,
+                sw,
+                sh,
+                csw,
+                csh,
                 y_in,
                 u_in,
                 v_in,
@@ -1421,12 +1509,20 @@ impl YuvMix {
                 vao,
                 pbo,
                 fence: [None, None],
+                reframe: None,
+                framed: None,
             })
         }
     }
 
     pub fn frame_bytes(&self) -> usize {
         (self.w * self.h + 2 * self.cw * self.ch) as usize
+    }
+
+    /// The bytes of one decoded picture handed to `submit` (the frame's own
+    /// size unless the mix was made `with_source`).
+    pub fn input_bytes(&self) -> usize {
+        (self.sw * self.sh + 2 * self.csw * self.csh) as usize
     }
 
     /// `i420` in, mixed I420 out (same layout), with `overlay` = the engine's output
@@ -1473,27 +1569,166 @@ impl YuvMix {
     }
 
     /// Upload `i420`, mix it with `overlay` and start the readback into slot `slot`.
+    /// Reframe the next frames' picture before the mix (none: as decoded, the
+    /// path the shipped styles take, unchanged).
+    pub fn set_reframe(&mut self, reframe: Option<Reframe>) {
+        self.reframe = reframe;
+    }
+
+    fn make_framed(&self) -> Result<Framed, String> {
+        let gl = &self.gl;
+        unsafe {
+            let y = target(gl, self.w, self.h, glow::R8, glow::RED, glow::UNSIGNED_BYTE)?;
+            let u = target(
+                gl,
+                self.cw,
+                self.ch,
+                glow::R8,
+                glow::RED,
+                glow::UNSIGNED_BYTE,
+            )?;
+            let v = target(
+                gl,
+                self.cw,
+                self.ch,
+                glow::R8,
+                glow::RED,
+                glow::UNSIGNED_BYTE,
+            )?;
+            let prog = gl.create_program().map_err(err("program"))?;
+            for (kind, src) in [
+                (glow::VERTEX_SHADER, MIX_VS),
+                (glow::FRAGMENT_SHADER, FRAME_FS),
+            ] {
+                let sh = gl.create_shader(kind).map_err(err("shader"))?;
+                gl.shader_source(sh, src);
+                gl.compile_shader(sh);
+                if !gl.get_shader_compile_status(sh) {
+                    return Err(format!("reframe shader: {}", gl.get_shader_info_log(sh)));
+                }
+                gl.attach_shader(prog, sh);
+                gl.delete_shader(sh);
+            }
+            gl.link_program(prog);
+            if !gl.get_program_link_status(prog) {
+                return Err(format!("reframe link: {}", gl.get_program_info_log(prog)));
+            }
+            let linear = gl.create_sampler().map_err(err("sampler"))?;
+            for (k, val) in [
+                (glow::TEXTURE_MIN_FILTER, glow::LINEAR),
+                (glow::TEXTURE_MAG_FILTER, glow::LINEAR),
+                (glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE),
+                (glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE),
+            ] {
+                gl.sampler_parameter_i32(linear, k, val as i32);
+            }
+            Ok(Framed {
+                y,
+                u,
+                v,
+                prog,
+                linear,
+            })
+        }
+    }
+
+    /// Resample the uploaded planes through `r` into the reframed planes.
+    fn run_reframe(&mut self, r: Reframe) -> Result<(), String> {
+        if self.framed.is_none() {
+            self.framed = Some(self.make_framed()?);
+        }
+        let f = self.framed.as_ref().expect("made above");
+        let gl = &self.gl;
+        unsafe {
+            gl.use_program(Some(f.prog));
+            let loc = |n: &str| gl.get_uniform_location(f.prog, n);
+            gl.uniform_1_i32(loc("src").as_ref(), 0);
+            gl.uniform_matrix_2_f32_slice(loc("inv").as_ref(), false, &r.inv);
+            gl.active_texture(glow::TEXTURE0);
+            gl.bind_sampler(0, Some(f.linear));
+            gl.bind_vertex_array(Some(self.vao));
+            for (src, out, (w, h), (iw, ih), k, black) in [
+                (
+                    self.y_in,
+                    &f.y,
+                    (self.w, self.h),
+                    (self.sw, self.sh),
+                    1.0,
+                    16.0,
+                ),
+                (
+                    self.u_in,
+                    &f.u,
+                    (self.cw, self.ch),
+                    (self.csw, self.csh),
+                    2.0,
+                    128.0,
+                ),
+                (
+                    self.v_in,
+                    &f.v,
+                    (self.cw, self.ch),
+                    (self.csw, self.csh),
+                    2.0,
+                    128.0,
+                ),
+            ] {
+                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(out.fbo));
+                gl.viewport(0, 0, w, h);
+                gl.uniform_2_f32(loc("src_size").as_ref(), iw as f32, ih as f32);
+                gl.uniform_2_f32(loc("center").as_ref(), r.center[0] / k, r.center[1] / k);
+                gl.uniform_2_f32(loc("focus").as_ref(), r.focus[0] / k, r.focus[1] / k);
+                gl.uniform_4_f32(
+                    loc("crop").as_ref(),
+                    r.crop[0] / k,
+                    r.crop[1] / k,
+                    r.crop[2] / k,
+                    r.crop[3] / k,
+                );
+                gl.uniform_1_f32(loc("black").as_ref(), black / 255.0);
+                gl.bind_texture(glow::TEXTURE_2D, Some(src));
+                gl.draw_arrays(glow::TRIANGLES, 0, 3);
+            }
+            gl.bind_sampler(0, None);
+            gl.bind_texture(glow::TEXTURE_2D, None);
+            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+            gl.use_program(None);
+        }
+        Ok(())
+    }
+
     pub fn submit(
         &mut self,
         i420: &[u8],
         overlay: glow::Texture,
         slot: usize,
     ) -> Result<(), String> {
+        // The decoded picture's planes (its own size), then the frame's (what
+        // is read back).
+        let (iys, ics) = ((self.sw * self.sh) as usize, (self.csw * self.csh) as usize);
         let (ys, cs) = ((self.w * self.h) as usize, (self.cw * self.ch) as usize);
-        if i420.len() != self.frame_bytes() {
+        if i420.len() != self.input_bytes() {
             return Err(format!(
                 "I420 frame of {} bytes, expected {}",
                 i420.len(),
-                self.frame_bytes()
+                self.input_bytes()
             ));
+        }
+        if self.reframe.is_none() && (self.sw, self.sh) != (self.w, self.h) {
+            return Err("a picture of another shape than the frame needs a reframing".into());
         }
         let gl = &self.gl;
         unsafe {
             gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
             for (tex, data, w, h) in [
-                (self.y_in, &i420[..ys], self.w, self.h),
-                (self.u_in, &i420[ys..ys + cs], self.cw, self.ch),
-                (self.v_in, &i420[ys + cs..ys + 2 * cs], self.cw, self.ch),
+                (self.y_in, &i420[..iys], self.sw, self.sh),
+                (self.u_in, &i420[iys..iys + ics], self.csw, self.csh),
+                (
+                    self.v_in,
+                    &i420[iys + ics..iys + 2 * ics],
+                    self.csw,
+                    self.csh,
+                ),
             ] {
                 gl.bind_texture(glow::TEXTURE_2D, Some(tex));
                 gl.tex_sub_image_2d(
@@ -1509,6 +1744,18 @@ impl YuvMix {
                 );
             }
             gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 4);
+        }
+        // The picture the mix reads: as decoded, or reframed.
+        let (y_src, u_src, v_src) = match self.reframe {
+            None => (self.y_in, self.u_in, self.v_in),
+            Some(r) => {
+                self.run_reframe(r)?;
+                let f = self.framed.as_ref().expect("made by run_reframe");
+                (f.y.tex, f.u.tex, f.v.tex)
+            }
+        };
+        let gl = &self.gl;
+        unsafe {
             gl.disable(glow::BLEND);
             gl.disable(glow::FRAMEBUFFER_SRGB);
             gl.disable(glow::SCISSOR_TEST);
@@ -1523,16 +1770,16 @@ impl YuvMix {
             gl.viewport(0, 0, self.w, self.h);
             gl.use_program(Some(self.prog_y));
             gl.active_texture(glow::TEXTURE0);
-            gl.bind_texture(glow::TEXTURE_2D, Some(self.y_in));
+            gl.bind_texture(glow::TEXTURE_2D, Some(y_src));
             gl.draw_arrays(glow::TRIANGLES, 0, 3);
             // U, V
             gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.uv_fbo));
             gl.viewport(0, 0, self.cw, self.ch);
             gl.use_program(Some(self.prog_uv));
             gl.active_texture(glow::TEXTURE0);
-            gl.bind_texture(glow::TEXTURE_2D, Some(self.u_in));
+            gl.bind_texture(glow::TEXTURE_2D, Some(u_src));
             gl.active_texture(glow::TEXTURE2);
-            gl.bind_texture(glow::TEXTURE_2D, Some(self.v_in));
+            gl.bind_texture(glow::TEXTURE_2D, Some(v_src));
             gl.draw_arrays(glow::TRIANGLES, 0, 3);
             // Read back the three planes.
             gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1);
@@ -1615,6 +1862,14 @@ impl Drop for YuvMix {
             }
             gl.delete_framebuffer(self.y_out.fbo);
             gl.delete_framebuffer(self.uv_fbo);
+            if let Some(f) = self.framed.take() {
+                for t in [&f.y, &f.u, &f.v] {
+                    gl.delete_framebuffer(t.fbo);
+                    gl.delete_texture(t.tex);
+                }
+                gl.delete_program(f.prog);
+                gl.delete_sampler(f.linear);
+            }
             gl.delete_program(self.prog_y);
             gl.delete_program(self.prog_uv);
             gl.delete_vertex_array(self.vao);

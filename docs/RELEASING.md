@@ -67,7 +67,7 @@ The build driver is `tools/delivery-build.ps1`; the acquisition, source and ZIP
 controls are in `tools/delivery.py`. Standard runners are `windows-2025` x64,
 `ubuntu-24.04` x64 and `macos-26` Apple Silicon. They use Rust 1.98.1, the locked Cargo graph, the
 existing Windows GNU/LLD configuration, without the updater feature. The default
-`compile-only` mode runs `cargo build --release --locked --features gui,mcp --bins`
+`compile-only` mode runs `cargo build --release --locked --features gui,mcp,motion --bins`
 and retains executables only on the disposable runner. Windows then runs the full
 standard Rust unit, GUI, CLI, media and MCP integration suite against the locked
 FFmpeg export backend. Tests use the same release profile to reuse compiled
@@ -92,7 +92,7 @@ approval; see [MACOS_SIGNING.md](MACOS_SIGNING.md) for exact inputs and native
 checks. Unsigned jobs receive no signing credentials. No real signing/notarization
 or environment setup has run in this preparation.
 
-`portable` uses `cargo dev build --gui --mcp`, after `delivery.py acquire-datasets`
+`portable` uses `cargo dev build --gui --mcp --motion`, after `delivery.py acquire-datasets`
 and `build_syllable_dicts.py --inputs` have built the language packs it reads from
 `NOH_LANGUAGES` (Windows and Linux). Both modes reject existing `dist/`
 or maintainer inputs. Portable mode passes
@@ -156,7 +156,7 @@ The Windows-only installer stage still requires `windows-x64` explicitly.
 
 The Linux job checks host FFmpeg/libmpv against `assets/linux-host.json`, builds
 the pinned CPU Whisper recipe, and calls
-`cargo dev build --gui --mcp --portable --speech ... --ffmpeg /usr/bin/ffmpeg`.
+`cargo dev build --gui --mcp --motion --portable --speech ... --ffmpeg /usr/bin/ffmpeg`.
 The AppDir contains GUI/CLI/MCP and CPU speech/models. It contains no shared
 libraries and no private ELF search paths. The host owns the entire media and
 desktop runtime. The old native lock/acquisition tool is historical provenance,

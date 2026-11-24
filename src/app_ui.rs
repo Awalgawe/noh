@@ -294,7 +294,9 @@ impl NohApp {
             self.wav_seconds,
             ctx,
         );
+        self.say_refused_lyrics();
         self.poll_project(ctx);
+        self.motion_frame(ctx);
         if self.output.is_none() && app_destination::syntax(&self.output_name).is_none() {
             self.output = Some(self.output_folder.join(&self.output_name));
         }
@@ -558,6 +560,15 @@ impl NohApp {
             },
             fraction: self.fraction,
         });
+        // A scene in use: the export draws it (said under the destination).
+        if operation == Operation::Idle
+            && view.third.is_none()
+            && self.project.apply_subtitles
+            && self.motion.used_scene().is_some()
+            && let Some(name) = self.motion.name()
+        {
+            view.third = Some(noh::i18n::Message::new("motion.burned", &[name]));
+        }
         // Shown lyrics need their track read on the current song clock.
         if self.project.apply_subtitles && !self.lyrics_ready() && operation == Operation::Idle {
             for availability in [
@@ -1907,6 +1918,7 @@ impl eframe::App for NohApp {
             scrubber.service(ui.ctx());
         }
         self.draw(ui);
+        self.motion_details(ui.ctx());
     }
 }
 

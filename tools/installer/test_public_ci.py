@@ -129,18 +129,18 @@ class InstallerGuards(unittest.TestCase):
 
     def test_the_upgrade_baseline_is_the_recorded_published_installer(self):
         baseline = ci.upgrade_baseline()
-        self.assertEqual(baseline['tag'], 'v0.3.0')
-        self.assertEqual(baseline['name'], 'NOH-0.3.0-windows-x64-Complete-Setup.exe')
+        self.assertEqual(baseline['tag'], 'v0.3.1')
+        self.assertEqual(baseline['name'], 'NOH-0.3.1-windows-x64-Complete-Setup.exe')
         # From 0.1.6 a publication record is a file of the release (PUBLICATION.json), not of this
         # repository: the pin's digest and size were read there when the pin was moved.
-        valid = {'schema': 1, 'tag': 'v0.3.0', 'installer': baseline['name'],
+        valid = {'schema': 1, 'tag': 'v0.3.1', 'installer': baseline['name'],
                  'sha256': baseline['sha256'], 'size': baseline['size']}
         with tempfile.TemporaryDirectory() as temporary:
             lock = Path(temporary) / 'lock.json'
             lock.write_text(json.dumps(valid), encoding='utf-8')
             self.assertEqual(ci.upgrade_baseline(lock), baseline)
-            for changes in ({'tag': 'v0.2.0'}, {'installer': 'NOH-0.3.0-windows-x64-Minimal-Setup.exe'},
-                            {'sha256': 'abc'}, {'size': '1233127872'}, {'size': 0}, {'schema': 2}):
+            for changes in ({'tag': 'v0.3.0'}, {'installer': 'NOH-0.3.1-windows-x64-Minimal-Setup.exe'},
+                            {'sha256': 'abc'}, {'size': '1233128464'}, {'size': 0}, {'schema': 2}):
                 lock.write_text(json.dumps({**valid, **changes}), encoding='utf-8')
                 with self.assertRaises(ValueError, msg=str(changes)):
                     ci.upgrade_baseline(lock)
@@ -199,6 +199,21 @@ class InstallerGuards(unittest.TestCase):
             (root / "extra.dll").write_bytes(b"unexpected native dependency")
             with self.assertRaisesRegex(ValueError, "Unexpected installed files"):
                 ci.verify_installed(root, expected)
+
+    def test_upgrade_check_still_rejects_a_retired_file_left_behind(self):
+        # The installer deletes the files earlier releases shipped and this one does not:
+        # the upgrade check must keep refusing them, never list them as allowed extras.
+        lines = web.retired_lines({"noh.exe": {}})
+        for name in web.RETIRED:
+            self.assertIn('Type: files; Name: "{app}\\' + name.replace("/", "\\") + '"', lines)
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                (root / "noh.exe").write_bytes(b"qualified application")
+                expected = ci.delivery.inventory(root)
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_bytes(b"left by an earlier release")
+                with self.assertRaisesRegex(ValueError, "Unexpected installed files"):
+                    ci.verify_installed(root, expected)
 
 
 if __name__ == "__main__":

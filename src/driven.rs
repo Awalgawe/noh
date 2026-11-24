@@ -104,6 +104,18 @@ pub enum LineEdit {
     Delete {
         index: usize,
     },
+    /// Who sings the line: the set of declared voice numbers (1 first; `[1, 2]`
+    /// both together; empty: no voice known).
+    SetVoices {
+        index: usize,
+        voices: Vec<u8>,
+    },
+    /// Declare the voices, in number order, each with an optional name (at
+    /// most 4; `[]` says nothing about who sings). Lines lose the numbers no
+    /// longer declared.
+    NameVoices {
+        names: Vec<Option<String>>,
+    },
 }
 
 /// One answer to a question of the application, as its button gives it.
@@ -247,6 +259,26 @@ pub enum Action {
         path: Option<std::path::PathBuf>,
         #[serde(default)]
         short_name: Option<String>,
+    },
+    /// Experimental (a build with motion scenes): attach the motion scene the
+    /// agent writes, by its absolute path (none detaches it). The window rereads
+    /// it when it changes (looked at every 2 s) and says in `state.scene`
+    /// whether it loads and draws its first frame, or why not; a whole check
+    /// is `noh_scene_check`'s. The window does not draw the scene yet.
+    SetScene {
+        #[serde(default)]
+        path: Option<std::path::PathBuf>,
+    },
+    /// What `noh_scene_look` with an `app_id` sends: move the playhead to
+    /// `at_ms` (waiting while the person navigates, as `seek`) and draw over
+    /// the monitor the frame's grid (`grid`) and, on the short, the safe area,
+    /// as long as the playhead stays there.
+    ShowSceneLook {
+        at_ms: u64,
+        #[serde(default)]
+        safe_area: crate::safe_area::SafeArea,
+        #[serde(default)]
+        grid: bool,
     },
     /// Export the montage, or the short (`short`). Started or not, the answer
     /// says; the progress and the end follow in `state`.

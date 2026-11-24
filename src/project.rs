@@ -46,6 +46,11 @@ pub struct ProjectRequest {
     /// captions it has nothing to draw and is ignored.
     #[serde(default)]
     pub effect: Option<EffectChoice>,
+    /// A motion scene drawn instead of the captions (it draws the lyrics
+    /// itself, on the song's clock). Exclusive with `effect`; like it, without
+    /// captions it has nothing to draw and is ignored.
+    #[serde(default)]
+    pub motion: Option<crate::scene_request::ProjectScene>,
 }
 
 /// The effect plugin chosen for the captions: its folder, its id (checked when the
@@ -125,6 +130,7 @@ impl ProjectRequest {
             .chain([&self.montage.wav, &self.montage.output])
             .chain(self.captions.iter().map(|c| &c.subtitles))
             .chain(self.effect.iter().map(|e| &e.dir))
+            .chain(self.motion.iter().map(|m| &m.scene))
         {
             if path.as_os_str().is_empty() || path.as_os_str().as_encoded_bytes().contains(&0) {
                 return Err(error(
@@ -141,7 +147,29 @@ impl ProjectRequest {
                 "A caption effect needs a plugin id.",
             ));
         }
+        if let Some(motion) = &self.motion {
+            if self.effect.is_some() {
+                return Err(error(
+                    "error.scene_with_effect",
+                    Some(&motion.scene),
+                    "A scene draws the lyrics itself: it cannot be combined with a caption effect.",
+                ));
+            }
+            motion.validate()?;
+        }
         Ok(())
+    }
+
+    /// Whether the captions are drawn live over a preview (by an effect or a
+    /// scene) rather than burned into it by libass.
+    pub fn drawn_live(&self) -> bool {
+        self.active_effect().is_some() || self.active_motion().is_some()
+    }
+
+    /// The scene actually drawn: one is chosen and there are captions (its
+    /// lyrics) to draw.
+    pub fn active_motion(&self) -> Option<&crate::scene_request::ProjectScene> {
+        self.motion.as_ref().filter(|_| self.captions.is_some())
     }
 
     /// The effect actually applied: one is chosen and there are captions to draw.
@@ -154,7 +182,11 @@ impl ProjectRequest {
     /// A preview render keeps libass: the app draws its effect over it live, or
     /// shows libass there when its monitor could not draw.
     fn default_classic(&self) -> Option<EffectChoice> {
-        if !cfg!(feature = "effects") || self.effect.is_some() || self.montage.preview {
+        if !cfg!(feature = "effects")
+            || self.effect.is_some()
+            || self.motion.is_some()
+            || self.montage.preview
+        {
             return None;
         }
         self.captions.as_ref().map(|c| EffectChoice {
@@ -187,9 +219,10 @@ impl ProjectRequest {
         self.montage.same_render_settings(&other.montage)
             && self.short == other.short
             && self.captions == other.captions
-            // Which effect does not matter: previews and stills carry no captions
-            // with one (the monitor draws it), only whether one is active.
-            && self.active_effect().is_some() == other.active_effect().is_some()
+            // Which effect or scene does not matter: previews and stills carry no
+            // captions with one (the monitor draws it), only whether one is active.
+            && (self.active_effect().is_some() || self.active_motion().is_some())
+                == (other.active_effect().is_some() || other.active_motion().is_some())
     }
 }
 
@@ -410,11 +443,15 @@ pub(crate) fn execute(
     let default_classic = request.default_classic();
     let builtin = default_classic.is_some();
     let effect = request.active_effect().or(default_classic.as_ref());
+    let motion = request.active_motion();
     let mut effect_track = None;
+    // A scene sees the whole lyrics on the song's clock, with the count of
+    // lines whose word times were read beside the subtitles.
+    let mut scene_track = None;
     if let Some(captions) = request
         .captions
         .as_ref()
-        .filter(|_| !(effect.is_some() && montage.preview))
+        .filter(|_| !((effect.is_some() || motion.is_some()) && montage.preview))
     {
         let path = &snapshot.0.last().unwrap().resolved;
         let text = crate::captions::read_srt(path)?;
@@ -422,7 +459,10 @@ pub(crate) fn execute(
             .map_err(|e| error("error.caption_track", Some(path), e))?;
         // The effect exports with the word times kept beside the subtitles
         // (libass ignores them); a cue changed outside NOH has none.
-        crate::subtitle_words::read_beside(path, &mut track);
+        let words = crate::subtitle_words::read_beside(path, &mut track);
+        if motion.is_some() {
+            scene_track = Some((track.clone(), words));
+        }
         let track = if let Some(short) = &request.short {
             track
                 .trim(short.start_ms, short.end_ms)
@@ -430,7 +470,9 @@ pub(crate) fn execute(
         } else {
             track
         };
-        if track.cues.is_empty() {
+        if motion.is_some() {
+            // The scene draws even where no line falls in a short's interval.
+        } else if track.cues.is_empty() {
             report.warning("short.no_captions");
         } else if effect.is_some() {
             // Classique keeps what libass needs (the cues and the same style: size,
@@ -639,10 +681,27 @@ pub(crate) fn execute(
     };
     let output = workspace.join("export.mp4");
     let selection = crate::encoder::select(ffmpeg, montage.preview);
-    let effect_job = match (effect, effect_track) {
-        (Some(choice), Some(track)) => Some(EffectJob {
-            choice,
-            builtin,
+    let pass = match (motion, scene_track, effect, effect_track) {
+        (Some(m), Some((track, words)), _, _) => Some((
+            Pass::Scene {
+                scene: &m.scene,
+                words,
+                start,
+                duration,
+                safe_area: request
+                    .captions
+                    .as_ref()
+                    .map(|c| c.style.safe_area)
+                    .unwrap_or_default(),
+            },
+            track,
+        )),
+        (None, _, Some(choice), Some(track)) => Some((Pass::Effect { choice, builtin }, track)),
+        _ => None,
+    };
+    let effect_job = match pass {
+        Some((pass, track)) => Some(EffectJob {
+            pass,
             track,
             video_filter: filter.join(","),
             clip_audio: montage.clip_audio,
@@ -795,12 +854,31 @@ pub(crate) fn execute(
     })
 }
 
+/// What draws the layer of a project export.
+enum Pass<'a> {
+    Effect {
+        choice: &'a EffectChoice,
+        /// The built-in Classique (`style::catalog::builtin_classic`), not a folder.
+        builtin: bool,
+    },
+    /// A motion scene, validated at the export's frames before anything starts.
+    Scene {
+        scene: &'a Path,
+        /// Lines whose word times were read beside the subtitles.
+        words: usize,
+        /// The output's first instant on the song's clock (a short's start).
+        start: f64,
+        /// The song's length.
+        duration: f64,
+        safe_area: crate::safe_area::SafeArea,
+    },
+}
+
 /// The caption effect pass of a project export (see `fx::export`).
 struct EffectJob<'a> {
-    choice: &'a EffectChoice,
-    /// The built-in Classique (`fx::catalog::builtin_classic`), not a folder.
-    builtin: bool,
-    /// Cues on the output clock (trimmed for a short), as libass would get them.
+    pass: Pass<'a>,
+    /// Cues: on the output clock (trimmed for a short) for an effect, as libass
+    /// would get them; whole, on the song's clock, for a scene.
     track: crate::subtitle_track::SubtitleTrack,
     /// The project's video filters without captions.
     video_filter: String,
@@ -884,6 +962,127 @@ fn run_effect(
     ))
 }
 
+/// The layer a project export mixes into its frames: the effect's scene, or
+/// the motion scene's overlay once it has passed its validation at the
+/// export's frames (refused with the instant and the cap, nothing started).
+#[cfg(feature = "effects")]
+fn job_layer(
+    job: &EffectJob<'_>,
+    ffmpeg: &Path,
+    wav: &Path,
+    fps: f64,
+    span: f64,
+) -> Result<crate::fx::export::Layer, EngineError> {
+    use crate::style;
+    let (choice, builtin) = match &job.pass {
+        Pass::Effect { choice, builtin } => (*choice, *builtin),
+        Pass::Scene {
+            scene,
+            words,
+            start,
+            duration,
+            safe_area,
+        } => {
+            return scene_layer(
+                job, scene, *words, *start, *duration, *safe_area, ffmpeg, wav, fps, span,
+            );
+        }
+    };
+    let effect = if builtin {
+        style::catalog::builtin_classic()
+    } else {
+        style::catalog::load_one(&choice.dir, &choice.id)
+            .map_err(|e| error("error.effect", Some(&choice.dir), e))?
+    };
+    if let Some(preset) = &choice.preset
+        && !effect.presets.iter().any(|(id, _)| id == preset)
+    {
+        return Err(error(
+            "error.effect",
+            Some(&choice.dir),
+            format!("The effect has no preset \"{preset}\"."),
+        ));
+    }
+    let (w, h) = job.size;
+    let scene = style::plugin::PluginScene::new(
+        effect,
+        w,
+        h,
+        style::line::from_track(&job.track),
+        choice.preset.as_deref(),
+    )
+    .with_values(&choice.values)
+    .map_err(|e| error("error.effect", Some(&choice.dir), e))?
+    .with_safe_insets(job.safe);
+    // Classique's letters never leave the picture by design: when they do, say so.
+    // Animated effects may (Typographic composition slides words in from outside).
+    let scene = if choice.id == CLASSIC {
+        scene.with_frame_check()
+    } else {
+        scene
+    };
+    Ok(Box::new(crate::style::plugin::StyleLayer::new(scene)))
+}
+
+#[cfg(all(feature = "effects", not(feature = "motion")))]
+#[allow(clippy::too_many_arguments)]
+fn scene_layer(
+    _: &EffectJob<'_>,
+    scene: &Path,
+    _: usize,
+    _: f64,
+    _: f64,
+    _: crate::safe_area::SafeArea,
+    _: &Path,
+    _: &Path,
+    _: f64,
+    _: f64,
+) -> Result<crate::fx::export::Layer, EngineError> {
+    Err(error(
+        "error.scene_unavailable",
+        Some(scene),
+        "This build of NOH cannot draw scenes.",
+    ))
+}
+
+/// The song's sound gives the energy and onsets; the frame is the export's;
+/// the scene's clock is the song's, so a short's frames start at its start.
+#[cfg(feature = "motion")]
+#[allow(clippy::too_many_arguments)]
+fn scene_layer(
+    job: &EffectJob<'_>,
+    scene: &Path,
+    words: usize,
+    start: f64,
+    duration: f64,
+    safe_area: crate::safe_area::SafeArea,
+    ffmpeg: &Path,
+    wav: &Path,
+    fps: f64,
+    span: f64,
+) -> Result<crate::fx::export::Layer, EngineError> {
+    use crate::fx::layer_shader as shader;
+    use crate::motion::{layer, song, thread::ScriptThread, validate};
+    let refused = |e: String| error("error.scene_refused", Some(scene), e);
+    let size = job.size;
+    crate::scene_request::safe_area_required(size.0, size.1, safe_area)?;
+    let gathered = song::gather(
+        ffmpeg, wav, true, size, size, duration, &job.track, words, safe_area,
+    )
+    .map_err(|e| error("error.scene_input", Some(wav), e))?;
+    let src = layer::read_scene(scene).map_err(refused)?;
+    let shaders = shader::read_beside(scene).map_err(refused)?;
+    let mut inputs = gathered.inputs;
+    inputs.shaders = shaders.iter().map(|(n, _)| n.clone()).collect();
+    let thread = ScriptThread::start(src, inputs, gathered.audio, false).map_err(refused)?;
+    let fps = validate::known_fps(fps).unwrap_or(validate::FALLBACK_FPS);
+    thread
+        .validate(validate::grid(start, start + span, fps))
+        .map_err(refused)?;
+    let overlay = layer::MotionLayer::new(thread, size, start, shaders).map_err(refused)?;
+    Ok(Box::new(overlay))
+}
+
 /// E4: FFmpeg #1 (video, no captions) -> GPU caption layer and YUV mix -> FFmpeg #2
 /// (sound, encoder). Same inputs, filters, encoder and timestamps as the libass
 /// command, the captions excepted.
@@ -911,39 +1110,8 @@ fn run_effect(
                 "Project rendering deadline exceeded.",
             )
         })?;
-    let effect = if job.builtin {
-        fx::catalog::builtin_classic()
-    } else {
-        fx::catalog::load_one(&job.choice.dir, &job.choice.id)
-            .map_err(|e| error("error.effect", Some(&job.choice.dir), e))?
-    };
-    if let Some(preset) = &job.choice.preset
-        && !effect.presets.iter().any(|(id, _)| id == preset)
-    {
-        return Err(error(
-            "error.effect",
-            Some(&job.choice.dir),
-            format!("The effect has no preset \"{preset}\"."),
-        ));
-    }
+    let layer = job_layer(job, ffmpeg, wav, fps, span)?;
     let (w, h) = job.size;
-    let scene = fx::plugin::PluginScene::new(
-        effect,
-        w,
-        h,
-        fx::line::from_track(&job.track),
-        job.choice.preset.as_deref(),
-    )
-    .with_values(&job.choice.values)
-    .map_err(|e| error("error.effect", Some(&job.choice.dir), e))?
-    .with_safe_insets(job.safe);
-    // Classique's letters never leave the picture by design: when they do, say so.
-    // Animated effects may (Typographic composition slides words in from outside).
-    let scene = if job.choice.id == CLASSIC {
-        scene.with_frame_check()
-    } else {
-        scene
-    };
     let mut first = crate::command(ffmpeg);
     first.current_dir(workspace).args([
         "-hide_banner",
@@ -1037,12 +1205,13 @@ fn run_effect(
         workspace: workspace.to_path_buf(),
         width: w,
         height: h,
+        source: (w, h),
         matrix: if job.bt709 {
             fx::gl::Matrix::Bt709
         } else {
             fx::gl::Matrix::Bt601
         },
-        scene,
+        scene: layer,
         deadline,
         end: None,
     };
@@ -1076,6 +1245,10 @@ fn run_effect(
             }
             if let Some(family) = &stats.font_missing {
                 report.warning(&crate::caption_gpu::font_missing_warning(family));
+            }
+            if let Some((at, why)) = &stats.over_caps {
+                report.warning(&crate::caption_gpu::heavy_warning(*at));
+                report.diagnostic(format!("Caption effect over a cap: {why}."));
             }
             report.diagnostic(format!(
                 "Caption effect: {} frames, engine set up in {:.0} ms on {}, time base {}, layer and mix p95 {:.2} ms per frame (p50/p95/max ms: layer {:.2}/{:.2}/{:.2}, mix submit {:.2}/{:.2}/{:.2}, readback wait {:.2}/{:.2}/{:.2}).",
@@ -1267,6 +1440,7 @@ mod tests {
         style: crate::captions::CaptionStyle,
     ) -> ProjectRequest {
         ProjectRequest {
+            motion: None,
             montage: ExportRequest {
                 items: vec![MediaItem::Video {
                     path: "a.mp4".into(),
@@ -1288,6 +1462,53 @@ mod tests {
             }),
             effect,
         }
+    }
+
+    /// A scene draws the lyrics itself: never with an effect, never with the
+    /// default Classique, and like an effect only with captions; a preview
+    /// render with one carries no captions (the monitor draws it).
+    #[test]
+    fn a_scene_replaces_the_effect_and_needs_captions() {
+        let scene = || crate::scene_request::ProjectScene {
+            scene: std::env::temp_dir().join("a.noh-motion.rhai"),
+        };
+        let style = crate::captions::CaptionStyle::default();
+        let mut with = captioned(None, false, style);
+        with.motion = Some(scene());
+        assert!(with.default_classic().is_none());
+        assert!(with.active_motion().is_some());
+        if cfg!(feature = "motion") {
+            with.validate().unwrap();
+        }
+        let classic = EffectChoice {
+            id: CLASSIC.into(),
+            preset: None,
+            dir: "c".into(),
+            values: Default::default(),
+        };
+        let mut both = captioned(Some(classic), false, style);
+        both.motion = Some(scene());
+        assert_eq!(both.validate().unwrap_err().code, "error.scene_with_effect");
+        let mut bare = captioned(None, false, style);
+        bare.motion = Some(scene());
+        bare.captions = None;
+        assert!(bare.active_motion().is_none());
+        let mut relative = captioned(None, false, style);
+        relative.motion = Some(crate::scene_request::ProjectScene {
+            scene: "a.noh-motion.rhai".into(),
+        });
+        assert_eq!(relative.validate().unwrap_err().code, "error.scene_request");
+        // Previews with a scene or an effect render the same (no captions).
+        let mut preview_scene = captioned(None, true, style);
+        preview_scene.motion = Some(scene());
+        let karaoke = EffectChoice {
+            id: "test.wipe".into(),
+            preset: None,
+            dir: "k".into(),
+            values: Default::default(),
+        };
+        assert!(preview_scene.same_render_settings(&captioned(Some(karaoke), true, style)));
+        assert!(!preview_scene.same_render_settings(&captioned(None, true, style)));
     }
 
     /// Task 43: the command line and the MCP choose no effect; their exported

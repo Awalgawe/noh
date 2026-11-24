@@ -382,11 +382,14 @@ impl NohApp {
                         l.format("pair.srt_time", &[s.clone()])
                     ),
                     _ => format!("{}.", l.plural("pair.body", *lines)),
-                } + &if *voices_lost > 0 {
+                } + (if *voices_lost > 0 {
                     format!(" {}", l.plural("pair.voices_lost", *voices_lost))
                 } else {
                     String::new()
-                },
+                })
+                // As &str: another `Add` for String (a scene engine's string
+                // type) leaves `&String` uncoerced.
+                .as_str(),
                 Some(if unsaved {
                     l.text("pair.srt_unsaved").to_owned()
                 } else if *lose == 0 {
@@ -481,6 +484,44 @@ mod tests {
         app.project.attach(path, Some(&wav));
         settle(&mut app);
         app
+    }
+
+    #[test]
+    fn a_refused_srt_over_loaded_lyrics_is_said_once_and_the_lyrics_stay() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = attached(folder.path(), A, None);
+        let before = app.project.track.loaded.as_ref().unwrap().track.clone();
+        // Line 2 starts before line 1 ends: this NOH refuses the file.
+        let bad = folder.path().join("bad.srt");
+        std::fs::write(
+            &bad,
+            "1\n00:00:01,000 --> 00:00:04,000\nUne\n\n2\n00:00:03,000 --> 00:00:05,000\nDeux\n",
+        )
+        .unwrap();
+        let wav = app.wav.clone().unwrap();
+        app.project.attach(bad, Some(&wav));
+        let ctx = egui::Context::default();
+        for _ in 0..400 {
+            app.project.track.poll(&ctx);
+            if app.project.track.error.is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        app.say_refused_lyrics();
+        let notice = app.notice.take().expect("the refusal is said");
+        assert_eq!(notice.key, crate::app_track::OVERLAP);
+        assert_eq!(notice.args, ["1", "2"]);
+        // The lyrics before it stay attached, and the card still shows them.
+        assert_eq!(app.project.track.loaded.as_ref().unwrap().track, before);
+        assert!(matches!(
+            app.lyrics_state(),
+            crate::app_lyrics::Chip::Ready { .. }
+        ));
+        // Said once: the next frames do not say it again.
+        app.project.track.poll(&ctx);
+        app.say_refused_lyrics();
+        assert!(app.notice.is_none());
     }
 
     /// Run the reader until the load arrives, then the frame that looks at it.

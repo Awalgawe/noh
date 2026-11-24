@@ -107,7 +107,7 @@ impl Launch for Beside {
 
 /// The application beside the server at `server`: in the server's folder, or
 /// in its parent when that folder is `bin` (the bundles keep the server in
-/// `bin/`, `fx::catalog::bundled_dir_for`). `noh-app` first: in a development
+/// `bin/`, `style::catalog::bundled_dir_for`). `noh-app` first: in a development
 /// build `noh.exe` is the command line; in the Windows bundle the app is
 /// `noh.exe`. Linux starts `usr/lib/noh/noh-app` itself: the AppDir's
 /// `AppRun` only runs it. Never PATH, never a shell.

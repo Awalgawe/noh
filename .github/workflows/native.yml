@@ -92,9 +92,11 @@ jobs:
             a_cue_too_tall_for_libass_is_drawn_by_classique_with_an_overflow_warning
             a_missing_installed_font_is_drawn_in_the_plugin_face_with_a_warning
             a_chosen_effect_draws_the_short_and_warns_when_its_installed_font_is_missing
+            scene_jobs_check_look_burn_clip_and_refuse
+            a_driver_that_dies_on_a_shader_fails_the_scene_job_cleanly
           )
           mkdir -p logs/platform
-          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a cargo test --locked --features gui,mcp --lib --tests -- \
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a cargo test --locked --features gui,mcp,motion --lib --tests -- \
             --ignored --test-threads=1 "${names[@]}" 2>&1 | tee logs/platform/effect-opengl-tests.log
           # A filter that matches nothing also exits 0: require each test to have run and passed once.
           for name in "${names[@]}"; do

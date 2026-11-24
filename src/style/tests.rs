@@ -3,8 +3,8 @@
 use super::catalog::{Catalog, scan};
 use super::line::{Line, split_words};
 use super::plugin::PluginScene;
-use super::shaders::{Inst, Upload};
-use super::text::Fonts;
+use crate::fx::shaders::{Inst, Upload};
+use crate::fx::text::Fonts;
 use std::path::{Path, PathBuf};
 
 fn repo(rel: &str) -> PathBuf {
@@ -101,6 +101,27 @@ fn bundled_effects_are_the_application_folder_s_from_bin_too() {
             "{exe}"
         );
     }
+}
+
+/// A macOS app keeps its executables in `Contents/MacOS`, where data files break
+/// the signature: its effects are in `Contents/Resources`. Outside an app (a
+/// development build), they stay beside the executable.
+#[cfg(target_os = "macos")]
+#[test]
+fn bundled_effects_of_a_macos_app_are_in_its_resources() {
+    let contents = Path::new("/Applications/NOH.app/Contents");
+    for exe in ["MacOS/noh-app", "MacOS/bin/noh-cli", "MacOS/bin/noh-mcp"] {
+        assert_eq!(
+            super::catalog::bundled_dir_for(&contents.join(exe)),
+            Some(contents.join("Resources/effects")),
+            "{exe}"
+        );
+    }
+    let build = Path::new("/src/noh/target/release");
+    assert_eq!(
+        super::catalog::bundled_dir_for(&build.join("noh-app")),
+        Some(build.join("effects"))
+    );
 }
 
 #[test]
@@ -320,8 +341,12 @@ fn gpu_checks() {
     an_installed_font_draws_on_the_gpu_like_the_bundled_face();
     a_failing_encoder_returns_its_diagnostics();
     super::engine_features_tests::gpu_engine_features();
+    // Motion scenes draw through the same engine, so on this thread.
+    #[cfg(feature = "motion")]
+    crate::motion::tests::motion_gpu_checks();
     let other = std::thread::spawn(|| {
-        super::gl::GlRenderer::headless(8, 8, 8.0, 8.0, super::shaders::Output::PremulGamma).err()
+        crate::fx::gl::GlRenderer::headless(8, 8, 8.0, 8.0, crate::fx::shaders::Output::PremulGamma)
+            .err()
     });
     let refused = other
         .join()
@@ -331,8 +356,8 @@ fn gpu_checks() {
 }
 
 fn gpu_mix_matches_the_float64_reference_in_both_matrices() {
-    use super::gl::{GlRenderer, Matrix, YuvMix};
-    use super::shaders::Output;
+    use crate::fx::gl::{GlRenderer, Matrix, YuvMix};
+    use crate::fx::shaders::Output;
     use glow::HasContext;
     // Odd sizes exercise the half-size chroma edge.
     let (w, h) = (161usize, 91usize);
@@ -565,18 +590,19 @@ fn a_failing_encoder_returns_its_diagnostics() {
         .arg(&out);
         c
     };
-    let job = super::export::Job {
+    let job = crate::fx::export::Job {
         first,
         second: Box::new(second),
         end: None,
         workspace: temp.path().into(),
         width: 64,
         height: 36,
-        matrix: super::gl::Matrix::Bt601,
-        scene,
+        source: (64, 36),
+        matrix: crate::fx::gl::Matrix::Bt601,
+        scene: Box::new(super::plugin::StyleLayer::new(scene)),
         deadline: std::time::Duration::from_secs(60),
     };
-    match super::export::run(job, |_| {}) {
+    match crate::fx::export::run(job, |_| {}) {
         Ok((status, log, _)) => assert!(
             !status.success() && log.contains("no-such-preset-noh"),
             "{status:?}\n{log}"
@@ -597,8 +623,8 @@ fn a_failing_encoder_returns_its_diagnostics() {
 #[test]
 #[ignore = "measurement dump: needs NOH_FX_DUMP, FFmpeg on PATH and a GPU"]
 fn dump_same_render_frames() {
-    use super::gl::{GlRenderer, Matrix, YuvMix};
-    use super::shaders::Output;
+    use crate::fx::gl::{GlRenderer, Matrix, YuvMix};
+    use crate::fx::shaders::Output;
     let Some(dir) = std::env::var_os("NOH_FX_DUMP").map(PathBuf::from) else {
         return;
     };
@@ -1286,7 +1312,7 @@ fn line_offsets_and_tracking_are_refused_in_compose_mode() {
 
 #[test]
 fn every_face_resolves_to_its_own_file_and_variable_ones_draw_at_their_weight() {
-    use super::text::{Face, layout};
+    use crate::fx::text::{Face, layout};
     let mut fonts = Fonts::load().unwrap();
     let file_len = |fonts: &mut Fonts, face: Face| -> usize {
         let laid = layout(
@@ -1371,7 +1397,7 @@ fn every_face_resolves_to_its_own_file_and_variable_ones_draw_at_their_weight() 
 
 #[test]
 fn a_variable_face_is_outlined_at_its_weight_in_the_msdf_atlas() {
-    use super::text::{Face, layout};
+    use crate::fx::text::{Face, layout};
     let mut fonts = Fonts::load().unwrap();
     let laid = layout(
         &mut fonts,
@@ -1399,10 +1425,10 @@ fn a_variable_face_is_outlined_at_its_weight_in_the_msdf_atlas() {
         "the axis moves the outline"
     );
     assert_eq!(fonts.weights[&g.font_id], 500.0);
-    let mut atlas = super::text::Atlas::new(48.0);
+    let mut atlas = crate::fx::text::Atlas::new(48.0);
     let s = atlas.msdf_sprite(&fonts, &NoGpu, g).unwrap();
     // Sprite width in font units (minus the MSDF padding) matches the 500 bbox.
-    let range = super::shaders::MSDF_RANGE;
+    let range = crate::fx::shaders::MSDF_RANGE;
     let units = (s.w / s.ppt - 2.0 * range) * f32::from(face.units_per_em()) / 48.0;
     assert!(
         (units - f32::from(at_500.width())).abs() < f32::from(face.units_per_em()) * 0.03,
@@ -1660,8 +1686,8 @@ fn choice_labels_name_each_choice_and_unknown_ones_are_refused() {
 #[test]
 #[ignore = "measurement: needs NOH_FX_BLUR_COST and a GPU"]
 fn blur_cost_of_a_full_blurred_line() {
-    use super::gl::GlRenderer;
-    use super::shaders::Output;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
     if std::env::var_os("NOH_FX_BLUR_COST").is_none() {
         return;
     }
@@ -1705,8 +1731,8 @@ fn blur_cost_of_a_full_blurred_line() {
 /// Gap 13: a blurred glyph is a smooth gaussian, not a grid of copies, and its
 /// blur runs past the sprite instead of stopping at it.
 fn a_blurred_glyph_is_smooth_and_not_cut_at_its_sprite() {
-    use super::gl::GlRenderer;
-    use super::shaders::Output;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
     let (w, h) = (320u32, 200u32);
     let mut fonts = Fonts::load().unwrap();
     let mut gpu = GlRenderer::headless(w, h, w as f32, h as f32, Output::PremulGamma).unwrap();
@@ -1813,8 +1839,8 @@ fn a_blurred_glyph_is_smooth_and_not_cut_at_its_sprite() {
 #[test]
 #[ignore = "measurement: needs NOH_FX_BLUR_PROBE and a GPU"]
 fn blur_layer_measurements() {
-    use super::gl::GlRenderer;
-    use super::shaders::Output;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
     if std::env::var_os("NOH_FX_BLUR_PROBE").is_none() {
         return;
     }
@@ -1936,7 +1962,7 @@ fn installed(files: &[&str]) -> (tempfile::TempDir, Fonts) {
     for f in files {
         std::fs::copy(repo(&format!("assets/{f}")), dir.path().join(f)).unwrap();
     }
-    let db = super::text::system_fonts(Some(&[dir.path().to_path_buf()]));
+    let db = crate::fx::text::system_fonts(Some(&[dir.path().to_path_buf()]));
     let fonts = Fonts::load()
         .unwrap()
         .with_installed(std::sync::Arc::new(db));
@@ -1980,7 +2006,7 @@ fn font_scene_at(value: &str, w: u32, h: u32) -> PluginScene {
 
 #[test]
 fn an_installed_family_draws_from_its_own_file_in_both_atlases() {
-    use super::text::{Face, FontData, layout};
+    use crate::fx::text::{Face, FontData, layout};
     let (dir, mut fonts) = installed(&["BarlowCondensed-ExtraBold.ttf"]);
     let (face, missing) = fonts.face("system:Barlow Condensed", Face::CondensedExtraBold);
     assert!(missing.is_none());
@@ -2000,7 +2026,7 @@ fn an_installed_family_draws_from_its_own_file_in_both_atlases() {
     assert!(matches!(data, FontData::Shared(_)));
     let file = std::fs::read(dir.path().join("BarlowCondensed-ExtraBold.ttf")).unwrap();
     assert_eq!(data.bytes(), &file[..]);
-    let mut atlas = super::text::Atlas::new(48.0);
+    let mut atlas = crate::fx::text::Atlas::new(48.0);
     let g = &mine.glyphs[0];
     assert!(atlas.cov_sprite(&mut fonts, &NoGpu, g, 1.0).is_some());
     assert!(atlas.msdf_sprite(&fonts, &NoGpu, g).is_some());
@@ -2016,7 +2042,7 @@ fn an_installed_family_draws_from_its_own_file_in_both_atlases() {
 
 #[test]
 fn a_missing_family_draws_the_plugin_face_and_is_reported() {
-    use super::text::{Face, Lack};
+    use crate::fx::text::{Face, Lack};
     let (_dir, mut fonts) = installed(&["BarlowCondensed-ExtraBold.ttf"]);
     assert_eq!(
         fonts.face("system:Nope Sans", Face::CondensedExtraBold),
@@ -2054,7 +2080,7 @@ fn a_missing_family_draws_the_plugin_face_and_is_reported() {
 
 #[test]
 fn a_font_removed_after_the_read_is_missing_and_leaves_nothing_behind() {
-    use super::text::{Face, Lack};
+    use crate::fx::text::{Face, Lack};
     let (dir, mut fonts) = installed(&["BarlowCondensed-ExtraBold.ttf"]);
     std::fs::remove_file(dir.path().join("BarlowCondensed-ExtraBold.ttf")).unwrap();
     let before = fonts.system.db().len();
@@ -2072,7 +2098,7 @@ fn a_font_removed_after_the_read_is_missing_and_leaves_nothing_behind() {
 
 #[test]
 fn an_installed_font_never_takes_over_a_bundled_face_fallback() {
-    use super::text::{Face, layout};
+    use crate::fx::text::{Face, layout};
     // A wide-coverage file installed and chosen BEFORE any text needs a fallback
     // (the order a user makes): a character Jost lacks must still be drawn from
     // the bundled file, not from the installed copy. Two separate font systems,
@@ -2119,7 +2145,7 @@ fn an_installed_font_never_takes_over_a_bundled_face_fallback() {
 
 #[test]
 fn a_variable_installed_font_is_drawn_at_the_plugin_weight() {
-    use super::text::Face;
+    use crate::fx::text::Face;
     let (_dir, mut fonts) = installed(&["Jost-Variable.ttf"]);
     // Jost ExtraBold (800) is the plugin's face: the variable file is asked at 800.
     let (face, missing) = fonts.face("system:Jost", Face::Jost);
@@ -2128,7 +2154,7 @@ fn a_variable_installed_font_is_drawn_at_the_plugin_weight() {
         "{face:?}"
     );
     assert_eq!(fonts.face_info(face).1.0, 800);
-    let laid = super::text::layout(
+    let laid = crate::fx::text::layout(
         &mut fonts,
         &["H".to_string()],
         "",
@@ -2143,8 +2169,8 @@ fn a_variable_installed_font_is_drawn_at_the_plugin_weight() {
 
 /// GPU: an installed copy of a bundled file draws the same pixels as the bundled face.
 fn an_installed_font_draws_on_the_gpu_like_the_bundled_face() {
-    use super::gl::GlRenderer;
-    use super::shaders::Output;
+    use crate::fx::gl::GlRenderer;
+    use crate::fx::shaders::Output;
     let (w, h) = (320u32, 200u32);
     let (_dir, mut fonts) = installed(&["BarlowCondensed-ExtraBold.ttf"]);
     let mut gpu = GlRenderer::headless(w, h, w as f32, h as f32, Output::PremulGamma).unwrap();
@@ -2183,9 +2209,9 @@ fn a_font_param_defaults_to_a_bundled_face_and_takes_installed_names() {
 #[ignore = "measurement: reads this machine's installed fonts (run with --nocapture)"]
 fn installed_fonts_read_time() {
     let started = std::time::Instant::now();
-    let db = super::text::system_fonts(None);
+    let db = crate::fx::text::system_fonts(None);
     let read = started.elapsed();
-    let families = super::text::families_of(&db);
+    let families = crate::fx::text::families_of(&db);
     eprintln!(
         "installed fonts: {} faces, {} families, read in {read:?}",
         db.len(),
@@ -2351,7 +2377,7 @@ fn the_bundled_plugins_take_an_installed_font_in_one_level_2_setting() {
 /// would start it at the box's left edge), and the layout says so.
 #[test]
 fn a_word_wider_than_the_box_stays_whole_centred_and_is_said() {
-    use super::text::{Face, layout};
+    use crate::fx::text::{Face, layout};
     let mut fonts = Fonts::load().unwrap();
     let long = "Supercalifragilisticexpialidocious";
     let words: Vec<String> = ["on", long, "ici"].iter().map(|s| s.to_string()).collect();
@@ -2471,7 +2497,7 @@ fn a_too_wide_word_is_centred_and_said_by_classique_and_a_plugin() {
 /// symbol font, is said so (the row keeps the interface font).
 #[test]
 fn a_face_draws_its_own_name_or_says_why_it_cannot() {
-    use super::text::{Face, Label};
+    use crate::fx::text::{Face, Label};
     let mut fonts = Fonts::load().unwrap();
     let ink = |l: &Label| match l {
         Label::Drawn { w, h, alpha } => {
@@ -2500,7 +2526,9 @@ fn a_face_draws_its_own_name_or_says_why_it_cannot() {
     for f in ["NotoSans-Regular.ttf", "NotoSans-SemiBold.ttf"] {
         std::fs::copy(repo(&format!("assets/{f}")), dir.path().join(f)).unwrap();
     }
-    let db = std::sync::Arc::new(super::text::system_fonts(Some(&[dir.path().to_path_buf()])));
+    let db = std::sync::Arc::new(crate::fx::text::system_fonts(Some(&[dir
+        .path()
+        .to_path_buf()])));
     fonts.set_installed(db);
     let (bold, _) = fonts.face("system:Noto Sans", Face::Jost);
     let (regular, _) = fonts.face("system:Noto Sans", Face::Sans);
@@ -2517,10 +2545,217 @@ fn a_face_draws_its_own_name_or_says_why_it_cannot() {
     if wingdings.is_file() {
         let sym = tempfile::tempdir().unwrap();
         std::fs::copy(wingdings, sym.path().join("wingding.ttf")).unwrap();
-        let db = std::sync::Arc::new(super::text::system_fonts(Some(&[sym.path().to_path_buf()])));
+        let db = std::sync::Arc::new(crate::fx::text::system_fonts(Some(&[sym
+            .path()
+            .to_path_buf()])));
         fonts.set_installed(db);
         let (face, lack) = fonts.face("system:Wingdings", Face::Sans);
         assert_eq!(lack, None);
         assert_eq!(fonts.label(face, "Wingdings", 28.0), Label::Symbol);
+    }
+}
+
+/// A style's frame description holds exactly the instances `frame` gives, for
+/// every bundled preset, and is a frame the engine draws by its direct path.
+#[test]
+fn a_style_describes_its_frame_as_the_instances_it_prepared() {
+    use crate::fx::draw::Draw;
+    let mut fonts = Fonts::load().unwrap();
+    for entry in scan(&[repo("assets/effects")]).effects {
+        let effect = entry.effect;
+        let mut presets: Vec<Option<String>> = vec![None];
+        presets.extend(effect.presets.iter().map(|(id, _)| Some(id.clone())));
+        for preset in presets {
+            for (w, h) in [(1920, 1080), (1080, 1920)] {
+                let mut a = PluginScene::new(effect.clone(), w, h, lines(), preset.as_deref());
+                let mut b = PluginScene::new(effect.clone(), w, h, lines(), preset.as_deref());
+                for t in [0.0, 0.4, 1.3, 2.6, 4.0] {
+                    let (glow, gain, main, changed) = a.frame(&mut fonts, &NoGpu, t);
+                    let (frame, changed_too) = b.describe(&mut fonts, &NoGpu, t);
+                    let what = format!("{} {preset:?} {w}x{h} t={t}", effect.id);
+                    assert_eq!(changed, changed_too, "{what}");
+                    let p = crate::fx::paint::direct(&frame)
+                        .unwrap_or_else(|| panic!("{what}: not the direct path"));
+                    assert!(
+                        matches!(frame.draws.as_slice(), [Draw::Prepared(_)]),
+                        "{what}"
+                    );
+                    assert_eq!(p.gain.to_bits(), gain.to_bits(), "{what}");
+                    assert_eq!(
+                        bytemuck::cast_slice::<Inst, u8>(&p.glow),
+                        bytemuck::cast_slice::<Inst, u8>(&glow),
+                        "{what}"
+                    );
+                    assert_eq!(
+                        bytemuck::cast_slice::<Inst, u8>(&p.main),
+                        bytemuck::cast_slice::<Inst, u8>(&main),
+                        "{what}"
+                    );
+                    // No bundled style is over a cap on these lyrics.
+                    assert_eq!(b.over_caps(), None, "{what}");
+                }
+            }
+        }
+    }
+}
+
+/// A frame with anything beside its prepared instances does not take the direct
+/// path, and is refused without a compositor to stack it on.
+#[test]
+fn only_a_frame_of_prepared_instances_alone_takes_the_direct_path() {
+    use crate::fx::draw::{Draw, Frame, Prepared, RectDraw, Run, Span, runs};
+    use crate::fx::paint::direct;
+    let prepared = || Draw::Prepared(Prepared::default());
+    let frame = |draws: Vec<Draw>, layers: Vec<Span>| Frame {
+        draws,
+        layers,
+        energy: 0.0,
+        onset_age: 0.0,
+        video: None,
+    };
+    assert!(direct(&frame(vec![prepared()], Vec::new())).is_some());
+    assert!(direct(&frame(Vec::new(), Vec::new())).is_none());
+    let rect = Draw::Rect(RectDraw::new(0.1, 0.1));
+    let beside = frame(vec![prepared(), rect.clone()], Vec::new());
+    assert!(direct(&beside).is_none());
+    let two = frame(vec![prepared(), prepared()], Vec::new());
+    assert!(direct(&two).is_none());
+    let mut reframed = frame(vec![prepared()], Vec::new());
+    reframed.video = Some(crate::fx::reframe::VideoDraw::default());
+    assert!(direct(&reframed).is_none());
+    // Each prepared draw is a pass of its own; the draws around it keep theirs.
+    let kinds: Vec<Run> = runs(&[rect.clone(), rect.clone(), prepared(), prepared(), rect])
+        .into_iter()
+        .map(|(_, k)| k)
+        .collect();
+    assert_eq!(
+        kinds,
+        [Run::Engine, Run::Prepared, Run::Prepared, Run::Engine]
+    );
+}
+
+/// A style that draws more at once than the engine's caps allow a scene still
+/// draws: what it is over is said, nothing is refused.
+#[test]
+fn a_style_over_a_cap_draws_and_says_which() {
+    use crate::fx::draw::{MAX_GLYPHS, Prepared};
+    let one = Inst {
+        center: [50.0, 50.0],
+        size: [10.0, 10.0],
+        xform: [0.0, 1.0, 1.0, 0.0],
+        ..Inst::default()
+    };
+    let within = Prepared {
+        glow: Vec::new(),
+        gain: 1.0,
+        main: vec![one; MAX_GLYPHS],
+    };
+    assert_eq!(crate::fx::check::over_caps(&within, 1920.0, 1080.0), None);
+    let over = Prepared {
+        glow: vec![one],
+        gain: 1.0,
+        main: vec![one; MAX_GLYPHS],
+    };
+    let said = crate::fx::check::over_caps(&over, 1920.0, 1080.0).unwrap();
+    assert!(said.contains("letters drawn"), "{said}");
+    // Surface: a quad counts what of it is inside the frame.
+    let big = |n: usize| Prepared {
+        glow: Vec::new(),
+        gain: 1.0,
+        main: vec![
+            Inst {
+                center: [960.0, 540.0],
+                size: [1920.0, 1080.0],
+                xform: [0.0, 1.0, 1.0, 0.0],
+                ..Inst::default()
+            };
+            n
+        ],
+    };
+    assert_eq!(big(1).area(1920.0, 1080.0), 1.0);
+    let half_out = Prepared {
+        glow: Vec::new(),
+        gain: 1.0,
+        main: vec![Inst {
+            center: [0.0, 540.0],
+            size: [1920.0, 1080.0],
+            xform: [0.0, 1.0, 1.0, 0.0],
+            ..Inst::default()
+        }],
+    };
+    assert_eq!(half_out.area(1920.0, 1080.0), 0.5);
+    let n = crate::fx::draw::MAX_AREA.ceil() as usize + 1;
+    let said = crate::fx::check::over_caps(&big(n), 1920.0, 1080.0).unwrap();
+    assert!(said.contains("frames"), "{said}");
+}
+
+/// Ordinary and long lyrics, invented: lines of a few words, then dense lines of
+/// fourteen long words sung fast, back to back.
+fn stress_lines() -> Vec<Line> {
+    let w = |s: &str| s.split_whitespace().map(str::to_string).collect::<Vec<_>>();
+    let mut out = Vec::new();
+    let mut t = 0.5;
+    for k in 0..6 {
+        let text = ["Ever since the impact", "nothing feels the same tonight"][k % 2];
+        out.push(split_words(t, t + 2.0, &w(text), " "));
+        t += 2.4;
+    }
+    let long = "extraordinary constellations wandering underneath everlasting thunderstorms \
+                remembering unforgettable conversations surrounding overwhelming \
+                kaleidoscopic transformations happening everywhere simultaneously";
+    for _ in 0..6 {
+        out.push(split_words(t, t + 3.0, &w(long), " "));
+        t += 3.0;
+    }
+    out
+}
+
+/// No bundled style, in any preset or orientation, is over one of the engine's
+/// caps on ordinary or on long lyrics: the « heavy » warning is for a style
+/// that asks for far more than a shipped one does. `NOH_STYLE_LYRICS` adds the
+/// lines of an `.srt` of one's own to the run; `--nocapture` prints the most
+/// each style reached.
+#[test]
+fn no_bundled_style_is_over_a_cap_on_ordinary_or_long_lyrics() {
+    let mut tracks = vec![("stress".to_string(), stress_lines())];
+    if let Ok(path) = std::env::var("NOH_STYLE_LYRICS") {
+        let text = std::fs::read_to_string(&path).unwrap();
+        let track = crate::subtitle_srt::parse(&text, 3_600_000).unwrap();
+        tracks.push(("own".to_string(), super::line::from_track(&track)));
+    }
+    let mut fonts = Fonts::load().unwrap();
+    for entry in scan(&[repo("assets/effects")]).effects {
+        let effect = entry.effect;
+        let mut presets: Vec<Option<String>> = vec![None];
+        presets.extend(effect.presets.iter().map(|(id, _)| Some(id.clone())));
+        let (mut glyphs, mut area, mut blurs) = (0usize, 0f32, 0usize);
+        for (name, lines) in &tracks {
+            let end = lines.iter().map(|l| l.end).fold(0.0, f64::max) + 1.0;
+            for preset in &presets {
+                for (w, h) in [(1920, 1080), (1080, 1920)] {
+                    let mut scene =
+                        PluginScene::new(effect.clone(), w, h, lines.clone(), preset.as_deref());
+                    let mut t = 0.0;
+                    while t < end {
+                        let (frame, _) = scene.describe(&mut fonts, &NoGpu, t);
+                        let p = crate::fx::paint::direct(&frame).unwrap();
+                        glyphs = glyphs.max(p.glyph_instances());
+                        area = area.max(p.area(w as f32, h as f32));
+                        blurs = blurs.max(p.blurs());
+                        assert_eq!(
+                            scene.over_caps(),
+                            None,
+                            "{} {preset:?} {w}x{h} {name} t={t:.2}",
+                            effect.id
+                        );
+                        t += 0.1;
+                    }
+                }
+            }
+        }
+        println!(
+            "{}: at most {glyphs} instances, {area:.2} frames, {blurs} blurs",
+            effect.id
+        );
     }
 }

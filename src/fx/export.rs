@@ -11,9 +11,7 @@
 //! the log is returned: the NVENC fallback decides on that log.
 use super::gl::{GlRenderer, Matrix, YuvMix};
 use super::mkv;
-use super::plugin::PluginScene;
 use super::shaders::Output;
-use super::text::Fonts;
 use crate::process::Tree;
 use std::{
     io::{self, BufRead, BufReader, Read, Write},
@@ -27,8 +25,44 @@ use std::{
 /// How long a frame may wait for its timestamp line, which FFmpeg writes before
 /// the frame: past this, the line is missing, not late.
 const LINE_GRACE: Duration = Duration::from_secs(5);
+/// What every GL call answers once a GPU reset has lost a robust context.
+const CONTEXT_LOST: u32 = 0x0507;
 /// How long a failing FFmpeg may take to exit before it is killed.
 const SETTLE: Duration = Duration::from_secs(5);
+
+/// What draws the layer mixed into each frame: a caption style, a motion
+/// scene, anything that draws an overlay on the engine's context.
+pub type Layer = Box<dyn Overlay>;
+
+/// An overlay drawn on the engine's context: set up once on the context, then
+/// asked for each frame's time. `draw` returns a texture of the engine's output
+/// kind (premultiplied, display-encoded RGBA8, top row first, the frame's
+/// size), valid until the next call.
+pub trait Overlay {
+    fn setup(&mut self, gpu: &mut GlRenderer) -> Result<(), String>;
+    fn draw(&mut self, gpu: &mut GlRenderer, t: f64) -> Result<glow::Texture, String>;
+    /// How the last frame drawn reframes the picture under it (none: as decoded).
+    fn reframe(&self) -> Option<super::gl::Reframe> {
+        None
+    }
+    /// Whether the last frame drawn put text outside the frame.
+    fn overflowed(&self) -> bool {
+        false
+    }
+    /// Whether the last frame drawn held a word wider than its box.
+    fn too_wide(&self) -> bool {
+        false
+    }
+    /// The installed font family asked for and not found, if any.
+    fn font_missing(&self) -> Option<String> {
+        None
+    }
+    /// The first of the engine's caps the last frame drawn is over, as a
+    /// sentence, for an overlay that draws all the same (a caption style).
+    fn over_caps(&self) -> Option<String> {
+        None
+    }
+}
 
 /// What a path supplies; `run` owns the processes and the GPU work.
 pub struct Job {
@@ -43,8 +77,11 @@ pub struct Job {
     pub workspace: PathBuf,
     pub width: u32,
     pub height: u32,
+    /// The decoded picture's size, FFmpeg #1's output: the frame's own, or the
+    /// source's when the layer reframes it into a frame of another shape.
+    pub source: (u32, u32),
     pub matrix: Matrix,
-    pub scene: PluginScene,
+    pub scene: Layer,
     pub deadline: Duration,
     /// The video's known end on FFmpeg #1's clock (s): the last frame lasts until
     /// then, as in a single FFmpeg. None: FFmpeg #2 decides (the project's setts).
@@ -84,6 +121,9 @@ pub struct Stats {
     /// The installed family the effect's font setting names and this machine
     /// lacks (drawn in the plugin's own face instead).
     pub font_missing: Option<String>,
+    /// Output time of the first frame over one of the engine's caps, and which
+    /// (drawn all the same).
+    pub over_caps: Option<(f64, String)>,
 }
 
 pub struct Failure {
@@ -414,6 +454,7 @@ pub fn run(
         job.width,
         job.height,
         job.matrix,
+        job.source,
         job.scene,
         job.end,
         &stats_path,
@@ -457,7 +498,8 @@ fn chain(
     w: u32,
     h: u32,
     matrix: Matrix,
-    mut scene: PluginScene,
+    source: (u32, u32),
+    mut scene: Layer,
     end: Option<f64>,
     stats_path: &Path,
     until: Instant,
@@ -467,20 +509,11 @@ fn chain(
     progress: &mut dyn FnMut(&str),
 ) -> Result<(ExitStatus, Stats), String> {
     let out = one.tree.0.stdout().take().ok_or("missing FFmpeg output")?;
-    if let Some(src) = scene.effect.shader.as_deref() {
-        gpu.set_hooks(Some(src), scene.hook_user())?;
-    }
-    let mut mix = YuvMix::new(&gpu, matrix).map_err(|e| format!("OpenGL: {e}"))?;
-    let mut fonts = Fonts::load()?;
-    // An installed font is read before the first frame: an export never draws
-    // with fonts « not read yet », only with the chosen one or, if it is missing,
-    // the plugin's own face and a warning.
-    if scene.wants_installed_fonts() {
-        fonts.set_installed(std::sync::Arc::new(super::text::system_fonts(None)));
-    }
+    let mut mix = YuvMix::with_source(&gpu, matrix, source).map_err(|e| format!("OpenGL: {e}"))?;
+    scene.setup(&mut gpu)?;
     let setup_ms = setup.elapsed().as_secs_f64() * 1000.0;
     let size = mix.frame_bytes();
-    let frames = Frames::start(out, size);
+    let frames = Frames::start(out, mix.input_bytes());
     let mut tail = StatsTail::open(stats_path, until)?;
     let line_until = || (Instant::now() + LINE_GRACE).min(until);
 
@@ -521,23 +554,37 @@ fn chain(
     let mut n = 0usize;
     let mut overflow_at = None;
     let mut too_wide_at = None;
+    let mut over_caps = None;
     let to_us = |p: i64| seconds(p, &time_base).map(|s| (s * 1e6).round() as u64);
     loop {
         let t0 = Instant::now();
         let t = seconds(pts, &time_base)?;
-        let (glow_i, gain, main, _) = scene.frame(&mut fonts, &gpu, t);
+        let layer = scene.draw(&mut gpu, t)?;
         if scene.overflowed() && overflow_at.is_none() {
             overflow_at = Some(t);
         }
         if scene.too_wide() && too_wide_at.is_none() {
             too_wide_at = Some(t);
         }
-        gpu.frame(&glow_i, gain, &main, false)
-            .map_err(|e| format!("OpenGL: {e}"))?;
+        if over_caps.is_none()
+            && let Some(why) = scene.over_caps()
+        {
+            over_caps = Some((t, why));
+        }
+        mix.set_reframe(scene.reframe());
         let t1 = Instant::now();
         let slot = n % 2;
-        mix.submit(&buf, gpu.output_texture(), slot)
+        mix.submit(&buf, layer, slot)
             .map_err(|e| format!("OpenGL: {e}"))?;
+        // A GPU reset loses a robust context (`gl.rs`): every call then answers
+        // GL_CONTEXT_LOST, and the frames read back would be empty. Fail, so
+        // that nothing is published.
+        let e = unsafe { glow::HasContext::get_error(&**gpu.context()) };
+        if e == CONTEXT_LOST {
+            return Err("the graphics driver was reset during the export".into());
+        } else if e != glow::NO_ERROR {
+            return Err(format!("OpenGL: error 0x{e:x} after the mix"));
+        }
         layer_ms.push((t1 - t0).as_secs_f64() * 1000.0);
         mix_ms.push(t1.elapsed().as_secs_f64() * 1000.0);
         let _ = frames.free.send(buf);
@@ -635,7 +682,8 @@ fn chain(
             fetch_ms: spread(fetch_ms),
             overflow_at,
             too_wide_at,
-            font_missing: scene.font_missing().map(str::to_string),
+            font_missing: scene.font_missing(),
+            over_caps,
         },
     ))
 }

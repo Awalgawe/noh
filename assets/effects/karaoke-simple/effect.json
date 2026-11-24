@@ -17,12 +17,12 @@
   "layout": {
     "mode": "line",
     "font": "$font",
-    "size": {"by_offset": [{"mul": ["@short", {"choose": ["$size", {"small": 0.07553, "medium": 0.09211, "large": 0.11053}]}]}, {"mul": ["@short", {"choose": ["$size", {"small": 0.06204, "medium": 0.07566, "large": 0.09079}]}]}]},
+    "size": {"by_offset": [{"mul": [{"min": ["@short", {"sub": [{"sub": ["@w", "@inset_l"]}, "@inset_r"]}]}, {"choose": ["$size", {"small": 0.07553, "medium": 0.09211, "large": 0.11053}]}]}, {"mul": [{"min": ["@short", {"sub": [{"sub": ["@w", "@inset_l"]}, "@inset_r"]}]}, {"choose": ["$size", {"small": 0.06204, "medium": 0.07566, "large": 0.09079}]}]}]},
     "line_height": 1.3,
     "box": {
       "x": 0.5,
       "width": 0.88,
-      "y": {"choose": ["$placement", {"bottom": {"sub": [0.84, {"div": [{"mul": ["@short", {"choose": ["$size", {"small": 0.08065, "medium": 0.09836, "large": 0.11803}]}]}, "@h"]}]}, "top": 0.16}]},
+      "y": {"choose": ["$placement", {"bottom": {"sub": [0.84, {"div": [{"mul": [{"min": ["@short", {"sub": [{"sub": ["@w", "@inset_l"]}, "@inset_r"]}]}, {"choose": ["$size", {"small": 0.08065, "medium": 0.09836, "large": 0.11803}]}]}, "@h"]}]}, "top": 0.16}]},
       "anchor": {"choose": ["$placement", {"bottom": "bottom", "top": "top"}]}
     },
     "visible": "line",

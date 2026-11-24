@@ -83,6 +83,7 @@ fn worker_short_requires_exactly_one_operation_and_no_montage_diagnosis() {
         ffmpeg: Some(f.ffmpeg.clone()),
     };
     let caption = noh::captions::CaptionRequest {
+        scene: None,
         effect: None,
         source: f.path("missing.mp4"),
         subtitles: f.path("reviewed.srt"),

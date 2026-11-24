@@ -117,6 +117,14 @@ class DeliveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Unknown'):
             public_installer.includes('unexpected', 'noh.exe')
 
+    def test_public_installer_deletes_retired_files_it_no_longer_ships(self):
+        lines = public_installer.retired_lines({'noh.exe': {}, 'docs/README.md': {}})
+        self.assertEqual(lines[0], '[InstallDelete]')
+        self.assertIn('Type: files; Name: "{app}\\docs\\UPDATE_RECOVERY.md"', lines)
+        self.assertEqual(len(lines), 1 + len(public_installer.RETIRED))
+        with self.assertRaisesRegex(ValueError, 'still shipped'):
+            public_installer.retired_lines({'docs/UPDATE_RELEASE.md': {}})
+
     def test_public_profile_manifest_matches_selected_files_and_preserves_build(self):
         for name in ('bin/noh-cli.exe', 'bin/noh-mcp.exe', 'bin/ffmpeg.exe',
                      'bin/preview/libmpv-2.dll', 'bin/speech/model.bin'):
@@ -455,7 +463,7 @@ class DeliveryTests(unittest.TestCase):
         (resources / 'README.md').write_text('Private fixture')
         (bundle / 'README.md').write_text('Private fixture')
         manifest = {'schema_version': 2, 'version': '0.1.0',
-                    'build': {'target': 'aarch64-apple-darwin', 'profile': 'release', 'git_revision': COMMIT, 'git_dirty': False, 'features': ['effects', 'gui', 'mcp']},
+                    'build': {'target': 'aarch64-apple-darwin', 'profile': 'release', 'git_revision': COMMIT, 'git_dirty': False, 'features': ['effects', 'gui', 'mcp', 'motion']},
                     'runtime_dependencies': {'portable': {'mach_o': [{'path': name} for name in paths]}},
                     'tools': {'ffmpeg': {'path': 'NOH.app/Contents/MacOS/bin/ffmpeg'}},
                     'sha256': {name: item['sha256'] for name, item in delivery.inventory(bundle).items()}}
@@ -921,7 +929,7 @@ class DeliveryTests(unittest.TestCase):
         self.materials.mkdir()
         (self.materials / "LICENSE.txt").write_text("synthetic notice", encoding="utf-8")
         self.manifest = {"schema_version": 2, "version": "0.1.0", "build": {
-            "target": "x86_64-pc-windows-gnu", "profile": "release", "features": ["effects", "gui", "mcp"],
+            "target": "x86_64-pc-windows-gnu", "profile": "release", "features": ["effects", "gui", "mcp", "motion"],
             "git_revision": COMMIT, "git_dirty": False},
             "sha256": {"noh.exe": delivery.digest(self.bundle / "noh.exe")}}
         delivery.write(self.bundle / "manifest.json", self.manifest)
@@ -1059,7 +1067,7 @@ class DeliveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "checksum"):
             delivery.verify_bundle(self.bundle, self.manifest["build"]["target"], COMMIT)
         for field, value in [("git_dirty", True), ("git_revision", "b" * 40),
-                             ("features", ["effects", "gui", "mcp", "updates"]), ("features", ["gui", "mcp"]), ("profile", "qa")]:
+                             ("features", ["effects", "gui", "mcp", "motion", "updates"]), ("features", ["effects", "gui", "mcp"]), ("profile", "qa")]:
             modified = copy.deepcopy(self.manifest)
             modified["build"][field] = value
             delivery.write(self.bundle / "manifest.json", modified)

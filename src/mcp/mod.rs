@@ -1,6 +1,7 @@
 //! Optional local MCP adapter; media work remains in the shared job controller.
 pub mod apps;
 pub mod machine;
+pub mod scene;
 pub mod session;
 pub mod slot;
 mod transport;
@@ -13,6 +14,7 @@ use rmcp::{
     schemars::{self, JsonSchema},
     tool, tool_handler, tool_router,
 };
+use scene::{SceneCheckInput, SceneClipInput, SceneLookInput};
 use serde::Serialize;
 use session::Session;
 use std::{io, path::PathBuf, sync::Arc};
@@ -156,19 +158,57 @@ impl Server {
         blocking(move || session.captions(input), |_| false).await
     }
 
-    #[tool(name = "noh_make_short", description = "Extract an explicit start_ms inclusive/end_ms exclusive interval from one local video into a vertical MP4, without overwriting. Pad preserves the full picture on black; crop fills the canvas by centered crop. Always re-encodes video and the first audio stream, preserving its source timing. Optional reviewed SRT captions (or their NOH lyrics file; the .srt and lyrics file are kept identical before starting, `truth` required when they differ, as in noh_burn_subtitles) use original source times and are clipped and shifted to the interval; they are drawn by the OpenGL engine in Classique, or in the caption effect named by captions.effect (see noh_list_effects, as in noh_burn_subtitles); libass is Classique's fallback only. Preview uses the same composition at reduced resolution. Returns a session job ID; poll noh_job for warnings, measured duration and exported path. No montage diagnosis is required.", output_schema = schema_for_output::<Reply<StartReply>>())]
+    #[tool(name = "noh_make_short", description = "Extract an explicit start_ms inclusive/end_ms exclusive interval from one local video into a vertical MP4, without overwriting. Pad preserves the full picture on black; crop fills the canvas by centered crop; experimental framing \"scene\" draws the motion scene in `motion` on the Short, framed by its video() (covering and centred without one), with captions.subtitles and captions.safe_area required (ask the user's platform) and no size, placement or effect. Always re-encodes video and the first audio stream, preserving its source timing. Optional reviewed SRT captions (or their NOH lyrics file; the .srt and lyrics file are kept identical before starting, `truth` required when they differ, as in noh_burn_subtitles) use original source times and are clipped and shifted to the interval; they are drawn by the OpenGL engine in Classique, or in the caption effect named by captions.effect (see noh_list_effects, as in noh_burn_subtitles); libass is Classique's fallback only. Preview uses the same composition at reduced resolution. Returns a session job ID; poll noh_job for warnings, measured duration and exported path. No montage diagnosis is required.", output_schema = schema_for_output::<Reply<StartReply>>())]
     async fn short(&self, Parameters(input): Parameters<ShortInput>) -> CallToolResult {
         let session = self.session.clone();
         blocking(move || session.short(input), |_| false).await
     }
 
-    #[tool(name = "noh_export_project", description = "Compose original ordered media and WAV directly into a full montage or selected vertical short, with optional reviewed WAV-timed SRT burned after framing (or its NOH lyrics file; the .srt and lyrics file are kept identical before starting, `truth` required when they differ, as in noh_burn_subtitles). Short start_ms/end_ms select the WAV; restart_loops defaults false and changes visual phase only, including synchronized original clip audio. Fades retain their full-project WAV clock. Selected pieces are prepared privately and losslessly; final composed video is encoded once. Composed output requires MP4 and WAV duration at most two hours. Captions are drawn frame-accurately in NOH's Classique style by its OpenGL engine, as in the app; without an OpenGL context they fall back to libass with the same line breaks and a warning, and a preview render uses libass. captions.effect names another caption effect (see noh_list_effects, as in noh_burn_subtitles): it has no libass fallback and is refused with preview. Without short or captions, existing montage behavior is preserved. No diagnosis or full-project intermediate is required. Existing files are never overwritten. Returns a job ID; poll noh_job.", output_schema = schema_for_output::<Reply<StartReply>>())]
+    #[tool(name = "noh_export_project", description = "Compose original ordered media and WAV directly into a full montage or selected vertical short, with optional reviewed WAV-timed SRT burned after framing (or its NOH lyrics file; the .srt and lyrics file are kept identical before starting, `truth` required when they differ, as in noh_burn_subtitles). Short start_ms/end_ms select the WAV; restart_loops defaults false and changes visual phase only, including synchronized original clip audio. Fades retain their full-project WAV clock. Selected pieces are prepared privately and losslessly; final composed video is encoded once. Composed output requires MP4 and WAV duration at most two hours. Captions are drawn frame-accurately in NOH's Classique style by its OpenGL engine, as in the app; without an OpenGL context they fall back to libass with the same line breaks and a warning, and a preview render uses libass. captions.effect names another caption effect (see noh_list_effects, as in noh_burn_subtitles): it has no libass fallback and is refused with preview. Experimental: `motion` draws a motion scene instead of the captions (it draws the lyrics of `captions` itself, with the song's sound, on the song's clock; a short's frames start at its start_ms); it needs captions without effect, size or placement, and is validated at the export's frames before anything starts (see noh_list_effects `motion`). Without short or captions, existing montage behavior is preserved. No diagnosis or full-project intermediate is required. Existing files are never overwritten. Returns a job ID; poll noh_job.", output_schema = schema_for_output::<Reply<StartReply>>())]
     async fn project(&self, Parameters(input): Parameters<ProjectInput>) -> CallToolResult {
         let session = self.session.clone();
         blocking(move || session.project(input), |_| false).await
     }
 
-    #[tool(name = "noh_list_effects", description = "List the caption effects that `effect.id` can name in noh_burn_subtitles, noh_make_short and noh_export_project: each effect's presets and settings (type, choices, range, default), the folders NOH reads (bundled beside noh.exe, then the user's) and the folders it refused with their reason. Reads files only; starts no job.", output_schema = schema_for_output::<Reply<EffectsReply>>())]
+    #[tool(name = "noh_scene_check", description = "Experimental. Check a motion scene (a script file that draws the lyrics, shapes and particles over a video; its language, functions, caps and the author guide are in noh_list_effects, `motion`) against a video and its reviewed subtitles: every frame of the interval at the video's frame rate is evaluated, checked against the counted caps, and asked again in another order; the layer shaders beside the scene (<scene>.shaders/, WGSL) are validated, then compiled and drawn once in NOH's worker process (a driver that fails on one stops the worker: error.scene_worker_stopped, nothing published). Writes report.json into a new output folder: the first refused frame with its instant and reason (the job fails), or the counted maxima against the caps, warnings (text leaving the frame or the safe area, overlaps), what was not checked, the script's time and the whole frame's time on this machine (information, never a limit). A vertical video needs a safe_area: ask the user which platform the video is for, proposing YouTube Shorts. If you cannot ask yet, draft with universal (the strictest) and ask before exporting. The subtitles are kept identical to their lyrics file as in noh_burn_subtitles: NOH creates the lyrics file beside an .srt given alone. The job's result is kind export, its output the folder. One job at a time: a check is refused (mcp.busy) while another job runs. In this version a scene is drawn over one video (a caption burn): its sound gives the energy and onsets, its length the song's, its size the canvas; scenes over a montage (a song WAV and several clips) come with the project export. Returns a job ID; poll noh_job.", output_schema = schema_for_output::<Reply<StartReply>>())]
+    async fn scene_check(&self, Parameters(input): Parameters<SceneCheckInput>) -> CallToolResult {
+        let session = self.session.clone();
+        blocking(move || session.scene_check(input), |_| false).await
+    }
+
+    #[tool(name = "noh_scene_look", description = "Experimental. See frames of a motion scene drawn by the export's engine over the video: stills (PNG frames at at_ms), strip (eight frames over one second and a sheet of them), sheet (count frames at the middle of equal parts of the interval, and a sheet; look.json gives each frame's time), or measure (where each text falls, as JSON, no picture). grid draws the frame's edges, a line every tenth of the frame and the safe area; bare shows the video alone, without the scene's draws, to compose on it. The scene is checked first, as noh_scene_check does; a refused scene fails the job. Files go into a new output folder with look.json listing them; open the PNGs to judge them. A vertical video needs a safe_area (ask the user's platform, proposing YouTube Shorts). If you cannot ask yet, draft with universal (the strictest) and ask before exporting. The subtitles are kept identical to their lyrics file as in noh_burn_subtitles: NOH creates the lyrics file beside an .srt given alone. The job's result is kind export, its output the folder. One job at a time: a look is refused (mcp.busy) while another job runs. With app_id (a window you drive), that window first moves its playhead to the instant looked at (waiting while the person navigates) and draws the frame's grid, and on the short the safe area, over its monitor, to show the person where you look; its refusals start nothing. In this version a scene is drawn over one video (a caption burn): its sound gives the energy and onsets, its length the song's, its size the canvas; scenes over a montage (a song WAV and several clips) come with the project export. Returns a job ID; poll noh_job.", output_schema = schema_for_output::<Reply<StartReply>>())]
+    async fn scene_look(&self, Parameters(input): Parameters<SceneLookInput>) -> CallToolResult {
+        let session = self.session.clone();
+        let apps = self.apps.clone();
+        blocking(
+            move || {
+                // The window shows where the agent looks before the frames
+                // are drawn; a window that refuses (the person navigates, it
+                // was taken back) starts nothing.
+                if let Some(app_id) = &input.app_id {
+                    // An invalid look, or one a running job refuses, moves no
+                    // one's playhead.
+                    session.scene_look_ready(&input)?;
+                    apps.act(app_id, input.marker()).map_err(|e| {
+                        let mut error = SessionError::new(&e.code, &e.detail);
+                        error.technical = e.details.map(|d| d.to_string()).unwrap_or_default();
+                        error
+                    })?;
+                }
+                session.scene_look(input)
+            },
+            |_| false,
+        )
+        .await
+    }
+
+    #[tool(name = "noh_scene_clip", description = "Experimental. Render a short clip (at most 30 s, preview quality) of the video with a motion scene drawn over it, to judge a rhythm: the same drawing as noh_burn_subtitles with `motion`, on start_ms..end_ms of the source; the scene keeps the source's clock. Checked before it starts; nothing published on a refusal. Publishes a new MP4 without overwriting. Its frames are checked at the clip's own instants (start plus whole frames); lyrics times stay on the source's clock. `vertical` draws on a vertical Short made from the video, as noh_make_short framing \"scene\" exports it. A vertical frame needs a safe_area (ask the user's platform). The subtitles are kept identical to their lyrics file as in noh_burn_subtitles: NOH creates the lyrics file beside an .srt given alone. One job at a time: refused (mcp.busy) while another job runs. Returns a job ID; poll noh_job.", output_schema = schema_for_output::<Reply<StartReply>>())]
+    async fn scene_clip(&self, Parameters(input): Parameters<SceneClipInput>) -> CallToolResult {
+        let session = self.session.clone();
+        blocking(move || session.scene_clip(input), |_| false).await
+    }
+
+    #[tool(name = "noh_list_effects", description = "List the caption effects that `effect.id` can name in noh_burn_subtitles, noh_make_short and noh_export_project: each effect's presets and settings (type, choices, range, default), the folders NOH reads (bundled beside noh.exe, then the user's) and the folders it refused with their reason. In a build with motion scenes it also returns `motion`: the scene format line, every callable function, the caps, the font faces, the safe areas and the format reference (read it before writing a scene for noh_scene_check, noh_scene_look, noh_scene_clip, noh_burn_subtitles or noh_export_project `motion`). Reads files only; starts no job.", output_schema = schema_for_output::<Reply<EffectsReply>>())]
     async fn list_effects(&self, Parameters(_): Parameters<ListEffectsInput>) -> CallToolResult {
         blocking(
             || Ok(EffectsReply::from(crate::effect_choice::list())),
@@ -200,7 +240,7 @@ impl Server {
         app_blocking(move || apps.close(&input.app_id)).await
     }
 
-    #[tool(name = "noh_app_do", description = "One gesture in a NOH window you drive, applied as the matching click: add files (as a drop), remove or move a clip, a picture's duration, fades and the clips' sound, convert all, a lyrics line (set_text, set_start, set_end, shift, add, delete; based_on = the lyrics revision you read, refused with app.state_changed if they were reloaded since), undo, redo, the caption effect and its settings (preset, values, size, placement, show_on_video), the safe area, the short's range and framing, the destination, export (montage or short; the answer says whether it started, or why not, e.g. app.not_started when the destination folder was removed meanwhile; state follows the job), cancel, seek, play, pause, or an answer to the open question. Gestures the interface locks during a job are refused with app.job_running. Seek, play and pause wait while the person navigates (up to 3 s after their last gesture) and are then refused with app.user_navigating and retry_after_ms; never take the playhead from the person. The open question and its kind are in noh_app_state (question); answers that drop work or rewrite a file (modify_srt, keep_lyrics, keep_srt, discard) are given like the others: ask the person first when you judge it right. Returns the state revision the gesture led to.", output_schema = schema_for_output::<AppReply<AppDoReply>>())]
+    #[tool(name = "noh_app_do", description = "One gesture in a NOH window you drive, applied as the matching click: add files (as a drop), remove or move a clip, a picture's duration, fades and the clips' sound, convert all, a lyrics line (set_text, set_start, set_end, shift, add, delete, set_voices: who sings it, as the set of declared voice numbers; name_voices declares the voices first, with optional names; based_on = the lyrics revision you read, refused with app.state_changed if they were reloaded since), undo, redo, the caption effect and its settings (preset, values, size, placement, show_on_video), the safe area, the short's range and framing, the destination, export (montage or short; the answer says whether it started, or why not, e.g. app.not_started when the destination folder was removed meanwhile; state follows the job), cancel, seek, play, pause, an answer to the open question, or (experimental, a build with motion scenes) set_scene: the scene file you write, reread when it changes, its light check in state.scene. Gestures the interface locks during a job are refused with app.job_running. Seek, play and pause wait while the person navigates (up to 3 s after their last gesture) and are then refused with app.user_navigating and retry_after_ms; never take the playhead from the person. The open question and its kind are in noh_app_state (question); answers that drop work or rewrite a file (modify_srt, keep_lyrics, keep_srt, discard) are given like the others: ask the person first when you judge it right. Returns the state revision the gesture led to.", output_schema = schema_for_output::<AppReply<AppDoReply>>())]
     async fn app_do(&self, Parameters(input): Parameters<AppDoInput>) -> CallToolResult {
         let apps = self.apps.clone();
         app_blocking(move || apps.act(&input.app_id, input.action)).await
@@ -233,6 +273,10 @@ impl Server {
     /// the bound, so the format is dropped from every input and output schema.
     fn router() -> ToolRouter<Self> {
         let mut router = Self::tool_router();
+        // A build without motion scenes does not offer their tools.
+        if !cfg!(feature = "motion") {
+            router.map.retain(|name, _| !name.starts_with("noh_scene_"));
+        }
         for route in router.map.values_mut() {
             let tool = &mut route.attr;
             tool.input_schema = Arc::new(without_unsigned_formats(&tool.input_schema));
@@ -361,7 +405,8 @@ mod tests {
     #[test]
     fn sixteen_tools_have_strict_inputs_and_explicit_output_schemas() {
         let tools = Server::router().list_all();
-        assert_eq!(tools.len(), 16);
+        // Sixteen, and the three scene tools when motion scenes are built in.
+        assert_eq!(tools.len(), if cfg!(feature = "motion") { 19 } else { 16 });
         let transcribe = tools
             .iter()
             .find(|tool| tool.name == "noh_transcribe")
