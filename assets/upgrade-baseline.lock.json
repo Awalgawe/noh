@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "purpose": "The last published version, installed before the new installer in the upgrade test. Move it to the new Complete installer after each final release.",
-  "tag": "v0.3.1",
-  "installer": "NOH-0.3.1-windows-x64-Complete-Setup.exe",
-  "sha256": "6ced09842b64a29bae2598cc18b946685fe1777b753a86e809dba182f0664a4d",
-  "size": 1233128464
+  "tag": "v0.4.0",
+  "installer": "NOH-0.4.0-windows-x64-Complete-Setup.exe",
+  "sha256": "283033bcdb530f3cfae27a0d9aab1f8ce422e1859acfc1407826a2f812a8dbcc",
+  "size": 1235157374
 }
