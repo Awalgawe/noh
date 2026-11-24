@@ -427,6 +427,7 @@ lyrics.recheck=à revérifier
 lyrics.recheck_help=La chanson a changé depuis ces paroles. Vérifiez leur synchronisation.
 lyrics.after_end=Certaines lignes dépassent la durée de la chanson. Vérifiez leur timing ou remplacez le fichier.
 lyrics.unreadable=Fichier illisible
+lyrics.srt_overlap=Ce .srt n’est pas chargé : la ligne {1} commence avant la fin de la ligne {0}. NOH ne lit pas encore deux lignes chantées en même temps.
 lyrics.pick_title=Importer des paroles (.srt)
 bar.generating=Génération des paroles
 bar.lyrics_ready=Paroles prêtes : {0}

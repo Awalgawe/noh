@@ -427,6 +427,7 @@ lyrics.recheck=需复查
 lyrics.recheck_help=生成这些歌词后歌曲已更改。请检查时间轴。
 lyrics.after_end=有歌词行结束时间晚于歌曲。请检查时间或替换文件。
 lyrics.unreadable=无法读取的文件
+lyrics.srt_overlap=此 .srt 未载入：第 {1} 行在第 {0} 行结束前开始。NOH 暂不支持同时演唱的两行。
 lyrics.pick_title=导入歌词 (.srt)
 bar.generating=正在生成歌词
 bar.lyrics_ready=歌词已就绪：{0}

@@ -1,6 +1,7 @@
 //! One imported/generated subtitle attachment. Reads and identity checks stay off the UI thread.
 use noh::{
     engine::EngineError,
+    i18n::Message,
     inspection::{FileStamp, Snapshot},
     subtitle_track::SubtitleTrack,
 };
@@ -87,6 +88,9 @@ pub struct Attachment {
     pub path: Option<PathBuf>,
     pub loaded: Option<Loaded>,
     pub error: Option<EngineError>,
+    /// A read failed since the app last looked: `error` is new (taken by the
+    /// app to say a refused .srt even while other lyrics stay attached).
+    pub fresh_error: bool,
     /// Only committed changes invalidate an otherwise current rendered preview.
     pub revision: u64,
     generation: u64,
@@ -255,6 +259,7 @@ impl Attachment {
                                         self.source = Some((request.wav, request.duration_ms));
                                     }
                                     self.error = Some(error);
+                                    self.fresh_error = true;
                                 }
                             },
                             Reply::Checked {
@@ -331,6 +336,19 @@ impl Attachment {
         }
         changed
     }
+}
+
+/// The read error of an .srt whose line starts before the previous one ends;
+/// its detail is that line's number (from 1).
+pub const OVERLAP: &str = "lyrics.srt_overlap";
+
+/// What to tell of a refused .srt: which line starts before the previous ends.
+pub fn overlap_message(error: &EngineError) -> Option<Message> {
+    let cue: usize = (error.code == OVERLAP).then(|| error.detail.parse().ok())??;
+    Some(Message::new(
+        OVERLAP,
+        &[cue.saturating_sub(1).to_string(), cue.to_string()],
+    ))
 }
 
 fn load(request: &Request) -> Result<Loaded, EngineError> {
@@ -449,6 +467,19 @@ fn load(request: &Request) -> Result<Loaded, EngineError> {
         (Some(Ok(text)), lyrics) => {
             let mut track = match noh::subtitle_srt::parse(&text, request.duration_ms) {
                 Ok(track) => track,
+                // A line that starts before the previous one ends: this NOH
+                // reads no lines sung at once yet. Refused, saying which lines.
+                Err(noh::subtitle_srt::SrtError::Validation {
+                    source: noh::subtitle_track::ValidationError::Order { cue },
+                    ..
+                }) => {
+                    return Err(EngineError::new(
+                        OVERLAP,
+                        "read_subtitles",
+                        Some(&request.path),
+                        cue,
+                    ));
+                }
                 Err(duration_error) => {
                     return Err(match words::parse_srt_unbound(&text) {
                         Ok(_) => after_end(),
@@ -523,6 +554,7 @@ pub fn lost_words(lyrics: &SubtitleTrack, srt: &SubtitleTrack) -> (usize, bool) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use noh::i18n::Language;
     #[test]
     fn an_attach_drops_the_lyrics_a_change_on_disk_replaced() {
         let (_dir, request) = fixture();
@@ -665,6 +697,42 @@ mod tests {
         };
 
         assert_eq!(error.code, "lyrics.after_end");
+    }
+
+    #[test]
+    fn lines_sung_at_once_are_refused_saying_which_lines() {
+        let (_dir, request) = fixture();
+        // Line 2 starts before line 1 ends.
+        std::fs::write(
+            &request.path,
+            "1
+00:00:01,000 --> 00:00:04,000
+Une
+
+2
+00:00:03,000 --> 00:00:05,000
+Deux
+",
+        )
+        .unwrap();
+        let error = match load(&request) {
+            Ok(_) => panic!("overlapping lines unexpectedly loaded"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code, OVERLAP);
+        let message = overlap_message(&error).unwrap();
+        assert_eq!(message.args, ["1", "2"]);
+        for language in Language::ALL {
+            let text = message.render(language);
+            assert!(
+                text.contains('1') && text.contains('2') && !text.contains('{'),
+                "{text}"
+            );
+        }
+        // Any other refusal keeps its own words.
+        assert!(
+            overlap_message(&EngineError::new("error.caption_track", "x", None, "2")).is_none()
+        );
     }
 
     #[test]

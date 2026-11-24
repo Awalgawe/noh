@@ -44,6 +44,21 @@ impl NohApp {
         self.wav.is_some() || self.project.track.path.is_some()
     }
 
+    /// A refused .srt is said once, when its read fails, even while the lyrics
+    /// before it stay attached (the lyrics card then still shows those).
+    pub(super) fn say_refused_lyrics(&mut self) {
+        if std::mem::take(&mut self.project.track.fresh_error)
+            && let Some(message) = self
+                .project
+                .track
+                .error
+                .as_ref()
+                .and_then(crate::app_track::overlap_message)
+        {
+            self.notice = Some(message);
+        }
+    }
+
     pub(super) fn lyrics_state(&self) -> Chip {
         let track = &self.project.track;
         if self.project.generating {
@@ -318,11 +333,17 @@ impl NohApp {
                     reason.to_owned()
                 })
             } else if state == Chip::Unreadable {
-                chip.on_hover_text(format!(
-                    "{}\n{}",
-                    Message::from(error.message_code()).render(l),
-                    error.detail
-                ))
+                // Only while nothing is loaded: over loaded lyrics, the error is
+                // the refused file's, said once by `say_refused_lyrics`.
+                if let Some(message) = crate::app_track::overlap_message(error) {
+                    chip.on_hover_text(message.render(l))
+                } else {
+                    chip.on_hover_text(format!(
+                        "{}\n{}",
+                        Message::from(error.message_code()).render(l),
+                        error.detail
+                    ))
+                }
             } else {
                 chip
             }

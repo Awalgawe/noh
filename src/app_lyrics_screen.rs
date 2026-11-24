@@ -4296,6 +4296,16 @@ mod tests {
         at(&mut app, &ctx, None, Vec::new());
         assert!(app.lyrics_screen.game.is_none());
         assert_eq!(app.lyrics_track().unwrap().cues[1].start_ms, 4100);
+        // Espace still down when the song ends: the take lasts until the
+        // player's last time, not a blink (it was 0,2 s).
+        game(&mut app, &ctx, Level::Line, 2);
+        let start = app.lyrics_track().unwrap().cues[2].start_ms;
+        at(&mut app, &ctx, Some(start), vec![space(true, false)]);
+        at(&mut app, &ctx, Some(start + 600), vec![space(true, true)]);
+        at(&mut app, &ctx, None, Vec::new());
+        assert!(app.lyrics_screen.game.is_none());
+        let c = &app.lyrics_track().unwrap().cues[2];
+        assert_eq!((c.start_ms, c.end_ms), (start, start + 600));
     }
 
     #[test]
@@ -5622,10 +5632,19 @@ mod tests {
         // Voice 3 is not declared: nothing changes, NOH says so.
         frame(&mut app, &ctx, vec![key(Key::Num3, Modifiers::COMMAND)]);
         assert_eq!(voices_of(&app)[3], [1]);
-        assert_eq!(
-            app.notice.as_ref().map(|m| m.key.as_str()),
-            Some("lyrics_screen.voice_missing")
+        // Said on this screen, painted over its bottom, not in the app's
+        // notice, which only the main screen draws (it was invisible here).
+        let said = Language::Fr.format(
+            "lyrics_screen.voice_missing",
+            &[Language::Fr.format("voices.numbered", &["3".into()])],
         );
+        let shown = texts_at(&mut app, &ctx, vec2(980.0, 850.0), true);
+        assert!(
+            shown.iter().any(|p| p.text == said),
+            "{said:?} not painted: {:?}",
+            shown.iter().map(|p| &p.text).collect::<Vec<_>>()
+        );
+        assert!(app.notice.is_none());
         // The text was not touched, and each key is one undo step.
         assert_eq!(texts(&app)[3], SONG[3]);
         assert!(app.undo());
