@@ -242,6 +242,23 @@ fn scene_jobs_check_look_burn_clip_and_refuse() {
         "check",
         "song.noh-motion.rhai",
     ));
+    // The window asks with no FFmpeg unless the person picked one: the job
+    // finds it, as the other jobs do.
+    let job = Job::scene_with_cancel(
+        SceneRequest {
+            ffmpeg: std::path::PathBuf::new(),
+            ..request(
+                &f,
+                SceneMode::Check,
+                "check-no-ffmpeg",
+                "song.noh-motion.rhai",
+            )
+        },
+        f.exe.clone(),
+        Arc::new(AtomicBool::new(false)),
+        || {},
+    );
+    ok(&wait(&job));
     let report: serde_json::Value =
         serde_json::from_slice(&std::fs::read(f.path("check").join("report.json")).unwrap())
             .unwrap();
