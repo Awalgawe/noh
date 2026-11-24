@@ -29,6 +29,9 @@ enum Task {
         gui: bool,
         #[arg(long)]
         mcp: bool,
+        /// Include the motion scenes (feature `motion`); release packages do.
+        #[arg(long, requires = "gui")]
+        motion: bool,
         #[arg(long)]
         offline: bool,
         #[arg(long)]
@@ -85,6 +88,7 @@ fn build(
     source_root: Option<PathBuf>,
     gui: bool,
     mcp: bool,
+    motion: bool,
     offline: bool,
     no_bundle: bool,
     portable: bool,
@@ -137,6 +141,10 @@ fn build(
     }
     if mcp {
         command.args(["--features", "mcp", "--bin", "noh-mcp"]);
+    }
+    if motion {
+        // No binary of its own: the app, the CLI and the MCP server gain the scenes.
+        command.args(["--features", "motion"]);
     }
     if offline {
         command.arg("--offline");
@@ -282,6 +290,7 @@ fn main() {
             source_root,
             gui,
             mcp,
+            motion,
             offline,
             no_bundle,
             portable,
@@ -291,6 +300,7 @@ fn main() {
             source_root,
             gui,
             mcp,
+            motion,
             offline,
             no_bundle,
             portable,
