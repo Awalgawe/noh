@@ -568,6 +568,7 @@ warning.effect_overflow=The effect goes outside the Short’s safe area (first a
 warning.effect_off_frame=Some captions go outside the picture (first at {0}).
 warning.effect_font_missing=The font “{0}” is not installed: the text is drawn in the effect’s own font.
 warning.effect_word_too_wide=A word is wider than the text area: it sticks out, NOH does not cut it (first at {0}).
+warning.effect_heavy=The effect draws a great deal at once: the export may be slow (first at {0}).
 effect.overflow=This effect goes outside the Short’s safe area.
 warning.effect_fallback=Your graphics card could not draw the effect: the classic captions were drawn another way.
 warning.caption_colors_old_ffmpeg=This FFmpeg draws the captions in an older colour standard: their colours may be slightly off (red comes out a little lighter). FFmpeg 7.1 or later draws them exactly.

@@ -2,6 +2,7 @@
 //! script engine, so that a frame can leave the thread that evaluated it), and
 //! the checks the painter would make, done without drawing: the same answer on
 //! every machine. Where text falls comes from the layout alone (no glyph image).
+use super::shaders::Inst;
 use super::text::{Face, Fonts, PGlyph, layout};
 
 /// One frame as host data: what to draw at an instant, whatever described it.
@@ -50,17 +51,110 @@ pub enum Draw {
     Rect(RectDraw),
     Emitter(EmitterDraw),
     Path(super::shapes::PathDraw),
+    /// Host-only: no script function makes one.
+    Prepared(Prepared),
+}
+
+/// Glyph instances a host front end prepared itself (a caption style lays its
+/// lines out and animates them): the glow pass with its gain and the main pass,
+/// exactly what the renderer draws. The glyph shader's hooks are the caller's
+/// to set before the frame is drawn.
+#[derive(Clone, Debug, Default)]
+pub struct Prepared {
+    pub glow: Vec<Inst>,
+    pub gain: f32,
+    pub main: Vec<Inst>,
+}
+
+/// Equal when the renderer would be handed the same bytes.
+impl PartialEq for Prepared {
+    fn eq(&self, o: &Self) -> bool {
+        self.gain.to_bits() == o.gain.to_bits()
+            && bytemuck::cast_slice::<Inst, u8>(&self.glow)
+                == bytemuck::cast_slice::<Inst, u8>(&o.glow)
+            && bytemuck::cast_slice::<Inst, u8>(&self.main)
+                == bytemuck::cast_slice::<Inst, u8>(&o.main)
+    }
+}
+
+impl Prepared {
+    /// Instances drawn, both passes counted.
+    pub fn glyph_instances(&self) -> usize {
+        self.glow.len() + self.main.len()
+    }
+
+    /// Surface the instances cover, in frames of `w` x `h` pixels, both passes
+    /// counted: each quad at its scale, the share of an unrotated quad outside
+    /// the frame left out.
+    pub fn area(&self, w: f32, h: f32) -> f32 {
+        let frame = w * h;
+        if frame <= 0.0 {
+            return 0.0;
+        }
+        self.glow
+            .iter()
+            .chain(&self.main)
+            .map(|i| {
+                let qw = (i.size[0] * i.xform[1]).abs();
+                let qh = (i.size[1] * i.xform[2]).abs();
+                if qw <= 0.0 || qh <= 0.0 {
+                    return 0.0;
+                }
+                let seen = if i.xform[0] == 0.0 {
+                    let iw = ((i.center[0] + qw / 2.0).min(w) - (i.center[0] - qw / 2.0).max(0.0))
+                        .max(0.0);
+                    let ih = ((i.center[1] + qh / 2.0).min(h) - (i.center[1] - qh / 2.0).max(0.0))
+                        .max(0.0);
+                    iw * ih
+                } else {
+                    qw * qh
+                };
+                seen / frame
+            })
+            .sum()
+    }
+
+    /// How many different blurs the main pass asks for (each is a blurred
+    /// layer of the renderer): coverage instances with a blur, by their sigma.
+    pub fn blurs(&self) -> usize {
+        let mut seen: Vec<u32> = Vec::new();
+        for i in &self.main {
+            if i.params[0] < 0.5 && i.params[1] > 0.0 {
+                let key = i.params[1].to_bits();
+                if !seen.contains(&key) {
+                    seen.push(key);
+                }
+            }
+        }
+        seen.len()
+    }
+}
+
+/// What draws a run of a group's draws.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Run {
+    /// The engine's glyph pass, painted from text, rectangles and particles.
+    Engine,
+    /// The shapes' pass.
+    Shapes,
+    /// The engine's glyph pass, from instances already prepared.
+    Prepared,
 }
 
 /// A group's draws cut into runs the same painter draws: the engine (text,
-/// rectangles, particles) or the shapes' pass. Each run is one pass.
-pub fn runs(draws: &[Draw]) -> Vec<(std::ops::Range<usize>, bool)> {
-    let mut out: Vec<(std::ops::Range<usize>, bool)> = Vec::new();
+/// rectangles, particles), the shapes' pass, or prepared instances (each such
+/// draw is a run of its own: it has its own gain). Each run is one pass.
+pub fn runs(draws: &[Draw]) -> Vec<(std::ops::Range<usize>, Run)> {
+    let mut out: Vec<(std::ops::Range<usize>, Run)> = Vec::new();
     for (i, d) in draws.iter().enumerate() {
-        let path = matches!(d, Draw::Path(_));
+        let kind = match d {
+            Draw::Path(_) => Run::Shapes,
+            Draw::Prepared(_) => Run::Prepared,
+            Draw::Text(_) | Draw::Rect(_) | Draw::Emitter(_) => Run::Engine,
+        };
         match out.last_mut() {
-            Some((r, p)) if *p == path => r.end = i + 1,
-            _ => out.push((i..i + 1, path)),
+            Some((r, k)) if *k == kind && kind != Run::Prepared => r.end = i + 1,
+            _ => out.push((i..i + 1, kind)),
         }
     }
     out
@@ -496,6 +590,8 @@ impl Draw {
                 Ok(())
             }
             Draw::Path(p) => p.check(),
+            // Made by the host, drawn as it is.
+            Draw::Prepared(_) => Ok(()),
             Draw::Emitter(e) => {
                 if let Source::Text(b) = &e.source {
                     b.check()?;

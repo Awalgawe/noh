@@ -111,6 +111,10 @@ says so with `warning.effect_word_too_wide` and the time it first shows. When th
 word also leaves the safe area (any effect) or the picture (Classique only), that
 warning comes as well.
 
+A caption effect that draws a great deal in one frame (letters, surface or
+blurs) is drawn all the same: the command says so with `warning.effect_heavy`
+and the time it first happens, because the export may be slow.
+
 ### Motion scenes (experimental)
 
 In a build with the `motion` feature, a scene (a script file, see

@@ -108,6 +108,9 @@ than the text area stays whole on its own line, centred, and the job warns with
 `{"code": "warning.effect_word_too_wide", "args": ["m:ss"]}`; the overflow
 warning may come too when the word also leaves the safe area (any effect), and
 the off-frame warning when it leaves the picture (Classique only).
+A caption effect that draws a great deal in one frame is drawn all the same; the
+job warns with `{"code": "warning.effect_heavy", "args": ["m:ss"]}` (the export
+may be slow).
 When libass draws the captions (Classique without OpenGL, or no effects
 engine) in a BT.709 export and the FFmpeg in use blends them in BT.601 (FFmpeg
 older than 7.1, such as Ubuntu 24.04's 6.1), the job warns with
