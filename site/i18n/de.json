@@ -96,7 +96,7 @@
   "mcp.li2": "Den Liedtext eines Songs schreiben, auf Ihrem Computer (mit der Transkriptionskomponente).",
   "mcp.li3": "Untertitel auf ein Video legen, in einem der {styles} Untertitelstile.",
   "mcp.li4": "Einen vertikalen Short aus einem Moment eines Videos schneiden.",
-  "mcp.li5": "Mit Ihnen eine maßgeschneiderte Animation des Liedtexts gestalten (experimentell): Text, Formen, Partikel, Bildausschnitt. Der Assistent schreibt die Szene, NOH prüft sie Bild für Bild und zeichnet sie auf Ihr Video oder Ihre Montage. Die Vorschau in NOH ändert den Bildausschnitt nicht und lässt Shader-Ebenen standardmäßig weg; der Export zeichnet alles.",
+  "mcp.li5": "Mit Ihnen eine maßgeschneiderte Animation des Liedtexts gestalten (experimentell): Text, Formen, Partikel, Bildausschnitt. Der Assistent schreibt die Szene, NOH prüft sie Bild für Bild und zeichnet sie auf Ihr Video oder Ihre Montage. Die Vorschau in NOH zeigt eine vereinfachte Fassung; der Export zeichnet alles.",
   "mcp.privacy": "Ihre Medien bleiben, wo sie sind. Der Assistent schickt NOH Anweisungen mit Dateipfaden und bekommt Ergebnisse zurück, nie die Dateien selbst. Der Server öffnet keinen Webzugang und lädt nichts hoch.",
   "mcp.setup": "Einrichtung",
   "mcp.setup_text": "Fügen Sie NOH zu den MCP-Servern Ihres Assistenten hinzu. Das Programm ist bei NOH dabei:",
