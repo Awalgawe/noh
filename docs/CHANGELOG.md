@@ -110,6 +110,15 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
 
 ### Fixes
 
+- In a vertical (9:16) video with a safe area, Sung sweep, Falling words,
+  Breath, Simple karaoke and Fade to dust size their text by the width the
+  safe area leaves, not by the picture's short side. Their text is smaller on
+  every line: by 39 % with the universal, TikTok and Reels safe areas, by 22 %
+  with YouTube Shorts. Long lines no longer push Sung sweep's first line out
+  through the top or make a word of Falling words wider than the text area,
+  and Breath and Fade to dust no longer reach the top edge. Without a safe area,
+  and in 16:9, these styles draw exactly as before. 0.3.1 drew these lines too
+  big, and warned.
 - NOH keeps up while its window is minimized. Before, the window took in
   nothing until it was shown again: an export's progress stood still and its
   end was shown only then, a short or an export with captions on the video
@@ -136,6 +145,10 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
 - When the main words of a line are timed again, its backing words are spread
   again, and backing words timed by hand are reset without warning if they
   end up out of order.
+- In a vertical video with a safe area, a long upcoming line of Simple karaoke
+  can still go under the bottom of the safe area, and Type block, Punched
+  words, Stickers and Scrolling lyrics, which draw big words by design, can
+  leave it on long lines. NOH warns that the text leaves the Short's safe area.
 - Motion scenes are experimental: their format may change in a later
   version. The preview does not reframe the picture as a scene asks, and leaves
   its shader layers out unless asked; the export does both. When NOH refuses a
