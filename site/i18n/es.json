@@ -96,6 +96,7 @@
   "mcp.li2": "Escribir la letra de una canción, en su computadora (con el componente de transcripción).",
   "mcp.li3": "Poner subtítulos en un video, en cualquiera de los {styles} estilos.",
   "mcp.li4": "Recortar un video vertical corto a partir de un momento de un video.",
+  "mcp.li5": "Crear con usted una animación de la letra a medida (experimental): texto, formas, partículas, encuadre. El asistente escribe la escena, y NOH la comprueba fotograma a fotograma y la dibuja sobre su video o su montaje. La vista previa de NOH no reencuadra y, por defecto, omite las capas de shader; la exportación lo dibuja todo.",
   "mcp.privacy": "Sus archivos se quedan donde están. El asistente envía a NOH instrucciones con rutas de archivo y recibe los resultados, nunca los archivos. El servidor no abre ningún acceso web y no sube nada.",
   "mcp.setup": "Configurarlo",
   "mcp.setup_text": "Agregue NOH a los servidores MCP de su asistente. El programa viene con NOH:",

@@ -96,6 +96,7 @@
   "mcp.li2": "Écrire les paroles d’une chanson, sur votre ordinateur (avec le composant de transcription).",
   "mcp.li3": "Mettre des sous-titres sur une vidéo, dans l’un des {styles} styles.",
   "mcp.li4": "Extraire un format vertical d’un moment d’une vidéo.",
+  "mcp.li5": "Créer avec vous une animation des paroles sur mesure (expérimental) : texte, formes, particules, cadrage. L’assistant écrit la scène, NOH la vérifie image par image et la dessine sur votre vidéo ou votre montage. L’aperçu de NOH ne recadre pas et, par défaut, laisse de côté les calques shader ; l’export dessine tout.",
   "mcp.privacy": "Vos médias restent où ils sont. L’assistant envoie à NOH des instructions avec des chemins de fichiers et reçoit des résultats, jamais les fichiers eux-mêmes. Le serveur n’ouvre aucun accès web et n’envoie rien en ligne.",
   "mcp.setup": "Le configurer",
   "mcp.setup_text": "Ajoutez NOH aux serveurs MCP de votre assistant. Le programme est fourni avec NOH :",

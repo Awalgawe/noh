@@ -96,6 +96,7 @@
   "mcp.li2": "Write the lyrics from a song, on your computer (with the transcription component).",
   "mcp.li3": "Put captions on a video, in any of the {styles} caption styles.",
   "mcp.li4": "Cut a vertical short from a moment of a video.",
+  "mcp.li5": "Create a lyrics animation made to measure with you (experimental): text, shapes, particles, framing. The assistant writes the scene, and NOH checks it frame by frame and draws it on your video or montage. The preview in NOH does not reframe and, by default, leaves out shader layers; the export draws everything.",
   "mcp.privacy": "Your media stays where it is. The assistant sends NOH instructions with file paths and gets results back, never the files themselves. The server has no web listener and uploads nothing.",
   "mcp.setup": "Set it up",
   "mcp.setup_text": "Add NOH to your assistant's MCP servers. The program comes with NOH:",

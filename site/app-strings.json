@@ -1,5 +1,5 @@
 {
-  "_source": "Taken from origin/main with tools/build_site.py --snapshot-app-strings origin/main; regenerate when the drawings are redrawn.",
+  "_source": "Taken from v0.4.0 with tools/build_site.py --snapshot-app-strings v0.4.0; regenerate when the drawings are redrawn.",
   "app": {
     "en": {
       "strip.add": "Add",
