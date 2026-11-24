@@ -134,6 +134,8 @@ jobs:
           python3 tools/test-linux-package.py
           python3 tools/test-linux-host-runtime.py
           python3 tools/test-linux-matrix.py
+          # logs/ is otherwise first made by the redistribution step, which a verify run skips.
+          mkdir -p logs
           python3 tools/linux_host.py --output logs/linux-host-runtime.json
       - name: Select the pinned Linux compiler
         id: compiler
@@ -203,7 +205,7 @@ jobs:
           cargo fmt --all --check
           cargo fetch --locked
           $PSNativeCommandUseErrorActionPreference = $false
-          cargo test --release --locked --offline --features gui,mcp --lib --bins --tests --example dev --no-fail-fast -- --test-threads=1 *> logs/delivery/tests.log
+          cargo test --release --locked --offline --features gui,mcp,motion --lib --bins --tests --example dev --no-fail-fast -- --test-threads=1 *> logs/delivery/tests.log
           $result = $LASTEXITCODE
           $PSNativeCommandUseErrorActionPreference = $true
           Get-Content logs/delivery/tests.log
