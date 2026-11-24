@@ -354,6 +354,27 @@ fn word_under(text: &str, index: usize) -> usize {
     k.min(text.split_whitespace().count().saturating_sub(1))
 }
 
+/// One press of `key`: its repeats (the key held) are taken too, and do
+/// nothing. Espace plays or pauses: held, as at the end of a game, its repeats
+/// would start and stop playback thirty times a second.
+fn take_press(i: &mut egui::InputState, key: Key, want: impl Fn(Modifiers) -> bool) -> bool {
+    let mut hit = false;
+    i.events.retain(|e| match e {
+        egui::Event::Key {
+            key: k,
+            pressed: true,
+            repeat,
+            modifiers,
+            ..
+        } if *k == key && want(*modifiers) => {
+            hit |= !*repeat;
+            false
+        }
+        _ => true,
+    });
+    hit
+}
+
 /// Take a key press whose modifiers `want` accepts, so no widget sees it.
 /// (`consume_key` ignores extra Shift and Alt: Maj+Entrée would pass for Entrée.)
 fn take_key(i: &mut egui::InputState, key: Key, want: impl Fn(Modifiers) -> bool) -> bool {
@@ -1286,7 +1307,7 @@ impl NohApp {
                 self.close_lyrics_screen();
             } else if !ctx.egui_wants_keyboard_input()
                 && ctx.memory(|m| m.focused().is_none())
-                && ctx.input_mut(|i| take_key(i, Key::Space, plain))
+                && ctx.input_mut(|i| take_press(i, Key::Space, plain))
             {
                 self.mini_play(ctx);
             }
@@ -1416,7 +1437,7 @@ impl NohApp {
                 self.lyrics_screen.word = Some(k + 1);
             }
         }
-        if focus_free && ctx.input_mut(|i| take_key(i, Key::Space, plain)) {
+        if focus_free && ctx.input_mut(|i| take_press(i, Key::Space, plain)) {
             self.mini_play(ctx);
         }
         if focus_free {
@@ -4044,6 +4065,45 @@ mod tests {
             repeat,
             modifiers: Modifiers::NONE,
         }
+    }
+
+    /// Espace held (as when a game ends with the key still down) is one press
+    /// of Lecture: its repeats are taken and do nothing.
+    #[test]
+    fn espace_held_plays_or_pauses_once() {
+        let ctx = egui::Context::default();
+        let mut seen = Vec::new();
+        for events in [
+            vec![space(true, false)],
+            vec![space(true, true), space(true, true)],
+            vec![space(false, false)],
+        ] {
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    events,
+                    ..Default::default()
+                },
+                |ui| {
+                    seen.push(ui.ctx().input_mut(|i| {
+                        let hit = take_press(i, Key::Space, plain);
+                        let left = i.events.iter().any(|e| {
+                            matches!(
+                                e,
+                                egui::Event::Key {
+                                    key: Key::Space,
+                                    pressed: true,
+                                    ..
+                                }
+                            )
+                        });
+                        (hit, left)
+                    }));
+                },
+            );
+            // As `texts_at`: the fonts' texture changes are taken each frame.
+            output.textures_delta.clear();
+        }
+        assert_eq!(seen, [(true, false), (false, false), (false, false)]);
     }
 
     /// One frame with the player's clock at `ms` (None: not playing).
