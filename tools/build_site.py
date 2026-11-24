@@ -44,6 +44,12 @@ ASSETS = {
     "linux": r"NOH-(?P<v>[0-9][^-]*)-linux-x64\.zip",
     "sums": r"SHA256SUMS",
 }
+# The link preview (Open Graph): the repository's social preview picture, one for every language;
+# title and description come from each language's meta.* strings.
+OG_IMAGE = ("og-image.jpg", 1280, 640)
+OG_LOCALES = {"en": "en_US", "fr": "fr_FR", "de": "de_DE", "es": "es_ES", "ja": "ja_JP", "ko": "ko_KR", "zh": "zh_CN"}
+# Discord colours its link preview with theme-color: NOH's accent, as on the page.
+THEME_COLOR = "#0B6C66"
 # Jost for the headings only (135 KB); text uses the system fonts, CJK included.
 FONTS = ("Jost-Variable.ttf", "Jost-OFL.txt")
 # The bundled styles in the app's order (src/app_effects.rs: Classique first, then the folders by name);
@@ -199,6 +205,20 @@ def head_links(site_url):
     return "\n".join(links)
 
 
+def social_tags(lang, site_url, title, description, image_alt):
+    """Open Graph and Twitter card tags; the values are already escaped for an attribute."""
+    name, width, height = OG_IMAGE
+    tags = [("property", "og:type", "website"), ("property", "og:site_name", "NOH"),
+            ("property", "og:url", site_url + page_path(lang)), ("property", "og:title", title),
+            ("property", "og:description", description), ("property", "og:locale", OG_LOCALES[lang])]
+    tags += [("property", "og:locale:alternate", OG_LOCALES[other]) for other in LANGS if other != lang]
+    tags += [("property", "og:image", site_url + name), ("property", "og:image:type", "image/jpeg"),
+             ("property", "og:image:width", str(width)), ("property", "og:image:height", str(height)),
+             ("property", "og:image:alt", image_alt), ("name", "twitter:card", "summary_large_image"),
+             ("name", "theme-color", THEME_COLOR)]
+    return "\n".join('<meta %s="%s" content="%s">' % tag for tag in tags)
+
+
 def language_script(lang):
     """The menu remembers a choice; the English page honours it, or sends a first visit to the browser's language."""
     redirect = ""
@@ -301,8 +321,10 @@ def render(lang, template, release, site_url):
         if not key.startswith(("_", "ui.")) and key != "step.caption":
             values[key] = interpolate(text, tokens, "%s/%s" % (lang, key))
     values["ui.pause"], values["ui.copy"] = strings["ui.pause"], strings["ui.copy"]
-    for key in ("meta.title", "meta.description"):
+    for key in ("meta.title", "meta.description", "meta.image_alt"):
         values[key] = html.escape(re.sub(r"<[^>]+>", "", values[key]), quote=True)
+    values["social"] = social_tags(lang, site_url, values["meta.title"], values["meta.description"],
+                                   values["meta.image_alt"])
 
     def one(match):
         key = match.group(1)
@@ -328,6 +350,7 @@ def build(out, release, site_url=SITE_URL):
     for name in FONTS:
         shutil.copyfile(ROOT / "assets" / name, out / "fonts" / name)
     shutil.copyfile(ROOT / "assets" / "noh-icon.svg", out / "noh-icon.svg")
+    shutil.copyfile(SITE / OG_IMAGE[0], out / OG_IMAGE[0])
     (out / ".nojekyll").write_text("", encoding="utf-8")
 
 

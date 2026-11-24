@@ -11,6 +11,17 @@ ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "tools" / "testdata" / "site-release.json"
 
 
+def jpeg_size(data):
+    """Width and height from a JPEG's start-of-frame marker."""
+    i = 2
+    while i < len(data):
+        marker, length = data[i + 1], int.from_bytes(data[i + 2:i + 4], "big")
+        if marker in (0xC0, 0xC1, 0xC2):
+            return int.from_bytes(data[i + 7:i + 9], "big"), int.from_bytes(data[i + 5:i + 7], "big")
+        i += 2 + length
+    raise ValueError("no start-of-frame marker")
+
+
 def fixture():
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
 
@@ -143,6 +154,23 @@ class BuildTests(unittest.TestCase):
         for name in build_site.FONTS:
             self.assertTrue((self.out / "fonts" / name).is_file(), name)
         self.assertTrue((self.out / "noh-icon.svg").is_file())
+
+    def test_each_page_has_a_link_preview_in_its_language(self):
+        name, width, height = build_site.OG_IMAGE
+        self.assertTrue((self.out / name).is_file())
+        jpeg = (self.out / name).read_bytes()
+        self.assertEqual(jpeg[:3], bytes.fromhex("ffd8ff"))
+        self.assertEqual(jpeg_size(jpeg), (width, height))
+        for lang, page in self.pages.items():
+            title = re.search(r"<title>([^<]+)</title>", page).group(1)
+            with self.subTest(lang=lang):
+                self.assertIn('<meta property="og:title" content="%s">' % title, page)
+                self.assertIn('<meta property="og:url" content="%s%s">' % (build_site.SITE_URL, build_site.page_path(lang)), page)
+                self.assertIn('<meta property="og:image" content="%s%s">' % (build_site.SITE_URL, name), page)
+                self.assertIn('<meta property="og:locale" content="%s">' % build_site.OG_LOCALES[lang], page)
+                self.assertIn('<meta name="twitter:card" content="summary_large_image">', page)
+                self.assertRegex(page, r'<meta property="og:image:alt" content="[^"]{20,}">')
+                self.assertEqual(page.count('property="og:locale:alternate"'), len(build_site.LANGS) - 1)
 
     def test_no_local_path_is_published(self):
         for path in self.out.rglob("*"):
