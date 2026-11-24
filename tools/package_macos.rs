@@ -75,6 +75,9 @@ pub(super) fn bundle(
     let mut command = Command::new(macos.join("bin/ffmpeg"));
     command.arg("-version");
     run(command)?;
+    // Contents/MacOS holds signed code only: the app reads its effects from
+    // Contents/Resources (`style::catalog::bundled_dir_for`).
+    super::copy_effects(root, &resources)?;
     super::copy_docs(root, &resources, mcp)?;
     let speech_source = speech
         .map(Path::to_owned)

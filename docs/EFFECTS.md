@@ -3,10 +3,11 @@
 A caption effect is a folder holding an `effect.json` (at most 16 KiB) and, when it
 needs one, a shader file. NOH reads the effects from two places, on demand: the
 `effects` folder beside `noh.exe` (the bundled ones; the command line and the MCP
-read the same folder one level up from `bin/`), then the user's own `noh/effects`
-folder. Each effect is validated when it is read; a folder that fails is listed
-with its reason (`noh --list-effects`) and never drawn. Validation is strict: an
-unknown field, property, value or unit is refused, never ignored.
+read the same folder one level up from `bin/`; in a macOS app,
+`Contents/Resources/effects`), then the user's own `noh/effects` folder. Each
+effect is validated when it is read; a folder that fails is listed with its
+reason (`noh --list-effects`) and never drawn. Validation is strict: an unknown
+field, property, value or unit is refused, never ignored.
 
 The engine knows layouts, tracks and passes; it knows no effect by name. The thirteen
 bundled effects in [`assets/effects`](../assets/effects) are complete examples.
