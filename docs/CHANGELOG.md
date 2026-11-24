@@ -5,7 +5,17 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
-## Unreleased
+## 0.4.0
+
+Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.4.0).
+
+### Caption styles
+
+- Seven new caption styles: Readable band, Highlighter, Lit word, Punched
+  words, Stickers, Scrolling lyrics and Fade to dust. NOH now ships thirteen.
+  Each has its own settings in the style panel.
+  In a vertical video with a safe area, Fade to dust sizes its text by the
+  width the safe area leaves, like the four styles corrected below.
 
 ### Caption effects
 
@@ -17,7 +27,73 @@ builds are not public releases.
   pixel's place in the frame, the letter's number, the line's time, the pass
   being drawn, the letter's row, the time since the line was sung and the
   effect's own settings. The bundled styles draw exactly as before. The format is described
-  in the [effect format guide](https://github.com/Awalgawe/noh/blob/main/docs/EFFECTS.md).
+  in the [effect format guide](https://github.com/Awalgawe/noh/blob/v0.4.0/docs/EFFECTS.md).
+- A caption effect that draws a great deal in one frame (letters, covered
+  surface or blurs) is still drawn, and the export warns that it may be slow,
+  with the time it first happens; the command line and the MCP job's warnings
+  say it too (`warning.effect_heavy`). No bundled style comes near that.
+
+### Motion scenes (experimental)
+
+- A motion scene is a text file beside the song (`<song>.noh-motion.rhai`),
+  usually written by an agent, that says what to draw over the video at each
+  instant: the lyrics, texts, shapes, particles, layers and their shaders, and
+  a framing of the picture. Its script runs in a sandbox with a list of allowed
+  functions and limits counted on each frame. The format is described in the
+  [motion authoring guide](https://github.com/Awalgawe/noh/blob/v0.4.0/docs/MOTION_AUTHORING.md).
+- **Motion**, under the caption styles, lists a scene found beside the song;
+  NOH never runs one on its own. One click checks every frame of the song and
+  uses the scene; a refused scene gives the instant and the reason. A scene
+  replaces the caption style. The preview draws it on the song's clock, and the
+  export burns it in. Until it can check, the scene's card says what it waits
+  for: the song, the lyrics and the videos, or an up-to-date analysis. The
+  preview says what it leaves to the export.
+- For an agent: `noh_scene_check`, `noh_scene_look` and `noh_scene_clip` check a
+  scene, look at one frame and render a short clip; burning captions, making a
+  short (with a framing that follows the scene) and exporting a project accept
+  a scene. The command line accepts it too. In a window the agent drives, the
+  window follows the agent's scene file.
+
+### Lyrics
+
+- The lyrics can say who sings each line. On the lyrics screen, **Voices**
+  above the text declares two voices; you can rename them, add up to four and
+  remove the last one. Each line has a badge with its voices: a click opens a
+  menu to set them, Ctrl+1 to Ctrl+4 give the current line one voice,
+  Ctrl+Shift+1 to Ctrl+Shift+4 add or remove one, and Ctrl+0 removes them all.
+  A digit for a voice that is not declared changes nothing, and the lyrics
+  screen says so.
+  Both tracks show a line's voices as a coloured band. No caption style draws
+  the voices yet.
+- Words between parentheses are backing vocals. The lyrics screen draws them
+  dimmer and underlined, and gives them their own band on the track. Select
+  some words and type "(" to put them between parentheses. The sync game gains
+  a **Backing** pass that times only those words; the other passes skip them.
+- A lyrics file that holds voices, or a word held past backing vocals, is
+  written as version 3 of the format; 0.3.1 and older versions see it as newer
+  and do not save over it. Every other lyrics file is written as before.
+- When you choose the .srt over the lyrics file, a line keeps its voices from
+  the line with the same times or, failing that, the same text. NOH says how
+  many lines lose theirs. The .srt itself holds no voices.
+- Exports, shorts and burned captions read the voices from the lyrics file
+  beside the .srt.
+- The lyrics screen fits in every language at both window sizes: the footer
+  takes a second row when its text needs one, a long line to sing is written
+  smaller and slides so that the word to sing stays in view, and the speeds
+  read 1×, 0.75×, 0.5×.
+
+### Updates
+
+- An update can install while an assistant such as Claude keeps NOH's MCP
+  server open. When only such servers hold the NOH folder, they stop by
+  themselves once they have no job left, and refuse new jobs meanwhile.
+  **Restart to update** waits for them, with a button to cancel. Afterwards,
+  reconnect the server in the assistant (Claude Code: `/mcp`, then
+  Reconnect): NOH says so.
+- When something else holds the NOH folder, the message says what, once per
+  kind of program, instead of repeating the same path.
+- NOH looks for a new version every 4 hours instead of once a day. The header
+  shows **Update ready** or **New version** as a button.
 
 ### MCP
 
@@ -26,7 +102,8 @@ builds are not public releases.
   `noh_app_close`): it adds, removes and orders media, sets fades, edits lyrics
   lines, chooses the effect and its settings, the short's range, framing and safe
   area, the destination, exports or cancels, moves the playhead and looks at the
-  window. It answers NOH's questions, which it reads in the window's state. One
+  window. It also declares the voices of the lyrics and sets who sings each
+  line. It answers NOH's questions, which it reads in the window's state. One
   heavy job runs at a time across the agent's windows and its other tools, and
   the windows prepare their previews one after another. It
   knows where you are on the timeline, and never takes the playhead from you
@@ -39,6 +116,24 @@ builds are not public releases.
 
 ### Fixes
 
+- On the lyrics screen, holding Space plays or pauses once. Before, its key
+  repeats started and stopped playback many times a second, for example when a
+  sync game ended with Space still held.
+- In the sync game, a line still held when the song ends keeps its time up to
+  the song's end. Before, it was cut to its start plus a fifth of a second.
+- An .srt whose lines overlap is still refused, but NOH now says so and names
+  the two lines, in the main screen's status, or when hovering the "Unreadable
+  file" chip when no lyrics are loaded. Before, added over lyrics already
+  loaded, it was refused without a word.
+- In a vertical (9:16) video with a safe area, Sung sweep, Falling words,
+  Breath and Simple karaoke size their text by the width the safe area leaves,
+  not by the picture's short side. Their text is smaller on every line: by
+  39 % with the universal, TikTok and Reels safe areas, by 22 % with YouTube
+  Shorts. Long lines no longer push Sung sweep's first line out through the
+  top or make a word of Falling words wider than the text area, and Breath and
+  Simple karaoke no longer reach the top edge. Without a safe area, and in
+  16:9, these styles draw exactly as before. 0.3.1 drew these lines too big,
+  and warned.
 - NOH keeps up while its window is minimized. Before, the window took in
   nothing until it was shown again: an export's progress stood still and its
   end was shown only then, a short or an export with captions on the video
@@ -50,6 +145,48 @@ builds are not public releases.
   Windows the decoders, the encoders and the downloads NOH starts also end
   with it when NOH is killed or crashes. The installer of an update is not
   concerned: it goes on after NOH closes, as before.
+
+### Known issues
+
+- The update from 0.3.1 to this version still waits for the idle MCP servers
+  of 0.3.1, which do not know how to stop for an update. Close the assistant's
+  session that uses NOH, or cancel and update later; after 20 seconds NOH says
+  that a server which does not stop is probably from an older version.
+- No caption style draws the voices yet: setting who sings a line changes
+  nothing on the video in this version.
+- Until the playhead first moves, the preview stays black at 0:00, on the main
+  screen and on the lyrics screen, while the clip's thumbnail shows the video.
+  Moving the playhead or playing brings the picture. This was already so in
+  0.3.1.
+- Two lines still cannot be sung at the same time: a lyrics file or an .srt
+  whose lines overlap is refused, as before, now with a message naming the two
+  lines. Words sung together go on one line, with both voices.
+- When the main words of a line are timed again, its backing words are spread
+  again, and backing words timed by hand are reset without warning if they
+  end up out of order.
+- In a vertical video with a safe area, a long upcoming line of Simple karaoke
+  can still go under the bottom of the safe area, and Type block, Punched
+  words, Stickers and Scrolling lyrics, which draw big words by design, can
+  leave it on long lines. NOH warns that the text leaves the Short's safe area.
+- Motion scenes are experimental: their format may change in a later
+  version. The preview does not reframe the picture as a scene asks; the export
+  does. In the preview, a scene's shader layers are left out whole, words
+  included, unless **Show shader layers in the preview** is on; the export
+  draws them. When NOH refuses a scene, the reason after the instant is in
+  English.
+- The preview does not show the warning about a caption effect that draws a
+  great deal at once; only the export does. Its German, Spanish, Japanese,
+  Korean and Chinese texts were written without a native speaker's review.
+- Updates carry no signature of their own. NOH trusts GitHub's HTTPS and the
+  digests GitHub reports for the files of the latest release. The Windows
+  installers are not Authenticode-signed. From this version GitHub keeps an
+  attestation of each release file: `gh attestation verify <file> --repo
+  Awalgawe/noh` checks that a workflow of that repository attested it. NOH
+  itself does not check it.
+- The other known issues of [0.3.1](https://github.com/Awalgawe/noh/releases/tag/v0.3.1)
+  remain, including those it carries from 0.3.0 and 0.2.0.
+- The automated tests use software rendering and virtual audio. They test no
+  real graphics card, sound card, NVENC or CUDA device.
 
 ## 0.3.1
 

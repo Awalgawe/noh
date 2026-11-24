@@ -30,8 +30,8 @@
 ### A few useful things, kept together
 
 - **See and hear the result** in the built-in preview before exporting.
-- **Add lyrics or captions** from an SRT file, or generate a local transcript and review it. Edit the lines in the lyrics lane.
-- **Choose how captions look.** Six caption effects are built in, among them karaoke that follows the syllables; they are drawn in the preview and in the export.
+- **Add lyrics or captions** from an SRT file, or generate a local transcript and review it. Edit the lines and their timing on the lyrics screen.
+- **Choose how captions look.** Thirteen caption effects are built in, among them karaoke that follows the syllables; they are drawn in the preview and in the export.
 - **Keep compatible footage intact.** Video is copied without recompression where the composition allows it.
 - **Work locally.** Your media is processed on your computer. The interface supports English, French, German, Spanish, Japanese, Korean and Simplified Chinese.
 

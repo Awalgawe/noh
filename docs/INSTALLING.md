@@ -208,8 +208,9 @@ slowly: the menu says so. On Linux transcription always runs on the CPU.
 
 ## Update or remove NOH
 
-**Installed copy on Windows.** From 0.3.0, NOH updates itself. Once a day, and
-when you choose **Settings > Updates > Check now**, it asks
+**Installed copy on Windows.** From 0.3.0, NOH updates itself. Every 4 hours from
+0.4.0 (once a day in 0.3.x), and when you choose **Settings > Updates > Check
+now**, it asks
 GitHub for the latest published release. When a newer one exists, NOH downloads
 its Minimal installer and only the optional components whose files changed, and
 checks the size and SHA-256 of each file against what GitHub declares for the
@@ -218,7 +219,12 @@ or simply close NOH: the installation runs silently and keeps your content
 profile, your settings and the files you added. Both switches in
 **Settings > Updates** can turn this off. NOH does not install while another of
 its programs runs from the installation folder (another NOH window, a
-command-line export, the MCP server, FFmpeg or Whisper): close it first.
+command-line export, FFmpeg or Whisper): the message says what, and you close
+it first. From 0.4.0, the MCP server an assistant such as Claude keeps open
+stops by itself once it has no job left, and **Restart to update** waits for
+it; reconnect it in the assistant afterwards (Claude Code: `/mcp`, then
+Reconnect). The servers of 0.3.1 and older do not stop by themselves: close
+the assistant's session that uses them.
 
 Copies installed before 0.3.0 do not look for updates: install the new
 release once by hand, as below; later versions then arrive by themselves.

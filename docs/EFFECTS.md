@@ -8,10 +8,10 @@ folder. Each effect is validated when it is read; a folder that fails is listed
 with its reason (`noh --list-effects`) and never drawn. Validation is strict: an
 unknown field, property, value or unit is refused, never ignored.
 
-The engine knows layouts, tracks and passes; it knows no effect by name. The six
+The engine knows layouts, tracks and passes; it knows no effect by name. The thirteen
 bundled effects in [`assets/effects`](../assets/effects) are complete examples.
 
-Some features below are marked **(after 0.3.1)**. NOH 0.3.1 and earlier refuse an
+Some features below are marked **(from 0.4.0)**. NOH 0.3.1 and earlier refuse an
 effect that uses one of them (an unknown field, property, value, operator or pass
 kind, or a shader hook reading a `GlyphIn` field they lack), with two exceptions
 that load there but are drawn wrong. A `past` track with its own `duration`: those
@@ -84,15 +84,15 @@ Wherever a number, colour or text is expected, a value may be:
 | `"@w"`, `"@h"`, `"@short"` | Canvas width, height and the smaller of the two, in px |
 | `"@inset_l"`, `"@inset_t"`, `"@inset_r"`, `"@inset_b"`, `"@safe"` | The safe area's insets in px (0 without one); `@safe` is 1 when a safe area applies |
 | `"@word_duration"`, `"@word_longest"` | The drawn word's sung length in seconds, and 1 for the longest-sung word of its line (else 0) |
-| `"@line_index"` **(after 0.3.1)** | The drawn line's rank among the lyrics' lines (a chunk's among the chunks), from 0 |
+| `"@line_index"` **(from 0.4.0)** | The drawn line's rank among the lyrics' lines (a chunk's among the chunks), from 0 |
 | `{"landscape": v, "portrait": v}` | By orientation |
 | `{"add": [a, b, …]}`, `sub`, `mul`, `div`, `min`, `max` | Arithmetic, 2 to 8 arguments; a zero divisor gives 0 |
 | `{"round": [a]}`, `ceil`, `floor` | Rounding |
-| `{"hash": [a]}` **(after 0.3.1)** | A number from -1 to 1 that depends only on `a` rounded to a whole number: with `@line_index`, a value steady for a line and different for the next |
+| `{"hash": [a]}` **(from 0.4.0)** | A number from -1 to 1 that depends only on `a` rounded to a whole number: with `@line_index`, a value steady for a line and different for the next |
 | `{"choose": [selector, {"case": v, "default": v}]}` | By the text of a choice parameter |
 | `{"mix": [colour, colour, t]}` | sRGB blend, `t` from 0 to 1 |
 | `{"scale": [a, k]}` | `a * k` |
-| `{"pick": [palette, scope]}` | A palette colour by `word_index`, `index` (letter in the line), `index_in_word`, or `line_index` **(after 0.3.1)** |
+| `{"pick": [palette, scope]}` | A palette colour by `word_index`, `index` (letter in the line), `index_in_word`, or `line_index` **(from 0.4.0)** |
 | `{"by_state": {"past": v, "active": v, "next": v}}` | By the state of the drawn line in a window |
 | `{"by_offset": [v0, v1, v2, v3]}` | By the drawn line's distance from the active slot (the last repeats) |
 
@@ -119,7 +119,7 @@ Wherever a number, colour or text is expected, a value may be:
   default) or of the canvas (`"canvas"`); `anchor` is the block's `top`, `center`
   or `bottom` at `y`. Lines wrap between words inside `width`; a word wider than
   the box is kept whole and reported.
-- `align` **(after 0.3.1)**: `center` (the default), `left` or `right`: each row
+- `align` **(from 0.4.0)**: `center` (the default), `left` or `right`: each row
   set against that edge of the box. Letter spacing (`tracking`) then grows from
   that edge. Line mode only.
 - `visible`: `line` shows the whole line; `from_start` shows each word from its
@@ -142,7 +142,7 @@ Wherever a number, colour or text is expected, a value may be:
   and `after` upcoming lines below (0 to 3 each); an upcoming line shows `lead`
   seconds before its start; lines stack `gap` font sizes apart. Between lines, the
   first upcoming line within its lead takes the active slot.
-  - `glide` **(after 0.3.1)**: when the active slot passes to another line, the
+  - `glide` **(from 0.4.0)**: when the active slot passes to another line, the
     column moves to its new place over `duration` seconds (above 0, at most 2)
     along `curve`, instead of jumping. A line leaving the window keeps its look,
     moves with the column and fades out over the same time. Values read with
@@ -176,7 +176,7 @@ letters):
 | `exit` | the last `duration` seconds of the line's visible span | over `duration` |
 | `loop` | always | — (keys read their first key; use `wave`, `noise` or `value`) |
 | `active` | while the unit is sung | over the unit's sung span |
-| `past` | once the unit has ended | — ; **(after 0.3.1)** with its own `duration`, the keys run over that time from the unit's end: a timed return, held at the last key after (0.3.1 loads it but holds the first key) |
+| `past` | once the unit has ended | — ; **(from 0.4.0)** with its own `duration`, the keys run over that time from the unit's end: a timed return, held at the last key after (0.3.1 loads it but holds the first key) |
 | `future` | before the unit starts | — |
 
 `duration` and `stagger` are constant seconds (default 0.3 and 0). A `past` track
@@ -193,19 +193,19 @@ constant or any value form). Curves: `linear`, `ease_in`, `ease_out`,
 | Property | Units | Effect |
 |---|---|---|
 | `opacity` | all | Multiplies |
-| `scale`, `scale_x` | all; line **(after 0.3.1)** | Multiply (scale_x on top of scale) |
-| `rotation` | all; line **(after 0.3.1)** | Adds degrees |
+| `scale`, `scale_x` | all; line **(from 0.4.0)** | Multiply (scale_x on top of scale) |
+| `rotation` | all; line **(from 0.4.0)** | Adds degrees |
 | `offset_x`, `offset_y` | all | Add, in em (the line's em for the line unit) |
 | `blur` | all | Gaussian sigma in px (line and letter blurs add) |
 | `color`, `color2` | word, syllable, letter | The fill colour, and the wipe's sung colour |
 | `wipe` | word, syllable, letter | Share of the unit drawn in its sung colour, left to right; a syllable wipe runs over the syllable's own letters |
-| `wipe_edge` **(after 0.3.1)** | word, syllable, letter | Width of the wipe's edge fade in em (0, the default, is the engine's hard edge). A soft edge enters wholly left of the unit and leaves wholly right of it, so it never pops in or out |
+| `wipe_edge` **(from 0.4.0)** | word, syllable, letter | Width of the wipe's edge fade in em (0, the default, is the engine's hard edge). A soft edge enters wholly left of the unit and leaves wholly right of it, so it never pops in or out |
 | `glow` | word, syllable, letter | Multiplies the glow pass's gain |
 | `tracking` | line | Letter spacing in em, from the row's centre (or the edge it is set against) |
 | `reveal_y` | line | Share of the block shown from its bottom up |
-| `plate_opacity`, `plate_margin`, `plate_scale_x`, `plate_wipe` **(after 0.3.1)** | line, word, letter | The plates measured on that unit (see Plates) |
+| `plate_opacity`, `plate_margin`, `plate_scale_x`, `plate_wipe` **(from 0.4.0)** | line, word, letter | The plates measured on that unit (see Plates) |
 
-The line unit's `scale`, `scale_x` and `rotation` **(after 0.3.1)** reach every
+The line unit's `scale`, `scale_x` and `rotation` **(from 0.4.0)** reach every
 letter and plate of the line, about the centre of its laid-out text; they apply
 after letter spacing and before the line's offsets. Not in compose mode, where
 the line unit draws `opacity` and `blur` only.
@@ -231,9 +231,9 @@ their own layer, blurred, and laid under everything else.
 | `outline_only` | as `fill`, plus `outline` (the stroke width in em) |
 | `shadow` | `color`, `alpha`, `offset_y` (em), `blur` (px) |
 | `glow` | `color`, `alpha`, `alpha2`, `gain` |
-| `plate` **(after 0.3.1)** | `on`, `color`, `alpha`, `margin_x`, `margin_y`, `radius` |
+| `plate` **(from 0.4.0)** | `on`, `color`, `alpha`, `margin_x`, `margin_y`, `radius` |
 
-### Plates (after 0.3.1)
+### Plates (from 0.4.0)
 
 A plate is a rounded rectangle drawn behind text, measured on its box:
 
@@ -292,13 +292,13 @@ struct GlyphIn {
   color2: vec4<f32>,      // the wipe's sung colour
   time: f32,              // seconds
   progress: f32,          // the word's sung progress, 0 to 1
-  frame: vec2<f32>,       // the pixel in the frame, 0 to 1 across and down (after 0.3.1)
-  index: f32,             // the letter's number in its line (after 0.3.1)
-  line: f32,              // the line's progress, 0 when it shows, 1 when it goes (after 0.3.1)
-  line_time: vec2<f32>,   // seconds since the line showed, and until it goes (after 0.3.1)
-  pass_kind: f32,         // 0 fill, 1 outline_only, 2 shadow, 3 glow, 4 plate or shape (after 0.3.1)
-  span: vec2<f32>,        // the left and right edges of the letter's row in the frame, 0 to 1 across (after 0.3.1)
-  line_end: f32,          // seconds since the line's sung end, negative before (after 0.3.1)
+  frame: vec2<f32>,       // the pixel in the frame, 0 to 1 across and down (from 0.4.0)
+  index: f32,             // the letter's number in its line (from 0.4.0)
+  line: f32,              // the line's progress, 0 when it shows, 1 when it goes (from 0.4.0)
+  line_time: vec2<f32>,   // seconds since the line showed, and until it goes (from 0.4.0)
+  pass_kind: f32,         // 0 fill, 1 outline_only, 2 shadow, 3 glow, 4 plate or shape (from 0.4.0)
+  span: vec2<f32>,        // the left and right edges of the letter's row in the frame, 0 to 1 across (from 0.4.0)
+  line_end: f32,          // seconds since the line's sung end, negative before (from 0.4.0)
 };
 struct VertexIn { corner: vec2<f32>, center: vec2<f32>, time: f32, index: f32 };
 ```
@@ -318,7 +318,7 @@ takes its row's span (a word or letter plate its first letter's row); compose
 shapes and compose letters, laid in slots rather than rows, get the whole frame
 (0, 1).
 
-**(after 0.3.1)** The hooks read the effect's settings in `g.user`, sixteen floats
+**(from 0.4.0)** The hooks read the effect's settings in `g.user`, sixteen floats
 (float `n` is `g.user[n / 4][n % 4]`), as the preset, the user and the orientation
 set them. They are packed in the order of `params`, from float 0: a `number` takes
 one float (its value), a `bool` one (0 or 1), a `choice` one (its index in
