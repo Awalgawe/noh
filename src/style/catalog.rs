@@ -31,8 +31,10 @@ impl Catalog {
 }
 
 /// `effects/` next to the application: beside `noh.exe`, so one folder up for the
-/// command line and the MCP, which live in `bin/`. Cargo does not copy it there: a
-/// development build gets it from `assets/effects/` by an explicit copy.
+/// command line and the MCP, which live in `bin/`. In a macOS app the executables
+/// are in `Contents/MacOS`, where only signed code may be: its effects are in
+/// `Contents/Resources`. Cargo does not copy it there: a development build gets
+/// it from `assets/effects/` by an explicit copy.
 pub fn bundled_dir() -> Option<PathBuf> {
     bundled_dir_for(&std::env::current_exe().ok()?)
 }
@@ -45,6 +47,13 @@ pub fn bundled_dir_for(exe: &Path) -> Option<PathBuf> {
     } else {
         folder
     };
+    if cfg!(target_os = "macos")
+        && app.file_name() == Some(std::ffi::OsStr::new("MacOS"))
+        && let Some(contents) = app.parent()
+        && contents.file_name() == Some(std::ffi::OsStr::new("Contents"))
+    {
+        return Some(contents.join("Resources/effects"));
+    }
     Some(app.join("effects"))
 }
 

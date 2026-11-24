@@ -226,6 +226,22 @@ fn bundle_windows(
     Ok(())
 }
 
+/// The effects alone, in `app_dir/effects`: `assets/effects` copied verbatim
+/// and compared by SHA-256. macOS ships them without the language packs, which
+/// it does not build yet.
+fn copy_effects(root: &Path, app_dir: &Path) -> Result<()> {
+    let effects = root.join("assets/effects");
+    copy_tree(&effects, &app_dir.join("effects"))?;
+    let (source, copied) = (
+        tree_hashes(&effects)?,
+        tree_hashes(&app_dir.join("effects"))?,
+    );
+    if source != copied || source.is_empty() {
+        return Err("The packaged effects differ from assets/effects.".into());
+    }
+    Ok(())
+}
+
 /// Task 44: the effects and the language packs beside the app executable, as the
 /// app reads them (`current_exe()/../effects|languages`), and their notice.
 /// - effects: each `assets/effects/<id>/` copied verbatim, then every file
@@ -241,15 +257,7 @@ fn copy_payload(root: &Path, app_dir: &Path) -> Result<()> {
 }
 
 fn copy_payload_from(root: &Path, app_dir: &Path, built: &Path) -> Result<()> {
-    let effects = root.join("assets/effects");
-    copy_tree(&effects, &app_dir.join("effects"))?;
-    let (source, copied) = (
-        tree_hashes(&effects)?,
-        tree_hashes(&app_dir.join("effects"))?,
-    );
-    if source != copied || source.is_empty() {
-        return Err("The packaged effects differ from assets/effects.".into());
-    }
+    copy_effects(root, app_dir)?;
     let languages = app_dir.join("languages");
     let mut manifests: Vec<PathBuf> = fs::read_dir(root.join("assets/languages"))?
         .map(|e| e.map(|e| e.path()))
