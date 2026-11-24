@@ -120,8 +120,8 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
   the song's end. Before, it was cut to its start plus a fifth of a second.
 - An .srt whose lines overlap is still refused, but NOH now says so and names
   the two lines, in the main screen's status, or when hovering the "Unreadable
-  file" chip when no lyrics are loaded. Before, added over lyrics already loaded, it was
-  refused without a word.
+  file" chip when no lyrics are loaded. Before, added over lyrics already
+  loaded, it was refused without a word.
 - In a vertical (9:16) video with a safe area, Sung sweep, Falling words,
   Breath and Simple karaoke size their text by the width the safe area leaves,
   not by the picture's short side. Their text is smaller on every line: by
