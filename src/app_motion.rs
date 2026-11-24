@@ -207,14 +207,29 @@ impl State {
 }
 
 impl NohApp {
+    /// The song, its length and the lyrics are known: what a check still waits
+    /// for then is the montage's up-to-date analysis.
+    fn motion_song_and_lyrics(&self) -> bool {
+        self.wav.is_some() && self.wav_seconds.is_some() && self.has_lyrics() && self.lyrics_ready()
+    }
+
+    /// Why « Vérifier et employer » waits: the song, lyrics and videos, or
+    /// only the analysis (turning captions on, for one, makes it stale).
+    fn motion_waiting(&self) -> &'static str {
+        if self.motion_song_and_lyrics() {
+            "motion.waiting_analysis"
+        } else {
+            "motion.waiting"
+        }
+    }
+
     /// What a check of the scene would be made for now: None while the song,
     /// its length, the lyrics or the montage's frame are not known yet.
     pub(super) fn motion_inputs(&self, stamp: Stamp) -> Option<Inputs> {
-        let wav = self.wav.clone()?;
-        self.wav_seconds?;
-        if !self.has_lyrics() || !self.lyrics_ready() {
+        if !self.motion_song_and_lyrics() {
             return None;
         }
+        let wav = self.wav.clone()?;
         // The montage's frame and rate from its exact analysis: the quick read
         // of the clips does not know their rate.
         let target = self
@@ -508,6 +523,7 @@ impl NohApp {
             .to_string_lossy()
             .into_owned();
         let ready = self.motion_inputs(f.stamp.clone()).is_some();
+        let waiting = self.motion_waiting();
         ui.add_space(space::S);
         let (line, _) =
             ui.allocate_exact_size(egui::vec2(ui.available_width(), 1.0), egui::Sense::hover());
@@ -557,7 +573,7 @@ impl NohApp {
                         }
                         if !ready {
                             ui.label(
-                                egui::RichText::new(l.text("motion.waiting"))
+                                egui::RichText::new(l.text(waiting))
                                     .size(style::text::SMALL)
                                     .color(t.text_3),
                             );
@@ -1133,6 +1149,39 @@ fn scene_card(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The card says what the check waits for: the song, lyrics and videos
+    /// while they are missing, then only the montage's up-to-date analysis
+    /// (turning captions on makes it stale, and the check waits for it).
+    #[test]
+    fn the_card_says_when_only_the_analysis_is_missing() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = NohApp::default();
+        assert_eq!(app.motion_waiting(), "motion.waiting");
+        app.wav = Some(folder.path().join("song.wav"));
+        app.wav_seconds = Some(20.0);
+        assert_eq!(app.motion_waiting(), "motion.waiting");
+        let srt = "1\n00:00:01,000 --> 00:00:09,000\nA test line\n\n";
+        let path = folder.path().join("song.srt");
+        std::fs::write(&path, srt).unwrap();
+        app.project.track.path = Some(path.clone());
+        app.project.track.loaded = Some(super::super::app_track::Loaded {
+            track: std::sync::Arc::new(noh::subtitle_srt::parse(srt, 20_000).unwrap()),
+            snapshot: noh::inspection::Snapshot(vec![
+                noh::inspection::FileStamp::read(&path).unwrap(),
+            ]),
+            model: None,
+            lyrics_unwritten: None,
+            srt_stamp: noh::inspection::FileStamp::read(&path).ok(),
+            lyrics_stamp: None,
+            pairing: Default::default(),
+        });
+        // No analysis yet: nothing to check against, and the card says why.
+        assert!(app.motion_inputs(None).is_none());
+        assert_eq!(app.motion_waiting(), "motion.waiting_analysis");
+        let l = noh::i18n::Language::Fr;
+        assert!(l.text("motion.waiting_analysis").contains("analyse"));
+    }
 
     #[test]
     fn the_scene_is_named_after_the_song() {

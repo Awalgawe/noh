@@ -228,7 +228,11 @@ pub fn gather(
     // FFmpeg refuses an output with no stream: a video without sound is not
     // decoded at all.
     let loudness = if sound {
-        sound_loudness(ffmpeg, source)?
+        // An empty path is the FFmpeg NOH finds (the window passes none unless
+        // the person picked one).
+        let ffmpeg = crate::inspection::resolve_ffmpeg(ffmpeg)
+            .map_err(|e| format!("FFmpeg: {}", e.detail))?;
+        sound_loudness(&ffmpeg, source)?
     } else {
         None
     };
