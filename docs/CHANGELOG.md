@@ -31,6 +31,25 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
   with the time it first happens; the command line and the MCP job's warnings
   say it too (`warning.effect_heavy`). No bundled style comes near that.
 
+### Motion scenes (experimental)
+
+- A motion scene is a text file beside the song (`<song>.noh-motion.rhai`),
+  usually written by an agent, that says what to draw over the video at each
+  instant: the lyrics, texts, shapes, particles, layers and their shaders, and
+  a framing of the picture. Its script runs in a sandbox with a list of allowed
+  functions and limits counted on each frame. The format is described in the
+  [motion authoring guide](https://github.com/Awalgawe/noh/blob/v0.4.0/docs/MOTION_AUTHORING.md).
+- **Motion**, under the caption styles, lists a scene found beside the song;
+  NOH never runs one on its own. One click checks every frame of the song and
+  uses the scene; a refused scene gives the instant and the reason. A scene
+  replaces the caption style. The preview draws it on the song's clock, and the
+  export burns it in.
+- For an agent: `noh_scene_check`, `noh_scene_look` and `noh_scene_clip` check a
+  scene, look at one frame and render a short clip; burning captions, making a
+  short (with a framing that follows the scene) and exporting a project accept
+  a scene. The command line accepts it too. In a window the agent drives, the
+  window follows the agent's scene file.
+
 ### Lyrics
 
 - The lyrics can say who sings each line. On the lyrics screen, **Voices**
@@ -117,6 +136,10 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
 - When the main words of a line are timed again, its backing words are spread
   again, and backing words timed by hand are reset without warning if they
   end up out of order.
+- Motion scenes are experimental: their format may change in a later
+  version. The preview does not reframe the picture as a scene asks, and leaves
+  its shader layers out unless asked; the export does both. When NOH refuses a
+  scene, the reason after the instant is in English.
 - The preview does not show the warning about a caption effect that draws a
   great deal at once; only the export does. Its German, Spanish, Japanese,
   Korean and Chinese texts were written without a native speaker's review.
