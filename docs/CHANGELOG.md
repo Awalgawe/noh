@@ -116,6 +116,9 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
 
 ### Fixes
 
+- On the lyrics screen, holding Space plays or pauses once. Before, its key
+  repeats started and stopped playback many times a second, for example when a
+  sync game ended with Space still held.
 - In the sync game, a line still held when the song ends keeps its time up to
   the song's end. Before, it was cut to its start plus a fifth of a second.
 - An .srt whose lines overlap is still refused, but NOH now says so and names
