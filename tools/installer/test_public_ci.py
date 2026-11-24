@@ -200,6 +200,21 @@ class InstallerGuards(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Unexpected installed files"):
                 ci.verify_installed(root, expected)
 
+    def test_upgrade_check_still_rejects_a_retired_file_left_behind(self):
+        # The installer deletes the files earlier releases shipped and this one does not:
+        # the upgrade check must keep refusing them, never list them as allowed extras.
+        lines = web.retired_lines({"noh.exe": {}})
+        for name in web.RETIRED:
+            self.assertIn('Type: files; Name: "{app}\\' + name.replace("/", "\\") + '"', lines)
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                (root / "noh.exe").write_bytes(b"qualified application")
+                expected = ci.delivery.inventory(root)
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_bytes(b"left by an earlier release")
+                with self.assertRaisesRegex(ValueError, "Unexpected installed files"):
+                    ci.verify_installed(root, expected)
+
 
 if __name__ == "__main__":
     unittest.main()
