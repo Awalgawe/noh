@@ -17,12 +17,12 @@
   "layout": {
     "mode": "line",
     "font": {"by_offset": ["$font", "jost_medium"]},
-    "size": {"by_offset": [{"mul": ["@short", {"choose": ["$size", {"small": 0.09171, "medium": 0.11184, "large": 0.13421}]}]}, {"mul": ["@short", {"choose": ["$size", {"small": 0.05125, "medium": 0.0625, "large": 0.075}]}]}]},
+    "size": {"by_offset": [{"mul": [{"min": ["@short", {"sub": [{"sub": ["@w", "@inset_l"]}, "@inset_r"]}]}, {"choose": ["$size", {"small": 0.09171, "medium": 0.11184, "large": 0.13421}]}]}, {"mul": [{"min": ["@short", {"sub": [{"sub": ["@w", "@inset_l"]}, "@inset_r"]}]}, {"choose": ["$size", {"small": 0.05125, "medium": 0.0625, "large": 0.075}]}]}]},
     "line_height": {"by_offset": [1.15, 1.2]},
     "box": {
       "x": 0.5,
       "width": 0.88,
-      "y": {"choose": ["$placement", {"bottom": {"sub": [0.84, {"div": [{"mul": ["@short", {"choose": ["$size", {"small": 0.07944, "medium": 0.09688, "large": 0.11625}]}]}, "@h"]}]}, "top": 0.16}]},
+      "y": {"choose": ["$placement", {"bottom": {"sub": [0.84, {"div": [{"mul": [{"min": ["@short", {"sub": [{"sub": ["@w", "@inset_l"]}, "@inset_r"]}]}, {"choose": ["$size", {"small": 0.07944, "medium": 0.09688, "large": 0.11625}]}]}, "@h"]}]}, "top": 0.16}]},
       "anchor": {"choose": ["$placement", {"bottom": "bottom", "top": "top"}]}
     },
     "visible": "line",

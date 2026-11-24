@@ -47,7 +47,7 @@ class LinuxPackageTests(unittest.TestCase):
         self.manifest = {'schema_version': 2, 'version': '0.1.0',
                          'runtime_dependencies': {'distribution': 'linux-host-runtime',
                              'contract': 'NOH.AppDir/usr/lib/noh/HOST-REQUIREMENTS.json'}, 'build': {
-            'target': 'x86_64-unknown-linux-gnu', 'profile': 'release', 'features': ['effects', 'gui', 'mcp'],
+            'target': 'x86_64-unknown-linux-gnu', 'profile': 'release', 'features': ['effects', 'gui', 'mcp', 'motion'],
             'git_revision': COMMIT, 'git_dirty': False}}
         self.update_manifest()
 

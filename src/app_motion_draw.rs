@@ -193,17 +193,26 @@ impl NohApp {
             Some((l.format("motion.frame_refused", &[clock(*at)]), why.clone()))
         } else if fb.slow {
             Some((l.text("motion.slow").to_string(), String::new()))
-        } else if fb.reframes {
-            Some((l.text("motion.no_reframe").to_string(), String::new()))
-        } else if fb.hidden > 0 && !self.motion.show_shaders {
-            Some((l.text("motion.shaders_hidden").to_string(), String::new()))
         } else {
-            None
+            let hidden = fb.hidden > 0 && !self.motion.show_shaders;
+            limits_note(fb.reframes, hidden).map(|key| (l.text(key).to_string(), String::new()))
         };
         if let Some((text, detail)) = note {
             badge(ui, monitor, &text, &detail);
         }
         fb.failed.is_none()
+    }
+}
+
+/// What the preview says it leaves to the export: the reframing, the shader
+/// layers (words drawn in one are left out with it), or both at once, so that
+/// neither hides the other.
+fn limits_note(reframes: bool, shaders_hidden: bool) -> Option<&'static str> {
+    match (reframes, shaders_hidden) {
+        (true, true) => Some("motion.no_reframe_shaders_hidden"),
+        (true, false) => Some("motion.no_reframe"),
+        (false, true) => Some("motion.shaders_hidden"),
+        (false, false) => None,
     }
 }
 
@@ -500,6 +509,27 @@ mod tests {
         assert_eq!(super::clock(0.0), "0:00,0");
     }
 
+    /// A scene that is reframed and has shader layers (its words may live in
+    /// one) is told both in one notice: the reframing one no longer hides the
+    /// other.
+    #[test]
+    fn the_preview_says_every_limit_at_once() {
+        use super::limits_note;
+        assert_eq!(
+            limits_note(true, true),
+            Some("motion.no_reframe_shaders_hidden")
+        );
+        assert_eq!(limits_note(true, false), Some("motion.no_reframe"));
+        assert_eq!(limits_note(false, true), Some("motion.shaders_hidden"));
+        assert_eq!(limits_note(false, false), None);
+        let l = noh::i18n::Language::Fr;
+        let both = l.text("motion.no_reframe_shaders_hidden");
+        assert!(
+            both.contains("recadre") && both.contains("shader"),
+            "{both}"
+        );
+    }
+
     /// The window prepares a scene on its script thread, with its fixed stack:
     /// a script hostile to the depth limits is refused there with the reason,
     /// and the window goes on (plan M4); a legal one is prepared.
@@ -561,6 +591,10 @@ fn frame(t, ctx) { draw(rect(0.1, 0.1).at(0.5, 0.5)); }
 ",
         );
         assert!(engine::prepare(&key(fine.clone()), &song, &ffmpeg, &track).is_ok());
+        // With no FFmpeg picked by the person (the window's usual case), the
+        // FFmpeg NOH finds is used.
+        let none = std::path::Path::new("");
+        assert!(engine::prepare(&key(fine.clone()), &song, none, &track).is_ok());
         // A version the worker did not check is not prepared: the scene file,
         // or a shader beside it, changed after the key was taken.
         let shaders = fine.with_extension("shaders");
