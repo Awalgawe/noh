@@ -599,12 +599,22 @@ fn look(
     write_json(dir, "look.json", &out)
 }
 
+/// The request with the FFmpeg it runs: an empty path is the one NOH finds, as
+/// for every other job (the window asks with none unless the person picked one).
+fn with_ffmpeg(request: &SceneRequest) -> Result<SceneRequest, EngineError> {
+    Ok(SceneRequest {
+        ffmpeg: crate::inspection::resolve_ffmpeg(&request.ffmpeg)?,
+        ..request.clone()
+    })
+}
+
 /// Run a scene job; its files are written into `workspace/scene`.
 pub fn execute(
     request: &SceneRequest,
     workspace: &Path,
     emit: &mut dyn FnMut(Event),
 ) -> Result<ExportResult, EngineError> {
+    let request = &with_ffmpeg(request)?;
     let mut report = Reporter::new(emit);
     let dir = workspace.join(STAGED);
     std::fs::create_dir(&dir).map_err(|e| fail("error.scene_output", Some(&dir), e))?;
@@ -622,4 +632,50 @@ pub fn execute(
         output: request.output.clone(),
         duration: span,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::scene_request::{SceneMode, SceneRequest};
+    use std::path::PathBuf;
+
+    fn request(ffmpeg: PathBuf) -> SceneRequest {
+        SceneRequest {
+            scene: PathBuf::from("C:/s/song.noh-motion.rhai"),
+            source: PathBuf::from("C:/s/song.wav"),
+            subtitles: PathBuf::from("C:/s/song.srt"),
+            ffmpeg,
+            safe_area: crate::safe_area::SafeArea::None,
+            from_ms: None,
+            to_ms: None,
+            mode: SceneMode::Check,
+            vertical: false,
+            bare: false,
+            grid: false,
+            output: PathBuf::from("C:/s/check"),
+            project: None,
+        }
+    }
+
+    /// The window asks with no FFmpeg unless the person picked one: the job
+    /// runs the one NOH finds, as the other jobs do, and an FFmpeg that is not
+    /// there is refused as such, before anything runs.
+    #[test]
+    fn a_scene_job_finds_its_ffmpeg_when_given_none() {
+        let found = crate::find_ffmpeg(None).expect("FFmpeg (NOH_FFMPEG)");
+        let resolved = super::with_ffmpeg(&request(PathBuf::new())).unwrap();
+        assert!(resolved.ffmpeg.is_file(), "{}", resolved.ffmpeg.display());
+        assert_eq!(resolved.ffmpeg.file_name(), found.file_name());
+        assert_eq!(
+            resolved,
+            SceneRequest {
+                ffmpeg: resolved.ffmpeg.clone(),
+                ..request(PathBuf::new())
+            }
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("no-ffmpeg.exe");
+        let error = super::with_ffmpeg(&request(missing)).unwrap_err();
+        assert_eq!(error.code, "error.ffmpeg");
+    }
 }
