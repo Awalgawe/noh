@@ -427,6 +427,7 @@ lyrics.recheck=erneut prüfen
 lyrics.recheck_help=Der Song hat sich seit diesem Songtext geändert. Prüfe das Timing.
 lyrics.after_end=Einige Zeilen enden nach dem Song. Prüfe ihr Timing oder ersetze die Datei.
 lyrics.unreadable=Datei nicht lesbar
+lyrics.srt_overlap=Diese .srt wurde nicht geladen: Zeile {1} beginnt, bevor Zeile {0} endet. NOH kann noch keine zwei gleichzeitig gesungenen Zeilen lesen.
 lyrics.pick_title=Songtext importieren (.srt)
 bar.generating=Songtext wird erstellt
 bar.lyrics_ready=Songtext fertig: {0}

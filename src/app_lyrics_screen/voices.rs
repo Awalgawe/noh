@@ -121,13 +121,13 @@ impl NohApp {
             return false;
         };
         if n as usize > declared {
-            self.notice = Some(Message::new(
-                "lyrics_screen.voice_missing",
-                &[self
-                    .locale
-                    .language
-                    .format("voices.numbered", &[n.to_string()])],
-            ));
+            // Said over the bottom of this screen, like the other keys that do
+            // nothing: the app's notice is drawn only by the main screen.
+            let voice = self
+                .locale
+                .language
+                .format("voices.numbered", &[n.to_string()]);
+            self.ls_flash("lyrics_screen.voice_missing", &[voice]);
             return true;
         }
         let set = match (n, toggle) {

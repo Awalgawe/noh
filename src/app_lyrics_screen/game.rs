@@ -50,6 +50,9 @@ pub(super) struct Game {
     pub holds: Vec<(usize, edit::Hold)>,
     /// Espace is down since this song time.
     pub hold: Option<u64>,
+    /// The player's clock at the game's latest poll: where a take held when
+    /// the song ends (playback stops by itself, the clock is gone) ends.
+    last_clock: Option<u64>,
     /// The lyrics when the game started.
     before: Arc<SubtitleTrack>,
     /// The same with, at the Syllables level, the language's split of every
@@ -209,6 +212,8 @@ impl NohApp {
         let target = ms.clamp(lo, hi.saturating_sub(1).max(lo));
         if let Some(g) = &mut self.lyrics_screen.game {
             g.waiting = Some(target);
+            // A time from before the seek must not end a later take.
+            g.last_clock = None;
             g.paused = None;
             g.hold = None;
         }
@@ -263,6 +268,7 @@ impl NohApp {
             idx: 0,
             holds: Vec::new(),
             hold: None,
+            last_clock: None,
             applied: None,
             before: track,
             split: Arc::new(split),
@@ -360,6 +366,7 @@ impl NohApp {
             }
             return;
         };
+        g.last_clock = Some(now);
         if g.was_live && !live {
             // The usual player took over: it plays at normal speed only.
             g.was_live = false;
@@ -464,6 +471,7 @@ impl NohApp {
             return;
         }
         g.hold = Some(now);
+        g.last_clock = Some(now);
     }
 
     /// Espace comes up: the unit ends now, and the take is written.
@@ -478,7 +486,12 @@ impl NohApp {
         let Some(u) = g.units.get(g.idx) else {
             return;
         };
-        let end = now.unwrap_or(start).max(start + MIN_HOLD_MS);
+        // No clock: the song ended (or its player closed) with Espace still
+        // down; the take lasts until the last time the player gave.
+        let end = now
+            .or(g.last_clock)
+            .unwrap_or(start)
+            .max(start + MIN_HOLD_MS);
         g.holds.push((
             g.idx,
             edit::Hold {
@@ -669,6 +682,7 @@ impl NohApp {
             idx: 0,
             holds: Vec::new(),
             hold: None,
+            last_clock: None,
             applied: None,
             split: track.clone(),
             before: track,

@@ -427,6 +427,7 @@ lyrics.recheck=check again
 lyrics.recheck_help=The song changed after these lyrics were made. Check their timing.
 lyrics.after_end=Some lines end after the song. Check their timing or replace the file.
 lyrics.unreadable=Unreadable file
+lyrics.srt_overlap=This .srt was not loaded: line {1} starts before line {0} ends. NOH cannot read two lines sung at the same time yet.
 lyrics.pick_title=Import lyrics (.srt)
 bar.generating=Generating the lyrics
 bar.lyrics_ready=Lyrics ready: {0}

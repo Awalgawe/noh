@@ -427,6 +427,7 @@ lyrics.recheck=다시 확인
 lyrics.recheck_help=이 가사를 만든 후 노래가 바뀌었습니다. 타이밍을 확인하세요.
 lyrics.after_end=노래가 끝난 뒤에 끝나는 가사가 있습니다. 타이밍을 확인하거나 파일을 바꾸세요.
 lyrics.unreadable=읽을 수 없는 파일
+lyrics.srt_overlap=이 .srt는 불러오지 않았습니다: {1}번째 줄이 {0}번째 줄이 끝나기 전에 시작합니다. NOH는 아직 동시에 부르는 두 줄을 읽지 못합니다.
 lyrics.pick_title=가사 가져오기(.srt)
 bar.generating=가사 생성 중
 bar.lyrics_ready=가사 준비 완료: {0}
