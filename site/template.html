@@ -225,7 +225,7 @@ section.band { padding-block: clamp(3rem, 7vw, 5.5rem); border-top: 1px solid va
 .sim.caps-on .sim-cap { display: block; }
 .sim-cap .sung { color: #FFD34D; }
 .sim-cap .next { color: rgba(255, 255, 255, 0.55); }
-.sim-panel { border-radius: 0.6em; background: var(--app-surface); padding: 1em; display: grid; grid-template-rows: auto auto 1fr; gap: 0.9em; min-width: 0; }
+.sim-panel { border-radius: 0.6em; background: var(--app-surface); padding: 1em; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 0.9em; min-width: 0; contain: size; }
 .sim-panel-head { display: flex; align-items: center; gap: 0.7em; }
 .sim-switch { width: 2.4em; height: 1.35em; border-radius: 1em; background: var(--app-surface-3); position: relative; flex: none; }
 .sim-switch::after { content: ""; position: absolute; top: 0.2em; left: 0.2em; width: 0.95em; height: 0.95em; border-radius: 50%; background: var(--app-text-2); }
@@ -235,13 +235,22 @@ section.band { padding-block: clamp(3rem, 7vw, 5.5rem); border-top: 1px solid va
 .sim-seg { margin-left: auto; display: flex; background: var(--app-surface-3); border-radius: 0.5em; padding: 0.2em; color: var(--app-text-2); white-space: nowrap; }
 .sim-seg span { padding: 0.3em 0.7em; border-radius: 0.35em; }
 .sim-seg span:first-child { background: var(--app-seg-on); color: var(--app-text); }
-.sim-styles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6em; }
+/* Beside the preview the panel takes the preview's height (contain: size: its tiles never make the row taller)
+   and the list scrolls, as in NOH, with a solid bar showing more below. */
+.sim-list { position: relative; min-height: 0; overflow: hidden; }
+.sim-list.scrolls { padding-right: 0.9em; }
+.sim-scroll { position: absolute; top: 0; right: 0.1em; bottom: 0; width: 0.4em; border-radius: 1em; background: var(--app-surface-3); display: none; }
+.sim-list.scrolls .sim-scroll { display: block; }
+.sim-scroll i { display: block; border-radius: 1em; background: var(--app-text-2); }
+.sim-styles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6em; align-content: start; }
 .sim:not(.has-lyrics) .sim-styles, .sim.has-lyrics:not(.caps-on) .sim-styles { opacity: 0.55; }
 .sim-style { border: 0.12em solid var(--app-line); border-radius: 0.5em; padding: 0.35em; display: grid; gap: 0.25em; min-width: 0; position: relative; }
 .sim-style.used { border-color: var(--app-text); }
 .sim-style i { display: grid; place-items: center; height: 2.6em; border-radius: 0.3em; background: var(--app-style-bg); font: 700 1.1em/1 var(--font-text); font-style: normal; white-space: nowrap; overflow: hidden; }
-.sim-style span { font-size: 0.85em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sim-style em { position: absolute; right: 0.5em; bottom: 0.3em; font-style: normal; font-size: 0.75em; color: var(--app-ok); display: none; }
+/* The name and the "in use" mark share a line: a long name is cut (…), never drawn under the mark. */
+.sim-style b { display: flex; align-items: baseline; gap: 0.4em; min-width: 0; font-weight: inherit; }
+.sim-style span { flex: 1 1 auto; min-width: 0; font-size: 0.85em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-style em { flex: none; font-style: normal; font-size: 0.75em; color: var(--app-ok); display: none; }
 .sim-style.used em { display: block; }
 .sim-note { align-self: end; color: var(--app-text-2); font-size: 0.9em; }
 /* transport, timeline, lyrics lane */
@@ -343,6 +352,7 @@ section.band { padding-block: clamp(3rem, 7vw, 5.5rem); border-top: 1px solid va
   /* Phone: one column; the export bar and the drop invitation stay at about 11-12 px. */
   .sim { font-size: 2cqw; }
   .sim-top, .sim-mid { grid-template-columns: minmax(0, 1fr); }
+  .sim-panel { contain: none; }
   .sim-tile, .sim-add { width: 8em; }
   .sim-ctrls .sim-skip, .sim-fades, .sim-short { display: none; }
   .sim-bar { font-size: 1.7em; }
@@ -762,6 +772,7 @@ img, svg { max-width: 100%; }
           <li>{{mcp.li2}}</li>
           <li>{{mcp.li3}}</li>
           <li>{{mcp.li4}}</li>
+          <li>{{mcp.li5}}</li>
         </ul>
         <p class="mcp-privacy">{{mcp.privacy}}</p>
       </div>
@@ -1132,14 +1143,24 @@ img, svg { max-width: 100%; }
     { from: 16, to: 22, text: "every picture finds its place" },
     { from: 23, to: 29, text: "and the song carries the rest" }
   ];
+  // One tile per bundled style, in tools/build_site.py's EFFECTS order (the names come from NOH.styles).
   var SIM_STYLES = [
-    { name: "Classic", look: '<span style="font-weight:600">La la la</span>' },
-    { name: "Type block", look: '<span style="font:800 0.55em/1 var(--font-text);text-align:center;color:#FFD34D">LA<br><span style="color:#fff">LA<br>LA</span></span>' },
-    { name: "Breath", look: '<span style="font-weight:400;font-size:1.2em">La la la</span>' },
-    { name: "Falling words", look: '<span style="font-weight:800;font-size:1.15em">La la</span>' },
-    { name: "Simple karaoke", look: '<span><span style="color:#FFD34D">La la</span> la</span>' },
-    { name: "Sung sweep", look: '<span><span style="color:#FFD34D">La l</span><span style="color:#9a9a92">a la</span></span>' }
+    { id: "classique", look: '<span style="font-weight:600">La la la</span>' },
+    { id: "band", look: '<span style="font-weight:600;font-size:0.9em;background:rgba(12,13,15,0.62);padding:0.25em 0.55em;border-radius:0.15em">La la la</span>' },
+    { id: "block", look: '<span style="font:800 0.55em/1 var(--font-text);text-align:center;color:#FFD34D">LA<br><span style="color:#fff">LA<br>LA</span></span>' },
+    { id: "breath", look: '<span style="font-weight:400;font-size:1.2em">La la la</span>' },
+    { id: "drop", look: '<span style="font-weight:800;font-size:1.15em">La la</span>' },
+    { id: "dust", look: '<span style="font:500 1em/1 var(--font-brand)"><span style="color:#FFE2B4;opacity:0.45;font-size:0.7em;letter-spacing:0.12em">∴·:</span><span style="opacity:0.7">la</span> la</span>' },
+    { id: "highlighter", look: '<span><span style="background:#FFE600;color:#121212;padding:0.05em 0.2em;border-radius:0.12em">La la</span> la</span>' },
+    { id: "karaoke-simple", look: '<span><span style="color:#FFD34D">La la</span> la</span>' },
+    { id: "lit", look: '<span style="font-weight:600"><span style="color:rgba(255,255,255,0.45)">La</span> <span style="color:#fff;text-shadow:0 0 0.35em rgba(255,255,255,0.7)">la</span> <span style="color:rgba(255,255,255,0.45)">la</span></span>' },
+    { id: "punch", look: '<span style="font:800 1.35em/1 var(--font-brand);color:#FFD84D;letter-spacing:-0.01em">LA</span>' },
+    { id: "scroll", look: '<span style="font:800 0.55em/1.2 var(--font-brand);text-align:center"><span style="color:rgba(255,255,255,0.4)">la la</span><br><span style="color:#fff">LA LA LA</span><br><span style="color:rgba(255,255,255,0.4)">la la</span></span>' },
+    { id: "sticker", look: '<span style="font:800 0.9em/1 var(--font-brand);color:#fff"><span style="display:inline-block;background:#FF5D73;padding:0.12em 0.25em;border-radius:0.12em;transform:rotate(-7deg)">LA</span> <span style="display:inline-block;background:#2E86FF;padding:0.12em 0.25em;border-radius:0.12em;transform:rotate(6deg)">LA</span></span>' },
+    { id: "sweep", look: '<span><span style="color:#FFD34D">La l</span><span style="color:#9a9a92">a la</span></span>' }
   ];
+  // The style the walkthrough picks; its captions are drawn sung word by word (.sim-cap .sung).
+  var SIM_KARAOKE = SIM_STYLES.map(function (st) { return st.id; }).indexOf("karaoke-simple");
   var CHECK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="m5.2 8.2 2 2 3.8-4.2"/></svg>';
   var NOTE = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M6 12V3.5l7-1.5V10.5"/><circle cx="4.25" cy="12" r="1.75"/><circle cx="11.25" cy="10.5" r="1.75"/></svg>';
   var LINES = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h7"/></svg>';
@@ -1202,12 +1223,23 @@ img, svg { max-width: 100%; }
     var styleEls = SIM_STYLES.map(function (st, k) {
       var d = el("div", "sim-style" + (k === 0 ? " used" : ""));
       var i = el("i"); i.innerHTML = st.look;
-      d.append(i, el("span", "", NOH.styles[k]), el("em", "", A("style.used")));
+      var label = el("b"); label.append(el("span", "", NOH.styles[k]), el("em", "", A("style.used")));
+      d.append(i, label);
       styles.appendChild(d);
       return d;
     });
+    var list = el("div", "sim-list"), bar = el("span", "sim-scroll"), thumb = el("i");
+    bar.appendChild(thumb);
+    list.append(styles, bar);
+    // The thumb is the visible share of the list; no bar when everything fits (one column on a phone).
+    function fitList() {
+      list.classList.remove("scrolls");
+      var share = list.clientHeight / Math.max(1, styles.scrollHeight);
+      if (share < 1) { list.classList.add("scrolls"); thumb.style.height = (share * 100) + "%"; }
+    }
+    if ("ResizeObserver" in window) new ResizeObserver(fitList).observe(list);
     var note = el("p", "sim-note");
-    panel.append(ph, styles, note);
+    panel.append(ph, list, note);
     mid.append(monitor, panel);
 
     // transport
@@ -1508,7 +1540,7 @@ img, svg { max-width: 100%; }
     // ---- one loop per step: [action, wait in ms] ----
     var scripts = {
       0: [
-        [function () { base({ tiles: 4, song: true, lyrics: "done", caps: true, style: 4 }); sim.classList.add("still"); animate(30000, function (k) { setPlayhead(k * 30); }); }, 30200]
+        [function () { base({ tiles: 4, song: true, lyrics: "done", caps: true, style: SIM_KARAOKE }); sim.classList.add("still"); animate(30000, function (k) { setPlayhead(k * 30); }); }, 30200]
       ],
       1: [
         [function () { base({ empty: true }); ghostFiles(); moveTo(edge("left", 0.45), 0); }, 600],
@@ -1553,11 +1585,11 @@ img, svg { max-width: 100%; }
         [function () { base({ tiles: 4, song: true, lyrics: "done" }); moveTo(spot(monitor, 0.7, 0.5), 0); }, 600],
         [function () { moveTo(spot(sw), 900); }, 1000],
         [function () { setCaps(true); setPlayhead(10.5); }, 700],
-        [function () { moveTo(spot(styleEls[4], 0.5, 0.45), 700); }, 800],
-        [function () { useStyle(4); animate(3000, function (k) { setPlayhead(10.5 + k * 4.4); }); }, 3600]
+        [function () { moveTo(spot(styleEls[SIM_KARAOKE], 0.5, 0.45), 700); }, 800],
+        [function () { useStyle(SIM_KARAOKE); animate(3000, function (k) { setPlayhead(10.5 + k * 4.4); }); }, 3600]
       ],
       6: [
-        [function () { base({ tiles: 4, song: true, lyrics: "done", caps: true, style: 4, at: 11.5 }); moveTo(spot(monitor, 0.8, 0.6), 0); }, 700],
+        [function () { base({ tiles: 4, song: true, lyrics: "done", caps: true, style: SIM_KARAOKE, at: 11.5 }); moveTo(spot(monitor, 0.8, 0.6), 0); }, 700],
         [function () { moveTo(spot(exportBtn), 1000); }, 1150],
         [function () { setStatus("prog"); animate(2600, setProgress); }, 2800],
         [function () { setStatus("done"); }, 2400]
@@ -1576,13 +1608,13 @@ img, svg { max-width: 100%; }
       stop: function () { clearTimeout(timer); if (raf) cancelAnimationFrame(raf); raf = null; },
       // The step's end state, without cursor: shown when nothing animates (reduced motion).
       still: function () {
-        var o = [{ tiles: 4, song: true, lyrics: "done", caps: true, style: 4, at: 10.5 },
+        var o = [{ tiles: 4, song: true, lyrics: "done", caps: true, style: SIM_KARAOKE, at: 10.5 },
           { tiles: 4 },
           { tiles: 4, song: true, at: 7 },
           { tiles: 4, song: true, lyrics: "done" },
           { tiles: 4, song: true, lyrics: "done" },
-          { tiles: 4, song: true, lyrics: "done", caps: true, style: 4, at: 12 },
-          { tiles: 4, song: true, lyrics: "done", caps: true, style: 4, at: 12 }][step];
+          { tiles: 4, song: true, lyrics: "done", caps: true, style: SIM_KARAOKE, at: 12 },
+          { tiles: 4, song: true, lyrics: "done", caps: true, style: SIM_KARAOKE, at: 12 }][step];
         base(o);
         if (step === 4) { lsShow(true); lsGame(false); lsSelect(0); lsAt(9.1); }
         if (step === 6) { setStatus("done"); setProgress(1); }

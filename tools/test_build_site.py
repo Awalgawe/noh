@@ -76,6 +76,16 @@ class StringTests(unittest.TestCase):
                 self.assertEqual(sorted(frozen["app"][lang]), sorted(build_site.APP_KEYS))
                 self.assertEqual(len(frozen["styles"][lang]), len(build_site.EFFECTS))
 
+    def test_every_bundled_style_has_one_drawn_tile_in_order(self):
+        template = (ROOT / "site" / "template.html").read_text(encoding="utf-8")
+        block = re.search(r"var SIM_STYLES = \[(.*?)\n  \];", template, re.S).group(1)
+        self.assertEqual(re.findall(r'\{ id: "([\w-]+)"', block), list(build_site.EFFECTS))
+        self.assertIn('"karaoke-simple"', template.split("var SIM_KARAOKE", 1)[1].split("\n", 1)[0])
+        bundled = sorted(p.parent.name for p in (ROOT / "assets" / "effects").glob("*/effect.json"))
+        self.assertEqual(sorted(build_site.EFFECTS), bundled)
+        self.assertEqual(build_site.EFFECTS[0], "classique")
+        self.assertEqual(list(build_site.EFFECTS[1:]), sorted(build_site.EFFECTS[1:]))
+
     def test_only_simplified_chinese_goes_to_the_chinese_page(self):
         for want, sent in [("zh", True), ("zh-cn", True), ("zh-sg", True), ("zh-hans", True), ("zh-hans-cn", True),
                            ("zh-tw", False), ("zh-hk", False), ("zh-hant-tw", False), ("zh-mo", False)]:
