@@ -1255,8 +1255,17 @@ impl NohApp {
             paint_texture(ui, monitor, texture);
         }
         // A driven window's `look`: the monitor, and whether its picture is
-        // the playhead's.
-        self.driven_note_monitor(monitor, !loading && !still_loading);
+        // the playhead's. A paused player moved by the agent shows it once its
+        // seek there has a picture: before, the monitor and the captions still
+        // show where it was (libmpv lands a paused seek in about 20 ms, less
+        // than the two frames a look waits for in an optimized build).
+        let target = self
+            .mini_preview
+            .cursor_ms
+            .saturating_sub(self.mini_bounds().0) as f64
+            / 1000.0;
+        let player_there = snapshot.as_ref().is_none_or(|s| player_shows(s, target));
+        self.driven_note_monitor(monitor, !loading && !still_loading && player_there);
         self.mini_preview.painted = (has_texture, false);
         let scrub_visible = self.mini_preview.scrub_visible();
         self.mini_preview.painted_scrub = scrub_visible;
@@ -2224,6 +2233,25 @@ fn player_preference() -> Option<bool> {
 fn after_live_failure(failure: Option<noh::playback::LiveFailure>) -> (bool, bool) {
     failure.map_or((true, true), |failure| (!failure.refused, failure.playing))
 }
+/// Whether a paused player's monitor shows the picture at `target` seconds of
+/// its selection: its last seek, to that very time, has published its first
+/// picture, or the picture shown is already that time's (within half a frame
+/// at 24 fps). A seek just asked and not yet taken by the player leaves the
+/// previous seek in the snapshot, so it is not mistaken for this one. A
+/// playing player shows wherever it is.
+fn player_shows(snapshot: &noh::playback::Snapshot, target: f64) -> bool {
+    if snapshot.playing {
+        return true;
+    }
+    let landed = snapshot
+        .seek
+        .is_some_and(|seek| (seek.target - target).abs() < 0.0005 && seek.frame_ms.is_some());
+    let shown = snapshot
+        .frame
+        .as_ref()
+        .is_some_and(|frame| (frame.position - target).abs() < 0.5 / 24.0);
+    landed || shown
+}
 /// Why Play does not go to libmpv, with what it gave up earlier in this
 /// session, if it did: from then on the usual player plays until NOH is
 /// started again.
@@ -2468,6 +2496,46 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// A look after a paused seek waits for the seek's own picture: the
+    /// previous seek's, or a picture of the old position, is not the
+    /// playhead's (a look then captured the old picture and its caption).
+    #[test]
+    fn a_paused_player_shows_the_playhead_once_its_seek_there_has_a_picture() {
+        use noh::playback::{Frame, SeekTiming, Snapshot};
+        let seek = |target: f64, landed: bool| SeekTiming {
+            seek_id: 1,
+            target,
+            started_ms: 0.0,
+            audio_ms: 0.0,
+            command_ms: 0.0,
+            spawned_ms: 0.0,
+            frame_ms: landed.then_some(15.0),
+        };
+        let paused = |seek: Option<SeekTiming>, shown: f64| Snapshot {
+            phase: Phase::Ready,
+            seek,
+            frame: Some(std::sync::Arc::new(Frame {
+                id: 7,
+                width: 0,
+                height: 0,
+                rgb: Vec::new(),
+                position: shown,
+            })),
+            ..Snapshot::default()
+        };
+        // Paused at 82.25 s, moved to 37 s: the seek is not taken yet (the
+        // snapshot names the previous one), then in flight, then landed.
+        assert!(!player_shows(&paused(Some(seek(74.3, true)), 82.25), 37.0));
+        assert!(!player_shows(&paused(Some(seek(37.0, false)), 82.25), 37.0));
+        assert!(player_shows(&paused(Some(seek(37.0, true)), 36.9583), 37.0));
+        // Already there (paused where it stopped playing): nothing to wait for.
+        assert!(player_shows(&paused(Some(seek(74.3, true)), 82.2083), 82.2));
+        // Playing: it shows wherever it is.
+        let mut playing = paused(None, 10.0);
+        playing.playing = true;
+        assert!(player_shows(&playing, 37.0));
     }
 
     #[test]
