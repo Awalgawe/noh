@@ -1196,9 +1196,11 @@ impl NohApp {
 
     /// A driven window waits for its preparation turn: its light copies and
     /// its waveform wait too (note §5). Not once the person took it back or
-    /// the agent left: it is then an ordinary NOH.
+    /// the agent left: it is then an ordinary NOH. And not once nothing is
+    /// left to prepare: the turn is given back then, and a window held after
+    /// it showed no paused picture until something was played.
     pub(super) fn driven_holds_preparation(&self) -> bool {
-        self.driven.as_ref().is_some_and(|d| d.locked() && !d.turn)
+        self.driven.as_ref().is_some_and(|d| d.locked() && !d.turn) && self.preparation_pending()
     }
 
     /// Copies being made or waiting, or a waveform to decode.

@@ -2132,10 +2132,16 @@ mod tests {
                 .unwrap()
                 .asked(&w.app.diagnostic_request())
         );
-        // Nothing left for the rest of this test.
+        // Nothing left to prepare: the turn went back, and nothing is held.
+        // The paused preview shows the playhead again (a driven window held
+        // here stayed on « Préparation de l'aperçu… » until something played).
         w.app.clips.clear();
         w.app.diagnosis_error = None;
+        assert!(!w.app.driven_holds_preparation());
+        // Something to prepare again: held until the next turn.
+        w.app.project.waveform_loading = true;
         assert!(w.app.driven_holds_preparation());
+        w.app.project.waveform_loading = false;
         // A job the agent started ends: the slot's owner is told.
         w.app.driven.as_mut().unwrap().agent_job = true;
         assert_eq!(
