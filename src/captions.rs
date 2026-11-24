@@ -80,6 +80,10 @@ pub struct CaptionRequest {
     /// itself), by the GPU engine with no fallback; exclusive with `effect`.
     #[serde(default)]
     pub scene: Option<crate::scene_request::SceneChoice>,
+    /// « Promote NOH »: the « made with NOH » signature at the bottom-right of
+    /// the picture (`crate::mark`). Off unless asked.
+    #[serde(default)]
+    pub promote: bool,
 }
 
 impl CaptionRequest {
@@ -222,6 +226,9 @@ pub(crate) fn execute(
     // it by its framing (FFmpeg #1 then outputs the whole picture).
     let vertical = request.scene.as_ref().is_some_and(|s| s.vertical);
     let frame = crate::scene_request::scene_frame(vertical, canvas.size());
+    // « Promote NOH »: the mark on the final picture, and the captions above it.
+    let band = mark_band(request.promote, frame, request.style.safe_area, &workspace)?;
+    let canvas = canvas.keep_above(band);
     if request.scene.is_some() {
         crate::scene_request::safe_area_required(frame.0, frame.1, request.style.safe_area)?;
     }
@@ -336,8 +343,11 @@ pub(crate) fn execute(
             if gpu && !gl_failed {
                 let style_safe = request.style.safe_area.insets(canvas.width, canvas.height);
                 let (head, tags, matrix) = crate::color::Plan::single_source_split(&media.video);
-                let finish: Vec<String> = tags
+                let finish: Vec<String> = request
+                    .promote
+                    .then(|| crate::mark::FILTER.to_string())
                     .into_iter()
+                    .chain(tags)
                     .chain(request.preview.then(|| {
                         if vertical {
                             "scale=360:640".to_string()
@@ -382,6 +392,7 @@ pub(crate) fn execute(
                     encode: encode_args(request.preview, copy_audio, encoder),
                     deadline: timeout,
                     end: Some(range.map_or(media.video_end, |(a, b)| b - a)),
+                    band,
                 };
                 let failed = (
                     "error.caption_backend",
@@ -448,7 +459,7 @@ pub(crate) fn execute(
                     source,
                     &workspace,
                     &canvas,
-                    (request.preview, copy_audio, encoder),
+                    (request.preview, copy_audio, encoder, request.promote),
                     &crate::color::Plan::single_source(&media.video),
                 );
                 let (status, log) = crate::process::stream(command, Some(timeout), false, |line| {
@@ -624,6 +635,20 @@ pub(crate) struct Canvas {
     alignment: u8,
 }
 impl Canvas {
+    /// Bottom captions end at least `band` pixels above the picture's bottom
+    /// edge: the « made with NOH » mark's place (`crate::mark::caption_band`).
+    /// Top captions are untouched.
+    pub(crate) fn keep_above(mut self, band: Option<u32>) -> Self {
+        if let Some(band) = band
+            && self.alignment != 8
+            && band > self.margin_vertical
+        {
+            self.max_height = (self.max_height - (band - self.margin_vertical) as f32).max(1.0);
+            self.margin_vertical = band;
+        }
+        self
+    }
+
     /// The canvas size in pixels (the source's displayed size, made even).
     pub(crate) fn size(&self) -> (u32, u32) {
         (self.width, self.height)
@@ -999,13 +1024,16 @@ fn render_command(
     source: &Path,
     workspace: &Path,
     canvas: &Canvas,
-    (preview, copy_audio, encoder): (bool, bool, VideoEncoder),
+    (preview, copy_audio, encoder, mark): (bool, bool, VideoEncoder, bool),
     color: &str,
 ) -> Command {
     let mut filter = format!(
         "{color},scale={}:{},setsar=1,{FILTER}",
         canvas.width, canvas.height
     );
+    if mark {
+        write!(filter, ",{}", crate::mark::FILTER).expect("Writing to String is infallible");
+    }
     if preview {
         write!(filter, ",{}", preview_scale(canvas)).expect("Writing to String is infallible");
     }
@@ -1038,6 +1066,24 @@ fn render_command(
         .args(["-progress", "pipe:1", "export.mp4"]);
     cmd
 }
+/// With « Promote NOH »: the mark staged in `workspace` for a `frame`-sized
+/// picture, and the band the captions keep above. None without it.
+pub(crate) fn mark_band(
+    promote: bool,
+    frame: (u32, u32),
+    area: crate::safe_area::SafeArea,
+    workspace: &Path,
+) -> Result<Option<u32>, EngineError> {
+    if !promote {
+        return Ok(None);
+    }
+    let (w, h) = frame;
+    let safe = crate::mark::safe_for(w, h, Some(area));
+    crate::mark::stage(workspace, w, h, safe)
+        .map_err(|e| error("error.caption_config", "stage_mark", Some(workspace), e))?;
+    Ok(Some(crate::mark::caption_band(w, h, safe)))
+}
+
 pub(crate) fn unsupported_renderer(log: &str) -> bool {
     log.contains(UNSUPPORTED_WRAP)
         || log.contains("failed to find any fallback with glyph")
@@ -1059,6 +1105,7 @@ mod tests {
             ffmpeg: "".into(),
             style: CaptionStyle::default(),
             preview: false,
+            promote: false,
         }
     }
     /// The libass routes' warning time: the start of the first cue holding a word
@@ -1240,7 +1287,7 @@ mod tests {
             source,
             Path::new("workspace"),
             &canvas,
-            (true, true, VideoEncoder::X264),
+            (true, true, VideoEncoder::X264, false),
             "format=yuv420p",
         );
         let args: Vec<_> = cmd

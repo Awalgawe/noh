@@ -175,6 +175,9 @@ impl NohApp {
                 short: selected,
                 effect,
                 captions,
+                // The mark is burned into exports; a preview render carries
+                // none (the monitor draws it live).
+                promote: self.promote && !previewing,
             };
             request.validate()?;
             Ok(request)

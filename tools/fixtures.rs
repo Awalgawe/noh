@@ -206,6 +206,7 @@ pub fn run(options: Options) -> Result<()> {
             subtitles: dir.join("ma-chanson.srt"),
             style: Default::default(),
         }),
+        promote: false,
     };
     fs::write(
         dir.join("project-short.json"),

@@ -120,6 +120,7 @@ impl Workspace {
                 ..CaptionStyle::default()
             },
             preview,
+            promote: false,
         }
     }
     fn issue(&self, preview: bool) -> Option<Message> {
@@ -486,6 +487,7 @@ impl NohApp {
             return;
         }
         let mut request = self.captions.request(self.ffmpeg.as_ref(), preview);
+        request.promote = self.promote && !preview;
         if let Err(error) = request.validate() {
             self.captions.fail(&error, self.captions.revision);
             return;

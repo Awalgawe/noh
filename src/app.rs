@@ -27,6 +27,7 @@ mod app_preview;
 mod app_project;
 mod app_project_ops;
 mod app_project_ui;
+mod app_promote;
 mod app_range;
 mod app_resources;
 mod app_sheet;
@@ -69,6 +70,8 @@ struct NohApp {
     subtitles: app_subtitles::Workspace,
     resources: app_resources::State,
     locale: Locale,
+    /// « Promote NOH »: the « made with NOH » mark on every export (`app_promote`).
+    promote: bool,
     clips: Vec<Clip>,
     wav: Option<PathBuf>,
     output: Option<PathBuf>,
@@ -178,6 +181,13 @@ impl Default for NohApp {
             subtitles: app_subtitles::Workspace::default(),
             resources: app_resources::State::default(),
             locale: Locale::load(),
+            // Off unless the user ticked it once (tests never read the user's file).
+            promote: !cfg!(test)
+                && app_promote::read(
+                    noh::i18n::preferences_path()
+                        .map(|language| app_promote::path(&language))
+                        .as_deref(),
+                ),
             clips: Vec::new(),
             wav: None,
             output: None,

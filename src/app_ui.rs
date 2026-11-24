@@ -776,6 +776,22 @@ impl NohApp {
         let montage = !short_workspace && !caption_workspace && !subtitle_workspace;
         let bar = view.montage.clone().filter(|_| montage).unwrap_or_default();
         let change = std::cell::Cell::new(None::<egui::Id>);
+        let promote_change = std::cell::Cell::new(None::<bool>);
+        let promote_now = self.promote;
+        let promote_language = self.locale.language;
+        let promote_box = |ui: &mut egui::Ui, idle: bool| {
+            let mut on = promote_now;
+            let l = promote_language;
+            let response = ui
+                .add_enabled_ui(idle, |ui| {
+                    style::small_checkbox(ui, &mut on, l.text("promote.label"))
+                })
+                .inner
+                .on_hover_text(l.text("promote.hint"));
+            if response.changed() {
+                promote_change.set(Some(on));
+            }
+        };
         // The export button pressed, for focus when the sheet closes.
         let export_from = std::cell::Cell::new(None::<egui::Id>);
         let exporting_short = self.project.running.as_ref().is_some_and(|r| r.short);
@@ -922,74 +938,91 @@ impl NohApp {
                         }
                     }
                     if view.destination && montage {
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = space::S;
-                            ui.spacing_mut().button_padding = vec2(0.0, 0.0);
-                            let (folder, _) =
-                                ui.allocate_exact_size(vec2(14.0, 16.0), Sense::hover());
-                            app_icons::paint(
-                                ui.painter(),
-                                Rect::from_center_size(folder.center(), vec2(14.0, 14.0)),
-                                app_icons::Icon::Folder,
-                                t.text_3,
-                            );
-                            ui.add(
-                                egui::Label::new(
-                                    RichText::new(&destination_text)
-                                        .size(style::text::SMALL)
-                                        .color(t.text_2),
-                                )
-                                .truncate(),
-                            )
-                            .on_hover_text(shown.display().to_string());
-                            if let Some(tag) = &bar.tag {
-                                style::tag(ui, &tag.render(l), true);
-                            }
-                            if view.operation == Operation::Idle && bar.change {
-                                let link = ui.add(
-                                    egui::Button::new(
-                                        RichText::new(l.text("bar.change"))
-                                            .size(style::text::SMALL)
-                                            .underline()
-                                            .color(t.accent_text),
+                        // « Promote NOH » at the line's right end, beside what it
+                        // changes; the destination shortens for it. Not while an
+                        // export runs (a run never mixes the two).
+                        let row = vec2(ui.available_width(), 16.0);
+                        ui.allocate_ui_with_layout(
+                            row,
+                            Layout::right_to_left(Align::Center),
+                            |ui| {
+                                promote_box(ui, view.operation == Operation::Idle);
+                                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                                    ui.spacing_mut().item_spacing.x = space::S;
+                                    ui.spacing_mut().button_padding = vec2(0.0, 0.0);
+                                    let (folder, _) =
+                                        ui.allocate_exact_size(vec2(14.0, 16.0), Sense::hover());
+                                    app_icons::paint(
+                                        ui.painter(),
+                                        Rect::from_center_size(folder.center(), vec2(14.0, 14.0)),
+                                        app_icons::Icon::Folder,
+                                        t.text_3,
+                                    );
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(&destination_text)
+                                                .size(style::text::SMALL)
+                                                .color(t.text_2),
+                                        )
+                                        .truncate(),
                                     )
-                                    .frame(false),
-                                );
-                                style::focus(ui, &link);
-                                if link.clicked() {
-                                    change.set(Some(link.id));
-                                }
-                            } else if view.operation != Operation::Idle && !compact {
-                                ui.add(
-                                    egui::Label::new(
-                                        RichText::new(view.detail.render(l))
-                                            .size(style::text::SMALL)
-                                            .color(t.text_3),
-                                    )
-                                    .truncate(),
-                                );
-                            }
-                        });
+                                    .on_hover_text(shown.display().to_string());
+                                    if let Some(tag) = &bar.tag {
+                                        style::tag(ui, &tag.render(l), true);
+                                    }
+                                    if view.operation == Operation::Idle && bar.change {
+                                        let link = ui.add(
+                                            egui::Button::new(
+                                                RichText::new(l.text("bar.change"))
+                                                    .size(style::text::SMALL)
+                                                    .underline()
+                                                    .color(t.accent_text),
+                                            )
+                                            .frame(false),
+                                        );
+                                        style::focus(ui, &link);
+                                        if link.clicked() {
+                                            change.set(Some(link.id));
+                                        }
+                                    } else if view.operation != Operation::Idle && !compact {
+                                        ui.add(
+                                            egui::Label::new(
+                                                RichText::new(view.detail.render(l))
+                                                    .size(style::text::SMALL)
+                                                    .color(t.text_3),
+                                            )
+                                            .truncate(),
+                                        );
+                                    }
+                                });
+                            },
+                        );
                     } else {
                         let detail = view.detail.render(l);
-                        let label = egui::Label::new(
-                            RichText::new(&detail)
-                                .size(style::text::SMALL)
-                                .color(t.text_2),
-                        );
-                        ui.add(
-                            if view.headline.key == "ui.subtitle_succeeded"
-                                || view.headline.key == "ui.caption_exported"
-                                || view.headline.key == "ui.caption_last_export"
-                                || view.headline.key == "ui.short_exported"
-                                || view.headline.key == "ui.short_last_export"
-                            {
-                                label.truncate()
-                            } else {
-                                label.wrap()
-                            },
-                        )
-                        .on_hover_text(&detail);
+                        let row = vec2(ui.available_width(), 16.0);
+                        ui.allocate_ui_with_layout(row, Layout::right_to_left(Align::Min), |ui| {
+                            promote_box(ui, view.operation == Operation::Idle);
+                            ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
+                                let label = egui::Label::new(
+                                    RichText::new(&detail)
+                                        .size(style::text::SMALL)
+                                        .color(t.text_2),
+                                );
+                                ui.add(
+                                    if view.headline.key == "ui.subtitle_succeeded"
+                                        || view.headline.key == "ui.caption_exported"
+                                        || view.headline.key == "ui.caption_last_export"
+                                        || view.headline.key == "ui.short_exported"
+                                        || view.headline.key == "ui.short_last_export"
+                                    {
+                                        label.truncate()
+                                    } else {
+                                        label.wrap()
+                                    },
+                                )
+                                .on_hover_text(&detail);
+                            });
+                        });
                     }
                     // The montage shows locking on the controls themselves.
                     let third = view
@@ -1447,6 +1480,9 @@ impl NohApp {
                 .height()
                 .max(main_ui.min_rect().height());
             ui.allocate_space(vec2(bounds.width(), height));
+        }
+        if let Some(on) = promote_change.get() {
+            self.set_promote(on);
         }
         if let Some(from) = change.get() {
             self.open_sheet(false, Some(from));

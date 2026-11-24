@@ -2277,6 +2277,21 @@ impl PluginScene {
         self
     }
 
+    /// The safe surface ends at least `band` pixels above the canvas's bottom
+    /// edge: the « made with NOH » mark's place (`crate::mark::caption_band`).
+    /// The surface only gets shorter, as a safe area makes it; `@safe` keeps
+    /// its value, so a style without a safe area keeps its own margins.
+    pub fn with_bottom_band(mut self, band: Option<u32>) -> Self {
+        if let Some(band) = band {
+            let [x0, y0, sw, sh] = self.safe;
+            let bottom = (self.h - band as f32).max(y0 + 1.0);
+            if y0 + sh > bottom {
+                self.safe = [x0, y0, sw, bottom - y0];
+            }
+        }
+        self
+    }
+
     /// Check letters against the whole canvas when no safe area applies (the
     /// `@safe` host value stays 0, so layouts are unchanged).
     pub fn with_frame_check(mut self) -> Self {

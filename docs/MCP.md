@@ -4,6 +4,10 @@ Caption requests and short/project `captions` accept an optional `safe_area`:
 `none` (default), `youtube_shorts`, `tiktok`, `reels`, or `universal`.
 See [Short presets](SHORT_PRESETS.md) for the shared protected text regions.
 
+Caption, short and project requests also accept `promote` (default `false`): a
+small "made with NOH" signature at the bottom right of the picture, as the
+CLI's `--promote` draws it.
+
 The implementation uses the official Rust SDK behind the
 optional `mcp` feature and the same isolated job controller as the CLI and GUI.
 It exposes local jobs over stdio; client compatibility should be checked with

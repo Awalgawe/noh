@@ -74,6 +74,15 @@ re-encoded; audio handling and timing warnings remain explicit.
 Use `--caption-safe-area youtube_shorts|tiktok|reels|universal|none` to apply the
 [short caption guides](SHORT_PRESETS.md).
 
+### Promote NOH
+
+`--promote` (with `--project`, `--short` or `--burn-subtitles`) adds a small
+"made with NOH" signature at the bottom right of the picture, inside its safe
+area (a vertical picture without one keeps it inside the `universal` area).
+Bottom captions keep above it. It is off by default. A project with no captions
+and no short is then encoded instead of copied. If this FFmpeg cannot draw the
+signature, the export is made again without it and a warning says so.
+
 ### Caption effects
 
 Captions (burn, short, project) are drawn in Classique unless `--effect` names

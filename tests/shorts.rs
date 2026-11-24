@@ -24,6 +24,7 @@ fn request(f: &Fixture, source: &Path, output: &str, start_ms: u64, end_ms: u64)
         framing: Framing::Pad,
         captions: None,
         preview: true,
+        promote: false,
     }
 }
 

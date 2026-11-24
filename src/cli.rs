@@ -87,6 +87,11 @@ pub struct Options {
     /// Caption placement preset (default: bottom).
     #[arg(long, value_parser = ["bottom", "top"], requires = "srt")]
     caption_placement: Option<String>,
+    /// « Promote NOH »: a small « made with NOH » signature at the bottom right
+    /// of the picture (--project, --short, --burn-subtitles; re-encodes a
+    /// montage that would otherwise be copied). Off by default.
+    #[arg(long)]
+    promote: bool,
     /// Protected caption region; conservative platform UI guides (default: none).
     #[arg(long, value_parser = ["none", "youtube_shorts", "tiktok", "reels", "universal"], requires = "srt")]
     caption_safe_area: Option<String>,
@@ -547,6 +552,7 @@ pub fn run(arguments: impl IntoIterator<Item = OsString>) -> i32 {
             short: project_short,
             effect: args.chosen_effect.clone(),
             captions: project_captions,
+            promote: args.promote,
         })
     } else if let Some(level) = args.diagnose {
         CliOperation::Inspect(crate::inspection::InspectionRequest::Plan { request, level })
@@ -748,6 +754,7 @@ impl Options {
                     style: self.caption_style(),
                 }),
             preview: self.preview,
+            promote: self.promote,
         }
     }
 }
@@ -804,6 +811,7 @@ fn scene_short(args: Options, ffmpeg: PathBuf) -> i32 {
         ffmpeg,
         style: args.caption_style(),
         preview: args.preview,
+        promote: false,
     };
     if let Err(error) = request.validate() {
         return start_error(&error, args.json);
@@ -851,6 +859,7 @@ fn burn_subtitles(args: Options) -> i32 {
         ffmpeg,
         style,
         preview: args.preview,
+        promote: args.promote,
     };
     run_job(
         CliOperation::Burn(request),

@@ -23,6 +23,7 @@ fn request(f: &Fixture, source: &Path, subtitles: &Path, output: &Path) -> Capti
         ffmpeg: f.ffmpeg.clone(),
         style: CaptionStyle::default(),
         preview: false,
+        promote: false,
     }
 }
 

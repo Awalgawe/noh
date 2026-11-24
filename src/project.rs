@@ -51,6 +51,10 @@ pub struct ProjectRequest {
     /// captions it has nothing to draw and is ignored.
     #[serde(default)]
     pub motion: Option<crate::scene_request::ProjectScene>,
+    /// « Promote NOH »: the « made with NOH » signature at the bottom-right of
+    /// the picture (`crate::mark`). Off unless asked.
+    #[serde(default)]
+    pub promote: bool,
 }
 
 /// The effect plugin chosen for the captions: its folder, its id (checked when the
@@ -332,8 +336,9 @@ pub(crate) fn execute(
 ) -> Result<ExportResult, EngineError> {
     request.validate()?;
     // Retain packet copying and all existing full-montage behavior when no
-    // composition is requested.
-    if request.short.is_none() && request.captions.is_none() {
+    // composition is requested. The « made with NOH » mark is drawn on the
+    // picture, so it needs one (the montage is then encoded, as asked).
+    if request.short.is_none() && request.captions.is_none() && !request.promote {
         return crate::engine::execute(request.montage.clone(), workspace, emit);
     }
     let started = Instant::now();
@@ -432,6 +437,17 @@ pub(crate) fn execute(
     } else {
         (target.width, target.height)
     };
+    // « Promote NOH »: the mark on the final picture, and the captions above it.
+    let band = crate::captions::mark_band(
+        request.promote,
+        (canvas_w, canvas_h),
+        request
+            .captions
+            .as_ref()
+            .map(|c| c.style.safe_area)
+            .unwrap_or_default(),
+        &workspace,
+    )?;
     let mut has_captions = false;
     // Classique's libass fallback: its cues and style, staged only when needed.
     let mut classic_fallback: Option<(
@@ -487,7 +503,8 @@ pub(crate) fn execute(
                 f64::from(canvas_w),
                 f64::from(canvas_h),
                 captions.style,
-            )?;
+            )?
+            .keep_above(band);
             if crate::captions::stage(&track, &canvas, 0.0, span, &workspace)? {
                 report.warning("caption.quantization");
             }
@@ -595,13 +612,19 @@ pub(crate) fn execute(
         filter.push(format!("setpts=PTS-{start:.9}/TB"));
     }
     // The geometry and captions tail; the libass fallback is the same with captions.
-    let tail = |captions: bool| -> Vec<String> {
+    // `mark`: the « made with NOH » signature, over the captions at the full
+    // size. The GPU engine's FFmpeg #2 draws it instead (`run_effect`), over
+    // its captions.
+    let tail = |captions: bool, mark: bool| -> Vec<String> {
         let mut tail = Vec::new();
         if let Some(geometry) = &geometry {
-            tail.push(geometry.filter(captions, montage.preview));
+            tail.push(geometry.filter(captions, mark, montage.preview));
         } else {
             if captions {
                 tail.push(crate::captions::FILTER.into());
+            }
+            if mark {
+                tail.push(crate::mark::FILTER.into());
             }
             if montage.preview {
                 tail.push("scale=w='max(2,trunc(min(640,min(iw,360*dar))/2)*2)':h='max(2,trunc(min(360,min(ih,640/dar))/2)*2)'".into());
@@ -611,8 +634,10 @@ pub(crate) fn execute(
         tail
     };
     let mut fallback_filter = filter.clone();
-    fallback_filter.extend(tail(true));
-    filter.extend(tail(has_captions));
+    fallback_filter.extend(tail(true, request.promote));
+    let mut gpu_filter = filter.clone();
+    gpu_filter.extend(tail(has_captions, false));
+    filter.extend(tail(has_captions, request.promote));
     let audio = if montage.clip_audio {
         format!(
             "[0:a]aresample=48000:async=1:first_pts=0,apad,atrim=duration={span:.9}[clips];[1:a]asetpts=PTS-STARTPTS,aresample=48000,apad,atrim=duration={span:.9}[wav];[clips][wav]amix=inputs=2:duration=first:dropout_transition=0[a]"
@@ -703,7 +728,9 @@ pub(crate) fn execute(
         Some((pass, track)) => Some(EffectJob {
             pass,
             track,
-            video_filter: filter.join(","),
+            video_filter: gpu_filter.join(","),
+            mark: request.promote,
+            band,
             clip_audio: montage.clip_audio,
             audio: audio.clone(),
             size: (canvas_w, canvas_h),
@@ -762,7 +789,8 @@ pub(crate) fn execute(
                         f64::from(canvas_w),
                         f64::from(canvas_h),
                         *style,
-                    )?;
+                    )?
+                    .keep_above(band);
                     let quantized = crate::captions::stage(track, &canvas, 0.0, span, &workspace)?;
                     // Said once: an NVENC retry comes back through this branch.
                     if !fallback_said {
@@ -892,6 +920,10 @@ struct EffectJob<'a> {
     bt709: bool,
     /// The safe area as insets from the canvas edges, None for the whole canvas.
     safe: Option<[u32; 4]>,
+    /// « Promote NOH »: FFmpeg #2 draws the mark over the captions, which keep
+    /// `band` pixels above the bottom edge (`crate::mark`).
+    mark: bool,
+    band: Option<u32>,
 }
 
 /// The effect that draws classic captions (it has a libass fallback).
@@ -1013,7 +1045,8 @@ fn job_layer(
     )
     .with_values(&choice.values)
     .map_err(|e| error("error.effect", Some(&choice.dir), e))?
-    .with_safe_insets(job.safe);
+    .with_safe_insets(job.safe)
+    .with_bottom_band(job.band);
     // Classique's letters never leave the picture by design: when they do, say so.
     // Animated effects may (Typographic composition slides words in from outside).
     let scene = if choice.id == CLASSIC {
@@ -1151,6 +1184,7 @@ fn run_effect(
     );
     let (rate_num, rate_den) = (target.rate_num, target.rate_den);
     let color_tags = job.color_tags.clone();
+    let mark = job.mark;
     let second = move |time_base: &str, first: f64| {
         let mut cmd = crate::command(&ffmpeg2);
         cmd.current_dir(&workspace2).args([
@@ -1167,9 +1201,14 @@ fn run_effect(
         cmd.args(["-ss", &format!("{start:.9}"), "-i"])
             .arg(&wav2)
             .args(["-filter_complex", &audio, "-map", "0:v", "-map", "[a]"]);
-        // Tags only, on the mapped stream: frames keep their values.
-        if let Some(tags) = &color_tags {
-            cmd.args(["-filter:v", tags]);
+        // The mark, then the tags, on the mapped stream: frames keep their values.
+        let finish: Vec<&str> = mark
+            .then_some(crate::mark::FILTER)
+            .into_iter()
+            .chain(color_tags.as_deref())
+            .collect();
+        if !finish.is_empty() {
+            cmd.args(["-filter:v", &finish.join(",")]);
         }
         cmd.args([
             "-t",
@@ -1461,6 +1500,7 @@ mod tests {
                 style,
             }),
             effect,
+            promote: false,
         }
     }
 

@@ -26,6 +26,7 @@ fn request(f: &Fixture) -> CaptionRequest {
         ffmpeg: f.ffmpeg.clone(),
         style: CaptionStyle::default(),
         preview: false,
+        promote: false,
     }
 }
 /// The longest a burn may say nothing before the test calls it hung. A burn

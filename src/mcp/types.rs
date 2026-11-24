@@ -334,6 +334,10 @@ impl From<CaptionSafeArea> for crate::safe_area::SafeArea {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CaptionsInput {
+    /// « Promote NOH »: a small « made with NOH » signature at the bottom
+    /// right of the picture, inside its safe area. Off by default.
+    #[serde(default)]
+    pub promote: bool,
     /// Conservative UI-safe text region; none preserves the original margins.
     #[serde(default)]
     pub safe_area: CaptionSafeArea,
@@ -485,6 +489,7 @@ impl CaptionsInput {
                 .unwrap_or_else(|| default_ffmpeg.to_owned()),
             style,
             preview: self.preview,
+            promote: self.promote,
         };
         request.validate().map_err(SessionError::from)?;
         Ok(request)
@@ -543,6 +548,10 @@ pub struct ShortCaptionInput {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ShortInput {
+    /// « Promote NOH »: a small « made with NOH » signature at the bottom
+    /// right of the picture, inside its safe area. Off by default.
+    #[serde(default)]
+    pub promote: bool,
     #[schemars(length(min = 1))]
     pub source: String,
     #[schemars(length(min = 1))]
@@ -586,6 +595,10 @@ pub struct ProjectShortInput {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectInput {
+    /// « Promote NOH »: a small « made with NOH » signature at the bottom
+    /// right of the picture, inside its safe area. Off by default.
+    #[serde(default)]
+    pub promote: bool,
     pub request: RenderRequest,
     #[serde(default)]
     pub short: Option<ProjectShortInput>,
@@ -683,6 +696,7 @@ impl ProjectInput {
             }),
             effect,
             captions,
+            promote: self.promote,
         };
         request.validate().map_err(SessionError::from)?;
         Ok(request)
@@ -733,6 +747,7 @@ impl ShortInput {
             preview: self.preview,
             effect: None,
             scene: Some(scene),
+            promote: self.promote,
         };
         request.validate().map_err(SessionError::from)?;
         Ok(request)
@@ -779,6 +794,7 @@ impl ShortInput {
             },
             captions,
             preview: self.preview,
+            promote: self.promote,
         };
         request.validate().map_err(SessionError::from)?;
         Ok(request)

@@ -65,6 +65,9 @@ struct SceneKey {
     canvas: (u32, u32),
     /// Safe area insets on `canvas`, as at export.
     safe: Option<[u32; 4]>,
+    /// « Promote NOH »: the captions keep this far above the bottom edge, as
+    /// at export (`noh::mark::caption_band`).
+    band: Option<u32>,
 }
 
 struct Wanted {
@@ -257,6 +260,7 @@ impl State {
         range: Option<(u64, u64)>,
         canvas: (u32, u32),
         safe: Option<[u32; 4]>,
+        band: Option<u32>,
     ) {
         // An installed font is chosen: read the installed fonts (once) for the
         // preview; until they land it draws the plugin's own face.
@@ -273,6 +277,7 @@ impl State {
             range,
             canvas,
             safe,
+            band,
         };
         let mut layer = self.layer.lock().unwrap();
         if layer.wanted.as_ref().is_some_and(|w| w.key == key) {
@@ -507,6 +512,7 @@ fn scene_for(wanted: &Wanted, px_scale: f32) -> Result<PluginScene, String> {
     )
     .with_values(&wanted.key.choice.values)?
     .with_safe_insets(wanted.key.safe)
+    .with_bottom_band(wanted.key.band)
     .with_px_scale(px_scale))
 }
 
@@ -649,11 +655,16 @@ impl super::NohApp {
             return;
         };
         // The same safe area libass would use for these captions, on the layer canvas.
-        let safe = self
+        let area = self
             .project
             .effective_caption_style(self.mini_preview.short)
-            .safe_area
-            .insets(canvas.0, canvas.1);
+            .safe_area;
+        let safe = area.insets(canvas.0, canvas.1);
+        // With « Promote NOH », above the mark, as the export draws them.
+        let band = self.promote.then(|| {
+            let mark = noh::mark::safe_for(canvas.0, canvas.1, Some(area));
+            noh::mark::caption_band(canvas.0, canvas.1, mark)
+        });
         self.effects.want(
             &choice,
             &track,
@@ -664,6 +675,7 @@ impl super::NohApp {
             range,
             canvas,
             safe,
+            band,
         );
         self.effects.paint(ui, monitor, t);
     }
@@ -779,6 +791,7 @@ mod tests {
             range: None,
             canvas: (1920, 1080),
             safe: None,
+            band: None,
         };
         let dir = tempfile::tempdir().unwrap();
         std::fs::copy(
@@ -945,6 +958,7 @@ mod tests {
                 range: None,
                 canvas: (1080, 1920),
                 safe: noh::safe_area::SafeArea::YoutubeShorts.insets(1080, 1920),
+                band: None,
             },
             effect: entry.effect.clone(),
             lines: Vec::new(),

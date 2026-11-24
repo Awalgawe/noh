@@ -1109,6 +1109,33 @@ fn run_scene(
 }
 
 /// Called only by binary entry points. JSON is restricted to this transport.
+/// An export with the « made with NOH » mark (`crate::mark`): a promotion mark
+/// never fails an export. When the run fails because of the mark (no
+/// `subtitles` filter, libass refusing its script), it runs again without it,
+/// in a folder of its own, and says so. Any other failure, a cancel included,
+/// is the export's.
+fn marked(
+    promote: bool,
+    workspace: &Path,
+    write: &mut dyn FnMut(Event),
+    run: impl Fn(bool, &Path, &mut dyn FnMut(Event)) -> Result<ExportResult, EngineError>,
+) -> Result<ExportResult, EngineError> {
+    match run(promote, workspace, write) {
+        Err(error) if promote && crate::mark::failed(&error.technical) => {
+            write(Event::Warning(crate::engine::Message {
+                code: crate::mark::SKIPPED.into(),
+                args: Vec::new(),
+            }));
+            let again = workspace.join("without-mark");
+            std::fs::create_dir_all(&again).map_err(|e| {
+                EngineError::new("error.workspace", "retry_without_mark", Some(&again), e)
+            })?;
+            run(false, &again, write)
+        }
+        other => other,
+    }
+}
+
 pub fn worker(path: &Path) -> i32 {
     let mut stdout = std::io::stdout().lock();
     let mut write = |event: Event| {
@@ -1187,15 +1214,45 @@ pub fn worker(path: &Path) -> i32 {
                 crate::subtitles::execute(&request, &wire.workspace, &mut write)
                     .map(Outcome::Subtitles)
             }
-            (None, None, None, Some(request), None, None) if wire.expected.is_none() => {
-                crate::captions::execute(&request, &wire.workspace, &mut write).map(Outcome::Export)
-            }
-            (None, None, None, None, Some(request), None) if wire.expected.is_none() => {
-                crate::shorts::execute(&request, &wire.workspace, &mut write).map(Outcome::Export)
-            }
-            (None, None, None, None, None, Some(request)) if wire.expected.is_none() => {
-                crate::project::execute(&request, &wire.workspace, &mut write).map(Outcome::Export)
-            }
+            (None, None, None, Some(request), None, None) if wire.expected.is_none() => marked(
+                request.promote,
+                &wire.workspace,
+                &mut write,
+                |promote, at, write| {
+                    let request = crate::captions::CaptionRequest {
+                        promote,
+                        ..request.clone()
+                    };
+                    crate::captions::execute(&request, at, write)
+                },
+            )
+            .map(Outcome::Export),
+            (None, None, None, None, Some(request), None) if wire.expected.is_none() => marked(
+                request.promote,
+                &wire.workspace,
+                &mut write,
+                |promote, at, write| {
+                    let request = crate::shorts::ShortRequest {
+                        promote,
+                        ..request.clone()
+                    };
+                    crate::shorts::execute(&request, at, write)
+                },
+            )
+            .map(Outcome::Export),
+            (None, None, None, None, None, Some(request)) if wire.expected.is_none() => marked(
+                request.promote,
+                &wire.workspace,
+                &mut write,
+                |promote, at, write| {
+                    let request = crate::project::ProjectRequest {
+                        promote,
+                        ..request.clone()
+                    };
+                    crate::project::execute(&request, at, write)
+                },
+            )
+            .map(Outcome::Export),
             _ => Err(EngineError::new(
                 "error.request",
                 "read_request",

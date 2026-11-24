@@ -136,6 +136,7 @@ impl Workspace {
                 },
             }),
             preview,
+            promote: false,
         }
     }
     fn issue(&self, preview: bool) -> Option<Message> {
@@ -496,7 +497,8 @@ impl NohApp {
         {
             return;
         }
-        let request = self.shorts.request(self.ffmpeg.as_ref(), preview);
+        let mut request = self.shorts.request(self.ffmpeg.as_ref(), preview);
+        request.promote = self.promote && !preview;
         if let Err(error) = request.validate() {
             self.shorts.fail(&error, self.shorts.revision);
             return;

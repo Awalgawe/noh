@@ -1225,6 +1225,7 @@ mod tests {
                     ffmpeg: folder.path().join("missing-ffmpeg"),
                     style: Default::default(),
                     preview: false,
+                    promote: false,
                 }),
                 _ => Operation::Short(crate::shorts::ShortRequest {
                     effect: None,
@@ -1236,6 +1237,7 @@ mod tests {
                     framing: Default::default(),
                     captions: None,
                     preview: false,
+                    promote: false,
                 }),
             };
             // A prior collector's join pauses startup after reserving the new ID

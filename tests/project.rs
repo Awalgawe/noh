@@ -87,6 +87,7 @@ fn fixture() -> (Fixture, ProjectRequest) {
             subtitles: f.path("reviewed.srt"),
             style: CaptionStyle::default(),
         }),
+        promote: false,
     };
     (f, request)
 }
@@ -315,6 +316,7 @@ fn project_h264_level_uses_picture_rate_instead_of_nut_timestamp_ticks() {
             effect: None,
             motion: None,
             captions: None,
+            promote: false,
         };
         success(&run(&f, &request));
         let headers = f.ff(args![
@@ -560,6 +562,7 @@ fn a_cue_too_tall_for_libass_is_drawn_by_classique_with_an_overflow_warning() {
                 subtitles: f.path("tall.srt"),
                 style,
             }),
+            promote: false,
         };
     let events = run(&f, &request("libass.mp4", None, true));
     match events.last() {
@@ -661,6 +664,7 @@ fn a_missing_installed_font_is_drawn_in_the_plugin_face_with_a_warning() {
             subtitles: f.path("words.srt"),
             style: CaptionStyle::default(),
         }),
+        promote: false,
     };
     let events = run(&f, &request);
     assert!(
