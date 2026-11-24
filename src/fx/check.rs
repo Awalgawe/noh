@@ -65,6 +65,32 @@ pub fn shader_load(f: &Frame) -> (usize, f32) {
     })
 }
 
+/// What a frame of prepared instances counts against the engine's caps, for a
+/// front end whose frames always draw (a caption style): the first cap it is
+/// over, as a sentence. Said to the user as a warning, never a refusal: a style
+/// that draws today must not start failing on long lyrics.
+pub fn over_caps(p: &super::draw::Prepared, w: f32, h: f32) -> Option<String> {
+    let glyphs = p.glyph_instances();
+    if glyphs > MAX_GLYPHS {
+        return Some(format!(
+            "{glyphs} letters drawn (every pass counted) exceed {MAX_GLYPHS}"
+        ));
+    }
+    let area = p.area(w, h);
+    if area > MAX_AREA {
+        return Some(format!(
+            "the draws cover {area:.2} frames (every pass counted), more than {MAX_AREA}"
+        ));
+    }
+    let blurs = p.blurs();
+    if blurs > MAX_BLURS {
+        return Some(format!(
+            "{blurs} different blurs in one frame exceed {MAX_BLURS}"
+        ));
+    }
+    None
+}
+
 /// The share of the box `[x0, y0, x1, y1]` (fractions of the frame) that falls
 /// inside the frame.
 fn inside(b: [f32; 4]) -> f32 {
@@ -115,6 +141,7 @@ impl Checker {
         let frame = w * h;
         let mut area = 0.0f32;
         let mut blurs: Vec<u32> = Vec::new();
+        let mut prepared_blurs = 0;
         for d in draws {
             match d {
                 Draw::Rect(r) => {
@@ -130,6 +157,10 @@ impl Checker {
                     }
                 }
                 Draw::Path(_) => {}
+                Draw::Prepared(p) => {
+                    area += p.area(w, h);
+                    prepared_blurs += p.blurs();
+                }
                 Draw::Emitter(e) => {
                     let side = e.size * short * 1.4;
                     let quad = side * side * if e.shape == "petal" { 1.7 } else { 1.0 };
@@ -176,7 +207,7 @@ impl Checker {
                 }
             }
         }
-        (area, blurs.len())
+        (area, blurs.len() + prepared_blurs)
     }
 
     /// The first of the counted checks, on its own: a front end with caps of its
@@ -231,6 +262,7 @@ impl Checker {
             match d {
                 Draw::Emitter(e) => c.particles += e.alive_bound(t),
                 Draw::Text(td) => c.glyphs += td.glyph_instances(),
+                Draw::Prepared(p) => c.glyphs += p.glyph_instances(),
                 Draw::Rect(_) | Draw::Path(_) => {}
             }
         }
@@ -276,7 +308,7 @@ impl Checker {
                     Source::Text(b) => (Some(b), 1.0),
                     Source::Rect { .. } => (None, 1.0),
                 },
-                Draw::Rect(_) | Draw::Path(_) => (None, 1.0),
+                Draw::Rect(_) | Draw::Path(_) | Draw::Prepared(_) => (None, 1.0),
             };
             if let Some(b) = block {
                 let e = self

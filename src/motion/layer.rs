@@ -9,7 +9,7 @@ use crate::fx::draw::Block;
 use crate::fx::export::Overlay;
 use crate::fx::gl::GlRenderer;
 use crate::fx::layer_shader::ShaderSet;
-use crate::fx::paint::{MOTION_HOOKS, Painter, Shaders, draw_frame_with};
+use crate::fx::paint::{Drawn, MOTION_HOOKS, Painter, Shaders, Stage, draw, draw_frame_with};
 use crate::fx::text::Fonts;
 use std::cell::RefCell;
 use std::path::Path;
@@ -216,15 +216,16 @@ impl Overlay for MotionLayer {
         } else {
             Shaders::Hide
         };
-        self.stats = draw_frame_with(
-            gpu,
-            &mut self.painter,
-            comp,
-            &f.draws,
-            &f.layers,
-            t,
+        let stage = Stage {
+            painter: &mut self.painter,
+            comp: &mut *comp,
             shaders,
-        )?;
+        };
+        // A scene's frame holds no prepared instances: it is always stacked.
+        let Drawn::Stacked(stats) = draw(gpu, &f, t, false, Some(stage))? else {
+            return Err("a scene's frame was drawn without the compositor".into());
+        };
+        self.stats = stats;
         lost(gpu)?;
         self.video = f.frame.video;
         Ok(comp.texture())

@@ -1,6 +1,7 @@
 //! Generic effect engine driven by plugin files (archi-greffons-v2). The engine
 //! knows layouts, tracks and passes; it knows no effect by name.
 use super::line::Line;
+use crate::fx::draw::{Draw, Frame};
 use crate::fx::ease::{Curve, ease};
 use crate::fx::shaders::{
     Inst, PASS_FILL, PASS_GLOW, PASS_OUTLINE, PASS_PLATE, PASS_SHADOW, Upload,
@@ -2115,6 +2116,8 @@ pub struct PluginScene {
     overflowed: bool,
     /// Whether the last `frame` showed a line holding a word wider than its box.
     too_wide: bool,
+    /// The first of the engine's caps the last described frame is over, if any.
+    over_caps: Option<String>,
     /// Why the installed family the font value asks for was not drawn (the
     /// plugin's own face was): missing on this machine, or not read yet.
     font_lack: Option<Lack>,
@@ -2186,6 +2189,7 @@ impl PluginScene {
             frame_check: false,
             overflowed: false,
             too_wide: false,
+            over_caps: None,
             font_lack: None,
             prepared: Vec::new(),
             state: ACTIVE,
@@ -2838,6 +2842,30 @@ impl PluginScene {
                 Prop::WipeEdge => st.wipe_edge = Some(num(&r).max(0.0)),
             }
         }
+    }
+
+    /// The frame at `t` as the engine's frame description: one draw of prepared
+    /// instances (the ones `frame` gives), which the engine draws by its direct
+    /// path. Also says whether the frame differs from the last one, and counts
+    /// the frame against the engine's caps (`over_caps`).
+    pub fn describe(&mut self, fonts: &mut Fonts, gpu: &dyn Upload, t: f64) -> (Frame, bool) {
+        let (glow, gain, main, changed) = self.frame(fonts, gpu, t);
+        let prepared = crate::fx::draw::Prepared { glow, gain, main };
+        self.over_caps = crate::fx::check::over_caps(&prepared, self.w, self.h);
+        let frame = Frame {
+            draws: vec![Draw::Prepared(prepared)],
+            layers: Vec::new(),
+            energy: 0.0,
+            onset_age: 0.0,
+            video: None,
+        };
+        (frame, changed)
+    }
+
+    /// The first of the engine's caps the last described frame is over, as a
+    /// sentence, if any. A style over a cap still draws: this is a warning.
+    pub fn over_caps(&self) -> Option<&str> {
+        self.over_caps.as_deref()
     }
 
     pub fn frame(
@@ -3816,9 +3844,8 @@ impl crate::fx::export::Overlay for StyleLayer {
         t: f64,
     ) -> Result<glow::Texture, String> {
         let fonts = self.fonts.as_mut().ok_or("the style was not set up")?;
-        let (glow_i, gain, main, _) = self.scene.frame(fonts, gpu, t);
-        gpu.frame(&glow_i, gain, &main, false)
-            .map_err(|e| format!("OpenGL: {e}"))?;
+        let (frame, _) = self.scene.describe(fonts, gpu, t);
+        crate::fx::paint::draw(gpu, &frame, t, false, None).map_err(|e| format!("OpenGL: {e}"))?;
         Ok(gpu.output_texture())
     }
 
@@ -3832,5 +3859,9 @@ impl crate::fx::export::Overlay for StyleLayer {
 
     fn font_missing(&self) -> Option<String> {
         self.scene.font_missing().map(str::to_string)
+    }
+
+    fn over_caps(&self) -> Option<String> {
+        self.scene.over_caps().map(str::to_string)
     }
 }

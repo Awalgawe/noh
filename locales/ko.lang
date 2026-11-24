@@ -568,6 +568,7 @@ warning.effect_overflow=효과가 쇼츠 안전 영역을 벗어납니다(처음
 warning.effect_off_frame=자막이 화면 밖으로 벗어납니다(처음: {0}).
 warning.effect_font_missing=글꼴 “{0}”이(가) 설치되어 있지 않습니다. 효과 기본 글꼴로 표시합니다.
 warning.effect_word_too_wide=단어가 텍스트 영역보다 넓어 밖으로 나옵니다. NOH는 단어를 자르지 않습니다(처음: {0}).
+warning.effect_heavy=효과가 한 번에 많이 그립니다. 내보내기가 느려질 수 있습니다(처음: {0}).
 effect.overflow=이 효과는 쇼츠 안전 영역을 벗어납니다.
 warning.effect_fallback=그래픽 카드에서 효과를 그릴 수 없어 기본 자막을 다른 방식으로 그렸습니다.
 warning.caption_colors_old_ffmpeg=이 FFmpeg는 이전 색상 표준으로 자막을 그리므로 색이 약간 다를 수 있습니다(빨간색이 조금 밝게 나옵니다). FFmpeg 7.1 이상은 정확하게 그립니다.

@@ -454,10 +454,12 @@ impl Layer {
             self.scene.as_mut().unwrap(),
             self.fonts.as_mut().unwrap(),
         );
-        let (glow_i, gain, main, _) = scene.frame(fonts, &*gpu, t);
+        let (frame, _) = scene.describe(fonts, &*gpu, t);
         self.overflow |= scene.overflowed();
         self.font_missing = scene.font_missing().map(str::to_string);
-        gpu.frame(&glow_i, gain, &main, false)?;
+        // A style's frame takes the engine's direct path: one call of the
+        // renderer on egui's context, no pass more.
+        noh::fx::paint::draw(gpu, &frame, t, false, None)?;
         let gl = painter.gl();
         unsafe {
             use glow::HasContext;

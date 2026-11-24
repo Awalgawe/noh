@@ -568,6 +568,7 @@ warning.effect_overflow=El efecto sale de la zona segura del Short (primera vez 
 warning.effect_off_frame=Algunos subtítulos salen de la imagen (primera vez en {0}).
 warning.effect_font_missing=La fuente «{0}» no está instalada: el texto se dibuja con la fuente propia del efecto.
 warning.effect_word_too_wide=Una palabra es más ancha que la zona del texto: sobresale, NOH no la corta (primera vez en {0}).
+warning.effect_heavy=El efecto dibuja mucho a la vez: la exportación puede ser lenta (primera vez en {0}).
 effect.overflow=Este efecto sale de la zona segura del Short.
 warning.effect_fallback=Su tarjeta gráfica no pudo dibujar el efecto: los subtítulos clásicos se dibujaron de otra forma.
 warning.caption_colors_old_ffmpeg=Este FFmpeg dibuja los subtítulos en un estándar de color antiguo: sus colores pueden variar ligeramente (el rojo sale algo más claro). FFmpeg 7.1 o posterior los dibuja con exactitud.

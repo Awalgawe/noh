@@ -241,8 +241,11 @@ fn render_sample(
     )
     .with_values(&job.values)?;
     gpu.set_hooks(job.effect.shader.as_deref(), scene.hook_user())?;
-    let (glow, gain, main, _) = scene.frame(fonts, &*gpu, 1.3);
-    let (px, _) = gpu.frame(&glow, gain, &main, true)?;
+    let (frame, _) = scene.describe(fonts, &*gpu, 1.3);
+    let noh::fx::paint::Drawn::Direct(px, _) = noh::fx::paint::draw(gpu, &frame, 1.3, true, None)?
+    else {
+        return Err("the sample was not drawn by the engine's direct path".into());
+    };
     crop(&px, SAMPLE_W as usize, SAMPLE_H as usize).ok_or_else(|| "nothing drawn".into())
 }
 

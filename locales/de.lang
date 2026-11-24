@@ -568,6 +568,7 @@ warning.effect_overflow=Der Effekt ragt aus dem sicheren Bereich des Shorts hera
 warning.effect_off_frame=Untertitel ragen aus dem Bild heraus (zuerst bei {0}).
 warning.effect_font_missing=Die Schrift „{0}“ ist nicht installiert: Der Text wird in der Schrift des Effekts gezeichnet.
 warning.effect_word_too_wide=Ein Wort ist breiter als der Textbereich: Es ragt heraus, NOH trennt es nicht (zuerst bei {0}).
+warning.effect_heavy=Der Effekt zeichnet sehr viel auf einmal: Der Export kann langsam sein (zuerst bei {0}).
 effect.overflow=Dieser Effekt ragt aus dem sicheren Bereich des Shorts heraus.
 warning.effect_fallback=Ihre Grafikkarte konnte den Effekt nicht zeichnen: Die klassischen Untertitel wurden auf andere Weise gezeichnet.
 warning.caption_colors_old_ffmpeg=Dieses FFmpeg zeichnet die Untertitel in einem älteren Farbstandard: Ihre Farben können leicht abweichen (Rot wird etwas heller). FFmpeg 7.1 oder neuer zeichnet sie exakt.

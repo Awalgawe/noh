@@ -568,6 +568,7 @@ warning.effect_overflow=エフェクトがショートのセーフエリアか�
 warning.effect_off_frame=字幕が画面の外にはみ出しています（最初は {0}）。
 warning.effect_font_missing=フォント「{0}」がインストールされていません。エフェクト本来のフォントで描画しました。
 warning.effect_word_too_wide=単語がテキスト領域より広いため、はみ出しています。NOH は単語を分割しません（最初は {0}）。
+warning.effect_heavy=エフェクトが一度に多くを描画しています。書き出しが遅くなることがあります（最初は {0}）。
 effect.overflow=このエフェクトはショートのセーフエリアからはみ出しています。
 warning.effect_fallback=グラフィックカードでエフェクトを描画できなかったため、通常の字幕を別の方法で描画しました。
 warning.caption_colors_old_ffmpeg=このFFmpegは古い色規格で字幕を描画するため、色がわずかにずれることがあります（赤がやや明るくなります）。FFmpeg 7.1以降なら正確に描画されます。

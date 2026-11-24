@@ -87,6 +87,8 @@ pub(crate) struct Done {
     pub too_wide_at: Option<f64>,
     /// The installed family the effect names and this machine lacks.
     pub font_missing: Option<String>,
+    /// Output time of the first frame over one of the engine's caps, and which.
+    pub over_caps: Option<(f64, String)>,
     pub diagnostic: String,
 }
 
@@ -229,6 +231,7 @@ pub(crate) fn run(
             overflow_at: stats.overflow_at,
             too_wide_at: stats.too_wide_at,
             font_missing: stats.font_missing,
+            over_caps: stats.over_caps,
             diagnostic: format!(
                 "Caption effect ({name}): {} frames, engine set up in {:.0} ms on {}, time base {}, layer and mix p95 {:.2} ms per frame.",
                 stats.frames, stats.setup_ms, stats.adapter, stats.time_base, stats.render_ms_p95
@@ -345,6 +348,7 @@ fn run_scene(
             overflow_at: None,
             too_wide_at: None,
             font_missing: None,
+            over_caps: None,
             diagnostic: format!(
                 "Motion scene: {} frames checked before, {} drawn, engine set up in {:.0} ms on {}, time base {}, layer and mix p95 {:.2} ms per frame.{}{}",
                 checked.frames,
@@ -402,6 +406,13 @@ pub(crate) fn overflow_warning(at: f64, safe: bool) -> String {
         "warning.effect_off_frame"
     };
     format!("{code}|{}:{:02}", at / 60, at % 60)
+}
+
+/// The warning for a caption style that draws more at once than the engine's
+/// caps allow a scene: it is drawn all the same, first at `at` seconds.
+pub(crate) fn heavy_warning(at: f64) -> String {
+    let at = at.max(0.0).round() as u64;
+    format!("warning.effect_heavy|{}:{:02}", at / 60, at % 60)
 }
 
 /// The warning for an installed font the effect names and this machine lacks:

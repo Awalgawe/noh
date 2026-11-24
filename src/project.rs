@@ -1246,6 +1246,10 @@ fn run_effect(
             if let Some(family) = &stats.font_missing {
                 report.warning(&crate::caption_gpu::font_missing_warning(family));
             }
+            if let Some((at, why)) = &stats.over_caps {
+                report.warning(&crate::caption_gpu::heavy_warning(*at));
+                report.diagnostic(format!("Caption effect over a cap: {why}."));
+            }
             report.diagnostic(format!(
                 "Caption effect: {} frames, engine set up in {:.0} ms on {}, time base {}, layer and mix p95 {:.2} ms per frame (p50/p95/max ms: layer {:.2}/{:.2}/{:.2}, mix submit {:.2}/{:.2}/{:.2}, readback wait {:.2}/{:.2}/{:.2}).",
                 stats.frames, stats.setup_ms, stats.adapter, stats.time_base, stats.render_ms_p95,
