@@ -45,7 +45,9 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
   NOH never runs one on its own. One click checks every frame of the song and
   uses the scene; a refused scene gives the instant and the reason. A scene
   replaces the caption style. The preview draws it on the song's clock, and the
-  export burns it in.
+  export burns it in. Until it can check, the scene's card says what it waits
+  for: the song, the lyrics and the videos, or an up-to-date analysis. The
+  preview says what it leaves to the export.
 - For an agent: `noh_scene_check`, `noh_scene_look` and `noh_scene_clip` check a
   scene, look at one frame and render a short clip; burning captions, making a
   short (with a framing that follows the scene) and exporting a project accept
@@ -141,6 +143,10 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
   that a server which does not stop is probably from an older version.
 - No caption style draws the voices yet: setting who sings a line changes
   nothing on the video in this version.
+- Until the playhead first moves, the preview stays black at 0:00, on the main
+  screen and on the lyrics screen, while the clip's thumbnail shows the video.
+  Moving the playhead or playing brings the picture. This was already so in
+  0.3.1.
 - Two lines still cannot be sung at the same time: a lyrics file or an .srt
   whose lines overlap is refused, as before. Words sung together go on one
   line, with both voices.
