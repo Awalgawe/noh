@@ -25,6 +25,10 @@ COMPILER = {
 PROFILES = ('minimal', 'standard', 'complete')
 WRAPPERS = ('public.iss', 'public-messages.iss', 'public-profile.iss', 'public-content.iss', 'public-verify.iss',
             'public-update.iss')
+# Files an earlier release installed that this one no longer ships. Inno Setup
+# leaves such files in place on an update, so the installer deletes them first.
+# 0.1.6 to 0.3.1 installed the update prototype's documents, removed in 0.4.0.
+RETIRED = ('docs/UPDATE_NATIVE_GATES.md', 'docs/UPDATE_RECOVERY.md', 'docs/UPDATE_RELEASE.md')
 
 
 def includes(profile, name):
@@ -75,6 +79,15 @@ def profile_payload(bundle, manifest, profile, source, extras=None, inventory=No
         path = paths[name]
         expected[name] = {'size': path.stat().st_size, 'sha256': delivery.digest(path)}
     return paths, expected
+
+
+def retired_lines(payload):
+    """Delete what earlier releases installed and this one no longer ships."""
+    shipped = sorted(name for name in RETIRED if name in payload)
+    if shipped:
+        raise ValueError('Retired files are still shipped: ' + ', '.join(shipped))
+    return ['[InstallDelete]'] + ['Type: files; Name: "{app}\\' + name.replace('/', '\\') + '"'
+                                  for name in RETIRED]
 
 
 def quoted(value):
@@ -202,6 +215,8 @@ def build(bundle, commit, compiler, output, profile='complete', components=None,
             flags = 'external ignoreversion' if maintenance else 'ignoreversion'
             lines.append('Source: ' + src + '; DestDir: "{app}"; DestName: ' + quoted(name)
                          + '; Flags: ' + flags + '; Check: Is' + content.title())
+    if not maintenance:
+        lines.extend(retired_lines(all_files))
     # Templates are installer support files, outside the application manifest to
     # avoid recursive hashes. Qualification still checks their exact bytes.
     support = {}

@@ -117,6 +117,14 @@ class DeliveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Unknown'):
             public_installer.includes('unexpected', 'noh.exe')
 
+    def test_public_installer_deletes_retired_files_it_no_longer_ships(self):
+        lines = public_installer.retired_lines({'noh.exe': {}, 'docs/README.md': {}})
+        self.assertEqual(lines[0], '[InstallDelete]')
+        self.assertIn('Type: files; Name: "{app}\\docs\\UPDATE_RECOVERY.md"', lines)
+        self.assertEqual(len(lines), 1 + len(public_installer.RETIRED))
+        with self.assertRaisesRegex(ValueError, 'still shipped'):
+            public_installer.retired_lines({'docs/UPDATE_RELEASE.md': {}})
+
     def test_public_profile_manifest_matches_selected_files_and_preserves_build(self):
         for name in ('bin/noh-cli.exe', 'bin/noh-mcp.exe', 'bin/ffmpeg.exe',
                      'bin/preview/libmpv-2.dll', 'bin/speech/model.bin'):
