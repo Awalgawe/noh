@@ -427,6 +427,7 @@ lyrics.recheck=revisar
 lyrics.recheck_help=La canción cambió después de crear esta letra. Revisa la sincronización.
 lyrics.after_end=Algunas líneas terminan después de la canción. Revisa su sincronización o sustituye el archivo.
 lyrics.unreadable=Archivo ilegible
+lyrics.srt_overlap=Este .srt no se ha cargado: la línea {1} empieza antes de que acabe la línea {0}. NOH aún no lee dos líneas cantadas a la vez.
 lyrics.pick_title=Importar letra (.srt)
 bar.generating=Generando la letra
 bar.lyrics_ready=Letra lista: {0}

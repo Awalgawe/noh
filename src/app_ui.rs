@@ -294,6 +294,7 @@ impl NohApp {
             self.wav_seconds,
             ctx,
         );
+        self.say_refused_lyrics();
         self.poll_project(ctx);
         self.motion_frame(ctx);
         if self.output.is_none() && app_destination::syntax(&self.output_name).is_none() {

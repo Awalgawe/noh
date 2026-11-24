@@ -427,6 +427,7 @@ lyrics.recheck=要確認
 lyrics.recheck_help=歌詞の作成後に曲が変わりました。タイミングを確認してください。
 lyrics.after_end=曲の終了後に終わる歌詞の行があります。タイミングを確認するか、ファイルを置き換えてください。
 lyrics.unreadable=読み込めないファイル
+lyrics.srt_overlap=この .srt は読み込まれていません: {1} 行目が {0} 行目の終わる前に始まっています。NOH は同時に歌われる 2 行にはまだ対応していません。
 lyrics.pick_title=歌詞を読み込む (.srt)
 bar.generating=歌詞を生成中
 bar.lyrics_ready=歌詞の準備完了：{0}
