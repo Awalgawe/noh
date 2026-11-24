@@ -61,6 +61,8 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
   remove the last one. Each line has a badge with its voices: a click opens a
   menu to set them, Ctrl+1 to Ctrl+4 give the current line one voice,
   Ctrl+Shift+1 to Ctrl+Shift+4 add or remove one, and Ctrl+0 removes them all.
+  A digit for a voice that is not declared changes nothing, and the lyrics
+  screen says so.
   Both tracks show a line's voices as a coloured band. No caption style draws
   the voices yet.
 - Words between parentheses are backing vocals. The lyrics screen draws them
@@ -114,6 +116,12 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
 
 ### Fixes
 
+- In the sync game, a line still held when the song ends keeps its time up to
+  the song's end. Before, it was cut to its start plus a fifth of a second.
+- An .srt whose lines overlap is still refused, but NOH now says so and names
+  the two lines, in the main screen's status, or when hovering the "Unreadable
+  file" chip when no lyrics are loaded. Before, added over lyrics already loaded, it was
+  refused without a word.
 - In a vertical (9:16) video with a safe area, Sung sweep, Falling words,
   Breath and Simple karaoke size their text by the width the safe area leaves,
   not by the picture's short side. Their text is smaller on every line: by
@@ -148,8 +156,8 @@ Download the [Windows installers and Windows/Linux portable ZIPs](https://github
   Moving the playhead or playing brings the picture. This was already so in
   0.3.1.
 - Two lines still cannot be sung at the same time: a lyrics file or an .srt
-  whose lines overlap is refused, as before. Words sung together go on one
-  line, with both voices.
+  whose lines overlap is refused, as before, now with a message naming the two
+  lines. Words sung together go on one line, with both voices.
 - When the main words of a line are timed again, its backing words are spread
   again, and backing words timed by hand are reset without warning if they
   end up out of order.
