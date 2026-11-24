@@ -163,7 +163,8 @@ open dist/NOH.app
 
 This local app depends on the installed Homebrew libraries. It is built for the
 current architecture, not as a universal binary. The packaging check rejects
-unsupported FFmpeg versions or a missing libass subtitle renderer.
+unsupported FFmpeg versions or a missing libass subtitle renderer. The caption
+effects are in `Contents/Resources/effects`; the language packs are not included.
 
 For a self-contained portable, prepare native Whisper and the pinned models
 (Python 3.12+, CMake and Xcode Command Line Tools are needed for this step):

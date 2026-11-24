@@ -103,6 +103,27 @@ fn bundled_effects_are_the_application_folder_s_from_bin_too() {
     }
 }
 
+/// A macOS app keeps its executables in `Contents/MacOS`, where data files break
+/// the signature: its effects are in `Contents/Resources`. Outside an app (a
+/// development build), they stay beside the executable.
+#[cfg(target_os = "macos")]
+#[test]
+fn bundled_effects_of_a_macos_app_are_in_its_resources() {
+    let contents = Path::new("/Applications/NOH.app/Contents");
+    for exe in ["MacOS/noh-app", "MacOS/bin/noh-cli", "MacOS/bin/noh-mcp"] {
+        assert_eq!(
+            super::catalog::bundled_dir_for(&contents.join(exe)),
+            Some(contents.join("Resources/effects")),
+            "{exe}"
+        );
+    }
+    let build = Path::new("/src/noh/target/release");
+    assert_eq!(
+        super::catalog::bundled_dir_for(&build.join("noh-app")),
+        Some(build.join("effects"))
+    );
+}
+
 #[test]
 fn duplicate_ids_refuse_both_and_missing_roots_are_ignored() {
     let temp = tempfile::tempdir().unwrap();
