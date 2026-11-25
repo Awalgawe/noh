@@ -97,9 +97,28 @@ def select(paths, event_name="pull_request"):
     return {"windows": windows, "unix": unix, "plugins": plugins}
 
 
+def merge_parent(event, cwd=None):
+    """The base side of the merge commit a pull_request run checks out, or None.
+
+    GitHub's `pull_request.base.sha` can stay where the branch started while main
+    moves on: comparing with it would count every change main made since. The merge
+    commit's first parent is main as it was merged with the branch, so the diff from
+    it holds only what the pull request changes. Any other checkout gives None.
+    """
+    head = event.get("pull_request", {}).get("head", {}).get("sha", "")
+    try:
+        commits = subprocess.run(["git", "rev-list", "--parents", "-n", "1", "HEAD"], cwd=cwd,
+                                 capture_output=True, text=True, check=True, timeout=30).stdout.split()
+    except (subprocess.SubprocessError, OSError):
+        return None
+    if len(commits) == 3 and re.fullmatch(r"[0-9a-f]{40}", head) and commits[2] == head:
+        return commits[1]
+    return None
+
+
 def changed_paths(event_name, event, cwd=None):
     if event_name == "pull_request":
-        base = event.get("pull_request", {}).get("base", {}).get("sha", "")
+        base = merge_parent(event, cwd) or event.get("pull_request", {}).get("base", {}).get("sha", "")
     elif event_name == "push":
         base = event.get("before", "")
     else:
