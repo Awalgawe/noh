@@ -487,7 +487,10 @@ impl NohApp {
             return;
         }
         let mut request = self.captions.request(self.ffmpeg.as_ref(), preview);
-        request.promote = (self.promote && !preview).then_some(self.promote_corner);
+        request.promote = (self.promote && !preview).then_some(noh::mark::Promote {
+            corner: self.promote_corner,
+            color: self.promote_color,
+        });
         if let Err(error) = request.validate() {
             self.captions.fail(&error, self.captions.revision);
             return;

@@ -54,7 +54,7 @@ pub struct ProjectRequest {
     /// « Promote NOH »: the « made with NOH » signature in this corner of the
     /// picture (`crate::mark`). None: no signature (the default).
     #[serde(default)]
-    pub promote: Option<crate::mark::Corner>,
+    pub promote: Option<crate::mark::Promote>,
 }
 
 /// The effect plugin chosen for the captions: its folder, its id (checked when the

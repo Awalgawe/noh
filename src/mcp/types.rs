@@ -342,6 +342,9 @@ pub struct CaptionsInput {
     /// vertical picture).
     #[serde(default)]
     pub promote_corner: Option<crate::mark::Corner>,
+    /// The signature's colour, `#RRGGBB` (default white); its opacity stays.
+    #[serde(default)]
+    pub promote_color: Option<crate::mark::Color>,
     /// Conservative UI-safe text region; none preserves the original margins.
     #[serde(default)]
     pub safe_area: CaptionSafeArea,
@@ -493,9 +496,10 @@ impl CaptionsInput {
                 .unwrap_or_else(|| default_ffmpeg.to_owned()),
             style,
             preview: self.preview,
-            promote: self
-                .promote
-                .then(|| self.promote_corner.unwrap_or_default()),
+            promote: self.promote.then(|| crate::mark::Promote {
+                corner: self.promote_corner.unwrap_or_default(),
+                color: self.promote_color.unwrap_or_default(),
+            }),
         };
         request.validate().map_err(SessionError::from)?;
         Ok(request)
@@ -562,6 +566,9 @@ pub struct ShortInput {
     /// vertical picture).
     #[serde(default)]
     pub promote_corner: Option<crate::mark::Corner>,
+    /// The signature's colour, `#RRGGBB` (default white); its opacity stays.
+    #[serde(default)]
+    pub promote_color: Option<crate::mark::Color>,
     #[schemars(length(min = 1))]
     pub source: String,
     #[schemars(length(min = 1))]
@@ -613,6 +620,9 @@ pub struct ProjectInput {
     /// vertical picture).
     #[serde(default)]
     pub promote_corner: Option<crate::mark::Corner>,
+    /// The signature's colour, `#RRGGBB` (default white); its opacity stays.
+    #[serde(default)]
+    pub promote_color: Option<crate::mark::Color>,
     pub request: RenderRequest,
     #[serde(default)]
     pub short: Option<ProjectShortInput>,
@@ -710,9 +720,10 @@ impl ProjectInput {
             }),
             effect,
             captions,
-            promote: self
-                .promote
-                .then(|| self.promote_corner.unwrap_or_default()),
+            promote: self.promote.then(|| crate::mark::Promote {
+                corner: self.promote_corner.unwrap_or_default(),
+                color: self.promote_color.unwrap_or_default(),
+            }),
         };
         request.validate().map_err(SessionError::from)?;
         Ok(request)
@@ -763,9 +774,10 @@ impl ShortInput {
             preview: self.preview,
             effect: None,
             scene: Some(scene),
-            promote: self
-                .promote
-                .then(|| self.promote_corner.unwrap_or_default()),
+            promote: self.promote.then(|| crate::mark::Promote {
+                corner: self.promote_corner.unwrap_or_default(),
+                color: self.promote_color.unwrap_or_default(),
+            }),
         };
         request.validate().map_err(SessionError::from)?;
         Ok(request)
@@ -812,9 +824,10 @@ impl ShortInput {
             },
             captions,
             preview: self.preview,
-            promote: self
-                .promote
-                .then(|| self.promote_corner.unwrap_or_default()),
+            promote: self.promote.then(|| crate::mark::Promote {
+                corner: self.promote_corner.unwrap_or_default(),
+                color: self.promote_color.unwrap_or_default(),
+            }),
         };
         request.validate().map_err(SessionError::from)?;
         Ok(request)

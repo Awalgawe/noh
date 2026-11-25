@@ -1115,11 +1115,11 @@ fn run_scene(
 /// in a folder of its own, and says so. Any other failure, a cancel included,
 /// is the export's.
 fn marked(
-    promote: Option<crate::mark::Corner>,
+    promote: Option<crate::mark::Promote>,
     workspace: &Path,
     write: &mut dyn FnMut(Event),
     run: impl Fn(
-        Option<crate::mark::Corner>,
+        Option<crate::mark::Promote>,
         &Path,
         &mut dyn FnMut(Event),
     ) -> Result<ExportResult, EngineError>,

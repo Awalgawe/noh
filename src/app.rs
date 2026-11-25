@@ -74,6 +74,7 @@ struct NohApp {
     /// corner (`app_promote`).
     promote: bool,
     promote_corner: noh::mark::Corner,
+    promote_color: noh::mark::Color,
     clips: Vec<Clip>,
     wav: Option<PathBuf>,
     output: Option<PathBuf>,
@@ -200,6 +201,16 @@ impl Default for NohApp {
                         .as_deref(),
                 )
                 .1
+            },
+            promote_color: if cfg!(test) {
+                noh::mark::Color::WHITE
+            } else {
+                app_promote::read(
+                    noh::i18n::preferences_path()
+                        .map(|language| app_promote::path(&language))
+                        .as_deref(),
+                )
+                .2
             },
             clips: Vec::new(),
             wav: None,

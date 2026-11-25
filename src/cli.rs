@@ -96,6 +96,10 @@ pub struct Options {
     /// top left on a vertical picture).
     #[arg(long, value_parser = ["auto", "top_left", "top_right", "bottom_left", "bottom_right"], requires = "promote")]
     promote_corner: Option<String>,
+    /// The signature's colour with --promote, `#RRGGBB` (default: white); its
+    /// opacity and stroke stay.
+    #[arg(long, value_parser = parse_color, requires = "promote")]
+    promote_color: Option<crate::mark::Color>,
     /// Protected caption region; conservative platform UI guides (default: none).
     #[arg(long, value_parser = ["none", "youtube_shorts", "tiktok", "reels", "universal"], requires = "srt")]
     caption_safe_area: Option<String>,
@@ -228,12 +232,14 @@ fn image_seconds(value: &std::ffi::OsStr) -> Result<f64, String> {
 
 impl Options {
     /// « Promote NOH »: the signature's corner, or None without --promote.
-    fn mark(&self) -> Option<crate::mark::Corner> {
-        self.promote.then(|| {
-            self.promote_corner
+    fn mark(&self) -> Option<crate::mark::Promote> {
+        self.promote.then(|| crate::mark::Promote {
+            corner: self
+                .promote_corner
                 .as_deref()
                 .and_then(|c| serde_json::from_value(serde_json::Value::String(c.into())).ok())
-                .unwrap_or_default()
+                .unwrap_or_default(),
+            color: self.promote_color.unwrap_or_default(),
         })
     }
 
@@ -422,6 +428,10 @@ fn present(event: Event, machine_output: bool) -> Option<i32> {
 }
 
 /// Return an exit code; only the executable may terminate its caller.
+fn parse_color(text: &str) -> Result<crate::mark::Color, String> {
+    crate::mark::Color::parse(text).ok_or_else(|| format!("not a #RRGGBB colour: {text}"))
+}
+
 pub fn run(arguments: impl IntoIterator<Item = OsString>) -> i32 {
     let matches = match Options::command().try_get_matches_from(arguments) {
         Ok(matches) => matches,

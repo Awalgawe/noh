@@ -7,7 +7,8 @@ See [Short presets](SHORT_PRESETS.md) for the shared protected text regions.
 Caption, short and project requests also accept `promote` (default `false`): a
 small "made with NOH" signature in a corner of the picture, as the CLI's
 `--promote` draws it, and `promote_corner` (`auto`, `top_left`, `top_right`,
-`bottom_left`, `bottom_right`; default `auto`).
+`bottom_left`, `bottom_right`; default `auto`) and `promote_color` (`#RRGGBB`,
+default white).
 
 The implementation uses the official Rust SDK behind the
 optional `mcp` feature and the same isolated job controller as the CLI and GUI.

@@ -87,6 +87,79 @@ impl Corner {
     }
 }
 
+/// The mark's colour, RGB (its opacity and stroke stay as fixed): white by
+/// default. Written `#RRGGBB`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Color(pub u8, pub u8, pub u8);
+
+impl Default for Color {
+    fn default() -> Self {
+        Color::WHITE
+    }
+}
+
+impl Color {
+    pub const WHITE: Color = Color(255, 255, 255);
+    pub const BLACK: Color = Color(0, 0, 0);
+
+    /// `#RRGGBB` (the `#` may be left out).
+    pub fn parse(text: &str) -> Option<Self> {
+        let hex = text.trim().trim_start_matches('#');
+        if hex.len() != 6 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+            return None;
+        }
+        let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
+        Some(Color(byte(0)?, byte(2)?, byte(4)?))
+    }
+
+    pub fn hex(self) -> String {
+        format!("#{:02X}{:02X}{:02X}", self.0, self.1, self.2)
+    }
+
+    /// ASS's colour: blue, green, red.
+    fn ass(self) -> String {
+        format!("{:02X}{:02X}{:02X}", self.2, self.1, self.0)
+    }
+}
+
+impl Serialize for Color {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.hex())
+    }
+}
+
+impl<'de> Deserialize<'de> for Color {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let text = String::deserialize(deserializer)?;
+        Color::parse(&text)
+            .ok_or_else(|| serde::de::Error::custom(format!("not a #RRGGBB colour: {text:?}")))
+    }
+}
+
+#[cfg(feature = "mcp")]
+impl rmcp::schemars::JsonSchema for Color {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Color".into()
+    }
+    fn json_schema(_: &mut rmcp::schemars::SchemaGenerator) -> rmcp::schemars::Schema {
+        rmcp::schemars::json_schema!({
+            "type": "string",
+            "pattern": "^#?[0-9A-Fa-f]{6}$",
+            "description": "An RGB colour, #RRGGBB"
+        })
+    }
+}
+
+/// « Promote NOH » as an export asks it: the mark's corner and colour.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Promote {
+    #[serde(default)]
+    pub corner: Corner,
+    #[serde(default)]
+    pub color: Color,
+}
+
 /// The mark placed in a picture, in its pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Layout {
@@ -199,9 +272,10 @@ impl Layout {
         }
     }
 
-    /// The ASS script that draws the mark for the whole video: one layer, three
-    /// drawings in picture pixels (the ring, MADE WITH, NOH).
-    pub fn script(&self, width: u32, height: u32) -> String {
+    /// The ASS script that draws the mark for the whole video in `color`: one
+    /// layer, three drawings in picture pixels (the ring, MADE WITH, NOH).
+    pub fn script(&self, width: u32, height: u32, color: Color) -> String {
+        let rgb = color.ass();
         let alpha = |opacity: f32| ((1.0 - opacity) * 255.0).round() as u8;
         let unit = self.unit();
         let noh = drawing(NOH_DRAWING, |x, y| {
@@ -230,7 +304,7 @@ impl Layout {
         );
         let tags = "\\an7\\pos(0,0)\\bord0\\shad0\\p1";
         format!(
-            "[Script Info]\nScriptType: v4.00+\nPlayResX: {width}\nPlayResY: {height}\nLayoutResX: {width}\nLayoutResY: {height}\nScaledBorderAndShadow: yes\nWrapStyle: 2\nYCbCr Matrix: None\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Mark,Arial,10,&H{:02X}FFFFFF,&H{:02X}FFFFFF,&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\nDialogue: 0,0:00:00.00,99:59:59.99,Mark,,0,0,0,,{{{tags}\\1a&H{:02X}&}}{ring}\nDialogue: 0,0:00:00.00,99:59:59.99,Mark,,0,0,0,,{{{tags}}}{made}\nDialogue: 0,0:00:00.00,99:59:59.99,Mark,,0,0,0,,{{{tags}}}{noh}\n",
+            "[Script Info]\nScriptType: v4.00+\nPlayResX: {width}\nPlayResY: {height}\nLayoutResX: {width}\nLayoutResY: {height}\nScaledBorderAndShadow: yes\nWrapStyle: 2\nYCbCr Matrix: None\n[V4+ Styles]\nFormat: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding\nStyle: Mark,Arial,10,&H{:02X}{rgb},&H{:02X}{rgb},&HFF000000,&HFF000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\n[Events]\nFormat: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text\nDialogue: 0,0:00:00.00,99:59:59.99,Mark,,0,0,0,,{{{tags}\\1a&H{:02X}&}}{ring}\nDialogue: 0,0:00:00.00,99:59:59.99,Mark,,0,0,0,,{{{tags}}}{made}\nDialogue: 0,0:00:00.00,99:59:59.99,Mark,,0,0,0,,{{{tags}}}{noh}\n",
             alpha(LETTERS),
             alpha(LETTERS),
             alpha(STROKE),
@@ -315,9 +389,10 @@ pub fn stage(
     width: u32,
     height: u32,
     safe: Option<[u32; 4]>,
-    corner: Corner,
+    promote: Promote,
 ) -> std::io::Result<()> {
-    let script = Layout::new(width, height, safe, corner).script(width, height);
+    let script =
+        Layout::new(width, height, safe, promote.corner).script(width, height, promote.color);
     fs::write(workspace.join(SCRIPT), script)
 }
 
@@ -387,7 +462,7 @@ mod tests {
     #[test]
     fn the_script_draws_the_ring_and_both_words_as_drawings() {
         let m = Layout::new(1920, 1080, None, Corner::Auto);
-        let script = m.script(1920, 1080);
+        let script = m.script(1920, 1080, Color::WHITE);
         assert!(script.contains("PlayResX: 1920\nPlayResY: 1080"));
         assert_eq!(script.matches("\\p1").count(), 3);
         assert!(script.contains("\\bord0\\shad0"));
@@ -396,6 +471,28 @@ mod tests {
         // No font: every event is a drawing.
         assert!(!script.contains("}MADE") && !script.contains("}NOH"));
         assert!(!FILTER.contains("fontsdir"));
+    }
+
+    #[test]
+    fn the_colour_is_any_rgb_in_hex_and_reaches_the_script() {
+        assert_eq!(Color::parse("#1A2b3C"), Some(Color(0x1A, 0x2B, 0x3C)));
+        assert_eq!(Color::parse("ffffff"), Some(Color::WHITE));
+        assert_eq!(Color::parse("#12345"), None);
+        assert_eq!(Color::parse("#GG0000"), None);
+        assert_eq!(Color(0x1A, 0x2B, 0x3C).hex(), "#1A2B3C");
+        let script =
+            Layout::new(1920, 1080, None, Corner::Auto).script(1920, 1080, Color(0x11, 0x22, 0x33));
+        // ASS writes blue, green, red; the opacities stay.
+        assert!(script.contains("&H99332211"), "{script}");
+        let promote: Promote = serde_json::from_str(r##"{"color":"#000000"}"##).unwrap();
+        assert_eq!(
+            promote,
+            Promote {
+                corner: Corner::Auto,
+                color: Color::BLACK
+            }
+        );
+        assert!(serde_json::from_str::<Promote>(r#"{"color":"black"}"#).is_err());
     }
 
     #[test]

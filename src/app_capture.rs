@@ -963,6 +963,7 @@ const OVERLAY_STATES: &[&str] = &[
     "lyrics-generating",
     "lyrics-track-menu",
     "lyrics-lane-tip",
+    "promote-menu",
     "lyrics-screen",
     "lyrics-screen-cut",
     "lyrics-screen-word",
@@ -2024,6 +2025,16 @@ impl NohApp {
             && !egui::Popup::is_id_open(ctx, egui::Id::new(app_lyrics::MENU))
         {
             egui::Popup::open_id(ctx, egui::Id::new(app_lyrics::MENU));
+        }
+        // « Promote NOH » ticked, its corner menu open with the colour picker
+        // shown (the setting is not saved).
+        if self.capture_overlay_step >= 1 && self.capture_overlay.as_deref() == Some("promote-menu")
+        {
+            self.promote = true;
+            ctx.data_mut(|d| d.insert_temp(egui::Id::new(app_promote::PICKER), true));
+            if !egui::Popup::is_id_open(ctx, egui::Id::new(app_promote::MENU)) {
+                egui::Popup::open_id(ctx, egui::Id::new(app_promote::MENU));
+            }
         }
         let fixture = self.capture_state.is_some() || self.capture_overlay.is_some();
         let transcribe = transcribe_enabled();

@@ -38,6 +38,7 @@ const STATES: &[&str] = &[
     "lyrics-menu",
     "lyrics-generating",
     "lyrics-track-menu",
+    "promote-menu",
     "lyrics-lane-tip",
     "lyrics-screen",
     "lyrics-screen-cut",

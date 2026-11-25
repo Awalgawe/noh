@@ -83,7 +83,7 @@ pub struct CaptionRequest {
     /// « Promote NOH »: the « made with NOH » signature in this corner of the
     /// picture (`crate::mark`). None: no signature (the default).
     #[serde(default)]
-    pub promote: Option<crate::mark::Corner>,
+    pub promote: Option<crate::mark::Promote>,
 }
 
 impl CaptionRequest {
@@ -1079,19 +1079,19 @@ fn render_command(
 /// picture in its corner, and the edge the captions keep clear of. None
 /// without it.
 pub(crate) fn mark_band(
-    promote: Option<crate::mark::Corner>,
+    promote: Option<crate::mark::Promote>,
     frame: (u32, u32),
     area: crate::safe_area::SafeArea,
     workspace: &Path,
 ) -> Result<Option<crate::mark::Band>, EngineError> {
-    let Some(corner) = promote else {
+    let Some(promote) = promote else {
         return Ok(None);
     };
     let (w, h) = frame;
     let safe = crate::mark::safe_for(w, h, Some(area));
-    crate::mark::stage(workspace, w, h, safe, corner)
+    crate::mark::stage(workspace, w, h, safe, promote)
         .map_err(|e| error("error.caption_config", "stage_mark", Some(workspace), e))?;
-    Ok(Some(crate::mark::caption_band(w, h, safe, corner)))
+    Ok(Some(crate::mark::caption_band(w, h, safe, promote.corner)))
 }
 
 pub(crate) fn unsupported_renderer(log: &str) -> bool {

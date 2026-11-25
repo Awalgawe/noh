@@ -177,7 +177,10 @@ impl NohApp {
                 captions,
                 // The mark is burned into exports; a preview render carries
                 // none (the monitor draws it live).
-                promote: (self.promote && !previewing).then_some(self.promote_corner),
+                promote: (self.promote && !previewing).then_some(noh::mark::Promote {
+                    corner: self.promote_corner,
+                    color: self.promote_color,
+                }),
             };
             request.validate()?;
             Ok(request)
