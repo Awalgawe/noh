@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
-  "resolved_at": "2026-11-18",
+  "resolved_at": "2026-11-25",
   "scope": "Provisioning inputs for native VM checks; the full acceptance matrix remains linux-validation-matrix.json.",
   "images": {
     "ubuntu-24.04": {
-      "url": "https://cloud-images.ubuntu.com/noble/20260926/noble-server-cloudimg-amd64.img",
+      "url": "https://cloud-images.ubuntu.com/noble/20261017/noble-server-cloudimg-amd64.img",
       "algorithm": "sha256",
-      "digest": "6a81c37564db9b1ee84e141922625e1d7c5b389b99bb3c572e0243607d5bb4d2",
+      "digest": "04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94",
       "os_id": "ubuntu", "version_id": "24.04", "session": "gnome.desktop",
       "reboot_after_provisioning": true
     },
     "ubuntu-26.04": {
-      "url": "https://cloud-images.ubuntu.com/resolute/20260927/resolute-server-cloudimg-amd64.img",
+      "url": "https://cloud-images.ubuntu.com/resolute/20261108/resolute-server-cloudimg-amd64.img",
       "algorithm": "sha256",
-      "digest": "8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2",
+      "digest": "7b90593f5532b49b7e3fe3d2743f0d1f0d822e5b07cebcd8e00c0df8069ecab9",
       "os_id": "ubuntu", "version_id": "26.04", "session": "gnome.desktop",
       "reboot_after_provisioning": true
     },
@@ -42,9 +42,9 @@
       "reboot_after_provisioning": true
     },
     "arch": {
-      "url": "https://geo.mirror.pkgbuild.com/images/v20261015.611680/Arch-Linux-x86_64-cloudimg-20261015.611680.qcow2",
+      "url": "https://geo.mirror.pkgbuild.com/images/v20261115.625457/Arch-Linux-x86_64-cloudimg-20261115.625457.qcow2",
       "algorithm": "sha256",
-      "digest": "08754e28d91b1680086c6211ef4df13559e766fff7cdb4006489b14b5d281f08",
+      "digest": "dbd02830f6eb0fe07ef6e5edaddbae8b577ce4296d9e79118904704cce0a1f60",
       "os_id": "arch", "version_id": null, "session": "plasma.desktop",
       "reboot_after_provisioning": true
     },
