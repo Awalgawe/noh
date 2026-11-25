@@ -5,6 +5,42 @@ are available on [GitHub Releases](https://github.com/Awalgawe/noh/releases).
 This changelog starts with the initial public source version; earlier private
 builds are not public releases.
 
+## 0.5.0
+
+Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.5.0).
+
+### Promote NOH
+
+- Turn on **Promote NOH** on the export line to add a small translucent
+  **MADE WITH NOH** signature. It is off by default. Choose any corner or leave
+  it on Automatic, which uses the bottom right on landscape exports and the
+  top left on vertical ones. Choose white, black, a preset or a custom colour.
+  The same colour picker is available in the caption style settings.
+- The signature appears on montages, shorts and videos with burned-in captions.
+  Captions on its side of the picture leave room for it. Adding a signature
+  re-encodes a montage. With the option off, compatible footage can still be
+  copied. If the signature itself cannot be drawn, NOH retries the export
+  without it and shows a warning.
+- The CLI accepts `--promote`, `--promote-corner` and `--promote-color`.
+  The MCP export tools accept `promote`, `promote_corner` and `promote_color`.
+
+### Fixes
+
+- A driven NOH window redraws the monitor after a paused seek and waits for the
+  new frame before returning a monitor capture.
+- macOS app bundles include the caption style files.
+- The Windows installer tests upgrading from 0.4.0, including installation
+  over files from the previous version.
+
+### Known issues
+
+- Scene-framed shorts do not support the signature. Montages that exceed the
+  composition limits export without the signature and show a warning.
+- The new promotion and colour controls and warnings in German, Spanish,
+  Japanese, Korean and Simplified Chinese have not been reviewed by native
+  speakers.
+- Motion scenes remain experimental. The [0.4.0 platform and playback notes](https://github.com/Awalgawe/noh/releases/tag/v0.4.0) still apply.
+
 ## 0.4.0
 
 Download the [Windows installers and Windows/Linux portable ZIPs](https://github.com/Awalgawe/noh/releases/tag/v0.4.0).
