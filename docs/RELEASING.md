@@ -295,7 +295,11 @@ new pin is reviewed and recorded before any build.
 2. `stage=build`, `target=windows-linux`: one build of that commit. Note the run
    ID, attempt and commit. When one platform fails, the run stops the other one:
    publication takes both packages from the same attempt, so the build is
-   dispatched again. `stage=verify` lets every platform finish.
+   dispatched again: a new run, never `gh run rerun --failed`. A re-run keeps the
+   failed attempt's artifacts in the run (its `delivery-failure-*` logs, and an audit
+   named after the first attempt), and the installer and desktop stages refuse a
+   run that holds an artifact they do not expect. `stage=verify` lets every
+   platform finish.
    `python tools/release_next.py after-build <build run>` prints the dispatches of
    steps 3 and 4 with that run, its latest attempt and its commit, once it has
    checked the run is a successful build on main; it dispatches nothing.
@@ -357,8 +361,12 @@ new pin is reviewed and recorded before any build.
    Just before publishing, the stage signs a build provenance attestation
    (`actions/attest`, through Sigstore) for every file of the release and for
    `PUBLICATION.json`. GitHub keeps the attestations apart from the release, so the
-   asset list does not change. They say that `release.yml` on main published these
-   exact bytes from the named commit; anyone can check a downloaded file with
+   asset list does not change. They say that `release.yml`, as it was on main when
+   the stage ran, published these exact bytes. The commit an attestation names is
+   that workflow's commit, main at publication time, not the commit the packages
+   were built from: when main moved between the build and the publication, the two
+   differ, and `PUBLICATION.json` names both (`changes_commit` and `source_commit`).
+   Anyone can check a downloaded file with
    `gh attestation verify <file> --repo Awalgawe/noh`. They do not replace code
    signing: Windows SmartScreen still sees an unsigned installer. If the attestation
    step fails, the filled draft stays and nothing is public: handle it like a

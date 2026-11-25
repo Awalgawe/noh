@@ -520,10 +520,22 @@ def windows_inputs(cache, destination):
     validate_ffmpeg(destination / "native/export/ffmpeg.exe")
 
 
+def ffmpeg_identity(result):
+    """What `ffmpeg -version` answered, for a refusal: its version, its configuration, its errors."""
+    lines = result.stdout.splitlines()
+    configuration = next((line for line in lines if line.startswith("configuration:")), None)
+    said = [repr(lines[0]) if lines else "nothing on standard output",
+            configuration[:2000] if configuration else "no configuration line"]
+    if result.stderr.strip():
+        said.append("standard error: " + repr(result.stderr.strip()[:1000]))
+    return "; ".join(said)
+
+
 def validate_ffmpeg(executable):
-    text = checked([executable, "-version"], capture_output=True, text=True).stdout
+    result = checked([executable, "-version"], capture_output=True, text=True)
+    text = result.stdout
     if not text.startswith("ffmpeg version 7.1") or "--enable-nonfree" in text:
-        raise ValueError("Expected FFmpeg 7.1 without --enable-nonfree")
+        raise ValueError("Expected FFmpeg 7.1 without --enable-nonfree; it answered " + ffmpeg_identity(result))
     filters = checked([executable, "-hide_banner", "-filters"], capture_output=True, text=True).stdout
     if not any(line.split()[1:2] == ["subtitles"] for line in filters.splitlines()):
         raise ValueError("Missing FFmpeg subtitles/libass filter")
