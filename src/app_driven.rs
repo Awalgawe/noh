@@ -1820,6 +1820,37 @@ mod tests {
     }
 
     #[test]
+    fn an_untimed_paused_look_waits_for_a_pending_picture() {
+        let mut w = window(true);
+        let folder = tempfile::tempdir().unwrap();
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(200.0, 100.0));
+        w.app.driven_note_monitor(rect, false);
+        w.app.driven_look(
+            &w.ctx,
+            7,
+            driven::LookScope::Monitor,
+            None,
+            folder.path().join("look.png"),
+        );
+        w.app.driven_look_frame(&w.ctx);
+        w.app.driven_look_frame(&w.ctx);
+        let requested = |app: &NohApp| {
+            app.driven
+                .as_ref()
+                .unwrap()
+                .look
+                .as_ref()
+                .unwrap()
+                .look
+                .requested
+        };
+        assert!(!requested(&w.app));
+        w.app.driven_note_monitor(rect, true);
+        w.app.driven_look_frame(&w.ctx);
+        assert!(requested(&w.app));
+    }
+
+    #[test]
     fn a_job_a_question_and_a_lost_picture_are_answered() {
         use driven::Action;
         let mut w = window(true);

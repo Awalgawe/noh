@@ -2107,6 +2107,7 @@ pub struct PluginScene {
     preset: Option<String>,
     /// The safe surface in canvas pixels: x0, y0, width, height.
     safe: [f32; 4],
+    mark_band: Option<crate::mark::Band>,
     /// A safe area applies (not the whole canvas): letters are checked against it.
     checked: bool,
     /// Without a safe area, letters are still checked against the canvas (exports:
@@ -2185,6 +2186,7 @@ impl PluginScene {
             shown,
             preset: preset.map(str::to_string),
             safe: [0.0, 0.0, w as f32, h as f32],
+            mark_band: None,
             checked: false,
             frame_check: false,
             overflowed: false,
@@ -2280,9 +2282,10 @@ impl PluginScene {
     /// The safe surface keeps clear of the « made with NOH » mark
     /// (`crate::mark::caption_band`): it ends that far above the bottom edge,
     /// or starts that far below the top edge. The surface only gets shorter,
-    /// as a safe area makes it; `@safe` keeps its value, so a style without a
-    /// safe area keeps its own margins.
+    /// as a safe area makes it. Keep `@safe` so that a style without a safe
+    /// area keeps its own margins wherever the mark does not require more room.
     pub fn with_mark_band(mut self, band: Option<crate::mark::Band>) -> Self {
+        self.mark_band = band;
         let [x0, y0, sw, sh] = self.safe;
         match band {
             Some(crate::mark::Band::Bottom(b)) => {
@@ -2714,6 +2717,14 @@ impl PluginScene {
                 "top" => ay,
                 "center" => ay - laid.height * 0.5,
                 _ => ay - laid.height,
+            };
+            // Canvas-relative effects can ignore the shortened safe surface
+            // (Classique does so without a safe area). Keep their width and
+            // move the entire line only far enough to clear the mark's band.
+            let oy = match self.mark_band {
+                Some(crate::mark::Band::Top(edge)) => oy.max(edge as f32),
+                Some(crate::mark::Band::Bottom(inset)) => oy.min(h - inset as f32 - laid.height),
+                None => oy,
             };
             (top, bottom, em) = (oy, oy + laid.height, size);
             too_wide = laid.too_wide;

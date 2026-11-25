@@ -16,7 +16,7 @@ use std::{
 pub(super) const NAVIGATION: Duration = Duration::from_secs(3);
 /// Position-only changes go out at most this often (4 per second).
 const POSITION_EVERY: Duration = Duration::from_millis(250);
-/// How long `look` with `at_ms` waits for the picture at T.
+/// How long a paused look waits for the picture at the playhead.
 const SETTLE: Duration = Duration::from_secs(2);
 /// A look whose screenshot has not come by then fails (the window was
 /// minimized after the request, or no picture came).
@@ -59,7 +59,7 @@ pub(super) struct Look {
     pub scope: LookScope,
     pub output: PathBuf,
     pub at_ms: Option<u64>,
-    /// Waiting for the picture at T until then (at_ms), else none.
+    /// Waiting for the picture at the paused playhead until then, else none.
     pub settle_until: Option<Instant>,
     /// Painted frames since the request, so the screenshot shows the change.
     pub frames: u8,
@@ -268,11 +268,15 @@ impl NohApp {
         if let Err(refusal) = check {
             return self.driven_answer(id, Err(refusal));
         }
+        // An untimed look also needs the paused picture if a separate seek
+        // just moved the playhead. It must not move the playhead itself.
+        let settle_until = (at_ms.is_none() && !self.clips.is_empty() && !self.mini_playing())
+            .then(|| Instant::now() + SETTLE);
         let look = Look {
             scope,
             output,
             at_ms,
-            settle_until: None,
+            settle_until,
             frames: 0,
             requested: false,
             started: Instant::now(),
