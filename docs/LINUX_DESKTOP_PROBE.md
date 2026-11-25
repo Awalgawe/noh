@@ -223,7 +223,7 @@ The earlier WSLg audio incident remains a separate unresolved observation.
 Checked on 2026-10-15:
 
 - [GitHub runner virtualization limits](https://docs.github.com/en/actions/concepts/runners/github-hosted-runners): nested VMs remain experimental and unsupported.
-- [Ubuntu 24.04 image/checksums](https://cloud-images.ubuntu.com/noble/20260926/) and [Ubuntu 26.04](https://cloud-images.ubuntu.com/resolute/20260927/).
+- [Ubuntu 24.04 image/checksums](https://cloud-images.ubuntu.com/noble/20261017/) and [Ubuntu 26.04](https://cloud-images.ubuntu.com/resolute/20261108/).
 - [Debian 13 dated generic image/checksums](https://cloud.debian.org/images/cloud/trixie/20261001-2618/).
 - [Debian's GNOME Xorg session package](https://packages.debian.org/trixie/gnome-session-xsession).
 - [Fedora 44 official images](https://fedoraproject.org/releases.json) and [GNOME Wayland session package](https://packages.fedoraproject.org/pkgs/gnome-session/gnome-session-wayland-session/fedora-44.html).
