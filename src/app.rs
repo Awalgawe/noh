@@ -3,6 +3,7 @@
 mod app_autoupdate;
 mod app_captions;
 mod app_capture;
+mod app_color;
 mod app_destination;
 mod app_diagnosis;
 mod app_driven;
@@ -75,6 +76,8 @@ struct NohApp {
     promote: bool,
     promote_corner: noh::mark::Corner,
     promote_color: noh::mark::Color,
+    /// The last hand-made colours of every colour component, newest first.
+    recent_colors: Vec<egui::Color32>,
     clips: Vec<Clip>,
     wav: Option<PathBuf>,
     output: Option<PathBuf>,
@@ -211,6 +214,15 @@ impl Default for NohApp {
                         .as_deref(),
                 )
                 .2
+            },
+            recent_colors: if cfg!(test) {
+                Vec::new()
+            } else {
+                app_color::read(
+                    noh::i18n::preferences_path()
+                        .map(|language| app_color::path(&language))
+                        .as_deref(),
+                )
             },
             clips: Vec::new(),
             wav: None,

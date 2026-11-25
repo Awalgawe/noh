@@ -782,16 +782,28 @@ impl NohApp {
         let promote_corner_now = self.promote_corner;
         let promote_color_now = self.promote_color;
         let promote_pick = std::cell::Cell::new(None::<app_promote::Pick>);
+        let promote_remember = std::cell::Cell::new(None::<app_color::Remember>);
+        let recent_colors = self.recent_colors.clone();
         // In a right-to-left row: the corner button (while ticked) at the end,
         // the box before it.
         let promote_box = |ui: &mut egui::Ui, idle: bool| {
             let mut on = promote_now;
             let l = promote_language;
-            if promote_now
-                && let Some(pick) =
-                    app_promote::corner_button(ui, promote_corner_now, promote_color_now, idle, l)
-            {
-                promote_pick.set(Some(pick));
+            if promote_now {
+                let (pick, remember) = app_promote::corner_button(
+                    ui,
+                    promote_corner_now,
+                    promote_color_now,
+                    &recent_colors,
+                    idle,
+                    l,
+                );
+                if pick.is_some() {
+                    promote_pick.set(pick);
+                }
+                if remember.is_some() {
+                    promote_remember.set(remember);
+                }
             }
             let response = ui
                 .add_enabled_ui(idle, |ui| {
@@ -1499,6 +1511,9 @@ impl NohApp {
             Some(app_promote::Pick::Corner(corner)) => self.set_promote_corner(corner),
             Some(app_promote::Pick::Color(color)) => self.set_promote_color(color),
             None => {}
+        }
+        if let Some(remember) = promote_remember.get() {
+            self.remember_color(remember);
         }
         if let Some(from) = change.get() {
             self.open_sheet(false, Some(from));

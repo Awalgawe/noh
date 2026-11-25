@@ -893,6 +893,8 @@ pub struct Tweaks {
     pub font: Option<String>,
     /// `font_open=1`: the font picker's list open.
     pub font_open: bool,
+    /// `colour_open=1`: the first colour setting's picker unfolded.
+    pub colour_open: bool,
     /// `motion=found|checking|use|refused|details`: the scene beside the song
     /// listed, or checked (with a click) until that state.
     pub motion: Option<String>,
@@ -925,6 +927,7 @@ pub fn parse_tweaks(value: &str) -> Result<Tweaks, String> {
             ("more", "1") => tweaks.more = true,
             ("font", _) if !item.is_empty() => tweaks.font = Some(item.into()),
             ("font_open", "1") => tweaks.font_open = true,
+            ("colour_open", "1") => tweaks.colour_open = true,
             ("motion", "found" | "checking" | "use" | "refused" | "details") => {
                 tweaks.motion = Some(item.into())
             }
@@ -2010,6 +2013,10 @@ impl NohApp {
                 self.style_panel.sheet = true;
                 self.style_panel.more = tweaks.more;
                 self.style_panel.font_open = tweaks.font_open;
+                self.style_panel.colour_open = tweaks.colour_open;
+                if tweaks.colour_open {
+                    self.recent_colors = app_color::capture_recent();
+                }
                 self.style_panel.font_reveal = tweaks.font_open || tweaks.font.is_some();
                 if let (Some(font), Some(choice)) = (&tweaks.font, self.project.effect.as_mut()) {
                     choice.values.insert("font".into(), serde_json::json!(font));
@@ -2031,7 +2038,12 @@ impl NohApp {
         if self.capture_overlay_step >= 1 && self.capture_overlay.as_deref() == Some("promote-menu")
         {
             self.promote = true;
-            ctx.data_mut(|d| d.insert_temp(egui::Id::new(app_promote::PICKER), true));
+            let owner = egui::Id::new(app_promote::PICKER);
+            if !app_color::is_open(ctx, owner) {
+                self.recent_colors = app_color::capture_recent();
+                let c = self.promote_color;
+                app_color::open(ctx, owner, egui::Color32::from_rgb(c.0, c.1, c.2));
+            }
             if !egui::Popup::is_id_open(ctx, egui::Id::new(app_promote::MENU)) {
                 egui::Popup::open_id(ctx, egui::Id::new(app_promote::MENU));
             }

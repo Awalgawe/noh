@@ -334,10 +334,25 @@ fn corner_row(
     response
 }
 
-/// The corner menu's popup id (one export line shows at a time), and the
-/// flag that shows its colour picker: stable, so a capture can open them.
+/// The corner menu's popup id (one export line shows at a time), and its
+/// colour component's id: stable, so a capture can open them.
 pub(super) const MENU: &str = "promote-corner-menu";
 pub(super) const PICKER: &str = "promote-custom-colour";
+
+/// The mark's swatches in the menu: white and black at one click, then four
+/// colours that sit well on video.
+const PALETTE: [(Color, &str); 6] = [
+    (Color::WHITE, "promote.color_white"),
+    (Color::BLACK, "promote.color_black"),
+    (Color(0x5F, 0xCA, 0xBE), "promote.color_teal"),
+    (Color(0xEA, 0xD9, 0xB8), "promote.color_sand"),
+    (Color(0xE9, 0xC4, 0x6A), "promote.color_gold"),
+    (Color(0xF0, 0xAC, 0x8B), "promote.color_coral"),
+];
+
+fn c32(c: Color) -> Color32 {
+    Color32::from_rgb(c.0, c.1, c.2)
+}
 
 /// What the corner menu changed.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -346,45 +361,18 @@ pub enum Pick {
     Color(Color),
 }
 
-/// A colour swatch in the menu: a rounded square, ringed when current.
-fn swatch(ui: &mut egui::Ui, color: Color, current: bool, name: &str) -> egui::Response {
-    let t = app_style::tokens(ui);
-    let (rect, response) = ui.allocate_exact_size(Vec2::splat(24.0), egui::Sense::click());
-    response.widget_info(|| {
-        egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, current, name)
-    });
-    let fill = Color32::from_rgb(color.0, color.1, color.2);
-    let inner = rect.shrink(4.0);
-    ui.painter().rect_filled(inner, app_style::radius::S, fill);
-    ui.painter().rect_stroke(
-        inner,
-        app_style::radius::S,
-        egui::Stroke::new(1.0, t.border_strong),
-        egui::StrokeKind::Outside,
-    );
-    if current || response.hovered() || response.has_focus() {
-        ui.painter().rect_stroke(
-            rect.shrink(1.0),
-            app_style::radius::M,
-            egui::Stroke::new(1.5, if current { t.accent } else { t.border_strong }),
-            egui::StrokeKind::Middle,
-        );
-    }
-    app_style::focus(ui, &response);
-    response.on_hover_text(name)
-}
-
 /// The corner button that follows a ticked « Promote NOH » box: the corner's
-/// glyph and a chevron; it opens the menu: the corners, then the colour (white
-/// and black at one click, any other from the colour picker). What was
-/// changed, if anything.
+/// glyph and a chevron; it opens the menu: the corners, then the colour (the
+/// app's colour component). What was changed, if anything, and a hand-made
+/// colour for the recent ones.
 pub fn corner_button(
     ui: &mut egui::Ui,
     corner: Corner,
     color: Color,
+    recent: &[Color32],
     enabled: bool,
     l: noh::i18n::Language,
-) -> Option<Pick> {
+) -> (Option<Pick>, Option<app_color::Remember>) {
     let t = app_style::tokens(ui);
     let (rect, response) = ui.allocate_exact_size(Vec2::new(34.0, 16.0), egui::Sense::click());
     let response = if enabled {
@@ -417,9 +405,10 @@ pub fn corner_button(
     app_style::focus(ui, &response);
     let response = response.on_hover_text(name);
     if !enabled {
-        return None;
+        return (None, None);
     }
     let mut picked = None;
+    let mut remember = None;
     egui::Popup::menu(&response)
         .id(egui::Id::new(MENU))
         .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
@@ -427,87 +416,79 @@ pub fn corner_button(
         .frame(app_style::popup_frame(ui))
         .width(260.0)
         .show(|ui| {
-            ui.set_width(260.0);
-            ui.add(
-                egui::Label::new(
-                    egui::RichText::new(l.text("promote.corner_title"))
-                        .size(app_style::text::SMALL)
-                        .color(app_style::tokens(ui).text_2),
-                )
-                .wrap(),
-            );
-            ui.add_space(4.0);
-            if corner_row(
-                ui,
-                Corner::Auto,
-                l.text("promote.corner_auto"),
-                Some(l.text("promote.corner_auto_hint")),
-                corner == Corner::Auto,
-            )
-            .clicked()
-            {
-                picked = Some(Pick::Corner(Corner::Auto));
-            }
-            ui.separator();
-            for (c, key) in CORNERS {
-                if corner_row(ui, c, l.text(key), None, corner == c).clicked() {
-                    picked = Some(Pick::Corner(c));
-                }
-            }
-            ui.separator();
-            ui.add(
-                egui::Label::new(
-                    egui::RichText::new(l.text("promote.color"))
-                        .size(app_style::text::SMALL)
-                        .color(app_style::tokens(ui).text_2),
-                )
-                .wrap(),
-            );
-            let custom_id = egui::Id::new(PICKER);
-            let mut custom = ui.data(|d| d.get_temp::<bool>(custom_id)).unwrap_or(false);
-            let other = color != Color::WHITE && color != Color::BLACK;
-            ui.horizontal(|ui| {
-                for (c, key) in [
-                    (Color::WHITE, "promote.color_white"),
-                    (Color::BLACK, "promote.color_black"),
-                ] {
-                    if swatch(ui, c, color == c, l.text(key)).clicked() {
-                        picked = Some(Pick::Color(c));
+            // Capped to the room above the button: a short window scrolls the
+            // menu instead of cutting its top off.
+            let room = response.rect.top() - ui.ctx().content_rect().top() - 24.0;
+            egui::ScrollArea::vertical()
+                .max_height(room.max(120.0))
+                .min_scrolled_height(room.max(120.0))
+                .auto_shrink([true, true])
+                .show(ui, |ui| {
+                    ui.set_width(260.0);
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(l.text("promote.corner_title"))
+                                .size(app_style::text::SMALL)
+                                .color(app_style::tokens(ui).text_2),
+                        )
+                        .wrap(),
+                    );
+                    ui.add_space(4.0);
+                    if corner_row(
+                        ui,
+                        Corner::Auto,
+                        l.text("promote.corner_auto"),
+                        Some(l.text("promote.corner_auto_hint")),
+                        corner == Corner::Auto,
+                    )
+                    .clicked()
+                    {
+                        picked = Some(Pick::Corner(Corner::Auto));
                     }
-                }
-                // The current colour when it is another one; it opens the picker.
-                let shown = if other {
-                    color
-                } else {
-                    Color(0xE0, 0x6C, 0x3C)
-                };
-                if swatch(ui, shown, other, l.text("promote.color_custom")).clicked() {
-                    custom = !custom;
-                }
-            });
-            if custom {
-                let mut c32 = Color32::from_rgb(color.0, color.1, color.2);
-                // Changes apply as the picker moves; the menu stays open.
-                if egui::color_picker::color_picker_color32(
-                    ui,
-                    &mut c32,
-                    egui::color_picker::Alpha::Opaque,
-                ) {
-                    let [r, g, b, _] = c32.to_srgba_unmultiplied();
-                    picked = Some(Pick::Color(Color(r, g, b)));
-                }
-            }
-            ui.data_mut(|d| d.insert_temp(custom_id, custom));
-            let one_click = match picked {
-                Some(Pick::Corner(_)) => true,
-                Some(Pick::Color(c)) => !custom && (c == Color::WHITE || c == Color::BLACK),
-                None => false,
-            };
-            if one_click {
-                ui.close();
-            }
+                    ui.separator();
+                    for (c, key) in CORNERS {
+                        if corner_row(ui, c, l.text(key), None, corner == c).clicked() {
+                            picked = Some(Pick::Corner(c));
+                        }
+                    }
+                    ui.separator();
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(l.text("promote.color"))
+                                .size(app_style::text::SMALL)
+                                .color(app_style::tokens(ui).text_2),
+                        )
+                        .wrap(),
+                    );
+                    ui.add_space(4.0);
+                    let swatches = PALETTE.map(|(c, key)| (c32(c), Some(l.text(key))));
+                    let out = app_color::colour_row(
+                        ui,
+                        egui::Id::new(PICKER),
+                        &swatches,
+                        c32(color),
+                        recent,
+                        l,
+                    );
+                    if let Some(c) = out.color {
+                        picked = Some(Pick::Color(Color(c.r(), c.g(), c.b())));
+                    }
+                    remember = out.remember;
+                    // A corner, white or black closes the menu; other colours keep it
+                    // open, so the mark can be watched while choosing.
+                    let one_click = match picked {
+                        Some(Pick::Corner(_)) => true,
+                        Some(Pick::Color(c)) => {
+                            out.from_row && (c == Color::WHITE || c == Color::BLACK)
+                        }
+                        None => false,
+                    };
+                    if one_click {
+                        ui.close();
+                    }
+                });
         });
-    picked
+    (picked, remember)
 }
 
 #[cfg(test)]
@@ -606,6 +587,19 @@ mod tests {
         assert_eq!(app.revision, revision);
         let file = path(app.locale.path.as_deref().unwrap());
         assert_eq!(read(Some(&file)).1, Corner::BottomRight);
+    }
+
+    #[test]
+    fn the_menu_colours_are_named_in_every_language() {
+        for language in noh::i18n::Language::ALL {
+            for (_, key) in PALETTE {
+                assert!(
+                    !language.text(key).contains("missing"),
+                    "{} {key}",
+                    language.code()
+                );
+            }
+        }
     }
 
     #[test]

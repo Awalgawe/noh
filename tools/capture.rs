@@ -365,6 +365,7 @@ const TWEAK_KEYS: &[&str] = &[
     "more",
     "font",
     "font_open",
+    "colour_open",
 ];
 const DEFAULT_THEMES: &[&str] = &["dark", "light"];
 const DEFAULT_SCALES: &[&str] = &["1", "1.5", "2"];
