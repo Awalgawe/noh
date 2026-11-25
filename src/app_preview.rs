@@ -1255,20 +1255,34 @@ impl NohApp {
         if let Some(texture) = texture {
             paint_texture(ui, monitor, texture);
         }
-        // A driven window's `look`: the monitor, and whether its picture is
-        // the playhead's. A paused player moved by the agent shows it once its
-        // seek there has a picture: before, the monitor and the captions still
-        // show where it was (libmpv lands a paused seek in about 20 ms, less
-        // than the two frames a look waits for in an optimized build).
-        let target = self
-            .mini_preview
-            .cursor_ms
-            .saturating_sub(self.mini_bounds().0) as f64
-            / 1000.0;
-        let player_there = snapshot.as_ref().is_none_or(|s| player_shows(s, target));
-        self.driven_note_monitor(monitor, !loading && !still_loading && player_there);
-        self.mini_preview.painted = (has_texture, false);
         let scrub_visible = self.mini_preview.scrub_visible();
+        if self.driven.is_some() {
+            // When the fast paused seek is in flight, the scrubber intentionally
+            // keeps drawing its previous frame. Check its timestamp, rather
+            // than the ordinary still worker's pending flag.
+            let cursor = self.mini_preview.cursor_ms;
+            let at_playhead = match &snapshot {
+                Some(player) => {
+                    let target = cursor.saturating_sub(self.mini_bounds().0) as f64 / 1000.0;
+                    player_shows(player, target)
+                }
+                None if scrub_visible => {
+                    self.mini_preview.scrubber.as_ref().is_some_and(|scrubber| {
+                        let picture = scrubber.snapshot();
+                        picture.epoch == scrubber.epoch()
+                            && picture.time_ms == cursor
+                            && picture.error.is_none()
+                    })
+                }
+                None if self.ready() && self.mini_preview.source.is_none() => {
+                    self.mini_preview.still_shown() == Some(cursor)
+                        && self.mini_preview.error.is_none()
+                }
+                None => true,
+            };
+            self.driven_note_monitor(monitor, !loading && !still_loading && at_playhead);
+        }
+        self.mini_preview.painted = (has_texture, false);
         self.mini_preview.painted_scrub = scrub_visible;
         if let Some(scrubber) = &self.mini_preview.scrubber {
             scrubber.paint(ui, monitor, scrub_visible, style::radius::L as f32);
