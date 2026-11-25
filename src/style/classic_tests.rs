@@ -203,6 +203,47 @@ fn classique_stays_inside_every_safe_area() {
     }
 }
 
+#[test]
+fn classique_clears_the_mark_without_a_safe_area() {
+    use crate::fx::shaders::Upload;
+    use crate::fx::text::Fonts;
+    use crate::mark::Band;
+
+    struct NoGpu;
+    impl Upload for NoGpu {
+        fn upload_cov(&self, _: u32, _: u32, _: u32, _: u32, _: &[u8]) {}
+        fn upload_msdf(&self, _: u32, _: u32, _: u32, _: u32, _: &[u8]) {}
+    }
+
+    let mut fonts = Fonts::load().unwrap();
+    for (placement, band, opposite) in [
+        ("top", Band::Top(359), Band::Bottom(743)),
+        ("bottom", Band::Bottom(743), Band::Top(359)),
+    ] {
+        let mut center = |band| {
+            let (scene, _) = scene(1080, 1920, "medium", placement, SafeArea::None);
+            let (_, _, drawn, _) = scene.with_mark_band(band).frame(&mut fonts, &NoGpu, 0.5);
+            drawn.first().unwrap().center
+        };
+        let plain = center(None);
+        let moved = center(Some(band));
+        assert_eq!(
+            center(Some(opposite)),
+            plain,
+            "{placement} on the other side"
+        );
+        assert_eq!(
+            moved[0], plain[0],
+            "{placement} keeps the horizontal layout"
+        );
+        match band {
+            Band::Top(edge) => assert!(moved[1] >= edge as f32, "{moved:?}"),
+            Band::Bottom(inset) => assert!(moved[1] <= (1920 - inset) as f32, "{moved:?}"),
+        }
+        assert_ne!(moved[1], plain[1]);
+    }
+}
+
 /// upem / (hhea ascender - descender) of the caption font: libass sizes text by
 /// FreeType's REAL_DIM height, so its em is Fontsize times this ratio.
 fn real_dim_ratio() -> f64 {
