@@ -214,6 +214,42 @@ class ScopeTests(unittest.TestCase):
             self.assertEqual(platforms(paths), {"windows": True, "unix": True})
             self.assertIsNone(ci_scope.changed_paths("push", {"before": "a" * 40}, root))
 
+    def test_a_branch_behind_main_counts_only_its_own_changes(self):
+        # GitHub can leave pull_request.base.sha where the branch started. The merge commit
+        # a pull_request run checks out has main as merged for its first parent.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def git(*args):
+                return subprocess.run(["git", *args], cwd=root, capture_output=True,
+                                      text=True, check=True).stdout.strip()
+            git("init", "-q", "-b", "main")
+            git("config", "user.name", "CI fixture")
+            git("config", "user.email", "fixture@example.invalid")
+            (root / "site").mkdir()
+            (root / "src").mkdir()
+            (root / "site/template.html").write_text("page", encoding="utf-8")
+            (root / "src/main.rs").write_text("fn main() {}", encoding="utf-8")
+            git("add", ".")
+            git("commit", "-qm", "where the branch starts")
+            stale_base = git("rev-parse", "HEAD")
+            git("checkout", "-qb", "page")
+            (root / "site/template.html").write_text("page, reworded", encoding="utf-8")
+            git("commit", "-qam", "page change")
+            head = git("rev-parse", "HEAD")
+            git("checkout", "-q", "main")
+            (root / "src/main.rs").write_text("fn main() { app() }", encoding="utf-8")
+            git("commit", "-qam", "app change on main")
+            git("checkout", "-q", "--detach")
+            git("merge", "-q", "--no-ff", "-m", "merge ref", head)
+            event = {"pull_request": {"base": {"sha": stale_base}, "head": {"sha": head}}}
+            self.assertEqual(ci_scope.changed_paths("pull_request", event, root), ["site/template.html"])
+            self.assertEqual(ci_scope.select(ci_scope.changed_paths("pull_request", event, root)),
+                             {"windows": False, "unix": False, "plugins": False})
+            # Not the merge of this head: back to base.sha, which counts main's change too.
+            other = {"pull_request": {"base": {"sha": stale_base}, "head": {"sha": "b" * 40}}}
+            self.assertEqual(sorted(ci_scope.changed_paths("pull_request", other, root)),
+                             ["site/template.html", "src/main.rs"])
+
     def test_gate_accepts_only_expected_success_or_skip(self):
         for windows, unix, plugins in itertools.product((False, True), repeat=3):
             scope = {"windows": windows, "unix": unix, "plugins": plugins}
