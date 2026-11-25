@@ -69,6 +69,25 @@ class DeliveryTests(unittest.TestCase):
                         str(Path(__file__).with_name('test-delivery-build.ps1'))],
                        check=True, capture_output=True, text=True, timeout=30)
 
+    def test_ffmpeg_refusal_says_what_ffmpeg_answered(self):
+        def answer(stdout, stderr=''):
+            return subprocess.CompletedProcess(['ffmpeg', '-version'], 0, stdout, stderr)
+        nonfree = ('ffmpeg version 7.1.1 Copyright (c) 2000-2025\nbuilt with gcc\n'
+                   'configuration: --enable-gpl --enable-nonfree\nlibavutil 59\n')
+        cases = [
+            (answer(nonfree), ["'ffmpeg version 7.1.1 Copyright (c) 2000-2025'",
+                               'configuration: --enable-gpl --enable-nonfree']),
+            (answer('ffmpeg version 6.1\nconfiguration: --enable-gpl\n'), ["'ffmpeg version 6.1'"]),
+            (answer('', 'The program cannot start\n'),
+             ['nothing on standard output', 'no configuration line', "standard error: 'The program cannot start'"]),
+        ]
+        for result, expected in cases:
+            with self.subTest(stdout=result.stdout), patch.object(delivery, 'checked', return_value=result):
+                with self.assertRaisesRegex(ValueError, 'without --enable-nonfree; it answered') as refusal:
+                    delivery.validate_ffmpeg('ffmpeg.exe')
+                for text in expected:
+                    self.assertIn(text, str(refusal.exception))
+
     def test_platform_selection_includes_linux_without_changing_single_platforms(self):
         self.assertEqual(delivery.selected_platforms('windows-linux'), ['windows-x64', 'linux-x64'])
         self.assertEqual(delivery.selected_platforms('all'), ['windows-x64', 'linux-x64', 'macos-arm64'])
