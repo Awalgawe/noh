@@ -779,9 +779,18 @@ impl NohApp {
         let promote_change = std::cell::Cell::new(None::<bool>);
         let promote_now = self.promote;
         let promote_language = self.locale.language;
+        let promote_corner_now = self.promote_corner;
+        let promote_corner_change = std::cell::Cell::new(None::<noh::mark::Corner>);
+        // In a right-to-left row: the corner button (while ticked) at the end,
+        // the box before it.
         let promote_box = |ui: &mut egui::Ui, idle: bool| {
             let mut on = promote_now;
             let l = promote_language;
+            if promote_now
+                && let Some(corner) = app_promote::corner_button(ui, promote_corner_now, idle, l)
+            {
+                promote_corner_change.set(Some(corner));
+            }
             let response = ui
                 .add_enabled_ui(idle, |ui| {
                     style::small_checkbox(ui, &mut on, l.text("promote.label"))
@@ -1483,6 +1492,9 @@ impl NohApp {
         }
         if let Some(on) = promote_change.get() {
             self.set_promote(on);
+        }
+        if let Some(corner) = promote_corner_change.get() {
+            self.set_promote_corner(corner);
         }
         if let Some(from) = change.get() {
             self.open_sheet(false, Some(from));

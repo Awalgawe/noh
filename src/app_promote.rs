@@ -184,6 +184,213 @@ pub fn paint(
     }
 }
 
+/// The corner glyph: an 18 × 12 frame with a 6 × 4 block in `corner`, or an
+/// « A » for automatic, centred in `rect`.
+fn paint_corner_glyph(painter: &Painter, rect: Rect, corner: Corner, color: Color32) {
+    let frame = Rect::from_center_size(rect.center(), Vec2::new(18.0, 12.0));
+    painter.rect_stroke(
+        frame.shrink(0.5),
+        1.5,
+        egui::Stroke::new(1.25, color),
+        egui::StrokeKind::Middle,
+    );
+    let block = |x: f32, y: f32| Rect::from_min_size(egui::pos2(x, y), Vec2::new(6.0, 4.0));
+    let (l, t) = (frame.left() + 2.0, frame.top() + 2.0);
+    let (r, b) = (frame.right() - 8.0, frame.bottom() - 6.0);
+    let filled = match corner {
+        Corner::TopLeft => Some(block(l, t)),
+        Corner::TopRight => Some(block(r, t)),
+        Corner::BottomLeft => Some(block(l, b)),
+        Corner::BottomRight => Some(block(r, b)),
+        Corner::Auto => None,
+    };
+    match filled {
+        Some(block) => {
+            painter.rect_filled(block, 0.5, color);
+        }
+        None => {
+            painter.text(
+                frame.center(),
+                egui::Align2::CENTER_CENTER,
+                "A",
+                FontId::proportional(9.0),
+                color,
+            );
+        }
+    }
+}
+
+/// The corners in the menu's order, with their label keys.
+const CORNERS: [(Corner, &str); 4] = [
+    (Corner::TopLeft, "promote.corner_top_left"),
+    (Corner::TopRight, "promote.corner_top_right"),
+    (Corner::BottomLeft, "promote.corner_bottom_left"),
+    (Corner::BottomRight, "promote.corner_bottom_right"),
+];
+
+/// One row of the corner menu: the glyph, the title (and a sub-line), a tick
+/// on the current one.
+fn corner_row(
+    ui: &mut egui::Ui,
+    corner: Corner,
+    title: &str,
+    sub: Option<&str>,
+    current: bool,
+) -> egui::Response {
+    let t = app_style::tokens(ui);
+    let width = ui.available_width().max(200.0);
+    let wrap = width - 40.0 - 28.0;
+    let title_galley = ui.painter().layout(
+        title.into(),
+        FontId::proportional(app_style::text::BODY),
+        t.text,
+        wrap,
+    );
+    let sub_galley = sub.map(|sub| {
+        ui.painter().layout(
+            sub.into(),
+            FontId::proportional(app_style::text::SMALL),
+            t.text_2,
+            wrap,
+        )
+    });
+    let height =
+        8.0 + title_galley.size().y + sub_galley.as_ref().map_or(0.0, |g| 2.0 + g.size().y) + 8.0;
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::new(width, height.max(32.0)), egui::Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::RadioButton, true, current, title)
+    });
+    if response.hovered() || response.has_focus() {
+        ui.painter()
+            .rect_filled(rect, app_style::radius::M, t.surface_2);
+    }
+    let painter = ui.painter();
+    paint_corner_glyph(
+        painter,
+        Rect::from_center_size(
+            egui::pos2(
+                rect.left() + 20.0,
+                rect.top() + 8.0 + title_galley.size().y / 2.0,
+            ),
+            Vec2::new(18.0, 12.0),
+        ),
+        corner,
+        t.text_2,
+    );
+    let title_h = title_galley.size().y;
+    painter.galley(
+        egui::pos2(rect.left() + 40.0, rect.top() + 8.0),
+        title_galley,
+        t.text,
+    );
+    if let Some(sub) = sub_galley {
+        painter.galley(
+            egui::pos2(rect.left() + 40.0, rect.top() + 10.0 + title_h),
+            sub,
+            t.text_2,
+        );
+    }
+    if current {
+        let c = egui::pos2(rect.right() - 16.0, rect.top() + 8.0 + title_h / 2.0);
+        painter.add(egui::Shape::line(
+            vec![
+                c + Vec2::new(-5.0, 0.0),
+                c + Vec2::new(-1.5, 3.5),
+                c + Vec2::new(5.0, -3.5),
+            ],
+            egui::Stroke::new(1.75, t.accent_text),
+        ));
+    }
+    app_style::focus(ui, &response);
+    response
+}
+
+/// The corner button that follows a ticked « Promote NOH » box: the corner's
+/// glyph and a chevron; it opens the menu of corners. The corner picked, if
+/// one was.
+pub fn corner_button(
+    ui: &mut egui::Ui,
+    corner: Corner,
+    enabled: bool,
+    l: noh::i18n::Language,
+) -> Option<Corner> {
+    let t = app_style::tokens(ui);
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(34.0, 16.0), egui::Sense::click());
+    let response = if enabled {
+        response
+    } else {
+        response.on_disabled_hover_text("")
+    };
+    let name = l.text("promote.corner");
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, name));
+    let color = if enabled { t.text_2 } else { t.text_3 };
+    if enabled && (response.hovered() || response.has_focus()) {
+        ui.painter()
+            .rect_filled(rect.expand(2.0), app_style::radius::S, t.surface_2);
+    }
+    paint_corner_glyph(
+        ui.painter(),
+        Rect::from_min_size(rect.min, Vec2::new(22.0, 16.0)),
+        corner,
+        color,
+    );
+    let c = egui::pos2(rect.right() - 6.0, rect.center().y);
+    ui.painter().add(egui::Shape::line(
+        vec![
+            c + Vec2::new(-3.0, -1.5),
+            c + Vec2::new(0.0, 1.5),
+            c + Vec2::new(3.0, -1.5),
+        ],
+        egui::Stroke::new(1.25, color),
+    ));
+    app_style::focus(ui, &response);
+    let response = response.on_hover_text(name);
+    if !enabled {
+        return None;
+    }
+    let mut picked = None;
+    egui::Popup::menu(&response)
+        .id(response.id.with("corners"))
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+        .align(egui::RectAlign::TOP_END)
+        .frame(app_style::popup_frame(ui))
+        .width(260.0)
+        .show(|ui| {
+            ui.set_width(260.0);
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(l.text("promote.corner_title"))
+                        .size(app_style::text::SMALL)
+                        .color(app_style::tokens(ui).text_2),
+                )
+                .wrap(),
+            );
+            ui.add_space(4.0);
+            if corner_row(
+                ui,
+                Corner::Auto,
+                l.text("promote.corner_auto"),
+                Some(l.text("promote.corner_auto_hint")),
+                corner == Corner::Auto,
+            )
+            .clicked()
+            {
+                picked = Some(Corner::Auto);
+            }
+            ui.separator();
+            for (c, key) in CORNERS {
+                if corner_row(ui, c, l.text(key), None, corner == c).clicked() {
+                    picked = Some(c);
+                }
+            }
+            if picked.is_some() {
+                ui.close();
+            }
+        });
+    picked
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

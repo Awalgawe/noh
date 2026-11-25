@@ -77,9 +77,11 @@ Use `--caption-safe-area youtube_shorts|tiktok|reels|universal|none` to apply th
 ### Promote NOH
 
 `--promote` (with `--project`, `--short` or `--burn-subtitles`) adds a small
-"made with NOH" signature at the bottom right of the picture, inside its safe
-area (a vertical picture without one keeps it inside the `universal` area).
-Bottom captions keep above it. It is off by default. A project with no captions
+"made with NOH" signature in a corner of the picture, inside its safe area (a
+vertical picture without one keeps it inside the `universal` area):
+`--promote-corner auto|top_left|top_right|bottom_left|bottom_right`, where
+`auto` (the default) is the bottom right, or the top left on a vertical
+picture. Captions on the signature's side keep clear of it. It is off by default. A project with no captions
 and no short is then encoded instead of copied. If this FFmpeg cannot draw the
 signature, the export is made again without it and a warning says so.
 
