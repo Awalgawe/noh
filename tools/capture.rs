@@ -38,6 +38,7 @@ const STATES: &[&str] = &[
     "lyrics-menu",
     "lyrics-generating",
     "lyrics-track-menu",
+    "promote-menu",
     "lyrics-lane-tip",
     "lyrics-screen",
     "lyrics-screen-cut",
@@ -364,6 +365,8 @@ const TWEAK_KEYS: &[&str] = &[
     "more",
     "font",
     "font_open",
+    "colour_open",
+    "promote",
 ];
 const DEFAULT_THEMES: &[&str] = &["dark", "light"];
 const DEFAULT_SCALES: &[&str] = &["1", "1.5", "2"];

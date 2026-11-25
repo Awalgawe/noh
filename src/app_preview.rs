@@ -476,6 +476,7 @@ impl NohApp {
             montage,
             short,
             captions,
+            promote: None,
         })
     }
     /// The light copies wait (see `preview_blocked`).
@@ -1281,6 +1282,25 @@ impl NohApp {
         if shown && self.mini_preview.source.is_none() && self.ready() {
             self.paint_effect(ui, monitor, scrub_visible);
             self.paint_try_tag(ui, monitor);
+        }
+        // « Promote NOH »: the mark over the picture, as every export burns it
+        // (with or without captions); the preview render never carries it.
+        if shown
+            && self.mini_preview.source.is_none()
+            && let Some((cw, ch)) = self.effect_canvas()
+        {
+            let area = self.project.apply_subtitles.then(|| {
+                self.project
+                    .effective_caption_style(self.mini_preview.short)
+                    .safe_area
+            });
+            let safe = noh::mark::safe_for(cw, ch, area);
+            let k = (monitor.width() / cw as f32).min(monitor.height() / ch as f32);
+            let picture = egui::Rect::from_center_size(
+                monitor.center(),
+                egui::vec2(cw as f32 * k, ch as f32 * k),
+            );
+            self.paint_promote(ui.painter(), picture, (cw, ch), safe);
         }
         if self.mini_preview.short && !self.project.hide_safe_area {
             paint_safe_area(ui, monitor, self.project.short_safe_area, l);

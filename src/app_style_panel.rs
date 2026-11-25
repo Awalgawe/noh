@@ -61,6 +61,8 @@ pub struct State {
     pub more: bool,
     /// Open the font picker's list on the next frame (capture and tests).
     pub font_open: bool,
+    /// Unfold the first colour setting's picker on the next frame (capture).
+    pub colour_open: bool,
     /// Scroll the settings to the font picker (capture: it may sit below the fold).
     pub font_reveal: bool,
     /// The picker's names drawn in their own faces.
@@ -1057,6 +1059,8 @@ impl super::NohApp {
         }
         let level2 = effect.params.iter().filter(|p| p.level == 2).count();
         let more = self.style_panel.more;
+        let recent = self.recent_colors.clone();
+        let mut remember = None;
         for p in effect.params.iter().filter(|p| p.level == 1 || more) {
             let value = current(&effect, &choice, p);
             let label = param_label(p, &lang);
@@ -1081,58 +1085,27 @@ impl super::NohApp {
                     }
                 }
                 "color" => {
-                    let mut swatches: Vec<Color32> = std::iter::once(&p.default)
+                    let mut swatches: Vec<(Color32, Option<&str>)> = Vec::new();
+                    for c in std::iter::once(&p.default)
                         .chain(effect.presets.iter().filter_map(|(_, v)| v.get(&p.id)))
                         .filter_map(color_of)
-                        .collect();
-                    swatches.dedup();
-                    let now = color_of(&value);
-                    ui.horizontal_wrapped(|ui| {
-                        for c in swatches {
-                            let (r, resp) =
-                                ui.allocate_exact_size(Vec2::splat(28.0), Sense::click());
-                            ui.painter().circle_filled(r.center(), 13.0, c);
-                            ui.painter().circle_stroke(
-                                r.center(),
-                                13.0,
-                                egui::Stroke::new(1.0, t.border_strong),
-                            );
-                            if now == Some(c) {
-                                ui.painter().circle_stroke(
-                                    r.center(),
-                                    16.0,
-                                    egui::Stroke::new(2.0, t.text),
-                                );
-                            }
-                            resp.widget_info(|| {
-                                egui::WidgetInfo::selected(
-                                    egui::WidgetType::RadioButton,
-                                    true,
-                                    now == Some(c),
-                                    hex(c),
-                                )
-                            });
-                            style::focus(ui, &resp);
-                            if resp.clicked() {
-                                next.values.insert(p.id.clone(), J::from(hex(c)));
-                            }
+                    {
+                        if !swatches.iter().any(|(s, _)| *s == c) {
+                            swatches.push((c, None));
                         }
-                        let mut free = now.unwrap_or(Color32::WHITE);
-                        ui.label(
-                            egui::RichText::new(l.text("style.other_color"))
-                                .size(style::text::SMALL)
-                                .color(t.text_2),
-                        );
-                        if egui::color_picker::color_edit_button_srgba(
-                            ui,
-                            &mut free,
-                            egui::color_picker::Alpha::Opaque,
-                        )
-                        .changed()
-                        {
-                            next.values.insert(p.id.clone(), J::from(hex(free)));
-                        }
-                    });
+                    }
+                    let now = color_of(&value).unwrap_or(Color32::WHITE);
+                    let owner = egui::Id::new(("style-colour", &p.id));
+                    if std::mem::take(&mut self.style_panel.colour_open) {
+                        super::app_color::open(ui.ctx(), owner, now);
+                    }
+                    let out = super::app_color::colour_row(ui, owner, &swatches, now, &recent, l);
+                    if let Some(c) = out.color {
+                        next.values.insert(p.id.clone(), J::from(hex(c)));
+                    }
+                    if out.remember.is_some() {
+                        remember = out.remember;
+                    }
                 }
                 "font" => self.font_picker(ui, p, &value, &mut next),
                 "palette" => {
@@ -1175,6 +1148,9 @@ impl super::NohApp {
         }
         if level2 > 0 && more_here {
             self.more_toggle(ui);
+        }
+        if let Some(r) = remember {
+            self.remember_color(r);
         }
         if next != choice {
             self.choose_effect(Some(next));

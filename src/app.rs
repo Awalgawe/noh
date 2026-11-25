@@ -3,6 +3,7 @@
 mod app_autoupdate;
 mod app_captions;
 mod app_capture;
+mod app_color;
 mod app_destination;
 mod app_diagnosis;
 mod app_driven;
@@ -27,6 +28,7 @@ mod app_preview;
 mod app_project;
 mod app_project_ops;
 mod app_project_ui;
+mod app_promote;
 mod app_range;
 mod app_resources;
 mod app_sheet;
@@ -69,6 +71,13 @@ struct NohApp {
     subtitles: app_subtitles::Workspace,
     resources: app_resources::State,
     locale: Locale,
+    /// « Promote NOH »: the « made with NOH » mark on every export, and its
+    /// corner (`app_promote`).
+    promote: bool,
+    promote_corner: noh::mark::Corner,
+    promote_color: noh::mark::Color,
+    /// The last hand-made colours of every colour component, newest first.
+    recent_colors: Vec<egui::Color32>,
     clips: Vec<Clip>,
     wav: Option<PathBuf>,
     output: Option<PathBuf>,
@@ -178,6 +187,43 @@ impl Default for NohApp {
             subtitles: app_subtitles::Workspace::default(),
             resources: app_resources::State::default(),
             locale: Locale::load(),
+            // Off unless the user ticked it once (tests never read the user's file).
+            promote: !cfg!(test)
+                && app_promote::read(
+                    noh::i18n::preferences_path()
+                        .map(|language| app_promote::path(&language))
+                        .as_deref(),
+                )
+                .0,
+            promote_corner: if cfg!(test) {
+                noh::mark::Corner::Auto
+            } else {
+                app_promote::read(
+                    noh::i18n::preferences_path()
+                        .map(|language| app_promote::path(&language))
+                        .as_deref(),
+                )
+                .1
+            },
+            promote_color: if cfg!(test) {
+                noh::mark::Color::WHITE
+            } else {
+                app_promote::read(
+                    noh::i18n::preferences_path()
+                        .map(|language| app_promote::path(&language))
+                        .as_deref(),
+                )
+                .2
+            },
+            recent_colors: if cfg!(test) {
+                Vec::new()
+            } else {
+                app_color::read(
+                    noh::i18n::preferences_path()
+                        .map(|language| app_color::path(&language))
+                        .as_deref(),
+                )
+            },
             clips: Vec::new(),
             wav: None,
             output: None,

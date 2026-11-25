@@ -33,6 +33,7 @@ pub mod inspection;
 pub mod jobs;
 pub mod languages;
 pub mod lyrics_input;
+pub mod mark;
 #[cfg(feature = "mcp")]
 pub mod mcp;
 pub mod media;

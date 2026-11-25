@@ -2277,6 +2277,31 @@ impl PluginScene {
         self
     }
 
+    /// The safe surface keeps clear of the « made with NOH » mark
+    /// (`crate::mark::caption_band`): it ends that far above the bottom edge,
+    /// or starts that far below the top edge. The surface only gets shorter,
+    /// as a safe area makes it; `@safe` keeps its value, so a style without a
+    /// safe area keeps its own margins.
+    pub fn with_mark_band(mut self, band: Option<crate::mark::Band>) -> Self {
+        let [x0, y0, sw, sh] = self.safe;
+        match band {
+            Some(crate::mark::Band::Bottom(b)) => {
+                let bottom = (self.h - b as f32).max(y0 + 1.0);
+                if y0 + sh > bottom {
+                    self.safe = [x0, y0, sw, bottom - y0];
+                }
+            }
+            Some(crate::mark::Band::Top(b)) => {
+                let top = (b as f32).min(y0 + sh - 1.0);
+                if top > y0 {
+                    self.safe = [x0, top, sw, y0 + sh - top];
+                }
+            }
+            None => {}
+        }
+        self
+    }
+
     /// Check letters against the whole canvas when no safe area applies (the
     /// `@safe` host value stays 0, so layouts are unchanged).
     pub fn with_frame_check(mut self) -> Self {

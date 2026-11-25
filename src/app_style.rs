@@ -1204,3 +1204,52 @@ pub fn select_chevron(ui: &Ui, rect: egui::Rect, _: &egui::style::WidgetVisuals,
         tokens(ui).text_2,
     );
 }
+
+/// A checkbox the size of a status line's small text (the export line's
+/// « Promote NOH »): the same box and check as `checkbox`, scaled to 12 px.
+pub fn small_checkbox(ui: &mut Ui, checked: &mut bool, label: &str) -> egui::Response {
+    let t = tokens(ui);
+    let color = if ui.is_enabled() { t.text_2 } else { t.text_3 };
+    let galley =
+        ui.painter()
+            .layout_no_wrap(label.into(), FontId::proportional(text::SMALL), color);
+    let size = Vec2::new(12.0 + 6.0 + galley.size().x, galley.size().y.max(14.0));
+    let (rect, mut response) = ui.allocate_exact_size(size, egui::Sense::click());
+    if response.clicked() {
+        *checked = !*checked;
+        response.mark_changed();
+    }
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(egui::WidgetType::Checkbox, ui.is_enabled(), *checked, label)
+    });
+    let boxed = egui::Rect::from_min_size(
+        egui::pos2(rect.left(), rect.center().y - 6.0),
+        Vec2::splat(12.0),
+    );
+    let painter = ui.painter();
+    if *checked {
+        painter.rect_filled(boxed, radius::S, t.accent);
+        painter.add(egui::Shape::line(
+            vec![
+                boxed.left_top() + Vec2::new(2.5, 6.25),
+                boxed.left_top() + Vec2::new(4.75, 8.5),
+                boxed.left_top() + Vec2::new(9.5, 3.75),
+            ],
+            Stroke::new(1.5, t.on_accent),
+        ));
+    } else {
+        painter.rect_stroke(
+            boxed.shrink(0.5),
+            radius::S,
+            Stroke::new(1.25, t.border_strong),
+            egui::StrokeKind::Middle,
+        );
+    }
+    painter.galley(
+        egui::pos2(boxed.right() + 6.0, rect.center().y - galley.size().y / 2.0),
+        galley,
+        color,
+    );
+    focus(ui, &response);
+    response
+}

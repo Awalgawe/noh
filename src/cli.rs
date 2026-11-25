@@ -87,6 +87,19 @@ pub struct Options {
     /// Caption placement preset (default: bottom).
     #[arg(long, value_parser = ["bottom", "top"], requires = "srt")]
     caption_placement: Option<String>,
+    /// « Promote NOH »: a small « made with NOH » signature at the bottom right
+    /// of the picture (--project, --short, --burn-subtitles; re-encodes a
+    /// montage that would otherwise be copied). Off by default.
+    #[arg(long)]
+    promote: bool,
+    /// The signature's corner with --promote (default: auto, bottom right or
+    /// top left on a vertical picture).
+    #[arg(long, value_parser = ["auto", "top_left", "top_right", "bottom_left", "bottom_right"], requires = "promote")]
+    promote_corner: Option<String>,
+    /// The signature's colour with --promote, `#RRGGBB` (default: white); its
+    /// opacity and stroke stay.
+    #[arg(long, value_parser = parse_color, requires = "promote")]
+    promote_color: Option<crate::mark::Color>,
     /// Protected caption region; conservative platform UI guides (default: none).
     #[arg(long, value_parser = ["none", "youtube_shorts", "tiktok", "reels", "universal"], requires = "srt")]
     caption_safe_area: Option<String>,
@@ -218,6 +231,18 @@ fn image_seconds(value: &std::ffi::OsStr) -> Result<f64, String> {
 }
 
 impl Options {
+    /// « Promote NOH »: the signature's corner, or None without --promote.
+    fn mark(&self) -> Option<crate::mark::Promote> {
+        self.promote.then(|| crate::mark::Promote {
+            corner: self
+                .promote_corner
+                .as_deref()
+                .and_then(|c| serde_json::from_value(serde_json::Value::String(c.into())).ok())
+                .unwrap_or_default(),
+            color: self.promote_color.unwrap_or_default(),
+        })
+    }
+
     fn caption_style(&self) -> crate::captions::CaptionStyle {
         use crate::captions::{CaptionPlacement, CaptionSize, CaptionStyle};
         if let Some(style) = self.chosen_style {
@@ -403,6 +428,10 @@ fn present(event: Event, machine_output: bool) -> Option<i32> {
 }
 
 /// Return an exit code; only the executable may terminate its caller.
+fn parse_color(text: &str) -> Result<crate::mark::Color, String> {
+    crate::mark::Color::parse(text).ok_or_else(|| format!("not a #RRGGBB colour: {text}"))
+}
+
 pub fn run(arguments: impl IntoIterator<Item = OsString>) -> i32 {
     let matches = match Options::command().try_get_matches_from(arguments) {
         Ok(matches) => matches,
@@ -448,6 +477,8 @@ pub fn run(arguments: impl IntoIterator<Item = OsString>) -> i32 {
     // The effect is checked first: a refused one leaves the subtitles and their
     // lyrics file untouched and asks nothing.
     let mut args = args;
+    // « Promote NOH »: read before the options are taken apart below.
+    let promote = args.mark();
     if let Err(error) = args.resolve_effect() {
         return start_error(&error, args.json);
     }
@@ -547,6 +578,7 @@ pub fn run(arguments: impl IntoIterator<Item = OsString>) -> i32 {
             short: project_short,
             effect: args.chosen_effect.clone(),
             captions: project_captions,
+            promote,
         })
     } else if let Some(level) = args.diagnose {
         CliOperation::Inspect(crate::inspection::InspectionRequest::Plan { request, level })
@@ -748,6 +780,7 @@ impl Options {
                     style: self.caption_style(),
                 }),
             preview: self.preview,
+            promote: self.mark(),
         }
     }
 }
@@ -790,6 +823,11 @@ fn scene_short(args: Options, ffmpeg: PathBuf) -> i32 {
         eprintln!("Error: select a nonempty interval within the first two hours of the source.");
         return 1;
     }
+    if args.promote {
+        eprintln!(
+            "Warning: the « made with NOH » mark is not drawn on a scene short (--framing scene); it is exported without it."
+        );
+    }
     let scene = args.scene.clone().unwrap();
     let request = crate::captions::CaptionRequest {
         scene: Some(crate::scene_request::SceneChoice {
@@ -804,6 +842,7 @@ fn scene_short(args: Options, ffmpeg: PathBuf) -> i32 {
         ffmpeg,
         style: args.caption_style(),
         preview: args.preview,
+        promote: None,
     };
     if let Err(error) = request.validate() {
         return start_error(&error, args.json);
@@ -818,6 +857,7 @@ fn scene_short(args: Options, ffmpeg: PathBuf) -> i32 {
 }
 
 fn burn_subtitles(args: Options) -> i32 {
+    let promote = args.mark();
     let style = args.caption_style();
     let ffmpeg = match crate::find_ffmpeg(args.ffmpeg.map(PathBuf::into_os_string)) {
         Ok(path) => path,
@@ -851,6 +891,7 @@ fn burn_subtitles(args: Options) -> i32 {
         ffmpeg,
         style,
         preview: args.preview,
+        promote,
     };
     run_job(
         CliOperation::Burn(request),

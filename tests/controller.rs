@@ -75,6 +75,7 @@ fn worker_short_requires_exactly_one_operation_and_no_montage_diagnosis() {
         framing: Default::default(),
         captions: None,
         preview: false,
+        promote: None,
     };
     let export = request(&f);
     let inspection = noh::inspection::InspectionRequest::Metadata {
@@ -91,6 +92,7 @@ fn worker_short_requires_exactly_one_operation_and_no_montage_diagnosis() {
         ffmpeg: f.ffmpeg.clone(),
         style: Default::default(),
         preview: false,
+        promote: None,
     };
     let subtitle = noh::subtitles::SubtitleRequest {
         source: f.path("speech.wav"),

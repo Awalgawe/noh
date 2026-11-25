@@ -1650,6 +1650,7 @@ mod tests {
                 effect: None,
                 motion: None,
                 captions: None,
+                promote: None,
             },
         }
     }

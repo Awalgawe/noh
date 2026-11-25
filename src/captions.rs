@@ -80,6 +80,10 @@ pub struct CaptionRequest {
     /// itself), by the GPU engine with no fallback; exclusive with `effect`.
     #[serde(default)]
     pub scene: Option<crate::scene_request::SceneChoice>,
+    /// « Promote NOH »: the « made with NOH » signature in this corner of the
+    /// picture (`crate::mark`). None: no signature (the default).
+    #[serde(default)]
+    pub promote: Option<crate::mark::Promote>,
 }
 
 impl CaptionRequest {
@@ -222,6 +226,9 @@ pub(crate) fn execute(
     // it by its framing (FFmpeg #1 then outputs the whole picture).
     let vertical = request.scene.as_ref().is_some_and(|s| s.vertical);
     let frame = crate::scene_request::scene_frame(vertical, canvas.size());
+    // « Promote NOH »: the mark on the final picture, and the captions above it.
+    let band = mark_band(request.promote, frame, request.style.safe_area, &workspace)?;
+    let canvas = canvas.keep_clear(band);
     if request.scene.is_some() {
         crate::scene_request::safe_area_required(frame.0, frame.1, request.style.safe_area)?;
     }
@@ -336,8 +343,11 @@ pub(crate) fn execute(
             if gpu && !gl_failed {
                 let style_safe = request.style.safe_area.insets(canvas.width, canvas.height);
                 let (head, tags, matrix) = crate::color::Plan::single_source_split(&media.video);
-                let finish: Vec<String> = tags
+                let finish: Vec<String> = request
+                    .promote
+                    .map(|_| crate::mark::FILTER.to_string())
                     .into_iter()
+                    .chain(tags)
                     .chain(request.preview.then(|| {
                         if vertical {
                             "scale=360:640".to_string()
@@ -382,6 +392,7 @@ pub(crate) fn execute(
                     encode: encode_args(request.preview, copy_audio, encoder),
                     deadline: timeout,
                     end: Some(range.map_or(media.video_end, |(a, b)| b - a)),
+                    band,
                 };
                 let failed = (
                     "error.caption_backend",
@@ -448,7 +459,12 @@ pub(crate) fn execute(
                     source,
                     &workspace,
                     &canvas,
-                    (request.preview, copy_audio, encoder),
+                    (
+                        request.preview,
+                        copy_audio,
+                        encoder,
+                        request.promote.is_some(),
+                    ),
                     &crate::color::Plan::single_source(&media.video),
                 );
                 let (status, log) = crate::process::stream(command, Some(timeout), false, |line| {
@@ -624,6 +640,24 @@ pub(crate) struct Canvas {
     alignment: u8,
 }
 impl Canvas {
+    /// Captions on the « made with NOH » mark's side keep clear of it
+    /// (`crate::mark::caption_band`): bottom captions end at least that far
+    /// above the bottom edge, top captions start at least that far below the
+    /// top edge. Captions on the other side are untouched.
+    pub(crate) fn keep_clear(mut self, band: Option<crate::mark::Band>) -> Self {
+        let top = self.alignment == 8;
+        let band = match band {
+            Some(crate::mark::Band::Bottom(b)) if !top => b,
+            Some(crate::mark::Band::Top(b)) if top => b,
+            _ => return self,
+        };
+        if band > self.margin_vertical {
+            self.max_height = (self.max_height - (band - self.margin_vertical) as f32).max(1.0);
+            self.margin_vertical = band;
+        }
+        self
+    }
+
     /// The canvas size in pixels (the source's displayed size, made even).
     pub(crate) fn size(&self) -> (u32, u32) {
         (self.width, self.height)
@@ -999,13 +1033,16 @@ fn render_command(
     source: &Path,
     workspace: &Path,
     canvas: &Canvas,
-    (preview, copy_audio, encoder): (bool, bool, VideoEncoder),
+    (preview, copy_audio, encoder, mark): (bool, bool, VideoEncoder, bool),
     color: &str,
 ) -> Command {
     let mut filter = format!(
         "{color},scale={}:{},setsar=1,{FILTER}",
         canvas.width, canvas.height
     );
+    if mark {
+        write!(filter, ",{}", crate::mark::FILTER).expect("Writing to String is infallible");
+    }
     if preview {
         write!(filter, ",{}", preview_scale(canvas)).expect("Writing to String is infallible");
     }
@@ -1038,6 +1075,25 @@ fn render_command(
         .args(["-progress", "pipe:1", "export.mp4"]);
     cmd
 }
+/// With « Promote NOH »: the mark staged in `workspace` for a `frame`-sized
+/// picture in its corner, and the edge the captions keep clear of. None
+/// without it.
+pub(crate) fn mark_band(
+    promote: Option<crate::mark::Promote>,
+    frame: (u32, u32),
+    area: crate::safe_area::SafeArea,
+    workspace: &Path,
+) -> Result<Option<crate::mark::Band>, EngineError> {
+    let Some(promote) = promote else {
+        return Ok(None);
+    };
+    let (w, h) = frame;
+    let safe = crate::mark::safe_for(w, h, Some(area));
+    crate::mark::stage(workspace, w, h, safe, promote)
+        .map_err(|e| error("error.caption_config", "stage_mark", Some(workspace), e))?;
+    Ok(Some(crate::mark::caption_band(w, h, safe, promote.corner)))
+}
+
 pub(crate) fn unsupported_renderer(log: &str) -> bool {
     log.contains(UNSUPPORTED_WRAP)
         || log.contains("failed to find any fallback with glyph")
@@ -1059,6 +1115,7 @@ mod tests {
             ffmpeg: "".into(),
             style: CaptionStyle::default(),
             preview: false,
+            promote: None,
         }
     }
     /// The libass routes' warning time: the start of the first cue holding a word
@@ -1232,6 +1289,32 @@ mod tests {
     }
 
     #[test]
+    fn the_mark_is_drawn_over_the_captions_before_a_preview_scale() {
+        let canvas = Canvas::new(1920.0, 1080.0, CaptionStyle::default()).unwrap();
+        let vf = |preview: bool, mark: bool| {
+            let cmd = render_command(
+                Path::new("ffmpeg"),
+                Path::new("source.mp4"),
+                Path::new("workspace"),
+                &canvas,
+                (preview, true, VideoEncoder::X264, mark),
+                "format=yuv420p",
+            );
+            let args: Vec<_> = cmd
+                .get_args()
+                .map(|s| s.to_string_lossy().into_owned())
+                .collect();
+            args[args.iter().position(|s| s == "-vf").unwrap() + 1].clone()
+        };
+        let marked = vf(true, true);
+        let captions = marked.find(FILTER).unwrap();
+        let mark = marked.find(crate::mark::FILTER).unwrap();
+        let scale = marked.rfind(",scale=").unwrap();
+        assert!(captions < mark && mark < scale, "{marked}");
+        assert!(!vf(true, false).contains(crate::mark::FILTER));
+    }
+
+    #[test]
     fn command_keeps_source_outside_filter_and_preserves_timeline() {
         let source = Path::new("C:\\folder 'comma, 日本語\\source.mp4");
         let canvas = Canvas::new(1080.0, 1920.0, CaptionStyle::default()).unwrap();
@@ -1240,7 +1323,7 @@ mod tests {
             source,
             Path::new("workspace"),
             &canvas,
-            (true, true, VideoEncoder::X264),
+            (true, true, VideoEncoder::X264, false),
             "format=yuv420p",
         );
         let args: Vec<_> = cmd

@@ -58,6 +58,10 @@ pub struct ShortRequest {
     /// line, MCP), drawn by the GPU engine with no libass fallback.
     #[serde(default)]
     pub effect: Option<crate::project::EffectChoice>,
+    /// « Promote NOH »: the « made with NOH » signature in this corner of the
+    /// picture (`crate::mark`). None: no signature (the default).
+    #[serde(default)]
+    pub promote: Option<crate::mark::Promote>,
 }
 
 fn error(code: &str, path: Option<&Path>, detail: impl ToString) -> EngineError {
@@ -200,6 +204,17 @@ pub(crate) fn execute(
         request.framing,
     )?;
     let mut has_captions = false;
+    // « Promote NOH »: the mark on the Short, and the captions above it.
+    let band = crate::captions::mark_band(
+        request.promote,
+        (OUTPUT_WIDTH, OUTPUT_HEIGHT),
+        request
+            .captions
+            .as_ref()
+            .map(|c| c.style.safe_area)
+            .unwrap_or_default(),
+        &workspace,
+    )?;
     // Classique draws the cues (Task 43); libass only without an OpenGL context.
     let mut classic: Option<(
         crate::subtitle_track::SubtitleTrack,
@@ -226,7 +241,8 @@ pub(crate) fn execute(
                 f64::from(OUTPUT_WIDTH),
                 f64::from(OUTPUT_HEIGHT),
                 captions.style,
-            )?;
+            )?
+            .keep_clear(band);
             if cfg!(feature = "effects") {
                 // Checked whatever draws them; libass's own limits only if it does.
                 crate::captions::check_timeline(&track, 0.0, span)?;
@@ -301,8 +317,11 @@ pub(crate) fn execute(
     if let Some((track, canvas, style)) = classic.take() {
         let style_safe = style.safe_area.insets(OUTPUT_WIDTH, OUTPUT_HEIGHT);
         let (head, tags, matrix) = crate::color::Plan::single_source_split(&media.video);
-        let finish: Vec<String> = tags
+        let finish: Vec<String> = request
+            .promote
+            .map(|_| crate::mark::FILTER.to_string())
             .into_iter()
+            .chain(tags)
             .chain(request.preview.then(|| "scale=360:640".to_string()))
             .collect();
         let start_text = format!("{start:.3}");
@@ -315,7 +334,7 @@ pub(crate) fn execute(
             workspace: workspace.clone(),
             input: vec!["-ss".into(), start_text],
             limit: vec!["-t".into(), span_text.clone()],
-            filter: format!("{head},{}", geometry.filter(false, false)),
+            filter: format!("{head},{}", geometry.filter(false, false, false)),
             finish: (!finish.is_empty()).then(|| finish.join(",")),
             size: (OUTPUT_WIDTH, OUTPUT_HEIGHT),
             matrix,
@@ -326,6 +345,7 @@ pub(crate) fn execute(
             deadline: timeout,
             // The seek puts the source's playback time `start` at zero.
             end: Some((media.video_end - start).min(span)),
+            band,
         };
         let failed = (
             "error.short_backend",
@@ -551,7 +571,9 @@ impl Geometry {
             framing,
         })
     }
-    pub(crate) fn filter(&self, captions: bool, preview: bool) -> String {
+    /// `mark`: the « made with NOH » signature, drawn over the captions at the
+    /// full size, before a preview's scale (`crate::mark::FILTER`).
+    pub(crate) fn filter(&self, captions: bool, mark: bool, preview: bool) -> String {
         let mut filter = format!("scale={}:{},setsar=1,", self.width, self.height);
         filter.push_str(match self.framing {
             Framing::Pad => "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black",
@@ -560,6 +582,10 @@ impl Geometry {
         if captions {
             filter.push(',');
             filter.push_str(crate::captions::FILTER);
+        }
+        if mark {
+            filter.push(',');
+            filter.push_str(crate::mark::FILTER);
         }
         if preview {
             filter.push_str(",scale=360:640");
@@ -628,7 +654,10 @@ fn render_command(
     captions: bool,
     color: &str,
 ) -> Command {
-    let filter = format!("{color},{}", geometry.filter(captions, request.preview));
+    let filter = format!(
+        "{color},{}",
+        geometry.filter(captions, request.promote.is_some(), request.preview)
+    );
     let start = format!("{:.3}", request.start_ms as f64 / 1000.0);
     let span = format!("{:.3}", (request.end_ms - request.start_ms) as f64 / 1000.0);
     let mut cmd = crate::command(ffmpeg);
@@ -669,6 +698,23 @@ fn render_command(
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_short_draws_the_mark_over_its_captions_before_the_preview_scale() {
+        let short = Geometry::new(1920.0, 1080.0, Framing::Pad).unwrap();
+        let filter = short.filter(true, true, true);
+        let captions = filter.find(crate::captions::FILTER).unwrap();
+        let mark = filter.find(crate::mark::FILTER).unwrap();
+        assert!(
+            captions < mark && filter.ends_with(&format!("{},scale=360:640", crate::mark::FILTER)),
+            "{filter}"
+        );
+        assert!(
+            !short
+                .filter(true, false, true)
+                .contains(crate::mark::FILTER)
+        );
+    }
+
     fn request() -> ShortRequest {
         ShortRequest {
             effect: None,
@@ -680,6 +726,7 @@ mod tests {
             framing: Framing::Pad,
             captions: None,
             preview: false,
+            promote: None,
         }
     }
 
@@ -690,7 +737,7 @@ mod tests {
             assert!(pad.width <= OUTPUT_WIDTH && pad.height <= OUTPUT_HEIGHT);
             let crop = Geometry::new(width, height, Framing::Crop).unwrap();
             assert!(crop.width >= OUTPUT_WIDTH && crop.height >= OUTPUT_HEIGHT);
-            let filter = crop.filter(true, true);
+            let filter = crop.filter(true, false, true);
             assert!(filter.find("crop=").unwrap() < filter.find("subtitles=").unwrap());
             assert!(filter.ends_with(",scale=360:640"));
         }

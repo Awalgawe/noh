@@ -61,6 +61,7 @@ fn request(f: &Fixture, effect: &str, preset: &str) -> ProjectRequest {
             subtitles: f.path("lyrics.srt"),
             style: CaptionStyle::default(),
         }),
+        promote: None,
     }
 }
 
@@ -192,6 +193,7 @@ fn without_opengl_classique_falls_back_to_libass_and_other_effects_fail() {
             style: CaptionStyle::default(),
             preview: false,
             effect: None,
+            promote: None,
         },
         f.exe.clone(),
         || {},
@@ -217,6 +219,7 @@ fn without_opengl_classique_falls_back_to_libass_and_other_effects_fail() {
             }),
             preview: false,
             effect: None,
+            promote: None,
         },
         f.exe.clone(),
         || {},

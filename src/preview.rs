@@ -1333,7 +1333,7 @@ fn project_command(
                 short.framing,
             )
             .map_err(engine_error)?
-            .filter(has_captions, false),
+            .filter(has_captions, false, false),
         );
     } else if has_captions {
         filter.push(crate::captions::FILTER.into());
@@ -1575,6 +1575,7 @@ mod tests {
             short: None,
             captions: None,
             effect: None,
+            promote: None,
         }
     }
     #[test]
@@ -1923,6 +1924,7 @@ fn main() {
             }),
             effect: None,
             captions: None,
+            promote: None,
         };
         let prepared = Prepared {
             snapshot: snapshot.clone(),
@@ -2023,6 +2025,7 @@ fn main() {
             short: None,
             effect: None,
             captions: None,
+            promote: None,
         };
         // The first clip is full range, as a phone or an action camera records.
         let info = |description: &str| crate::media::MediaInfo {
@@ -2141,6 +2144,7 @@ fn main() {
                 subtitles: subtitles.clone(),
                 style: crate::captions::CaptionStyle::default(),
             }),
+            promote: None,
         };
         let prepared = Prepared {
             snapshot: snapshot.clone(),

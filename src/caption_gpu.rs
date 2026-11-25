@@ -51,6 +51,9 @@ pub(crate) struct Job {
     pub deadline: Duration,
     /// The video's known end on FFmpeg #1's clock (the last frame's duration).
     pub end: Option<f64>,
+    /// « Promote NOH »: how far above the bottom edge the captions keep, clear
+    /// of the mark (`crate::mark::caption_band`); `finish` draws the mark.
+    pub band: Option<crate::mark::Band>,
 }
 
 /// A scene to draw: validated at the output's frames before FFmpeg starts.
@@ -197,7 +200,8 @@ pub(crate) fn run(
     )
     .with_values(&values)
     .map_err(|e| engine(dir, e))?
-    .with_safe_insets(job.style.safe_area.insets(w, h));
+    .with_safe_insets(job.style.safe_area.insets(w, h))
+    .with_mark_band(job.band);
     // Classique's letters never leave the picture by design; animated effects may.
     let scene = if job.effect.is_none() {
         scene.with_frame_check()
@@ -432,6 +436,7 @@ pub(crate) fn args(cmd: &Command) -> Vec<String> {
 #[cfg(test)]
 pub(crate) fn job_for_test(input: &[&str], finish: Option<&str>) -> Job {
     Job {
+        band: None,
         scene: None,
         source_size: None,
         ffmpeg: "ffmpeg".into(),
