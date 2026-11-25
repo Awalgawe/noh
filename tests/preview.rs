@@ -55,7 +55,7 @@ fn fixture() -> (Fixture, ProjectRequest) {
         effect: None,
         motion: None,
         captions: None,
-        promote: false,
+        promote: None,
     };
     (f, request)
 }
@@ -287,7 +287,7 @@ fn still_occurrences_follow_the_export_frame_grid_and_composite_alpha() {
         effect: None,
         motion: None,
         captions: None,
-        promote: false,
+        promote: None,
     };
     // At 25 fps, the 60 ms red occurrence rounds to two frames (80 ms).
     assert!(pixel(&frame(&project, 79), 32, 16)[0] > 200);
@@ -415,7 +415,7 @@ fn cursor_cold_and_eight_warm_seeks_on_thirty_minute_captioned_project() {
             subtitles: f.path("reviewed.srt"),
             style: CaptionStyle::default(),
         }),
-        promote: false,
+        promote: None,
     };
     let worker = FrameWorker::new(|| {});
     let mut timings = Vec::new();

@@ -154,7 +154,7 @@ fn burn(f: &Fixture, scene: &str, range_ms: Option<[u64; 2]>, out: &str) -> Vec<
             range_ms,
             vertical: false,
         }),
-        promote: false,
+        promote: None,
     };
     let job = Job::burn_with_worker(request, f.exe.clone(), || {});
     wait(&job)
@@ -178,7 +178,7 @@ fn short(f: &Fixture, scene: &str, range_ms: [u64; 2], out: &str) -> Vec<Event> 
             range_ms: Some(range_ms),
             vertical: true,
         }),
-        promote: false,
+        promote: None,
     };
     wait(&Job::burn_with_worker(request, f.exe.clone(), || {}))
 }
@@ -620,7 +620,7 @@ fn project(f: &Fixture, scene: &str, short: Option<[u64; 2]>, out: &str) -> Vec<
                 ..Default::default()
             },
         }),
-        promote: false,
+        promote: None,
     };
     wait(&Job::project_with_worker(request, f.exe.clone(), || {}))
 }

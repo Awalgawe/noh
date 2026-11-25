@@ -25,7 +25,7 @@ fn request(f: &Fixture, source: &Path, output: &Path, framing: Framing) -> Short
         framing,
         captions: None,
         preview: false,
-        promote: false,
+        promote: None,
     }
 }
 
