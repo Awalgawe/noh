@@ -53,7 +53,7 @@ pub(crate) struct Job {
     pub end: Option<f64>,
     /// « Promote NOH »: how far above the bottom edge the captions keep, clear
     /// of the mark (`crate::mark::caption_band`); `finish` draws the mark.
-    pub band: Option<u32>,
+    pub band: Option<crate::mark::Band>,
 }
 
 /// A scene to draw: validated at the output's frames before FFmpeg starts.
@@ -201,7 +201,7 @@ pub(crate) fn run(
     .with_values(&values)
     .map_err(|e| engine(dir, e))?
     .with_safe_insets(job.style.safe_area.insets(w, h))
-    .with_bottom_band(job.band);
+    .with_mark_band(job.band);
     // Classique's letters never leave the picture by design; animated effects may.
     let scene = if job.effect.is_none() {
         scene.with_frame_check()

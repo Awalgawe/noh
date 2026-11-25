@@ -1751,7 +1751,7 @@ mod tests {
             }),
             effect: None,
             captions: None,
-            promote: false,
+            promote: None,
         }
     }
 

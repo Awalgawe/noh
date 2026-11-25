@@ -66,7 +66,7 @@ fn main() {
                         style: Default::default(),
                     }),
                     preview: false,
-                    promote: false,
+                    promote: None,
                 })
             } else {
                 Operation::Captions(CaptionRequest {
@@ -78,7 +78,7 @@ fn main() {
                     ffmpeg: worker.clone(),
                     style: Default::default(),
                     preview: false,
-                    promote: false,
+                    promote: None,
                 })
             };
             let cancel = AtomicBool::new(false);
@@ -174,7 +174,7 @@ fn short_wire_is_optional_for_v1_and_roundtrips_without_changing_other_operation
         framing: crate::shorts::Framing::Crop,
         captions: None,
         preview: true,
-        promote: false,
+        promote: None,
     };
     let wire = WorkerRequest {
         shorts: Some(request.clone()),
@@ -207,7 +207,7 @@ fn pre_cancelled_short_never_validates_or_launches_a_worker() {
             framing: Default::default(),
             captions: None,
             preview: false,
-            promote: false,
+            promote: None,
         },
         folder.path().join("missing-worker"),
         Arc::new(AtomicBool::new(true)),
@@ -374,7 +374,7 @@ if (!$ready.WaitOne(10000)) { throw 'Child handshake timed out' }
                 framing: Default::default(),
                 captions: None,
                 preview: false,
-                promote: false,
+                promote: None,
             })
         } else if phase.starts_with("caption.") {
             Operation::Captions(CaptionRequest {
@@ -386,7 +386,7 @@ if (!$ready.WaitOne(10000)) { throw 'Child handshake timed out' }
                 ffmpeg: ffmpeg.clone(),
                 style: Default::default(),
                 preview: false,
-                promote: false,
+                promote: None,
             })
         } else {
             Operation::Export(request, None)

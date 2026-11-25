@@ -65,9 +65,9 @@ struct SceneKey {
     canvas: (u32, u32),
     /// Safe area insets on `canvas`, as at export.
     safe: Option<[u32; 4]>,
-    /// « Promote NOH »: the captions keep this far above the bottom edge, as
-    /// at export (`noh::mark::caption_band`).
-    band: Option<u32>,
+    /// « Promote NOH »: the edge the captions keep clear of, as at export
+    /// (`noh::mark::caption_band`).
+    band: Option<noh::mark::Band>,
 }
 
 struct Wanted {
@@ -260,7 +260,7 @@ impl State {
         range: Option<(u64, u64)>,
         canvas: (u32, u32),
         safe: Option<[u32; 4]>,
-        band: Option<u32>,
+        band: Option<noh::mark::Band>,
     ) {
         // An installed font is chosen: read the installed fonts (once) for the
         // preview; until they land it draws the plugin's own face.
@@ -512,7 +512,7 @@ fn scene_for(wanted: &Wanted, px_scale: f32) -> Result<PluginScene, String> {
     )
     .with_values(&wanted.key.choice.values)?
     .with_safe_insets(wanted.key.safe)
-    .with_bottom_band(wanted.key.band)
+    .with_mark_band(wanted.key.band)
     .with_px_scale(px_scale))
 }
 
@@ -663,7 +663,7 @@ impl super::NohApp {
         // With « Promote NOH », above the mark, as the export draws them.
         let band = self.promote.then(|| {
             let mark = noh::mark::safe_for(canvas.0, canvas.1, Some(area));
-            noh::mark::caption_band(canvas.0, canvas.1, mark)
+            noh::mark::caption_band(canvas.0, canvas.1, mark, self.promote_corner)
         });
         self.effects.want(
             &choice,

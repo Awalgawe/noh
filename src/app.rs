@@ -70,8 +70,10 @@ struct NohApp {
     subtitles: app_subtitles::Workspace,
     resources: app_resources::State,
     locale: Locale,
-    /// « Promote NOH »: the « made with NOH » mark on every export (`app_promote`).
+    /// « Promote NOH »: the « made with NOH » mark on every export, and its
+    /// corner (`app_promote`).
     promote: bool,
+    promote_corner: noh::mark::Corner,
     clips: Vec<Clip>,
     wav: Option<PathBuf>,
     output: Option<PathBuf>,
@@ -187,7 +189,18 @@ impl Default for NohApp {
                     noh::i18n::preferences_path()
                         .map(|language| app_promote::path(&language))
                         .as_deref(),
-                ),
+                )
+                .0,
+            promote_corner: if cfg!(test) {
+                noh::mark::Corner::Auto
+            } else {
+                app_promote::read(
+                    noh::i18n::preferences_path()
+                        .map(|language| app_promote::path(&language))
+                        .as_deref(),
+                )
+                .1
+            },
             clips: Vec::new(),
             wav: None,
             output: None,

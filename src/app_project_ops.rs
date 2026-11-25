@@ -177,7 +177,7 @@ impl NohApp {
                 captions,
                 // The mark is burned into exports; a preview render carries
                 // none (the monitor draws it live).
-                promote: self.promote && !previewing,
+                promote: (self.promote && !previewing).then_some(self.promote_corner),
             };
             request.validate()?;
             Ok(request)

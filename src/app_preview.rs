@@ -476,7 +476,7 @@ impl NohApp {
             montage,
             short,
             captions,
-            promote: false,
+            promote: None,
         })
     }
     /// The light copies wait (see `preview_blocked`).

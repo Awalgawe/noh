@@ -2277,17 +2277,27 @@ impl PluginScene {
         self
     }
 
-    /// The safe surface ends at least `band` pixels above the canvas's bottom
-    /// edge: the « made with NOH » mark's place (`crate::mark::caption_band`).
-    /// The surface only gets shorter, as a safe area makes it; `@safe` keeps
-    /// its value, so a style without a safe area keeps its own margins.
-    pub fn with_bottom_band(mut self, band: Option<u32>) -> Self {
-        if let Some(band) = band {
-            let [x0, y0, sw, sh] = self.safe;
-            let bottom = (self.h - band as f32).max(y0 + 1.0);
-            if y0 + sh > bottom {
-                self.safe = [x0, y0, sw, bottom - y0];
+    /// The safe surface keeps clear of the « made with NOH » mark
+    /// (`crate::mark::caption_band`): it ends that far above the bottom edge,
+    /// or starts that far below the top edge. The surface only gets shorter,
+    /// as a safe area makes it; `@safe` keeps its value, so a style without a
+    /// safe area keeps its own margins.
+    pub fn with_mark_band(mut self, band: Option<crate::mark::Band>) -> Self {
+        let [x0, y0, sw, sh] = self.safe;
+        match band {
+            Some(crate::mark::Band::Bottom(b)) => {
+                let bottom = (self.h - b as f32).max(y0 + 1.0);
+                if y0 + sh > bottom {
+                    self.safe = [x0, y0, sw, bottom - y0];
+                }
             }
+            Some(crate::mark::Band::Top(b)) => {
+                let top = (b as f32).min(y0 + sh - 1.0);
+                if top > y0 {
+                    self.safe = [x0, top, sw, y0 + sh - top];
+                }
+            }
+            None => {}
         }
         self
     }

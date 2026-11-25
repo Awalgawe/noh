@@ -51,10 +51,10 @@ pub struct ProjectRequest {
     /// captions it has nothing to draw and is ignored.
     #[serde(default)]
     pub motion: Option<crate::scene_request::ProjectScene>,
-    /// « Promote NOH »: the « made with NOH » signature at the bottom-right of
-    /// the picture (`crate::mark`). Off unless asked.
+    /// « Promote NOH »: the « made with NOH » signature in this corner of the
+    /// picture (`crate::mark`). None: no signature (the default).
     #[serde(default)]
-    pub promote: bool,
+    pub promote: Option<crate::mark::Corner>,
 }
 
 /// The effect plugin chosen for the captions: its folder, its id (checked when the
@@ -338,7 +338,7 @@ pub(crate) fn execute(
     // Retain packet copying and all existing full-montage behavior when no
     // composition is requested. The « made with NOH » mark is drawn on the
     // picture, so it needs one (the montage is then encoded, as asked).
-    if request.short.is_none() && request.captions.is_none() && !request.promote {
+    if request.short.is_none() && request.captions.is_none() && request.promote.is_none() {
         return crate::engine::execute(request.montage.clone(), workspace, emit);
     }
     let started = Instant::now();
@@ -504,7 +504,7 @@ pub(crate) fn execute(
                 f64::from(canvas_h),
                 captions.style,
             )?
-            .keep_above(band);
+            .keep_clear(band);
             if crate::captions::stage(&track, &canvas, 0.0, span, &workspace)? {
                 report.warning("caption.quantization");
             }
@@ -634,10 +634,10 @@ pub(crate) fn execute(
         tail
     };
     let mut fallback_filter = filter.clone();
-    fallback_filter.extend(tail(true, request.promote));
+    fallback_filter.extend(tail(true, request.promote.is_some()));
     let mut gpu_filter = filter.clone();
     gpu_filter.extend(tail(has_captions, false));
-    filter.extend(tail(has_captions, request.promote));
+    filter.extend(tail(has_captions, request.promote.is_some()));
     let audio = if montage.clip_audio {
         format!(
             "[0:a]aresample=48000:async=1:first_pts=0,apad,atrim=duration={span:.9}[clips];[1:a]asetpts=PTS-STARTPTS,aresample=48000,apad,atrim=duration={span:.9}[wav];[clips][wav]amix=inputs=2:duration=first:dropout_transition=0[a]"
@@ -729,7 +729,7 @@ pub(crate) fn execute(
             pass,
             track,
             video_filter: gpu_filter.join(","),
-            mark: request.promote,
+            mark: request.promote.is_some(),
             band,
             clip_audio: montage.clip_audio,
             audio: audio.clone(),
@@ -790,7 +790,7 @@ pub(crate) fn execute(
                         f64::from(canvas_h),
                         *style,
                     )?
-                    .keep_above(band);
+                    .keep_clear(band);
                     let quantized = crate::captions::stage(track, &canvas, 0.0, span, &workspace)?;
                     // Said once: an NVENC retry comes back through this branch.
                     if !fallback_said {
@@ -923,7 +923,7 @@ struct EffectJob<'a> {
     /// « Promote NOH »: FFmpeg #2 draws the mark over the captions, which keep
     /// `band` pixels above the bottom edge (`crate::mark`).
     mark: bool,
-    band: Option<u32>,
+    band: Option<crate::mark::Band>,
 }
 
 /// The effect that draws classic captions (it has a libass fallback).
@@ -1046,7 +1046,7 @@ fn job_layer(
     .with_values(&choice.values)
     .map_err(|e| error("error.effect", Some(&choice.dir), e))?
     .with_safe_insets(job.safe)
-    .with_bottom_band(job.band);
+    .with_mark_band(job.band);
     // Classique's letters never leave the picture by design: when they do, say so.
     // Animated effects may (Typographic composition slides words in from outside).
     let scene = if choice.id == CLASSIC {
@@ -1500,7 +1500,7 @@ mod tests {
                 style,
             }),
             effect,
-            promote: false,
+            promote: None,
         }
     }
 

@@ -58,10 +58,10 @@ pub struct ShortRequest {
     /// line, MCP), drawn by the GPU engine with no libass fallback.
     #[serde(default)]
     pub effect: Option<crate::project::EffectChoice>,
-    /// « Promote NOH »: the « made with NOH » signature at the bottom-right of
-    /// the picture (`crate::mark`). Off unless asked.
+    /// « Promote NOH »: the « made with NOH » signature in this corner of the
+    /// picture (`crate::mark`). None: no signature (the default).
     #[serde(default)]
-    pub promote: bool,
+    pub promote: Option<crate::mark::Corner>,
 }
 
 fn error(code: &str, path: Option<&Path>, detail: impl ToString) -> EngineError {
@@ -242,7 +242,7 @@ pub(crate) fn execute(
                 f64::from(OUTPUT_HEIGHT),
                 captions.style,
             )?
-            .keep_above(band);
+            .keep_clear(band);
             if cfg!(feature = "effects") {
                 // Checked whatever draws them; libass's own limits only if it does.
                 crate::captions::check_timeline(&track, 0.0, span)?;
@@ -319,7 +319,7 @@ pub(crate) fn execute(
         let (head, tags, matrix) = crate::color::Plan::single_source_split(&media.video);
         let finish: Vec<String> = request
             .promote
-            .then(|| crate::mark::FILTER.to_string())
+            .map(|_| crate::mark::FILTER.to_string())
             .into_iter()
             .chain(tags)
             .chain(request.preview.then(|| "scale=360:640".to_string()))
@@ -656,7 +656,7 @@ fn render_command(
 ) -> Command {
     let filter = format!(
         "{color},{}",
-        geometry.filter(captions, request.promote, request.preview)
+        geometry.filter(captions, request.promote.is_some(), request.preview)
     );
     let start = format!("{:.3}", request.start_ms as f64 / 1000.0);
     let span = format!("{:.3}", (request.end_ms - request.start_ms) as f64 / 1000.0);
@@ -709,7 +709,7 @@ mod tests {
             framing: Framing::Pad,
             captions: None,
             preview: false,
-            promote: false,
+            promote: None,
         }
     }
 

@@ -286,7 +286,7 @@ impl SceneClipInput {
                 range_ms: Some([self.start_ms, self.end_ms]),
                 vertical: self.vertical,
             }),
-            promote: false,
+            promote: None,
         };
         request.validate().map_err(SessionError::from)?;
         Ok(request)

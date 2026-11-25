@@ -1115,13 +1115,17 @@ fn run_scene(
 /// in a folder of its own, and says so. Any other failure, a cancel included,
 /// is the export's.
 fn marked(
-    promote: bool,
+    promote: Option<crate::mark::Corner>,
     workspace: &Path,
     write: &mut dyn FnMut(Event),
-    run: impl Fn(bool, &Path, &mut dyn FnMut(Event)) -> Result<ExportResult, EngineError>,
+    run: impl Fn(
+        Option<crate::mark::Corner>,
+        &Path,
+        &mut dyn FnMut(Event),
+    ) -> Result<ExportResult, EngineError>,
 ) -> Result<ExportResult, EngineError> {
     match run(promote, workspace, write) {
-        Err(error) if promote && crate::mark::failed(&error.technical) => {
+        Err(error) if promote.is_some() && crate::mark::failed(&error.technical) => {
             write(Event::Warning(crate::engine::Message {
                 code: crate::mark::SKIPPED.into(),
                 args: Vec::new(),
@@ -1130,7 +1134,7 @@ fn marked(
             std::fs::create_dir_all(&again).map_err(|e| {
                 EngineError::new("error.workspace", "retry_without_mark", Some(&again), e)
             })?;
-            run(false, &again, write)
+            run(None, &again, write)
         }
         other => other,
     }

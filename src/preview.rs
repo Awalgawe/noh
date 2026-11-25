@@ -1575,7 +1575,7 @@ mod tests {
             short: None,
             captions: None,
             effect: None,
-            promote: false,
+            promote: None,
         }
     }
     #[test]
@@ -1924,7 +1924,7 @@ fn main() {
             }),
             effect: None,
             captions: None,
-            promote: false,
+            promote: None,
         };
         let prepared = Prepared {
             snapshot: snapshot.clone(),
@@ -2025,7 +2025,7 @@ fn main() {
             short: None,
             effect: None,
             captions: None,
-            promote: false,
+            promote: None,
         };
         // The first clip is full range, as a phone or an action camera records.
         let info = |description: &str| crate::media::MediaInfo {
@@ -2144,7 +2144,7 @@ fn main() {
                 subtitles: subtitles.clone(),
                 style: crate::captions::CaptionStyle::default(),
             }),
-            promote: false,
+            promote: None,
         };
         let prepared = Prepared {
             snapshot: snapshot.clone(),
