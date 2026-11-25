@@ -559,7 +559,7 @@ pub struct ShortCaptionInput {
 #[serde(deny_unknown_fields)]
 pub struct ShortInput {
     /// « Promote NOH »: a small « made with NOH » signature in a corner of the
-    /// picture, inside its safe area. Off by default.
+    /// picture, inside its safe area. Off by default; refused with framing "scene".
     #[serde(default)]
     pub promote: bool,
     /// The signature's corner (default: auto, bottom right or top left on a
@@ -746,6 +746,11 @@ impl ShortInput {
         if captions.effect.is_some() || captions.size.is_some() || captions.placement.is_some() {
             return Err(refuse(
                 "A scene draws the lyrics itself: leave effect, size and placement out.",
+            ));
+        }
+        if self.promote {
+            return Err(refuse(
+                "The « made with NOH » mark is not drawn on a scene short (framing \"scene\"): leave promote out.",
             ));
         }
         if self.start_ms >= self.end_ms || self.end_ms > crate::shorts::MAX_SOURCE_MS {

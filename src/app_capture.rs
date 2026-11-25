@@ -895,6 +895,8 @@ pub struct Tweaks {
     pub font_open: bool,
     /// `colour_open=1`: the first colour setting's picker unfolded.
     pub colour_open: bool,
+    /// `promote=1`: « Promote NOH » ticked (not saved), the mark over the preview.
+    pub promote: bool,
     /// `motion=found|checking|use|refused|details`: the scene beside the song
     /// listed, or checked (with a click) until that state.
     pub motion: Option<String>,
@@ -928,6 +930,7 @@ pub fn parse_tweaks(value: &str) -> Result<Tweaks, String> {
             ("font", _) if !item.is_empty() => tweaks.font = Some(item.into()),
             ("font_open", "1") => tweaks.font_open = true,
             ("colour_open", "1") => tweaks.colour_open = true,
+            ("promote", "1") => tweaks.promote = true,
             ("motion", "found" | "checking" | "use" | "refused" | "details") => {
                 tweaks.motion = Some(item.into())
             }
@@ -2007,6 +2010,9 @@ impl NohApp {
                     .find(|c| c.id == id)
                     .unwrap_or_else(|| panic!("NOH_CAPTURE_TWEAKS: no effect {id:?}"));
                 self.choose_effect(Some(card));
+            }
+            if tweaks.promote {
+                self.promote = true;
             }
             if tweaks.style_settings && !self.style_panel.settings {
                 self.style_panel.settings = true;

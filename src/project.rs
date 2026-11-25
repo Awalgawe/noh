@@ -338,9 +338,79 @@ pub(crate) fn execute(
     // Retain packet copying and all existing full-montage behavior when no
     // composition is requested. The « made with NOH » mark is drawn on the
     // picture, so it needs one (the montage is then encoded, as asked).
-    if request.short.is_none() && request.captions.is_none() && request.promote.is_none() {
+    let mark_only = request.short.is_none() && request.captions.is_none();
+    if mark_only && request.promote.is_none() {
         return crate::engine::execute(request.montage.clone(), workspace, emit);
     }
+    if mark_only {
+        // The mark never refuses a montage the plain export takes: past the
+        // composition's own limits (two hours of WAV, frame rate and size,
+        // pieces), the montage is exported as before, without the mark. These
+        // limits are checked before anything is rendered.
+        return match compose(request, workspace, emit) {
+            Err(error) if error.code == "error.short_limit" => {
+                emit(Event::Warning(crate::engine::Message {
+                    code: crate::mark::SKIPPED.into(),
+                    args: Vec::new(),
+                }));
+                emit(Event::Diagnostic(format!(
+                    "The « made with NOH » mark was left out: {}",
+                    error.technical
+                )));
+                crate::engine::execute(request.montage.clone(), workspace, emit)
+            }
+            other => other,
+        };
+    }
+    compose(request, workspace, emit)
+}
+
+/// A composition's filter after its pieces: the short's geometry or the
+/// captions, the « made with NOH » mark over the captions at the full size,
+/// a preview's scale, then the colour tags. The GPU engine's FFmpeg #2 draws
+/// the mark instead (`effect_finish`), over its captions.
+fn filter_tail(
+    geometry: Option<&crate::shorts::Geometry>,
+    captions: bool,
+    mark: bool,
+    preview: bool,
+    color_tags: Option<&str>,
+) -> Vec<String> {
+    let mut tail = Vec::new();
+    if let Some(geometry) = geometry {
+        tail.push(geometry.filter(captions, mark, preview));
+    } else {
+        if captions {
+            tail.push(crate::captions::FILTER.into());
+        }
+        if mark {
+            tail.push(crate::mark::FILTER.into());
+        }
+        if preview {
+            tail.push("scale=w='max(2,trunc(min(640,min(iw,360*dar))/2)*2)':h='max(2,trunc(min(360,min(ih,640/dar))/2)*2)'".into());
+        }
+    }
+    tail.extend(color_tags.map(str::to_owned));
+    tail
+}
+
+/// FFmpeg #2's video filter after the GPU engine: the mark, then the colour
+/// tags, on the mapped stream (frames keep their values). None when neither.
+fn effect_finish(mark: bool, color_tags: Option<&str>) -> Option<String> {
+    let finish: Vec<&str> = mark
+        .then_some(crate::mark::FILTER)
+        .into_iter()
+        .chain(color_tags)
+        .collect();
+    (!finish.is_empty()).then(|| finish.join(","))
+}
+
+/// A composed export: a short, captions, or the « made with NOH » mark.
+fn compose(
+    request: &ProjectRequest,
+    workspace: &Path,
+    emit: &mut dyn FnMut(Event),
+) -> Result<ExportResult, EngineError> {
     let started = Instant::now();
     let snapshot = request.snapshot()?;
     let montage = &request.montage;
@@ -517,8 +587,10 @@ pub(crate) fn execute(
     snapshot.verify()?;
     report.warning(if request.short.is_some() {
         "short.reencode"
-    } else {
+    } else if request.captions.is_some() {
         "caption.reencode"
+    } else {
+        "project.reencode_mark"
     });
     if request
         .short
@@ -615,23 +687,14 @@ pub(crate) fn execute(
     // `mark`: the « made with NOH » signature, over the captions at the full
     // size. The GPU engine's FFmpeg #2 draws it instead (`run_effect`), over
     // its captions.
-    let tail = |captions: bool, mark: bool| -> Vec<String> {
-        let mut tail = Vec::new();
-        if let Some(geometry) = &geometry {
-            tail.push(geometry.filter(captions, mark, montage.preview));
-        } else {
-            if captions {
-                tail.push(crate::captions::FILTER.into());
-            }
-            if mark {
-                tail.push(crate::mark::FILTER.into());
-            }
-            if montage.preview {
-                tail.push("scale=w='max(2,trunc(min(640,min(iw,360*dar))/2)*2)':h='max(2,trunc(min(360,min(ih,640/dar))/2)*2)'".into());
-            }
-        }
-        tail.extend(color_tags.clone());
-        tail
+    let tail = |captions: bool, mark: bool| {
+        filter_tail(
+            geometry.as_ref(),
+            captions,
+            mark,
+            montage.preview,
+            color_tags.as_deref(),
+        )
     };
     let mut fallback_filter = filter.clone();
     fallback_filter.extend(tail(true, request.promote.is_some()));
@@ -1201,14 +1264,8 @@ fn run_effect(
         cmd.args(["-ss", &format!("{start:.9}"), "-i"])
             .arg(&wav2)
             .args(["-filter_complex", &audio, "-map", "0:v", "-map", "[a]"]);
-        // The mark, then the tags, on the mapped stream: frames keep their values.
-        let finish: Vec<&str> = mark
-            .then_some(crate::mark::FILTER)
-            .into_iter()
-            .chain(color_tags.as_deref())
-            .collect();
-        if !finish.is_empty() {
-            cmd.args(["-filter:v", &finish.join(",")]);
+        if let Some(finish) = effect_finish(mark, color_tags.as_deref()) {
+            cmd.args(["-filter:v", &finish]);
         }
         cmd.args([
             "-t",
@@ -1471,6 +1528,29 @@ fn run_command(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn the_mark_follows_the_captions_and_precedes_the_preview_scale_and_tags() {
+        let tags = Some("setparams=colorspace=bt709");
+        let plain = filter_tail(None, true, true, true, tags);
+        assert_eq!(plain[0], crate::captions::FILTER);
+        assert_eq!(plain[1], crate::mark::FILTER);
+        assert!(plain[2].starts_with("scale="));
+        assert_eq!(plain[3], tags.unwrap());
+        assert!(
+            !filter_tail(None, true, false, false, None).contains(&crate::mark::FILTER.to_string())
+        );
+        let short =
+            crate::shorts::Geometry::new(1920.0, 1080.0, crate::shorts::Framing::Crop).unwrap();
+        let tail = filter_tail(Some(&short), true, true, false, None);
+        assert_eq!(tail, vec![short.filter(true, true, false)]);
+        assert_eq!(
+            effect_finish(true, tags).as_deref(),
+            Some(format!("{},{}", crate::mark::FILTER, tags.unwrap()).as_str())
+        );
+        assert_eq!(effect_finish(false, tags).as_deref(), tags);
+        assert_eq!(effect_finish(false, None), None);
+    }
     use super::*;
 
     fn captioned(

@@ -1111,9 +1111,10 @@ fn run_scene(
 /// Called only by binary entry points. JSON is restricted to this transport.
 /// An export with the « made with NOH » mark (`crate::mark`): a promotion mark
 /// never fails an export. When the run fails because of the mark (no
-/// `subtitles` filter, libass refusing its script), it runs again without it,
-/// in a folder of its own, and says so. Any other failure, a cancel included,
-/// is the export's.
+/// `subtitles` filter, libass refusing its script), what that run left in the
+/// workspace goes and it runs again there without the mark (the controller
+/// publishes only the workspace's own `export.<ext>`), and says so. Any other
+/// failure, a cancel included, is the export's.
 fn marked(
     promote: Option<crate::mark::Promote>,
     workspace: &Path,
@@ -1124,20 +1125,46 @@ fn marked(
         &mut dyn FnMut(Event),
     ) -> Result<ExportResult, EngineError>,
 ) -> Result<ExportResult, EngineError> {
+    // What was there before the first run (the request, the controller's
+    // files) stays; a workspace that cannot be listed gets no retry.
+    let before = promote.and_then(|_| entries(workspace).ok());
     match run(promote, workspace, write) {
-        Err(error) if promote.is_some() && crate::mark::failed(&error.technical) => {
+        Err(error) if crate::mark::failed(&error.technical) && before.is_some() => {
+            // A workspace that cannot be cleared keeps the mark's own failure.
+            if remove_new(workspace, &before.unwrap_or_default()).is_err() {
+                return Err(error);
+            }
             write(Event::Warning(crate::engine::Message {
                 code: crate::mark::SKIPPED.into(),
                 args: Vec::new(),
             }));
-            let again = workspace.join("without-mark");
-            std::fs::create_dir_all(&again).map_err(|e| {
-                EngineError::new("error.workspace", "retry_without_mark", Some(&again), e)
-            })?;
-            run(None, &again, write)
+            run(None, workspace, write)
         }
         other => other,
     }
+}
+
+fn entries(folder: &Path) -> std::io::Result<std::collections::HashSet<std::ffi::OsString>> {
+    std::fs::read_dir(folder)?
+        .map(|entry| entry.map(|e| e.file_name()))
+        .collect()
+}
+
+/// Remove what `folder` holds beyond `before` (files and folders, links not
+/// followed).
+fn remove_new(
+    folder: &Path,
+    before: &std::collections::HashSet<std::ffi::OsString>,
+) -> std::io::Result<()> {
+    for name in entries(folder)?.difference(before) {
+        let path = folder.join(name);
+        if std::fs::symlink_metadata(&path)?.is_dir() {
+            std::fs::remove_dir_all(&path)?;
+        } else {
+            std::fs::remove_file(&path)?;
+        }
+    }
+    Ok(())
 }
 
 pub fn worker(path: &Path) -> i32 {

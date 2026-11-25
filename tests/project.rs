@@ -681,3 +681,46 @@ fn a_missing_installed_font_is_drawn_in_the_plugin_face_with_a_warning() {
     assert_eq!(warned, vec![vec![family.to_string()]], "{events:?}");
     assert!(f.path("font.mp4").exists());
 }
+
+/// The « made with NOH » mark alone never refuses a montage: past the
+/// composition's limits (here 250 fps), the montage is exported as before,
+/// without the mark, with a warning.
+#[test]
+fn a_montage_the_mark_cannot_compose_is_exported_without_it() {
+    let (f, mut request) = fixture();
+    f.ff(args![
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=0x555555:s=128x72:r=250:d=2",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        f.path("fast.mp4")
+    ]);
+    f.ff(args![
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=220:sample_rate=48000:duration=2",
+        "-c:a",
+        "pcm_s16le",
+        f.path("short.wav")
+    ]);
+    request.montage.items = vec![f.path("fast.mp4").into()];
+    request.montage.wav = f.path("short.wav");
+    request.montage.preview = false;
+    request.short = None;
+    request.captions = None;
+    request.promote = Some(noh::mark::Promote::default());
+    let events = run(&f, &request);
+    success(&events);
+    assert!(
+        events.iter().any(
+            |event| matches!(event, Event::Warning(message) if message.code == noh::mark::SKIPPED)
+        ),
+        "{events:?}"
+    );
+    assert!(request.montage.output.is_file());
+}

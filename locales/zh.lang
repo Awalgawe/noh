@@ -232,6 +232,7 @@ error.caption_result=渲染的字幕视频无效或不完整。
 caption.preparing=正在准备字幕…
 caption.rendering=正在渲染字幕…
 caption.reencode=导出时会重新编码视频以烧录字幕。
+project.reencode_mark=导出时会重新编码视频以绘制「made with NOH」标记。
 caption.audio_convert=第一条音轨将转换为 AAC，码率为 320 kbit/s。
 caption.multiple_audio=仅包含第一条音轨。
 caption.quantization=字幕端点按 10 ms 取整（差异最多 5 ms）。

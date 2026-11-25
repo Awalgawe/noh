@@ -578,3 +578,70 @@ fn words_beside(srt: &Path) {
     )
     .unwrap();
 }
+
+/// An FFmpeg that refuses the « made with NOH » mark's script the way libass
+/// does, and runs the real FFmpeg (named in `real-ffmpeg.txt` beside it) for
+/// everything else.
+fn ffmpeg_refusing_the_mark(f: &Fixture) -> std::path::PathBuf {
+    let folder = f.path("refusing");
+    std::fs::create_dir_all(&folder).unwrap();
+    let script = folder.join("refusing.rs");
+    let exe = folder.join(if cfg!(windows) {
+        "ffmpeg.exe"
+    } else {
+        "ffmpeg"
+    });
+    std::fs::write(
+        &script,
+        r#"use std::{env, fs, process::{exit, Command}};
+fn main() {
+    let real = fs::read_to_string(env::current_exe().unwrap().with_file_name("real-ffmpeg.txt")).unwrap();
+    let args: Vec<_> = env::args_os().skip(1).collect();
+    if args.iter().any(|a| a.to_string_lossy().contains("mark.ass")) {
+        eprintln!("[Parsed_subtitles_9 @ 0000000000000000] Unable to open mark.ass");
+        exit(1);
+    }
+    exit(Command::new(real.trim()).args(&args).status().unwrap().code().unwrap_or(1));
+}
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        folder.join("real-ffmpeg.txt"),
+        f.ffmpeg.to_string_lossy().as_bytes(),
+    )
+    .unwrap();
+    let mut compiler =
+        std::process::Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()));
+    compiler.arg(&script).arg("-o").arg(&exe);
+    #[cfg(all(windows, target_env = "gnu"))]
+    compiler.args(["-C", "linker=rust-lld", "-C", "linker-flavor=ld.lld"]);
+    let output = process::run(compiler, Duration::from_secs(120)).unwrap();
+    assert!(output.status.success(), "{}", support::log(&output));
+    exe
+}
+
+/// The mark fails, the export does not: it is made again without the mark
+/// and published where the controller reads it, with a warning.
+#[test]
+fn a_mark_that_fails_leaves_the_export_published_without_it() {
+    let f = Fixture::new();
+    let mut req = request(&f);
+    black(&f, &req.source, 640, 360, 2);
+    std::fs::write(
+        &req.subtitles,
+        "1\n00:00:00,200 --> 00:00:01,500\nUne ligne\n",
+    )
+    .unwrap();
+    req.ffmpeg = ffmpeg_refusing_the_mark(&f);
+    req.promote = Some(noh::mark::Promote::default());
+    let events = burn(&f, &req);
+    success(&events);
+    assert!(
+        events.iter().any(
+            |event| matches!(event, Event::Warning(message) if message.code == noh::mark::SKIPPED)
+        ),
+        "{events:?}"
+    );
+    assert!(f.duration(&req.output) > 1.5);
+}

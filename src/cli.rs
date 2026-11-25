@@ -823,6 +823,11 @@ fn scene_short(args: Options, ffmpeg: PathBuf) -> i32 {
         eprintln!("Error: select a nonempty interval within the first two hours of the source.");
         return 1;
     }
+    if args.promote {
+        eprintln!(
+            "Warning: the « made with NOH » mark is not drawn on a scene short (--framing scene); it is exported without it."
+        );
+    }
     let scene = args.scene.clone().unwrap();
     let request = crate::captions::CaptionRequest {
         scene: Some(crate::scene_request::SceneChoice {

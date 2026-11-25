@@ -232,6 +232,7 @@ error.caption_result=렌더링된 자막 영상이 잘못되었거나 불완전�
 caption.preparing=자막 준비 중…
 caption.rendering=자막 렌더링 중…
 caption.reencode=자막을 영상에 입히기 위해 내보내기 시 영상을 다시 인코딩합니다.
+project.reencode_mark=「made with NOH」 표시를 그리기 위해 내보내기 시 영상을 다시 인코딩합니다.
 caption.audio_convert=첫 번째 오디오 트랙을 AAC 320 kbit/s로 변환합니다.
 caption.multiple_audio=첫 번째 오디오 트랙만 포함됩니다.
 caption.quantization=자막 끝 시간을 10 ms 단위로 반올림합니다(최대 차이 5 ms).

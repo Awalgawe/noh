@@ -232,6 +232,7 @@ error.caption_result=Das gerenderte Ergebnis ist ungültig oder unvollständig.
 caption.preparing=Untertitel werden vorbereitet…
 caption.rendering=Untertitel werden gerendert…
 caption.reencode=Für den Export wird das Video zum Einbrennen der Untertitel neu kodiert.
+project.reencode_mark=Für den Export wird das Video neu kodiert, um die Signatur „made with NOH“ einzuzeichnen.
 caption.audio_convert=Die erste Audiospur wird mit 320 kbit/s in AAC umgewandelt.
 caption.multiple_audio=Nur die erste Audiospur wird übernommen.
 caption.quantization=Untertitelgrenzen werden auf 10 ms gerundet (maximal 5 ms Abweichung).

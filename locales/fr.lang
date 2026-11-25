@@ -232,6 +232,7 @@ error.caption_result=Le rendu des sous-titres est invalide ou incomplet.
 caption.preparing=Préparation des sous-titres…
 caption.rendering=Rendu des sous-titres…
 caption.reencode=Cette exportation réencode la vidéo pour incruster les sous-titres.
+project.reencode_mark=Cette exportation réencode la vidéo pour dessiner la signature « made with NOH ».
 caption.audio_convert=La première piste audio sera convertie en AAC à 320 kbit/s.
 caption.multiple_audio=Seule la première piste audio sera incluse.
 caption.quantization=Les limites des sous-titres sont arrondies à 10 ms (écart maximal : 5 ms).

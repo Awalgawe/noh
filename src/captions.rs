@@ -1289,6 +1289,32 @@ mod tests {
     }
 
     #[test]
+    fn the_mark_is_drawn_over_the_captions_before_a_preview_scale() {
+        let canvas = Canvas::new(1920.0, 1080.0, CaptionStyle::default()).unwrap();
+        let vf = |preview: bool, mark: bool| {
+            let cmd = render_command(
+                Path::new("ffmpeg"),
+                Path::new("source.mp4"),
+                Path::new("workspace"),
+                &canvas,
+                (preview, true, VideoEncoder::X264, mark),
+                "format=yuv420p",
+            );
+            let args: Vec<_> = cmd
+                .get_args()
+                .map(|s| s.to_string_lossy().into_owned())
+                .collect();
+            args[args.iter().position(|s| s == "-vf").unwrap() + 1].clone()
+        };
+        let marked = vf(true, true);
+        let captions = marked.find(FILTER).unwrap();
+        let mark = marked.find(crate::mark::FILTER).unwrap();
+        let scale = marked.rfind(",scale=").unwrap();
+        assert!(captions < mark && mark < scale, "{marked}");
+        assert!(!vf(true, false).contains(crate::mark::FILTER));
+    }
+
+    #[test]
     fn command_keeps_source_outside_filter_and_preserves_timeline() {
         let source = Path::new("C:\\folder 'comma, 日本語\\source.mp4");
         let canvas = Canvas::new(1080.0, 1920.0, CaptionStyle::default()).unwrap();

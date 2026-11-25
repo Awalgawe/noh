@@ -232,6 +232,7 @@ error.caption_result=The rendered caption output is invalid or incomplete.
 caption.preparing=Preparing captions…
 caption.rendering=Rendering captions…
 caption.reencode=This export re-encodes the video to render captions.
+project.reencode_mark=This export re-encodes the video to draw the « made with NOH » mark.
 caption.audio_convert=The first audio stream will be converted to AAC at 320 kbit/s.
 caption.multiple_audio=Only the first audio stream will be included.
 caption.quantization=Caption endpoints are rounded to 10 ms (up to 5 ms difference).

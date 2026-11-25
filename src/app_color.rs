@@ -40,6 +40,9 @@ pub struct Outcome {
     pub color: Option<Color32>,
     /// The colour came from a swatch of the row.
     pub from_row: bool,
+    /// The colour is the one chosen (a click, a drag's end, a key, a full hex
+    /// code, Escape): not a step of a drag. Callers that save save then.
+    pub settled: bool,
     /// A hand-made colour to keep among the recent ones.
     pub remember: Option<Remember>,
 }
@@ -137,6 +140,7 @@ pub fn colour_row(
                 if swatch(ui, *c, *c == current, &name).clicked() {
                     out.color = Some(*c);
                     out.from_row = true;
+                    out.settled = true;
                     state = None;
                 }
             }
@@ -421,8 +425,14 @@ fn picker(
         open.shown = c;
         open.hex = hex_text(c);
         out.color = Some(c);
+        out.settled = true;
     }
 
+    out.settled |= commit;
+    // A drag's end may move nothing: the colour is still handed over, settled.
+    if commit && out.color.is_none() {
+        out.color = Some(open.shown);
+    }
     if commit && !out.from_row {
         let c = open.shown;
         if !swatches.iter().any(|(s, _)| *s == c) {
@@ -439,6 +449,7 @@ fn picker(
         if open.before != current {
             out.color = Some(open.before);
         }
+        out.settled = true;
         out.remember = None;
         return false;
     }

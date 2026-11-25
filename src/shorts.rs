@@ -698,6 +698,23 @@ fn render_command(
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_short_draws_the_mark_over_its_captions_before_the_preview_scale() {
+        let short = Geometry::new(1920.0, 1080.0, Framing::Pad).unwrap();
+        let filter = short.filter(true, true, true);
+        let captions = filter.find(crate::captions::FILTER).unwrap();
+        let mark = filter.find(crate::mark::FILTER).unwrap();
+        assert!(
+            captions < mark && filter.ends_with(&format!("{},scale=360:640", crate::mark::FILTER)),
+            "{filter}"
+        );
+        assert!(
+            !short
+                .filter(true, false, true)
+                .contains(crate::mark::FILTER)
+        );
+    }
+
     fn request() -> ShortRequest {
         ShortRequest {
             effect: None,

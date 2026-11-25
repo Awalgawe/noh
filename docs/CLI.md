@@ -84,7 +84,11 @@ vertical picture without one keeps it inside the `universal` area):
 picture. `--promote-color '#RRGGBB'` sets its colour (white by default; its
 opacity and stroke stay). Captions on the signature's side keep clear of it. It is off by default. A project with no captions
 and no short is then encoded instead of copied. If this FFmpeg cannot draw the
-signature, the export is made again without it and a warning says so.
+signature, the export is made again without it and a warning says so; the same
+goes for a project with no captions and no short that the signature's
+composition cannot take (more than two hours, or too fast or too large a
+picture), which is then exported as before, copied. A scene short
+(`--framing scene`) is exported without the signature, with a warning.
 
 ### Caption effects
 

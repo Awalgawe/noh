@@ -8,7 +8,7 @@ Caption, short and project requests also accept `promote` (default `false`): a
 small "made with NOH" signature in a corner of the picture, as the CLI's
 `--promote` draws it, and `promote_corner` (`auto`, `top_left`, `top_right`,
 `bottom_left`, `bottom_right`; default `auto`) and `promote_color` (`#RRGGBB`,
-default white).
+default white). A short with framing `scene` refuses `promote`.
 
 The implementation uses the official Rust SDK behind the
 optional `mcp` feature and the same isolated job controller as the CLI and GUI.

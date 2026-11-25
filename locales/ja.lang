@@ -232,6 +232,7 @@ error.caption_result=描画された字幕動画が無効か不完全です。
 caption.preparing=字幕を準備中…
 caption.rendering=字幕を描画中…
 caption.reencode=字幕を焼き込むため、動画を再エンコードします。
+project.reencode_mark=「made with NOH」マークを描くため、動画を再エンコードします。
 caption.audio_convert=最初の音声トラックをAAC 320 kbit/sに変換します。
 caption.multiple_audio=最初の音声トラックのみを含めます。
 caption.quantization=字幕の端点は10 ms単位に丸められます（差は最大5 ms）。

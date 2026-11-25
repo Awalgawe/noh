@@ -72,18 +72,20 @@ impl NohApp {
         self.save_promote();
     }
 
-    /// Choose the mark's colour (its opacity and stroke stay): remembered.
-    /// With the box ticked, exports made in another colour are no longer
-    /// current; unticked, nothing changes.
-    pub(super) fn set_promote_color(&mut self, color: Color) {
-        if self.promote_color == color {
-            return;
+    /// Choose the mark's colour (its opacity and stroke stay). With the box
+    /// ticked, exports made in another colour are no longer current;
+    /// unticked, nothing changes. Remembered once `settled` (a drag in the
+    /// picker saves at its end, not on each frame).
+    pub(super) fn set_promote_color(&mut self, color: Color, settled: bool) {
+        if self.promote_color != color {
+            self.promote_color = color;
+            if self.promote {
+                self.outdate_marked_exports();
+            }
         }
-        self.promote_color = color;
-        if self.promote {
-            self.outdate_marked_exports();
+        if settled {
+            self.save_promote();
         }
-        self.save_promote();
     }
 
     fn outdate_marked_exports(&mut self) {
@@ -358,7 +360,8 @@ fn c32(c: Color) -> Color32 {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Pick {
     Corner(Corner),
-    Color(Color),
+    /// The colour, and whether it is settled (`app_color::Outcome::settled`).
+    Color(Color, bool),
 }
 
 /// The corner button that follows a ticked « Promote NOH » box: the corner's
@@ -471,14 +474,14 @@ pub fn corner_button(
                         l,
                     );
                     if let Some(c) = out.color {
-                        picked = Some(Pick::Color(Color(c.r(), c.g(), c.b())));
+                        picked = Some(Pick::Color(Color(c.r(), c.g(), c.b()), out.settled));
                     }
                     remember = out.remember;
                     // A corner, white or black closes the menu; other colours keep it
                     // open, so the mark can be watched while choosing.
                     let one_click = match picked {
                         Some(Pick::Corner(_)) => true,
-                        Some(Pick::Color(c)) => {
+                        Some(Pick::Color(c, _)) => {
                             out.from_row && (c == Color::WHITE || c == Color::BLACK)
                         }
                         None => false,
@@ -610,11 +613,17 @@ mod tests {
         let revision = app.revision;
         app.export_artifact = artifact(revision);
         app.preview_artifact = artifact(revision);
-        app.set_promote_color(Color::BLACK);
+        app.set_promote_color(Color::BLACK, true);
         assert_eq!(app.export_artifact.as_ref().unwrap().revision, revision);
         app.set_promote(true);
         app.export_artifact = artifact(app.revision);
-        app.set_promote_color(Color(0xE0, 0x6C, 0x3C));
+        app.set_promote_color(Color(0xE0, 0x6C, 0x3C), false);
+        // A step of a drag is not saved yet; its end is.
+        assert_eq!(
+            read(Some(&path(app.locale.path.as_deref().unwrap()))).2,
+            Color::BLACK
+        );
+        app.set_promote_color(Color(0xE0, 0x6C, 0x3C), true);
         assert_ne!(app.export_artifact.as_ref().unwrap().revision, app.revision);
         assert_eq!(
             app.preview_artifact.as_ref().unwrap().revision,

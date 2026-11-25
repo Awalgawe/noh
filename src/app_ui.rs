@@ -981,15 +981,38 @@ impl NohApp {
                                         app_icons::Icon::Folder,
                                         t.text_3,
                                     );
-                                    ui.add(
-                                        egui::Label::new(
-                                            RichText::new(&destination_text)
-                                                .size(style::text::SMALL)
-                                                .color(t.text_2),
+                                    // The tag and « Changer… » keep their room: on a
+                                    // narrow line only the destination shortens.
+                                    let small = |text: &str| {
+                                        ui.painter()
+                                            .layout_no_wrap(
+                                                text.into(),
+                                                egui::FontId::proportional(style::text::SMALL),
+                                                t.text_2,
+                                            )
+                                            .size()
+                                            .x
+                                    };
+                                    let mut keep = 0.0;
+                                    if let Some(tag) = &bar.tag {
+                                        keep += small(&tag.render(l)) + 12.0 + space::S;
+                                    }
+                                    if view.operation == Operation::Idle && bar.change {
+                                        keep += small(l.text("bar.change")) + space::S;
+                                    }
+                                    let room = (ui.available_width() - keep).max(0.0);
+                                    ui.scope(|ui| {
+                                        ui.set_max_width(room);
+                                        ui.add(
+                                            egui::Label::new(
+                                                RichText::new(&destination_text)
+                                                    .size(style::text::SMALL)
+                                                    .color(t.text_2),
+                                            )
+                                            .truncate(),
                                         )
-                                        .truncate(),
-                                    )
-                                    .on_hover_text(shown.display().to_string());
+                                        .on_hover_text(shown.display().to_string());
+                                    });
                                     if let Some(tag) = &bar.tag {
                                         style::tag(ui, &tag.render(l), true);
                                     }
@@ -1509,7 +1532,9 @@ impl NohApp {
         }
         match promote_pick.get() {
             Some(app_promote::Pick::Corner(corner)) => self.set_promote_corner(corner),
-            Some(app_promote::Pick::Color(color)) => self.set_promote_color(color),
+            Some(app_promote::Pick::Color(color, settled)) => {
+                self.set_promote_color(color, settled)
+            }
             None => {}
         }
         if let Some(remember) = promote_remember.get() {

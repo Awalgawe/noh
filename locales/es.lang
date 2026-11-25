@@ -232,6 +232,7 @@ error.caption_result=El resultado renderizado no es válido o está incompleto.
 caption.preparing=Preparando subtítulos…
 caption.rendering=Renderizando subtítulos…
 caption.reencode=La exportación vuelve a codificar el vídeo para incrustar los subtítulos.
+project.reencode_mark=La exportación vuelve a codificar el vídeo para dibujar la firma «made with NOH».
 caption.audio_convert=La primera pista de audio se convertirá a AAC a 320 kbit/s.
 caption.multiple_audio=Solo se incluirá la primera pista de audio.
 caption.quantization=Los extremos se redondean a 10 ms (hasta 5 ms de diferencia).
