@@ -220,3 +220,73 @@ fn ordinary_cues_stay_inside_the_picture_with_classique() {
         }
     }
 }
+
+/// The « made with NOH » mark moves Classique's line clear of its band; letters
+/// below that line box (descenders, the outline) are still inside the picture, or
+/// inside the safe area when one is set, so an ordinary cue says nothing about
+/// leaving it, whatever the mark's corner.
+#[test]
+fn the_mark_band_raises_no_warning_on_ordinary_cues_with_classique() {
+    use crate::mark::{Corner, caption_band, safe_for};
+    use crate::safe_area::SafeArea;
+    let mut fonts = Fonts::load().unwrap();
+    let cues = ["a short day", "and the city lights keep falling down on me"];
+    let lines: Vec<Line> = cues
+        .iter()
+        .enumerate()
+        .map(|(k, c)| {
+            split_words(
+                k as f64 * 2.5,
+                k as f64 * 2.5 + 2.4,
+                &c.split_whitespace().map(str::to_string).collect::<Vec<_>>(),
+                " ",
+            )
+        })
+        .collect();
+    for (w, h, area) in [
+        (1920u32, 1080u32, None),
+        (1080, 1920, None),
+        (1920, 1080, Some(SafeArea::Universal)),
+        (1080, 1920, Some(SafeArea::Universal)),
+        (1080, 1920, Some(SafeArea::YoutubeShorts)),
+    ] {
+        for corner in [
+            Corner::BottomRight,
+            Corner::BottomLeft,
+            Corner::TopLeft,
+            Corner::TopRight,
+        ] {
+            let band = caption_band(w, h, safe_for(w, h, area), corner);
+            for size in ["small", "medium", "large"] {
+                for place in ["bottom", "top"] {
+                    let values = [
+                        ("size".to_string(), serde_json::json!(size)),
+                        ("placement".to_string(), serde_json::json!(place)),
+                    ]
+                    .into_iter()
+                    .collect();
+                    let mut scene = PluginScene::new(
+                        super::catalog::builtin_classic(),
+                        w,
+                        h,
+                        lines.clone(),
+                        None,
+                    )
+                    .with_values(&values)
+                    .unwrap()
+                    .with_safe_insets(area.and_then(|a| a.insets(w, h)))
+                    .with_mark_band(Some(band))
+                    .with_frame_check();
+                    let out = (0..10 * 5).map(|f| f as f64 / 10.0).find(|t| {
+                        scene.frame(&mut fonts, &NoGpu, *t);
+                        scene.overflowed()
+                    });
+                    assert!(
+                        out.is_none(),
+                        "Classique {size} {place} at {w}x{h}, {area:?}, mark {corner:?}: outside at {out:?} s"
+                    );
+                }
+            }
+        }
+    }
+}

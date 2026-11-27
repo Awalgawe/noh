@@ -40,6 +40,24 @@ fn cancelled() -> EngineError {
 }
 
 impl NohApp {
+    /// Whether this run is the plain montage export (`start`): no short, no
+    /// captions on the video, and no « made with NOH » mark to draw. The mark
+    /// is drawn on the picture, so a marked export goes through the
+    /// composition like captions do; a preview never carries it (the monitor
+    /// draws it live).
+    fn plain_montage(&self, previewing: bool, short: bool) -> bool {
+        !short && !self.project.apply_subtitles && (previewing || !self.promote)
+    }
+
+    /// The mark a composition burns: the setting's, on exports only; a preview
+    /// render carries none (the monitor draws it live).
+    fn export_promote(&self, previewing: bool) -> Option<noh::mark::Promote> {
+        (self.promote && !previewing).then_some(noh::mark::Promote {
+            corner: self.promote_corner,
+            color: self.promote_color,
+        })
+    }
+
     pub(super) fn start_project(&mut self, ctx: &egui::Context, previewing: bool, short: bool) {
         if self.job.is_some()
             || self.cancelling
@@ -61,7 +79,7 @@ impl NohApp {
             return;
         };
         self.mini_preview.invalidate();
-        if !short && !self.project.apply_subtitles {
+        if self.plain_montage(previewing, short) {
             self.start(ctx, previewing);
             if self.job.is_some() {
                 if previewing {
@@ -70,6 +88,14 @@ impl NohApp {
                     self.project.full_export_artifact = None;
                 }
             }
+            return;
+        }
+        // A marked montage takes the composition instead of `start`; it keeps
+        // `start`'s rule that an export needs the current check.
+        if !previewing && !short && !self.project.apply_subtitles && !self.diagnosis_current() {
+            // As `start`: the bar shows a failure of this revision.
+            self.failure_revision = Some(self.revision);
+            self.error = Some("diagnosis.required".into());
             return;
         }
         self.operation_revision = self.revision;
@@ -175,12 +201,7 @@ impl NohApp {
                 short: selected,
                 effect,
                 captions,
-                // The mark is burned into exports; a preview render carries
-                // none (the monitor draws it live).
-                promote: (self.promote && !previewing).then_some(noh::mark::Promote {
-                    corner: self.promote_corner,
-                    color: self.promote_color,
-                }),
+                promote: self.export_promote(previewing),
             };
             request.validate()?;
             Ok(request)
@@ -803,6 +824,85 @@ mod tests {
                 "the current missing-media error is retained"
             );
         }
+    }
+    #[test]
+    fn a_marked_montage_export_goes_through_the_composition() {
+        let mut app = NohApp::default();
+        app.promote = false;
+        assert!(app.plain_montage(false, false));
+        assert!(app.plain_montage(true, false));
+        app.promote = true;
+        // The export draws the mark; the preview leaves it to the monitor.
+        assert!(!app.plain_montage(false, false));
+        assert!(app.plain_montage(true, false));
+        // Captions on the video or a short always compose.
+        app.project.apply_subtitles = true;
+        assert!(!app.plain_montage(false, false));
+        app.project.apply_subtitles = false;
+        assert!(!app.plain_montage(false, true));
+        // What the composition burns: the setting's mark, on exports only.
+        app.promote_corner = noh::mark::Corner::BottomLeft;
+        app.promote_color = noh::mark::Color(0xE8, 0x44, 0x3A);
+        assert_eq!(
+            app.export_promote(false),
+            Some(noh::mark::Promote {
+                corner: noh::mark::Corner::BottomLeft,
+                color: noh::mark::Color(0xE8, 0x44, 0x3A),
+            })
+        );
+        assert_eq!(app.export_promote(true), None);
+        app.promote = false;
+        assert_eq!(app.export_promote(false), None);
+    }
+
+    /// A montage with the mark and no captions starts the composition (it
+    /// used to start the plain export, which has no mark); without the
+    /// current check it says so, as the plain export does.
+    #[test]
+    fn a_marked_montage_export_starts_the_composition_once_checked() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut app = NohApp::default();
+        app.worker = folder.path().join("no-worker.exe");
+        let mut info = noh::media::MediaInfo::default();
+        info.seconds = 5.0;
+        info.width = 1280;
+        info.height = 720;
+        app.clips = vec![Clip {
+            id: 1,
+            request_id: 1,
+            item: folder.path().join("a.mp4").into(),
+            info: Some(info),
+            error: None,
+        }];
+        app.wav = Some(folder.path().join("song.wav"));
+        app.wav_seconds = Some(30.0);
+        app.project.duration_ms = 30_000;
+        app.output = Some(folder.path().join("song_noh.mp4"));
+        app.promote = true;
+        let ctx = egui::Context::default();
+        app.start_project(&ctx, false, false);
+        assert_eq!(app.error, Some("diagnosis.required".into()));
+        assert!(app.project.running.is_none() && app.job.is_none());
+        app.error = None;
+        let request = app.diagnostic_request().unwrap();
+        app.diagnosis = Some(Box::new(noh::inspection::Diagnosis {
+            version: 1,
+            level: noh::inspection::Level::Exact,
+            request,
+            snapshot: noh::inspection::Snapshot(vec![]),
+            duration: 30.0,
+            container: "mp4".into(),
+            audio: "aac_320".into(),
+            quick_media: vec![],
+            notes: vec![],
+            plan: None,
+        }));
+        app.diagnosis_revision = Some(app.revision);
+        app.start_project(&ctx, false, false);
+        assert!(app.error.is_none(), "{:?}", app.error);
+        let running = app.project.running.as_ref().expect("the composition runs");
+        assert!(!running.preview && !running.short);
+        assert!(app.job.is_none(), "not the plain export");
     }
     #[test]
     fn a_stale_working_file_moves_the_subtitles_to_the_next_name() {
