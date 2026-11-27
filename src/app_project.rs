@@ -145,6 +145,7 @@ impl State {
         if self.input.as_ref() != Some(&input) {
             self.range_moved = false;
             self.input = Some(input);
+            self.track.ffmpeg = ffmpeg.cloned().unwrap_or_default();
             self.watched = None;
             self.watched_at = None;
             self.track.invalidate();
@@ -412,6 +413,22 @@ mod tests {
         let revision = state.track.revision;
         state.sync_inputs(3, Some(&wav), None, None, &ctx);
         assert_eq!(state.track.revision, revision);
+    }
+
+    /// The lyrics check reads the song's length with the project's FFmpeg, as
+    /// the waveform does: a song whose copy left the cache is decoded with it.
+    #[test]
+    fn the_lyrics_check_uses_the_projects_ffmpeg() {
+        let ctx = eframe::egui::Context::default();
+        let song = PathBuf::from("song.mp3");
+        let chosen = PathBuf::from("chosen/ffmpeg");
+        let mut state = State::default();
+        state.sync_inputs(1, Some(&song), Some(&chosen), Some(10.0), &ctx);
+        assert_eq!(state.track.ffmpeg, chosen);
+        state.attach("song.srt".into(), Some(&song));
+        assert_eq!(state.track.pending_ffmpeg(), Some(chosen.as_path()));
+        state.sync_inputs(2, Some(&song), None, Some(10.0), &ctx);
+        assert_eq!(state.track.ffmpeg, PathBuf::new());
     }
 
     #[test]

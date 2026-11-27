@@ -7,7 +7,7 @@ use noh::{
 };
 use std::{
     io::Read,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{
         Arc,
         mpsc::{self, Receiver},
@@ -20,6 +20,8 @@ struct Request {
     generation: u64,
     path: PathBuf,
     wav: PathBuf,
+    /// The FFmpeg chosen for this project (empty: NOH's own).
+    ffmpeg: PathBuf,
     duration_ms: u64,
     /// An attach: an .srt alone gets its lyrics file (decision B). A reload
     /// after a change on disk does not: a deleted lyrics file is rewritten from
@@ -86,6 +88,9 @@ enum Reply {
 pub struct Attachment {
     /// Last successfully attached track (or the initial candidate when none is loaded).
     pub path: Option<PathBuf>,
+    /// The FFmpeg the project uses (empty: NOH's own), set with its inputs. A
+    /// song whose copy left the cache is decoded again with it to check its length.
+    pub ffmpeg: PathBuf,
     pub loaded: Option<Loaded>,
     pub error: Option<EngineError>,
     /// A read failed since the app last looked: `error` is new (taken by the
@@ -112,6 +117,11 @@ pub struct Attachment {
 }
 
 impl Attachment {
+    /// The FFmpeg a requested read will use, before it starts.
+    #[cfg(test)]
+    pub fn pending_ffmpeg(&self) -> Option<&std::path::Path> {
+        self.pending.as_ref().map(|r| r.ffmpeg.as_path())
+    }
     pub fn validating(&self) -> bool {
         self.pending.is_some()
             || self.reading
@@ -201,6 +211,7 @@ impl Attachment {
             generation: self.generation,
             path,
             wav,
+            ffmpeg: self.ffmpeg.clone(),
             duration_ms,
             create: true,
         });
@@ -370,9 +381,9 @@ fn load(request: &Request) -> Result<Loaded, EngineError> {
         )
     };
     let wav_stamp = FileStamp::read(&request.wav)?;
-    // The song's length as its WAV gives it (an MP3's copy, made when it was
-    // dropped, is found again here; NOH's own FFmpeg remakes one if it is gone).
-    let actual_duration = noh::song::duration(&request.wav, Path::new(""), &|| false)
+    // The song's length as its WAV gives it: an MP3's copy, made when it was
+    // dropped, is found again here, or made again with the project's FFmpeg.
+    let actual_duration = noh::song::duration(&request.wav, &request.ffmpeg, &|| false)
         .map_err(|e| error(e.to_string()))?;
     if (actual_duration * 1_000.0).round() as u64 != request.duration_ms {
         return Err(EngineError::new(
@@ -654,6 +665,7 @@ mod tests {
                 generation: 1,
                 path,
                 wav,
+                ffmpeg: PathBuf::new(),
                 duration_ms: 20_000,
                 create: true,
             },

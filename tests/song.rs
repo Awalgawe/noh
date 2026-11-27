@@ -15,15 +15,20 @@ const FRAMES: usize = 88_200;
 const CLICK: usize = 30_000;
 const AAC_FRAME: usize = 1024;
 
-/// Song copies go to a cache folder of this test run, never the user's.
+/// Song copies go to a cache folder of these tests, never the user's: one
+/// folder in Cargo's test directory under `target`, emptied when a run starts,
+/// so that no run leaves a folder in the system's temporary directory.
 fn private_cache() {
     static CACHE: Once = Once::new();
     CACHE.call_once(|| {
-        let folder = tempfile::Builder::new()
-            .prefix("noh-song-cache-")
-            .tempdir()
-            .unwrap()
-            .keep();
+        let folder = Path::new(env!("CARGO_TARGET_TMPDIR")).join("song-cache");
+        match std::fs::remove_dir_all(&folder) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                panic!("cannot empty {}: {error}", folder.display())
+            }
+            _ => {}
+        }
+        std::fs::create_dir_all(&folder).unwrap();
         // SAFETY: every test calls this first and `Once` makes the others wait,
         // so no thread of this binary reads the environment meanwhile.
         unsafe { std::env::set_var("NOH_CACHE_DIR", folder) };
