@@ -3587,7 +3587,16 @@ impl PluginScene {
                                     ((g.sprite.w - 2.0 * pad).max(0.0) * 0.5 + inst.params[2]) * sx,
                                     ((g.sprite.h - 2.0 * pad).max(0.0) * 0.5 + inst.params[2]) * s,
                                 ];
-                                *overflow = ink_outside(inst.center, half, glyph_rot, self.safe);
+                                // Without a safe area only the picture bounds the
+                                // letters: the mark's band moves the line (`layout`),
+                                // and a descender or outline below that line box is
+                                // still inside the picture.
+                                let bounds = if self.checked {
+                                    self.safe
+                                } else {
+                                    [0.0, 0.0, self.w, self.h]
+                                };
+                                *overflow = ink_outside(inst.center, half, glyph_rot, bounds);
                             }
                             if let Some(wp) = st.wipe {
                                 let c2 = st
