@@ -566,7 +566,7 @@ impl Drop for Claim<'_> {
     }
 }
 
-fn cache_folder() -> Option<PathBuf> {
+pub(crate) fn cache_folder() -> Option<PathBuf> {
     if let Some(folder) = std::env::var_os("NOH_CACHE_DIR").filter(|p| !p.is_empty()) {
         return Some(folder.into());
     }

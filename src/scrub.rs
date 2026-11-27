@@ -381,6 +381,8 @@ struct LiveRun {
     /// The frames of the file libmpv was given: where a seek goes.
     grid: crate::preview::PlayGrid,
     _copies: Vec<Arc<crate::copies::Light>>,
+    /// The song's WAV it plays, kept as long as the copies.
+    _song: crate::song::Audio,
 }
 struct LiveSeek {
     at: Instant,
@@ -531,6 +533,7 @@ fn control(api: Arc<Api>, handle: usize, shared: Arc<Shared>, ctx: egui::Context
                             noted: Instant::now(),
                             grid: plan.grid,
                             _copies: plan.copies,
+                            _song: plan.song,
                         };
                         Ok((run, plan.duration))
                     })();

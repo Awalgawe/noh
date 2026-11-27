@@ -265,8 +265,8 @@ pub fn inspect_and_plan(
     emit: &mut dyn FnMut(Event),
 ) -> Result<crate::plan::RenderPlan, EngineError> {
     request.validate()?;
-    let duration = wav_duration(&request.wav)
-        .map_err(|e| EngineError::new("error.wav", "read_soundtrack", Some(&request.wav), e))?;
+    let duration = crate::song::duration(&request.wav, &request.ffmpeg, &|| false)
+        .map_err(|e| crate::song::engine_error("error.wav", "read_soundtrack", &request.wav, e))?;
     if request.fade_in + request.fade_out > duration {
         return Err(EngineError::new(
             "error.fades",
@@ -384,10 +384,15 @@ fn render(
         }
     }
     let mut video = items[0].path().clone();
-    let mut wav = input_path(&args.wav, "error.wav")?;
-    if !video.is_file() || !wav.is_file() {
+    let song = input_path(&args.wav, "error.wav")?;
+    if !video.is_file() || !song.is_file() {
         return Err("Provide two existing files.".into());
     }
+    // The song's sound as one WAV (an MP3 is read through its copy); held
+    // until the export ends.
+    let audio = crate::song::audio(&song, &args.ffmpeg, &|| false)
+        .map_err(|e| crate::song::engine_error("error.wav", "read_soundtrack", &song, e))?;
+    let mut wav = audio.path().to_owned();
     let duration = wav_duration(&wav)
         .map_err(|e| EngineError::new("error.wav", "read_soundtrack", Some(&wav), e))?;
     if args.fade_in + args.fade_out > duration {

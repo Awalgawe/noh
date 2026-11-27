@@ -12,7 +12,9 @@ noh first.mp4 song.wav --fade-in 1 --fade-out 2 --partial-fades --output video.m
 noh --soundtrack song.wav --image photo.png 2.5 --video clip.mp4 --output video.mp4
 ```
 
-The sequence repeats to the WAV's duration. Named media arguments retain order.
+The soundtrack is a WAV, MP3, M4A, FLAC or OGG song; a song that is not a WAV is
+decoded once into a WAV that every step reads. The sequence repeats to the song's
+duration. Named media arguments retain order.
 Each `--image PATH SECONDS` sets that occurrence's duration. PNG/JPEG images fit
 without cropping; transparent areas and padding become black. Animated PNG is
 not supported. The first video sets dimensions and frame rate; image-only

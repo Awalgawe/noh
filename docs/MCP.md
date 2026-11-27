@@ -51,7 +51,7 @@ cargo --offline dev verify --media --mcp --offline
 
 | Tool | Required arguments | Result |
 | --- | --- | --- |
-| `noh_inspect` | `path`, `kind` (`video`, `wav` or `image`) | Metadata job ID |
+| `noh_inspect` | `path`, `kind` (`video`, `wav` or `image`; `wav` takes any song: WAV, MP3, M4A, FLAC or OGG) | Metadata job ID |
 | `noh_diagnose` | `request`; optional `level` (`exact` by default, or `quick`) | Diagnosis job ID |
 | `noh_export` | `request`, `diagnosis_job_id` | Checked export job ID |
 | `noh_preview` | `request` | Preview job ID; full montage at reduced quality |
@@ -237,7 +237,7 @@ local path. A render request has this shape:
 }
 ```
 
-`wav`, `output` and exactly one of `videos` or `items` are required. The optional `ffmpeg` is absolute.
+`wav` (the song: WAV, MP3, M4A, FLAC or OGG), `output` and exactly one of `videos` or `items` are required. The optional `ffmpeg` is absolute.
 Defaults: zero fades, partial fades enabled, clip audio and forced conversion
 disabled. Up to 4096 ordered clips are accepted. Fade durations must be finite
 and nonnegative. The server selects preview mode; clients cannot supply it.

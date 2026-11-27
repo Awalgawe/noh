@@ -7,7 +7,7 @@ use noh::{
 };
 use std::{
     io::Read,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc,
         mpsc::{self, Receiver},
@@ -370,7 +370,10 @@ fn load(request: &Request) -> Result<Loaded, EngineError> {
         )
     };
     let wav_stamp = FileStamp::read(&request.wav)?;
-    let actual_duration = noh::wav_duration(&request.wav).map_err(|e| error(e.to_string()))?;
+    // The song's length as its WAV gives it (an MP3's copy, made when it was
+    // dropped, is found again here; NOH's own FFmpeg remakes one if it is gone).
+    let actual_duration = noh::song::duration(&request.wav, Path::new(""), &|| false)
+        .map_err(|e| error(e.to_string()))?;
     if (actual_duration * 1_000.0).round() as u64 != request.duration_ms {
         return Err(EngineError::new(
             "error.stale_inspection",

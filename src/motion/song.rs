@@ -232,7 +232,13 @@ pub fn gather(
         // the person picked one).
         let ffmpeg = crate::inspection::resolve_ffmpeg(ffmpeg)
             .map_err(|e| format!("FFmpeg: {}", e.detail))?;
-        sound_loudness(&ffmpeg, source)?
+        // A song is heard as one WAV (an MP3 from its copy, `crate::song`).
+        let song = if crate::song::is_song(source) {
+            Some(crate::song::audio(source, &ffmpeg, &|| false).map_err(|e| e.to_string())?)
+        } else {
+            None
+        };
+        sound_loudness(&ffmpeg, song.as_ref().map_or(source, |song| song.path()))?
     } else {
         None
     };

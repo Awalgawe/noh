@@ -47,7 +47,7 @@ fn load(request: &SceneRequest, report: &mut Reporter<'_>) -> Result<Loaded, Eng
     // is the project's. Over one video, the video gives all three.
     let (picture, duration, sound, rate) = match &request.project {
         Some(p) => {
-            let duration = crate::wav_duration(&request.source)
+            let duration = crate::song::duration(&request.source, &request.ffmpeg, &|| false)
                 .map_err(|e| fail("error.scene_input", Some(&request.source), e))?;
             ((p.width, p.height), duration, true, p.fps)
         }

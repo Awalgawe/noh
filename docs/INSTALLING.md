@@ -174,7 +174,7 @@ NOH follows your system language when supported. Use the sliders button in the
 upper-right corner to choose another language.
 
 1. Add a short video or a PNG/JPEG photo.
-2. Add a WAV soundtrack.
+2. Add a song (MP3, WAV, M4A, FLAC or OGG).
 3. Press **Play**, choose a destination, then **Export the video**.
 
 See the [desktop guide](APP.md#make-your-first-video) for arranging media,

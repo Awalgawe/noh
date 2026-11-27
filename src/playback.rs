@@ -114,8 +114,15 @@ struct Input {
     ffmpeg: PathBuf,
     project: Option<Arc<crate::project::ProjectRequest>>,
     cancel: Arc<AtomicBool>,
+    /// A project's song as one WAV (an MP3 is heard from its copy), set when
+    /// the session opens.
+    song: Option<Arc<crate::song::Audio>>,
 }
 impl Input {
+    /// The file a project's song is heard from.
+    fn sound(&self) -> &Path {
+        self.song.as_ref().map_or(&self.path, |song| song.path())
+    }
     fn audio_start(&self) -> f64 {
         self.project
             .as_ref()
@@ -252,6 +259,7 @@ impl Player {
                 ffmpeg,
                 project: None,
                 cancel: Arc::new(AtomicBool::new(false)),
+                song: None,
             },
             start_seconds,
             playing,
@@ -302,6 +310,7 @@ impl Player {
                 ffmpeg,
                 project: Some(Arc::new(request)),
                 cancel: Arc::new(AtomicBool::new(false)),
+                song: None,
             },
             start_seconds,
             playing,
@@ -646,7 +655,7 @@ fn stream_mix(
             .arg("-ss")
             .arg(format!("{:.9}", input.audio_start() + local))
             .arg("-i")
-            .arg(&input.path);
+            .arg(input.sound());
         command.arg("-filter_complex").arg(format!("[0:a:0]aresample=48000:async=1:first_pts=0,apad,atrim=duration={span:.9}[clips];[1:a:0]asetpts=PTS-STARTPTS,aresample=48000,apad,atrim=duration={span:.9}[wav];[clips][wav]amix=inputs=2:duration=first:dropout_transition=0[a]"))
             .args(["-map", "[a]", "-vn", "-sn", "-dn", "-t"]).arg(format!("{span:.9}"))
             .args(["-ac", "2", "-ar", "48000", "-f", "f32le", "pipe:1"]);
@@ -816,10 +825,21 @@ fn source_for(
         streamed_source(input, position, remaining, failure)
     } else {
         Ok(Box::new(
-            audio_source(&input.path, input.audio_start() + position)?
+            audio_source(input.sound(), input.audio_start() + position)?
                 .take_duration(Duration::from_secs_f64(remaining.max(0.0))),
         ))
     }
+}
+/// A project's song as the player hears it: one WAV (an MP3 from its copy,
+/// `crate::song`), as the export and the waveform read it.
+fn hear_song(input: &mut Input) -> Result<(), String> {
+    let cancel = input.cancel.clone();
+    let song = crate::song::audio(&input.path, &input.ffmpeg, &|| {
+        cancel.load(Ordering::Acquire)
+    })
+    .map_err(|e| e.to_string())?;
+    input.song = Some(Arc::new(song));
+    Ok(())
 }
 fn audio_source(path: &Path, position: f64) -> Result<rodio::Decoder<BufReader<File>>, String> {
     let file = File::open(path).map_err(|e| format!("Cannot open preview sound: {e}"))?;
@@ -1186,11 +1206,12 @@ impl Session {
     fn open(mut input: Input, desired: &Desired) -> Result<Self, String> {
         let opening = Instant::now();
         let stamp = FileStamp::read(&input.path).map_err(|e| e.to_string())?;
-        let info = if let Some(project) = &input.project {
+        let info = if let Some(project) = input.project.clone() {
             project.validate().map_err(|e| e.to_string())?;
             input.ffmpeg =
                 crate::inspection::resolve_ffmpeg(&input.ffmpeg).map_err(|e| e.to_string())?;
-            let wav_duration = crate::wav_duration(&input.path).map_err(|e| e.to_string())?;
+            hear_song(&mut input)?;
+            let wav_duration = crate::wav_duration(input.sound()).map_err(|e| e.to_string())?;
             let (start, end) = project.short.as_ref().map_or((0.0, wav_duration), |s| {
                 (s.start_ms as f64 / 1000.0, s.end_ms as f64 / 1000.0)
             });
@@ -1653,6 +1674,7 @@ mod tests {
             ffmpeg: "missing-ffmpeg".into(),
             project: None,
             cancel: Arc::new(AtomicBool::new(false)),
+            song: None,
         };
         let desired = Desired {
             generation: 1,
@@ -1800,6 +1822,7 @@ mod tests {
                 ffmpeg: "unused-ffmpeg".into(),
                 project: Some(Arc::new(project)),
                 cancel: Arc::new(AtomicBool::new(false)),
+                song: None,
             };
             let failure = Arc::new(Mutex::new(None));
             let mut source = source_for(&input, 0.125, 1.0, failure).unwrap();
@@ -1807,6 +1830,54 @@ mod tests {
             assert_eq!(actual, expected);
             assert_eq!(source.count() + 256, 48_000);
         }
+    }
+
+    /// The fallback player decodes WAV only: an MP3 project song reaches it as
+    /// its copy, on the same samples as the WAV it was made from.
+    #[test]
+    fn an_mp3_project_song_is_heard_from_its_wav_copy() {
+        if std::env::var_os("NOH_MEDIA_TESTS").is_none() {
+            return;
+        }
+        let ffmpeg = crate::find_ffmpeg(None).unwrap();
+        let folder = tempfile::tempdir().unwrap();
+        let wav = folder.path().join("clock.wav");
+        identity_wav(&wav);
+        let mp3 = folder.path().join("clock.mp3");
+        let status = crate::command(&ffmpeg)
+            .args(["-hide_banner", "-nostdin", "-v", "error", "-i"])
+            .arg(&wav)
+            .args(["-c:a", "libmp3lame", "-b:a", "320k"])
+            .arg(&mp3)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let project = request(
+            folder.path(),
+            ffmpeg.clone(),
+            mp3.clone(),
+            "a.mp4".into(),
+            "b.mp4".into(),
+            false,
+            false,
+        );
+        let mut input = Input {
+            path: mp3.clone(),
+            ffmpeg,
+            project: Some(Arc::new(project)),
+            cancel: Arc::new(AtomicBool::new(false)),
+            song: None,
+        };
+        let failure = Arc::new(Mutex::new(None));
+        assert!(source_for(&input, 0.0, 1.0, failure.clone()).is_err());
+        hear_song(&mut input).unwrap();
+        assert_ne!(input.sound(), mp3.as_path());
+        assert_eq!(
+            crate::wav_duration(input.sound()).unwrap(),
+            crate::wav_duration(&wav).unwrap()
+        );
+        let source = source_for(&input, 0.125, 1.0, failure).unwrap();
+        assert_eq!(source.count(), 48_000);
     }
 
     #[test]
@@ -2074,6 +2145,7 @@ mod tests {
             ffmpeg: ffmpeg.clone(),
             project: None,
             cancel: Arc::new(AtomicBool::new(false)),
+            song: None,
         };
         let (sender, receiver) = mpsc::sync_channel(32);
         let decoded = thread::spawn(move || {

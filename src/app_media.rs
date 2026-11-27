@@ -351,7 +351,7 @@ pub fn kind_of(path: &Path) -> Option<Kind> {
     Some(match ext.as_str() {
         "png" | "jpg" | "jpeg" => Kind::Picture,
         "mp4" | "mov" | "mkv" | "webm" | "avi" | "m4v" => Kind::Video,
-        "wav" => Kind::Song,
+        _ if noh::song::is_song(path) => Kind::Song,
         "srt" => Kind::Lyrics,
         _ => return None,
     })
@@ -668,13 +668,17 @@ mod tests {
             ("a.avi", Kind::Video),
             ("a.m4v", Kind::Video),
             ("a.wav", Kind::Song),
+            ("a.MP3", Kind::Song),
+            ("a.m4a", Kind::Song),
+            ("a.flac", Kind::Song),
+            ("a.ogg", Kind::Song),
             ("a.Srt", Kind::Lyrics),
             ("a.noh-lyrics.json", Kind::Lyrics),
             ("a.NOH-Words.JSON", Kind::Lyrics),
         ] {
             assert_eq!(kind_of(Path::new(name)), Some(kind), "{name}");
         }
-        for name in ["a.apng", "a.gif", "a.mp3", "a.txt", "a"] {
+        for name in ["a.apng", "a.gif", "a.aac", "a.txt", "a"] {
             assert_eq!(kind_of(Path::new(name)), None, "{name}");
             assert_eq!(
                 refused(&[file(name)], false),

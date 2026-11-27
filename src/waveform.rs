@@ -279,7 +279,12 @@ fn extract_identified(
     cancel: &AtomicBool,
 ) -> Result<Waveform> {
     check_cancel(cancel)?;
-    let duration = crate::wav_duration(&source.resolved).map_err(unavailable)?;
+    // The song's sound as one WAV: an MP3 is drawn from its copy.
+    let audio = crate::song::audio(&source.resolved, &decoder.resolved, &|| {
+        cancel.load(std::sync::atomic::Ordering::Acquire)
+    })
+    .map_err(unavailable)?;
+    let duration = crate::wav_duration(audio.path()).map_err(unavailable)?;
     if !duration.is_finite() || duration <= 0.0 {
         return Err(unavailable("The soundtrack has no audio frames"));
     }
@@ -294,7 +299,7 @@ fn extract_identified(
             "1",
             "-i",
         ])
-        .arg(&source.resolved)
+        .arg(audio.path())
         .args([
             "-map",
             "0:a:0",

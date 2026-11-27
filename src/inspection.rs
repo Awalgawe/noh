@@ -265,28 +265,26 @@ pub fn inspect(
             Ok(InspectionResult::Metadata { info, snapshot })
         }
         InspectionRequest::Metadata { path, ffmpeg, wav } => {
-            let ffmpeg = if *wav {
+            // A WAV song needs no FFmpeg; another song is decoded here, once:
+            // this inspection runs when the song is dropped (`song.rs`).
+            let ffmpeg = if *wav && !crate::song::needs_decoding(path) {
                 None
             } else {
                 Some(resolve_ffmpeg(ffmpeg.as_deref().unwrap_or(Path::new("")))?)
             };
             let snapshot = Snapshot::read(std::iter::once(path).chain(ffmpeg.iter()))?;
-            let info = if let Some(ffmpeg) = ffmpeg {
-                crate::media::quick_info(&ffmpeg, path, false)
+            let info = if *wav {
+                let ffmpeg = ffmpeg.as_deref().unwrap_or(Path::new(""));
+                crate::song::duration(path, ffmpeg, &|| false)
+                    .map(|seconds| crate::media::MediaInfo {
+                        seconds,
+                        ..Default::default()
+                    })
+                    .map_err(|e| crate::song::engine_error("error.wav", "inspect", path, e))?
             } else {
-                crate::wav_duration(path).map(|seconds| crate::media::MediaInfo {
-                    seconds,
-                    ..Default::default()
-                })
-            }
-            .map_err(|e| {
-                EngineError::new(
-                    if *wav { "error.wav" } else { "error.video" },
-                    "inspect",
-                    Some(path),
-                    e,
-                )
-            })?;
+                crate::media::quick_info(ffmpeg.as_deref().unwrap(), path, false)
+                    .map_err(|e| EngineError::new("error.video", "inspect", Some(path), e))?
+            };
             snapshot.verify()?;
             Ok(InspectionResult::Metadata { info, snapshot })
         }
@@ -294,9 +292,10 @@ pub fn inspect(
             request.validate()?;
             let snapshot = Snapshot::project(request)?;
             let ffmpeg = resolve_ffmpeg(&request.ffmpeg)?;
-            let duration = crate::wav_duration(&request.wav).map_err(|e| {
-                EngineError::new("error.wav", "read_soundtrack", Some(&request.wav), e)
-            })?;
+            let duration =
+                crate::song::duration(&request.wav, &ffmpeg, &|| false).map_err(|e| {
+                    crate::song::engine_error("error.wav", "read_soundtrack", &request.wav, e)
+                })?;
             if request.fade_in + request.fade_out > duration {
                 return Err(EngineError::new(
                     "error.fades",

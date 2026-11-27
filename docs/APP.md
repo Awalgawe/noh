@@ -1,7 +1,7 @@
 # Getting started with NOH
 
 NOH turns an ordered sequence of clips and photos into a video that follows a
-WAV soundtrack. The sequence repeats for the length of the song. You can also
+song (MP3, WAV, M4A, FLAC or OGG). The sequence repeats for the length of the song. You can also
 export a selected moment as a vertical short.
 
 ## Open the app
@@ -26,8 +26,11 @@ a [source build](BUILDING.md).
 
 1. Drop videos or PNG/JPEG photos into the window, or click **Add**. Arrange the
    items in the strip at the top. Each photo has an adjustable duration.
-2. Add a **WAV soundtrack**. Its waveform appears below the monitor and determines
-   the full video's length. Original clip audio is off by default.
+2. Add your **song**: MP3, WAV, M4A, FLAC or OGG. Its waveform appears below the
+   monitor and determines the full video's length. Original clip audio is off by
+   default. A song that is not a WAV is decoded once, when you add it, into a WAV
+   kept in NOH's cache folder: the player, the lyrics and the export all hear that
+   copy. Lyrics and scene files stay beside your own song file.
 3. Press **Play** to see and hear the result. Use the monitor controls or the
    waveform to move through the project. **Fades** adjusts the beginning and end.
 4. Choose a destination in the bottom bar, then click **Export the video** once

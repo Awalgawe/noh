@@ -53,6 +53,7 @@ pub mod scene_request;
 pub mod scrub;
 mod sequence;
 pub mod shorts;
+pub mod song;
 mod storage;
 #[cfg(feature = "effects")]
 pub mod style;

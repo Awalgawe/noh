@@ -73,7 +73,7 @@ struct RenderRequestFields {
     )]
     #[schemars(with = "Vec<MediaInput>", length(min = 1, max = 4096))]
     items: Option<Vec<MediaInput>>,
-    /// Absolute path to a PCM or floating-point WAV soundtrack.
+    /// Absolute path to the song: a WAV, MP3, M4A, FLAC or OGG file.
     #[schemars(length(min = 1))]
     pub wav: String,
     /// Absolute destination path. Existing files are never overwritten.
