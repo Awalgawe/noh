@@ -24,7 +24,7 @@
 ## From a folder of media to a video
 
 1. **Add your clips and photos.** Put them in the order you want.
-2. **Drop in a WAV soundtrack.** Preview how the sequence fits the music.
+2. **Drop in your song.** MP3, WAV, M4A, FLAC or OGG. Preview how the sequence fits the music.
 3. **Export the video.** Or select a moment on the waveform for a vertical short.
 
 ### A few useful things, kept together

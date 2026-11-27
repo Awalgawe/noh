@@ -862,7 +862,7 @@ impl NohApp {
         let l = self.locale.language;
         if let Some(path) = rfd::FileDialog::new()
             .set_title(l.text("choose_wav"))
-            .add_filter(l.text("wav_filter"), &["wav"])
+            .add_filter(l.text("wav_filter"), &noh::song::EXTENSIONS[..])
             .pick_file()
         {
             self.drop_files(vec![path], ctx);
@@ -891,7 +891,8 @@ impl NohApp {
             .add_filter(
                 l.text("drop.filter_all"),
                 &[
-                    "mp4", "mov", "mkv", "webm", "avi", "m4v", "png", "jpg", "jpeg", "wav", "srt",
+                    "mp4", "mov", "mkv", "webm", "avi", "m4v", "png", "jpg", "jpeg", "wav", "mp3",
+                    "m4a", "flac", "ogg", "srt",
                     // NOH lyrics files (any other .json is refused, as a drop).
                     "json",
                 ],

@@ -16,7 +16,7 @@ use std::{
     group = clap::ArgGroup::new("short_operation").args(["short", "project"]),
     version = crate::build_info::VERSION,
     about = "Loop a sequence, generate or burn captions, or extract a selected vertical short.",
-    after_help = "Positional form: noh VIDEO WAV [--video VIDEO ...]. The positional video comes first.\nFlagged form: noh --soundtrack WAV --video VIDEO --image IMAGE SECONDS [...]. Named items follow their option order.\nWithout fades: copy compatible video without re-encoding. Images are encoded.\nWith fades: high-quality H.264 (CRF 16). --partial-fades copies compatible central loops.\nMP4: AAC 320 kbit/s. MKV: lossless audio copy. Existing files are never overwritten.\nSubtitles: noh --transcribe SOURCE --output captions.srt --transcriber WHISPER --model MODEL --vad-model VAD [--language fr].\nTranscription uses a local GPU when available, otherwise CPU. Review the generated text and timing before use.\nCaption burn: noh --burn-subtitles SOURCE --srt captions.srt --output captioned.mp4 [--caption-size medium] [--caption-placement bottom] [--preview] [--json].\nBurning captions re-encodes video and never overwrites output. Captions (burn, short, project) use the Classique style by default, drawn by the OpenGL engine as in the app; without OpenGL, libass draws them, with the same line breaks.
+    after_help = "Positional form: noh VIDEO SONG [--video VIDEO ...]. The positional video comes first.\nFlagged form: noh --soundtrack SONG --video VIDEO --image IMAGE SECONDS [...]. Named items follow their option order.\nSONG: a WAV, MP3, M4A, FLAC or OGG file; a song that is not a WAV is decoded once into a WAV that every step reads.\nWithout fades: copy compatible video without re-encoding. Images are encoded.\nWith fades: high-quality H.264 (CRF 16). --partial-fades copies compatible central loops.\nMP4: AAC 320 kbit/s. MKV: lossless audio copy. Existing files are never overwritten.\nSubtitles: noh --transcribe SOURCE --output captions.srt --transcriber WHISPER --model MODEL --vad-model VAD [--language fr].\nTranscription uses a local GPU when available, otherwise CPU. Review the generated text and timing before use.\nCaption burn: noh --burn-subtitles SOURCE --srt captions.srt --output captioned.mp4 [--caption-size medium] [--caption-placement bottom] [--preview] [--json].\nBurning captions re-encodes video and never overwrites output. Captions (burn, short, project) use the Classique style by default, drawn by the OpenGL engine as in the app; without OpenGL, libass draws them, with the same line breaks.
 Effects: noh --list-effects shows the caption effects; --effect ID [--effect-preset NAME] [--effect-value KEY=VALUE ...] draws one instead of Classique, with OpenGL only (no libass fallback). An installed font missing on this computer is drawn in the effect's own font, with a warning. A project --preview cannot draw an effect.\nShort: noh --short SOURCE --start-ms 135 --end-ms 1775 --output short.mp4 [--framing pad|crop] [--srt reviewed.srt] [--preview] [--json].\nShort intervals use source playback milliseconds; optional SRT times refer to the original source.\nProject: noh --project --soundtrack voice.wav --video A.mp4 --video B.mp4 --output selected.mp4 --start-ms 13000 --end-ms 18000 [--restart-loops] [--srt reviewed.srt].\nProject start/end and SRT use the full WAV clock. Restart changes visuals and original-clip audio only. Omit start/end for a full montage; captions remain optional.
 A project --preview draws its captions with libass.
 Motion scenes (experimental, docs/MOTION_AUTHORING.md): noh --scene-check SOURCE --scene scene.noh-motion.rhai --srt reviewed.srt --output report-folder [--caption-safe-area youtube_shorts] [--from-ms A --to-ms B].
@@ -174,7 +174,7 @@ pub struct Options {
     chosen_effect: Option<crate::project::EffectChoice>,
     video: Option<PathBuf>,
     wav: Option<PathBuf>,
-    /// WAV soundtrack for fully flagged or image-only input.
+    /// Song (WAV, MP3, M4A, FLAC or OGG) for fully flagged or image-only input.
     #[arg(long, conflicts_with = "wav")]
     soundtrack: Option<PathBuf>,
     #[arg(short = 'o', long)]
@@ -543,7 +543,7 @@ pub fn run(arguments: impl IntoIterator<Item = OsString>) -> i32 {
         });
     let Some(wav) = args.soundtrack.or(args.wav) else {
         eprintln!(
-            "Error: Provide a WAV soundtrack. Use VIDEO WAV or --soundtrack WAV. See --help."
+            "Error: Provide a song (WAV, MP3, M4A, FLAC or OGG). Use VIDEO SONG or --soundtrack SONG. See --help."
         );
         return 1;
     };

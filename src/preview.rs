@@ -423,7 +423,9 @@ fn prepare(
         *item.path_mut() = stamp.resolved.clone();
     }
     let ffmpeg = &snapshot.0[items.len() + 1].resolved;
-    let duration = crate::wav_duration(&snapshot.0[items.len()].resolved).map_err(unavailable)?;
+    let stop = || cancel.load(Ordering::Acquire);
+    let duration = crate::song::duration(&snapshot.0[items.len()].resolved, ffmpeg, &stop)
+        .map_err(unavailable)?;
     if !duration.is_finite()
         || duration <= 0.0
         || duration * 1000.0 > crate::shorts::MAX_SOURCE_MS as f64
@@ -607,6 +609,8 @@ pub(crate) struct PlayPlan {
     pub grid: PlayGrid,
     /// The copies stay in the store's hands while they play.
     pub copies: Vec<Arc<crate::copies::Light>>,
+    /// The song's WAV, kept while it plays (a temporary one is deleted with it).
+    pub song: crate::song::Audio,
 }
 /// The frame grids of the file given to libmpv: one for each piece, as the
 /// paused preview counts them (`cursor_local`).
@@ -808,10 +812,14 @@ pub(crate) fn play_plan(project: &ProjectRequest, cancel: &AtomicBool) -> Result
     if parts.is_empty() {
         return Err(unavailable("the montage has no picture to play"));
     }
-    let song = snapshot.0[montage.items.len()]
-        .resolved
-        .to_string_lossy()
-        .into_owned();
+    // The song's sound as one WAV: an MP3 plays from its copy, as everywhere.
+    let audio = crate::song::audio(
+        &snapshot.0[montage.items.len()].resolved,
+        &snapshot.0[montage.items.len() + 1].resolved,
+        &|| cancel.load(Ordering::Acquire),
+    )
+    .map_err(unavailable)?;
+    let song = audio.path().to_string_lossy().into_owned();
     let (canvas_w, canvas_h) = if project.short.is_some() {
         (1080, 1920)
     } else {
@@ -845,6 +853,7 @@ pub(crate) fn play_plan(project: &ProjectRequest, cancel: &AtomicBool) -> Result
     );
     Ok(PlayPlan {
         edl: play_edl(&parts, &song, start, span),
+        song: audio,
         filter,
         width,
         height,

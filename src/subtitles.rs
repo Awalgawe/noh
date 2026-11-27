@@ -267,13 +267,23 @@ pub(crate) fn execute(
         ensure_fresh(path)?;
     }
     phase(emit, "subtitle.preparing");
+    // A song is heard as one WAV (an MP3 from its copy), so that the words land
+    // on the clock of the player and the export. A video is read as it is.
+    let song = if crate::song::is_song(source) {
+        Some(crate::song::audio(source, ffmpeg, &|| false).map_err(|e| {
+            crate::song::engine_error("error.subtitle_input", "prepare_subtitle_audio", source, e)
+        })?)
+    } else {
+        None
+    };
+    let heard = song.as_ref().map_or(source.as_path(), |song| song.path());
     let mut prepare = crate::command(ffmpeg);
     // Keep FFmpeg's normal demux start-time subtraction. Anchor samples to that
     // playback origin, filling a delayed audio start/gaps with silence and
     // trimming negative-PTS encoder preroll instead of discarding timestamps.
     prepare
         .args(["-hide_banner", "-nostdin", "-nostats", "-n", "-i"])
-        .arg(source)
+        .arg(heard)
         .args([
             "-map",
             "0:a:0",

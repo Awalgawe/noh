@@ -253,6 +253,8 @@ fn verify(media: bool, mcp: bool, transcription: bool, offline: bool) -> Result<
             "--test",
             "waveform",
             "--test",
+            "song",
+            "--test",
             "preview",
         ]);
     }

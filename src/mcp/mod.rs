@@ -122,7 +122,7 @@ struct Server {
 
 #[tool_router]
 impl Server {
-    #[tool(name = "noh_inspect", description = "Start inspection of one local video, WAV or PNG/JPEG image. Returns a job ID; poll noh_job for metadata. Image duration belongs to the render request, not the image file.", output_schema = schema_for_output::<Reply<StartReply>>())]
+    #[tool(name = "noh_inspect", description = "Start inspection of one local video, song (kind wav: a WAV, MP3, M4A, FLAC or OGG file) or PNG/JPEG image. Returns a job ID; poll noh_job for metadata. Image duration belongs to the render request, not the image file.", output_schema = schema_for_output::<Reply<StartReply>>())]
     async fn inspect(&self, Parameters(input): Parameters<InspectInput>) -> CallToolResult {
         let session = self.session.clone();
         blocking(move || session.inspect(input), |_| false).await

@@ -418,11 +418,15 @@ fn compose(
     for (item, stamp) in items.iter_mut().zip(&snapshot.0) {
         *item.path_mut() = stamp.resolved.clone();
     }
-    let wav = &snapshot.0[items.len()].resolved;
+    let song = &snapshot.0[items.len()].resolved;
     let ffmpeg = &snapshot.0[items.len() + 1].resolved;
     let workspace = workspace
         .canonicalize()
         .map_err(|e| error("error.short_config", Some(workspace), e))?;
+    // The song's sound as one WAV (an MP3 is read through its copy).
+    let audio = crate::song::audio(song, ffmpeg, &|| false)
+        .map_err(|e| crate::song::engine_error("error.wav", "read_soundtrack", song, e))?;
+    let wav = audio.path();
     let duration = crate::wav_duration(wav).map_err(|e| error("error.wav", Some(wav), e))?;
     if !duration.is_finite()
         || duration <= 0.0
